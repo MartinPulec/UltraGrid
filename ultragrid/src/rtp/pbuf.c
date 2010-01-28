@@ -51,8 +51,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.5 $
- * $Date: 2010/01/28 10:06:59 $
+ * $Revision: 1.4.2.1 $
+ * $Date: 2010/01/28 18:17:28 $
  *
  */
 
@@ -341,7 +341,7 @@ frame_complete(struct pbuf_node *frame)
 }
 
 int
-pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time, char *framebuffer, int i, int compression)
+pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time, frame_t *framebuffer, int i, int compression)
 {
 	/* Find the first complete frame that has reached it's playout */
 	/* time, and decode it into the framebuffer. Mark the frame as */
@@ -379,8 +379,6 @@ int
 audio_pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time, audio_frame *buffer)
 {
       struct pbuf_node        *curr;
-
-      UNUSED(curr_time);
 
       pbuf_validate(playout_buf);     // should be run in debug mode
 

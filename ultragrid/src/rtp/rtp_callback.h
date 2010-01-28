@@ -38,8 +38,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.1 $
- * $Date: 2007/11/08 09:48:59 $
+ * $Revision: 1.1.2.1 $
+ * $Date: 2010/01/28 18:17:28 $
  *
  */
 
@@ -51,10 +51,12 @@
 
 
 typedef struct {
-	uint16_t        y_offset;       /* pixels */
-	uint16_t        x_offset;       /* pixels */
-	uint16_t        length;         /* pixels */
-	uint16_t        flags;          
+    uint16_t    width;      /* pixels */
+    uint16_t    height;     /* pixels */
+    uint32_t    offset;     /* in bytes */
+    uint16_t    length;     /* octets */
+    uint8_t     colorspc;
+    uint8_t     flags;
 } payload_hdr_t;
 
 /* FIXME: this is only needed because fdisplay() takes "struct display" as a parameter */

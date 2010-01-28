@@ -1,5 +1,5 @@
 /*
- * FILE:   quicktime.c
+ * FILE:   testcard.c
  * AUTHOR: Colin Perkins <csp@csperkins.org
  *         Alvaro Saurin <saurin@dcs.gla.ac.uk>
  *         Martin Benes     <martinbenesh@gmail.com>
@@ -48,8 +48,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.8 $
- * $Date: 2009/12/11 15:13:10 $
+ * $Revision: 1.8.2.1 $
+ * $Date: 2010/01/28 18:17:28 $
  *
  */
 
@@ -68,7 +68,7 @@
 #include <SDL/SDL.h>
 
 void rgb2yuv422(unsigned char *in, unsigned int width, unsigned int height);
-unsigned char * tov210(unsigned char *in, unsigned int width, unsigned int height);
+unsigned char * tov210(unsigned char *in, unsigned int width, unsigned int height, double bpp);
 void toR10k(unsigned char *in, unsigned int width, unsigned int height);
 
 struct testcard_state {
@@ -163,7 +163,7 @@ rgb2yuv422(unsigned char *in, unsigned int width, unsigned int height)
 }
 
 unsigned char *
-tov210(unsigned char *in, unsigned int width, unsigned int height)
+tov210(unsigned char *in, unsigned int width, unsigned int height, double bpp)
 {
 	struct {
                  unsigned a:10;
@@ -175,7 +175,7 @@ tov210(unsigned char *in, unsigned int width, unsigned int height)
 
 	unsigned int linesize = width * 8 /3;
 
-	unsigned char *dst = (unsigned char*)malloc(width*height*hd_color_bpp);
+	unsigned char *dst = (unsigned char*)malloc(width*height*bpp);
  	unsigned char *src;
 	unsigned char *ret = dst;
 
@@ -274,7 +274,7 @@ vidcap_testcard_init(char *fmt)
 
         if(strcmp(fmt, "help")==0) {
                 printf("testcard options:\n");
-                printf("\twidth:height:fps:codec[:filename][:p}\n");
+                printf("\twidth:height:fps:codec[:filename][:p]\n");
 				printf("\tp - pan with frame\n");
                 show_codec_help();
                 return NULL;
@@ -333,6 +333,7 @@ vidcap_testcard_init(char *fmt)
 
         hd_size_x = s->width;
         hd_size_y = s->height;
+        hd_color_spc = codec;
         if(h_align) {
                 hd_size_x = (hd_size_x + h_align - 1)/h_align*h_align;
 				s->width = hd_size_x;
@@ -342,9 +343,7 @@ vidcap_testcard_init(char *fmt)
 
 		s->linesize = hd_size_x * bpp;
 
-        hd_color_bpp = ceil(bpp);
-
-        s->size = hd_size_x*hd_size_y*hd_color_bpp;
+        s->size = hd_size_x*hd_size_y*bpp;
 
         filename = strtok(NULL, ":");
         if(filename && strcmp(filename, "p") != 0) {
@@ -416,7 +415,7 @@ vidcap_testcard_init(char *fmt)
 			} 
 
 			if(codec == v210) {
-				s->frame = (char*)tov210((unsigned char*)s->frame, s->width, s->height);
+				s->frame = (char*)tov210((unsigned char*)s->frame, s->width, s->height, bpp);
 			}
 
 			if(codec == R10k) {
@@ -434,11 +433,7 @@ vidcap_testcard_init(char *fmt)
     	s->count = 0;
     	gettimeofday(&(s->last_frame_time), NULL);
 
-        if(hd_color_bpp != ceil(bpp)) {
-                fprintf(stderr, "Warning, file data size does not match width * height * bpp of selected codec.\n");
-        }
-
-		printf("Testcard set to %dx%d, bpp %d\n", s->width, hd_size_y, hd_color_bpp);
+		printf("Testcard set to %dx%d, bpp %f\n", s->width, hd_size_y, bpp);
 
 	return s;
 }

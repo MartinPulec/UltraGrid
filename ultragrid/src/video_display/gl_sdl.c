@@ -72,6 +72,7 @@
 #include "config_win32.h"
 #include "video_display.h"
 #include "video_display/gl_sdl.h"
+#include "v_codec.h"
 
 #define HD_WIDTH        1920
 #define HD_HEIGHT       1080
@@ -322,6 +323,7 @@ static void * display_thread_gl(void *arg)
     /* FPS */
     static GLint T0     = 0;
     static GLint Frames = 0;
+    double bpp;
 
 #ifdef HAVE_MACOSX
             /* Startup function to call when running Cocoa code from a Carbon application. Whatever the fuck that means. */
@@ -469,6 +471,8 @@ static void * display_thread_gl(void *arg)
         exit(65);
     }
 
+    bpp = get_bpp(hd_color_spc);
+
     /* Check to see if we have data yet, if not, just chillax */
     /* TODO: we need some solution (TM) for sem_getvalue on MacOS X */
 #ifndef HAVE_MACOSX
@@ -503,13 +507,13 @@ static void * display_thread_gl(void *arg)
 		}
 	} else {
 		if (progressive == 1) {
-			memcpy(line2, line1, hd_size_x*hd_size_y*hd_color_bpp);
+			memcpy(line2, line1, hd_size_x*hd_size_y*bpp);
 		} else {
 			for(i=0; i<1080; i+=2) {       
-				memcpy(line2, line1, hd_size_x*hd_color_bpp);
-				memcpy(line2+hd_size_x*hd_color_bpp, line1+hd_size_x*hd_color_bpp*540, hd_size_x*hd_color_bpp);
-				line1 += hd_size_x*hd_color_bpp;
-				line2 += 2*hd_size_x*hd_color_bpp;
+				memcpy(line2, line1, (int)hd_size_x*bpp);
+				memcpy(line2+(int)(hd_size_x*bpp), line1+(int)(hd_size_x*bpp*540), (int)(hd_size_x*bpp));
+				line1 += (int)(hd_size_x*bpp);
+				line2 += (int)(2*hd_size_x*bpp);
 			}
 		}
 	}

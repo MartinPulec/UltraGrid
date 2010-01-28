@@ -44,8 +44,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.15 $
- * $Date: 2009/12/11 15:27:17 $
+ * $Revision: 1.15.2.1 $
+ * $Date: 2010/01/28 18:17:28 $
  *
  */
 
@@ -97,6 +97,9 @@ struct state_sdl {
     SDL_Overlay         *yuv_image;
     SDL_Surface         *rgb_image;
     unsigned char       *buffers[2];
+    pthread_mutex_t     bufflock;
+    int                 bufflen;
+    frame_t             frame;
     XShmSegmentInfo     vw_shm_segment[2];
     int                 image_display, image_network;
     XvAdaptorInfo       *ai;
@@ -121,6 +124,7 @@ struct state_sdl {
     int                 dst_linesize;
 
     codec_t             codec;
+    const struct codec_info_t *c_info;
     char                *filename;
     unsigned            rgb:1;
     unsigned            interlaced:1;
@@ -136,6 +140,8 @@ inline void copyliner10k(struct state_sdl *s, unsigned char *dst, unsigned char 
 void copylineRGBA(struct state_sdl *s, unsigned char *dst, unsigned char *src, int len);
 void deinterlace(struct state_sdl *s, unsigned char *buffer);
 void show_help(void);
+void cleanup_screen(struct state_sdl *s);
+void reconfigure_screen(struct state_sdl *s);
 
 extern int should_exit;
 
@@ -434,9 +440,9 @@ display_thread_sdl(void *arg)
     struct timeval      tv;
     int                 i;
     unsigned char       *buff = NULL; 
-    unsigned char *line1=NULL, *line2;
-    int linesize=0;
-    int height=0;
+    unsigned char       *line1=NULL, *line2;
+    int                 linesize=0;
+    int                 height=0;
 
     if(s->use_file && s->filename) {
             FILE *in;
@@ -454,23 +460,31 @@ display_thread_sdl(void *arg)
     if(s->use_file && buff) 
         line1 = buff;
 
-    if(s->rgb) {
-        linesize = s->sdl_screen->pitch;
-        if(linesize > s->src_linesize)
-            linesize = s->src_linesize;
-            height = s->height;
-        if(height > s->dst_rect.h)
-            height = s->dst_rect.h;
-    }
-
     while (!should_exit) {
         display_sdl_handle_events(s);
 
         if(!(s->use_file && buff)) {
                 platform_sem_wait(&s->semaphore);
+                if((unsigned int)s->width != hd_size_x || (unsigned int)s->height != hd_size_y || 
+                s->codec != (codec_t)hd_color_spc) {
+                    s->width = hd_size_x;
+                    s->height = hd_size_y;
+                    s->codec = hd_color_spc;
+                    cleanup_screen(s);
+                    reconfigure_screen(s);
+                    if(s->rgb) {
+                        linesize = s->sdl_screen->pitch;
+                        if(linesize > s->src_linesize)
+                            linesize = s->src_linesize;
+                        height = s->height;
+                        if(height > s->dst_rect.h)
+                            height = s->dst_rect.h;
+                    }
+                }
                 line1 = s->buffers[s->image_display];
         }
 
+    
         if(s->rgb) {
                 SDL_LockSurface(s->sdl_screen);
                 line2 = s->sdl_screen->pixels;
@@ -575,7 +589,7 @@ display_thread_sdl(void *arg)
 
         if(s->rgb) {
                 SDL_UnlockSurface(s->sdl_screen);
-                SDL_Flip(s->sdl_screen);
+                SDL_Flip(s->sdl_screen);             
         } else {
                 SDL_UnlockYUVOverlay(s->yuv_image);
                 SDL_DisplayYUVOverlay(s->yuv_image, &(s->dst_rect));
@@ -612,17 +626,17 @@ show_help(void)
         show_codec_help();
 }
 
-void *
-display_sdl_init(char *fmt)
+void
+cleanup_screen(struct state_sdl *s)
 {
-    struct state_sdl    *s;
-    int                 ret;
+    if(s->rgb == 0) {
+        SDL_FreeYUVOverlay(s->yuv_image);
+    }
+}
 
-    SDL_Surface         *image;
-    SDL_Surface         *temp;
-    SDL_Rect            splash_src;
-    SDL_Rect            splash_dest;
-
+void
+reconfigure_screen(struct state_sdl *s)
+{
     int                 itemp;
     unsigned int        utemp;
     Window              wtemp;
@@ -630,116 +644,11 @@ display_sdl_init(char *fmt)
     unsigned int        x_res_x;
     unsigned int        x_res_y;
 
-    const struct codec_info_t *c_info=NULL;
+    int                 ret, i;
 
-    unsigned int        i;
-
-    s = (struct state_sdl *) calloc(sizeof(struct state_sdl),1);
-    s->magic = MAGIC_SDL;
-
-    if(fmt!=NULL) {
-            if(strcmp(fmt, "help") == 0) {
-                show_help();
-                free(s);
-                return NULL;
-            }
-            char *tmp = strdup(fmt);
-            char *tok;
-           
-            tok = strtok(tmp, ":");
-            if(tok == NULL) {
-                    show_help();
-                    free(s);
-                    free(tmp);
-                    return NULL;
-            }
-            s->width = atol(tok);
-            tok = strtok(NULL, ":");
-            if(tok == NULL) {
-                    show_help();
-                    free(s);
-                    free(tmp);
-                    return NULL;
-            }
-            s->height = atol(tok);
-            tok = strtok(NULL, ":");
-            if(tok == NULL) {
-                    show_help();
-                    free(s);
-                    free(tmp);
-                    return NULL;
-            }
-            s->codec = 0xffffffff;
-            for(i = 0; codec_info[i].name != NULL; i++) {
-                    if(strcmp(tok, codec_info[i].name) == 0) {
-                        s->codec = codec_info[i].codec;
-                        c_info = &codec_info[i];
-                        s->rgb = codec_info[i].rgb;
-                    }
-            }
-            if(s->codec == 0xffffffff) {
-                fprintf(stderr, "SDL: unknown codec: %s\n", tok);
-                free(s);
-                free(tmp);
-                return NULL;
-            }
-            tok = strtok(NULL, ":");
-            while(tok != NULL) {
-                    if(tok[0] == 'f' && tok[1] == 's') {
-                            s->fs=1;
-                    } else if(tok[0] == 'i') {
-                            s->interlaced = 1;
-                    } else if(tok[0] == 'd') {
-                            s->deinterlace = 1;
-                    } else if(tok[0] == 'f') {
-                            s->use_file =1;
-                            tok = strtok(NULL, ":");
-                            s->filename = strdup(tok);
-                    }
-                    tok = strtok(NULL, ":");
-            }
-            free(tmp);
-    }
-
-    if(s->width <= 0 || s->height <= 0) {
-            printf("SDL: failed to parse config options: '%s'\n", fmt);
-            free(s);
-            return NULL;
-    }
-
-    s->bpp = c_info->bpp;
-
-    printf("SDL setup: %dx%d codec %s\n", s->width, s->height, c_info->name);
-
-    asm("emms\n");
-
-    platform_sem_init(&s->semaphore, 0, 0);
-
-    debug_msg("Window initialized %p\n", s);
-
-    if (!(s->display = XOpenDisplay(NULL))) {
-                printf("Unable to open display.\n");
-                return NULL;
-    }
-
-#ifdef HAVE_MACOSX
-    /* Startup function to call when running Cocoa code from a Carbon application. 
-     * Whatever the fuck that means. 
-     * Avoids uncaught exception (1002)  when creating CGSWindow */
-    NSApplicationLoad();
-#endif
-
-    ret = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE);
-    if (ret < 0) {
-        printf("Unable to initialize SDL.\n");
-        return NULL;
-    }
-
-    /* Get XWindows resolution */
     ret = XGetGeometry(s->display, DefaultRootWindow(s->display), &wtemp, &itemp, 
                     &itemp, &x_res_x, &x_res_y, &utemp, &utemp);
 
-    
     fprintf(stdout,"Setting video mode %dx%d.\n", x_res_x, x_res_y);
     if(s->fs)
         s->sdl_screen = SDL_SetVideoMode(x_res_x, x_res_y, 0, SDL_FULLSCREEN | SDL_HWSURFACE | SDL_DOUBLEBUF);
@@ -757,6 +666,14 @@ display_sdl_init(char *fmt)
 
     SDL_ShowCursor(SDL_DISABLE);
 
+    for(i = 0; codec_info[i].name != NULL; i++) {
+        if(s->codec == codec_info[i].codec) {
+            s->c_info = &codec_info[i];
+            s->rgb = codec_info[i].rgb;
+            s->bpp = codec_info[i].bpp;
+        }
+    }
+
     if(s->rgb == 0) {
             s->yuv_image = SDL_CreateYUVOverlay(s->width, s->height, FOURCC_UYVY, s->sdl_screen);
             if (s->yuv_image == NULL) {
@@ -768,21 +685,9 @@ display_sdl_init(char *fmt)
 
     int w = s->width;
 
-    if(c_info->h_align) {
-            w = ((w+c_info->h_align-1)/c_info->h_align)*c_info->h_align;
+    if(s->c_info->h_align) {
+            w = ((w+s->c_info->h_align-1)/s->c_info->h_align)*s->c_info->h_align;
     }
-
-    /*FIXME: kill hd_size at all, use another approach avoiding globals */
-    hd_size_x = w;
-    hd_size_y = s->height;
-    /*FIXME: kill hd_color_bpp at all, use linesize instead! 
-     *       however, not sure about computing pos (x,y) in transmit.c
-     *       mess with green pixels with DVS and MTU 9000 could be because of pixel size 8/3B not 3B!
-     */
-    hd_color_bpp = ceil(s->bpp);
-
-    s->buffers[0] = malloc(w*s->height*hd_color_bpp);
-    s->buffers[1] = malloc(w*s->height*hd_color_bpp);
 
     s->src_linesize = w*s->bpp;
     if(s->rgb)
@@ -804,43 +709,190 @@ display_sdl_init(char *fmt)
         s->dst_rect.h = x_res_y;
     }
 
+    if(s->bufflen < s->src_linesize * s->height) {
+        pthread_mutex_lock(&s->bufflock);
+        s->bufflen = s->src_linesize * s->height;
+        s->buffers[0] = malloc(s->bufflen);
+        s->buffers[1] = malloc(s->bufflen);
+        pthread_mutex_unlock(&s->bufflock);
+        fprintf(stdout, "New buffers %p, %p\n", s->buffers[0], s->buffers[1]);
+    }
+
     s->src_rect.w = s->width;
     s->src_rect.h = s->height;
 
     fprintf(stdout,"Setting SDL rect %dx%d - %d,%d.\n", s->dst_rect.w, s->dst_rect.h, s->dst_rect.x, 
                     s->dst_rect.y);
 
+}
+
+void *
+display_sdl_init(char *fmt)
+{
+    struct state_sdl    *s;
+    int                 ret;
+
+    SDL_Surface         *image;
+    SDL_Surface         *temp;
+    SDL_Rect            splash_src;
+    SDL_Rect            splash_dest;
+
+    unsigned int        i;
+
+    s = (struct state_sdl *) calloc(sizeof(struct state_sdl),1);
+    s->magic = MAGIC_SDL;
+
+    if(fmt != NULL) {
+            if(strcmp(fmt, "help") == 0) {
+                show_help();
+                free(s);
+                return NULL;
+            }
+        
+            if(strcmp(fmt, "fs") == 0) {
+                s->fs = 1;
+                fmt = NULL;
+            } else {
+
+                char *tmp = strdup(fmt);
+                char *tok;
+           
+                tok = strtok(tmp, ":");
+                if(tok == NULL) {
+                        show_help();
+                        free(s);
+                        free(tmp);
+                        return NULL;
+                }
+                s->width = atol(tok);
+                tok = strtok(NULL, ":");
+                if(tok == NULL) {
+                        show_help();
+                        free(s);
+                        free(tmp);
+                        return NULL;
+                }
+                s->height = atol(tok);
+                tok = strtok(NULL, ":");
+                if(tok == NULL) {
+                        show_help();
+                        free(s);
+                        free(tmp);
+                        return NULL;
+                }
+                s->codec = 0xffffffff;
+                for(i = 0; codec_info[i].name != NULL; i++) {
+                        if(strcmp(tok, codec_info[i].name) == 0) {
+                            s->codec = codec_info[i].codec;
+                            s->c_info = &codec_info[i];
+                            s->rgb = codec_info[i].rgb;
+                        }
+                }
+                if(s->codec == 0xffffffff) {
+                    fprintf(stderr, "SDL: unknown codec: %s\n", tok);
+                    free(s);
+                    free(tmp);
+                    return NULL;
+                }
+                tok = strtok(NULL, ":");
+                while(tok != NULL) {
+                        if(tok[0] == 'f' && tok[1] == 's') {
+                                s->fs=1;
+                        } else if(tok[0] == 'i') {
+                                s->interlaced = 1;
+                        } else if(tok[0] == 'd') {
+                                s->deinterlace = 1;
+                        } else if(tok[0] == 'f') {
+                                s->use_file =1;
+                                tok = strtok(NULL, ":");
+                            s->filename = strdup(tok);
+                        }
+                        tok = strtok(NULL, ":");
+                }
+                free(tmp);
+
+                if(s->width <= 0 || s->height <= 0) {
+                    printf("SDL: failed to parse config options: '%s'\n", fmt);
+                    free(s);
+                    return NULL;
+                }
+                s->bpp = s->c_info->bpp;
+                printf("SDL setup: %dx%d codec %s\n", s->width, s->height, s->c_info->name);
+        }
+    }
+
+    asm("emms\n");
+
+    platform_sem_init(&s->semaphore, 0, 0);
+
+    if (!(s->display = XOpenDisplay(NULL))) {
+                printf("Unable to open display.\n");
+                return NULL;
+    }
+
+#ifdef HAVE_MACOSX
+    /* Startup function to call when running Cocoa code from a Carbon application. 
+     * Whatever the fuck that means. 
+     * Avoids uncaught exception (1002)  when creating CGSWindow */
+    NSApplicationLoad();
+#endif
+
+    ret = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE);
+    if (ret < 0) {
+        printf("Unable to initialize SDL.\n");
+        return NULL;
+    }
+
+    if(fmt != NULL) {
+        /*FIXME: kill hd_size at all, use another approach avoiding globals */
+        int w = s->width;
+
+        if(s->c_info->h_align) {
+            w = ((w+s->c_info->h_align-1)/s->c_info->h_align)*s->c_info->h_align;
+        }
+
+        hd_size_x = w;
+        hd_size_y = s->height;
+        reconfigure_screen(s);
+        temp = SDL_LoadBMP("/usr/share/uv-0.3.1/uv_startup.bmp");
+        if (temp == NULL) {
+            temp = SDL_LoadBMP("/usr/local/share/uv-0.3.1/uv_startup.bmp");
+            if (temp == NULL) {
+                temp = SDL_LoadBMP("uv_startup.bmp");
+                if (temp == NULL) {
+                    printf("Unable to load splash bitmap: uv_startup.bmp.\n");
+                }
+            }
+        }   
+    
+        if (temp != NULL) {
+            image = SDL_DisplayFormat(temp);
+            SDL_FreeSurface(temp);
+ 
+            splash_src.x = 0;
+            splash_src.y = 0;
+            splash_src.w = image->w;
+            splash_src.h = image->h;
+ 
+            splash_dest.x = (int)((s->width - splash_src.w) / 2);
+            splash_dest.y = (int)((s->height - splash_src.h) / 2) + 60;
+            splash_dest.w = image->w;
+            splash_dest.h = image->h;
+ 
+            SDL_BlitSurface(image, &splash_src, s->sdl_screen, &splash_dest);
+            SDL_Flip(s->sdl_screen);
+        }
+    }
+
+    s->bufflen = hd_size_x*hd_size_y*s->bpp;
+
+    s->buffers[0] = malloc(s->bufflen);
+    s->buffers[1] = malloc(s->bufflen);
+
     s->image_network = 0;
     s->image_display = 1;
 
-    temp = SDL_LoadBMP("/usr/share/uv-0.3.1/uv_startup.bmp");
-    if (temp == NULL) {
-        temp = SDL_LoadBMP("/usr/local/share/uv-0.3.1/uv_startup.bmp");
-        if (temp == NULL) {
-            temp = SDL_LoadBMP("uv_startup.bmp");
-            if (temp == NULL) {
-                printf("Unable to load splash bitmap: uv_startup.bmp.\n");
-            }
-        }
-    }
-    
-    if (temp != NULL) {
-        image = SDL_DisplayFormat(temp);
-        SDL_FreeSurface(temp);
- 
-        splash_src.x = 0;
-        splash_src.y = 0;
-        splash_src.w = image->w;
-        splash_src.h = image->h;
- 
-        splash_dest.x = (int)((x_res_x - splash_src.w) / 2);
-        splash_dest.y = (int)((x_res_y - splash_src.h) / 2) + 60;
-        splash_dest.w = image->w;
-        splash_dest.h = image->h;
- 
-        SDL_BlitSurface(image, &splash_src, s->sdl_screen, &splash_dest);
-        SDL_Flip(s->sdl_screen);
-    }
+    pthread_mutex_init(&s->bufflock, NULL);
 
     if (pthread_create(&(s->thread_id), NULL, display_thread_sdl, (void *) s) != 0) {
         perror("Unable to create display thread\n");
@@ -865,13 +917,22 @@ display_sdl_done(void *state)
     SDL_Quit();
 }
 
-char *
+frame_t *
 display_sdl_getf(void *state)
 {
     struct state_sdl *s = (struct state_sdl *) state;
     assert(s->magic == MAGIC_SDL);
     assert(s->buffers[s->image_network] != NULL);
-    return (char *)s->buffers[s->image_network];
+    pthread_mutex_lock(&s->bufflock);
+    s->frame.len = s->bufflen;
+    if(s->frame.buffer != NULL) {
+        if(s->frame.buffer != (char*)s->buffers[0] && 
+           s->frame.buffer != (char*)s->buffers[1])
+            free(s->frame.buffer);
+    }
+    s->frame.buffer = (char*)s->buffers[s->image_network];
+    pthread_mutex_unlock(&s->bufflock);
+    return &s->frame;
 }
 
 int

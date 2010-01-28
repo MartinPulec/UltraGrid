@@ -49,21 +49,19 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.5 $
- * $Date: 2010/01/28 10:06:59 $
+ * $Revision: 1.4.2.1 $
+ * $Date: 2010/01/28 18:17:28 $
  *
  */
-
-
-#ifdef HAVE_AUDIO
-#include "audio/audio.h"
-#endif /* HAVE_AUDIO */
 
 /******************************************************************************/
 /* The main playout buffer data structures. See "RTP: Audio and Video for the */
 /* Internet" Figure 6.8 (page 167) for a diagram.                       [csp] */
 /******************************************************************************/
 
+#include "config.h"
+#include "audio/audio.h"
+#include "video_display.h"
 
 /* The coded representation of a single frame */
 struct coded_data {
@@ -81,8 +79,8 @@ struct pbuf;
  */
 struct pbuf	*pbuf_init(void);
 void		 pbuf_insert(struct pbuf *playout_buf, rtp_packet *r);
-int 	 	 pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time, char *framebuffer, int i, int compression);
+int 	 	 pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time, frame_t *framebuffer, int i, int compression);
 void		 pbuf_remove(struct pbuf *playout_buf, struct timeval curr_time);
 #ifdef HAVE_AUDIO
-int              audio_pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time, audio_frame *frame);
+int          audio_pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time, audio_frame *frame);
 #endif /* HAVE_AUDIO */

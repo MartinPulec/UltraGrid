@@ -1,5 +1,5 @@
 /*
- * FILE:    v_codec.c
+ * FILE:    video_display/quicktime.h
  * AUTHORS: Martin Benes     <martinbenesh@gmail.com>
  *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
  *          Petr Holub       <hopet@ics.muni.cz>
@@ -8,7 +8,7 @@
  *          Dalibor Matura   <255899@mail.muni.cz>
  *          Ian Wesley-Smith <iwsmith@cct.lsu.edu>
  *
- * Copyright (c) 2005-2010 CESNET z.s.p.o.
+ * Copyright (c) 2005-2209 CESNET z.s.p.o.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, is permitted provided that the following conditions
@@ -26,10 +26,10 @@
  * 
  *      This product includes software developed by CESNET z.s.p.o.
  * 
- * 4. Neither the name of the CESNET nor the names of its contributors may be
- *    used to endorse or promote products derived from this software without
- *    specific prior written permission.
- *
+ * 4. Neither the name of CESNET nor the names of its contributors may be used 
+ *    to endorse or promote products derived from this software without specific
+ *    prior written permission.
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE AUTHORS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESSED OR IMPLIED WARRANTIES, INCLUDING,
  * BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
@@ -43,45 +43,15 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
+ *
  */
-#include <stdio.h>
-#include "v_codec.h"
 
-const struct codec_info_t codec_info[] = {
-        {RGBA, "RGBA", 0, 0, 4.0, 1},
-        {UYVY, "UYVY", 846624121, 0, 2, 0},
-        {Vuy2, "2vuy", '2vuy', 0, 2, 0},
-        {DVS8, "DVS8", 0, 0, 2, 0},
-        {R10k, "R10k", 1378955371, 0, 4, 1},
-        {v210, "v210", 1983000880, 48, 8.0/3.0, 0},
-        {DVS10, "DVS10", 0, 48, 8.0/3.0, 0},
-        {0, NULL, 0, 0, 0.0, 0}};
+#define DISPLAY_QUICKTIME_ID    0xba370f2f
 
+display_type_t          *display_quicktime_probe(void);
+void                    *display_quicktime_init(char *fmt);
+void                     display_quicktime_done(void *state);
+char                    *display_quicktime_getf(void *state);
+int                      display_quicktime_putf(void *state, char *frame);
+display_colour_t         display_quicktime_colour(void *state);
 
-void
-show_codec_help(void)
-{
-        printf("\tSupported codecs:\n");
-        printf("\t\t8bits\n");
-        printf("\t\t\t'RGBA' - Red Green Blue Alpha 32bit\n");
-        printf("\t\t\t'UYVY' - YUV 4:2:2\n");
-        printf("\t\t\t'2vuy' - YUV 4:2:2\n");
-        printf("\t\t\t'DVS8' - Centaurus 8bit YUV 4:2:2\n");
-        printf("\t\t10bits\n");
-        printf("\t\t\t'R10k' - RGB 4:4:4\n");
-        printf("\t\t\t'v210' - YUV 4:2:2\n");
-        printf("\t\t\t'DVS10' - Centaurus 10bit YUV 4:2:2\n");
-}
-
-double
-get_bpp(codec_t codec) 
-{
-    int i=0;
-
-    while(codec_info[i].name != NULL) {
-        if(codec == codec_info[i].codec)
-            return codec_info[i].bpp;
-        i++;
-    }
-    return 0;
-}

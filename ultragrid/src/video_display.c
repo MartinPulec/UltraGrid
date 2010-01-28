@@ -47,8 +47,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.8 $
- * $Date: 2009/12/11 15:29:39 $
+ * $Revision: 1.8.2.1 $
+ * $Date: 2010/01/28 18:17:28 $
  *
  */
 
@@ -64,7 +64,7 @@
 #include "video_display/hdstation.h"
 #include "video_display/gl_sdl.h"
 #include "video_display/dxt.h"
-#include "video_display/kona.h"
+#include "video_display/quicktime.h"
 #include "video_display/sage.h"
 
 /*
@@ -161,12 +161,12 @@ static display_table_t display_device_table[] = {
 #ifdef HAVE_MACOSX
 	{
 		0,
-		display_kona_probe,
-		display_kona_init,
-		display_kona_done,
-		display_kona_getf,
-		display_kona_putf,
-		display_kona_colour
+		display_quicktime_probe,
+		display_quicktime_init,
+		display_quicktime_done,
+		display_quicktime_getf,
+		display_quicktime_putf,
+		display_quicktime_colour
 	},
 #endif /* HAVE_MACOSX */
 	{
@@ -278,7 +278,7 @@ display_done(struct display *d)
 	display_device_table[d->index].func_done(d->state);
 }
 
-char *
+frame_t*
 display_get_frame(struct display *d)
 {
 	assert(d->magic == DISPLAY_MAGIC);

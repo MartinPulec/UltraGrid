@@ -37,8 +37,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.1 $
- * $Date: 2007/11/08 09:48:59 $
+ * $Revision: 1.1.2.1 $
+ * $Date: 2010/01/28 18:17:28 $
  *
  */
 
@@ -55,48 +55,30 @@
 #define DXT_DEPTH 8
 
 static void 
-copy_p2f (char *frame, rtp_packet *pckt)
+copy_p2f (frame_t *frame, rtp_packet *pckt)
 {
-	/* Copy 1 rtp packet to frame for uncompressed HDTV data. */
-	/* We limit packets to having up to 10 payload headers... */
-	char                    *offset;
-	payload_hdr_t		*curr_hdr;
-	payload_hdr_t		*hdr[10];
-	int			 hdr_count = 0, i;
-	int		 	 frame_offset = 0;
-	char 			*base;
-	int  			 len;
+    char            *offset;
+    payload_hdr_t   *hdr;
+    uint32_t        len;
+    uint32_t        data_pos;
 
-	/* figure out how many headers ? */
-	curr_hdr = (payload_hdr_t *) pckt->data;
-	while (1) {
-		hdr[hdr_count++] = curr_hdr;
-		if ((ntohs(curr_hdr->flags) & (1<<15)) != 0) {
-				/* Last header... */
-				break;
-		}
-		if (hdr_count == 10) {
-				/* Out of space... */
-			break;
-		}
-		curr_hdr++;
-	}
+    hdr = (payload_hdr_t *)pckt->data;
+    offset = (char*)(pckt->data + sizeof(payload_hdr_t));
 
-        /* OK, now we can copy the data */
-	offset=(char *) (pckt->data) + hdr_count * 8;
-	for (i = 1; i < hdr_count + 1; i++) {
-		unsigned int y=ntohs(hdr[i - 1]->y_offset);
-                /*if(y < HD_HEIGHT/2) {
-                        y = y *2;
-                } else {
-                        y = (y-HD_HEIGHT/2) * 2 + 1;
-                }*/
-		frame_offset = ((ntohs(hdr[i - 1]->x_offset) + y * HD_WIDTH)) * HD_DEPTH;
-		base = frame + frame_offset;
-		len  = ntohs(hdr[i - 1]->length);
-		memcpy(base,offset,len);
-		offset+=len;
-	}
+    len = ntohs(hdr->length);
+    data_pos = ntohl(hdr->offset);
+   
+    if(frame->len > data_pos + len) {
+        memcpy(frame->buffer + data_pos, offset, len);
+    }
+
+    hd_size_x = ntohs(hdr->width);
+    hd_size_y = ntohs(hdr->height);
+    hd_color_spc = hdr->colorspc;
+
+//    fprintf(stdout, "Received: len %d, pos %d, width %d, height %d, color spc %d\n",
+  //      ntohs(hdr->length), ntohl(hdr->offset), hd_size_x, hd_size_y, hd_color_spc);
+
 }
 
 static void 
@@ -131,29 +113,29 @@ dxt_copy_p2f (char *frame, rtp_packet *pckt)
         /* OK, now we can copy the data */
 	offset=(char *) (pckt->data) + hdr_count * 8;
 	for (i = 0; i < hdr_count ; i++) {
-		y=ntohs(hdr[i]->y_offset);
+	//	y=ntohs(hdr[i]->y_offset);
                 /*if(y < HD_HEIGHT/2) {
                         y = y *2;
                 } else {
                         y = (y-HD_HEIGHT/2) * 2 + 1;
                 }*/
-		frame_offset = ((ntohs(hdr[i]->x_offset) + y * DXT_WIDTH)) * DXT_DEPTH;
+	/*	frame_offset = ((ntohs(hdr[i]->x_offset) + y * DXT_WIDTH)) * DXT_DEPTH;
 		base = frame + frame_offset;
 		len  = ntohs(hdr[i]->length);
 		memcpy(base,offset,len);
-		offset+=len;
+		offset+=len;*/
 	}
 }
 
 void
-decode_frame(struct coded_data *cdata, char *frame, int compression)
+decode_frame(struct coded_data *cdata, frame_t *frame, int compression)
 {
 	/* Given a list of coded_data, try to decode it. This is mostly  */
  	/* a placeholder function: once we have multiple codecs, it will */
 	/* get considerably more content...                              */
 	if(compression) {
 		while (cdata != NULL) {
-			dxt_copy_p2f(frame, cdata->data);
+			dxt_copy_p2f(frame->buffer, cdata->data);
 			cdata = cdata->nxt;
 		}
 	}else{

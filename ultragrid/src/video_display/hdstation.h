@@ -38,17 +38,17 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.1 $
- * $Date: 2007/11/08 09:48:59 $
+ * $Revision: 1.1.2.1 $
+ * $Date: 2010/01/28 18:17:28 $
  *
  */
 
 #define DISPLAY_HDSTATION_ID	0x74ac3e0f
 
-display_type_t		*display_hdstation_probe(void);
-void 			*display_hdstation_init(void);
-void 			 display_hdstation_done(void *state);
-char 			*display_hdstation_getf(void *state);
-int  			 display_hdstation_putf(void *state, char *frame);
-display_colour_t	 display_hdstation_colour(void *state);
+display_type_t      *display_hdstation_probe(void);
+void                *display_hdstation_init(char *fmt);
+void                 display_hdstation_done(void *state);
+char                *display_hdstation_getf(void *state);
+int                  display_hdstation_putf(void *state, char *frame);
+display_colour_t     display_hdstation_colour(void *state);
 

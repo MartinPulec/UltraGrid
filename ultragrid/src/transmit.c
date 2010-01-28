@@ -48,8 +48,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.5 $
- * $Date: 2009/12/11 15:29:39 $
+ * $Revision: 1.5.2.1 $
+ * $Date: 2010/01/28 18:17:28 $
  *
  */
 
@@ -57,12 +57,13 @@
 #include "config_unix.h"
 #include "config_win32.h"
 #include "debug.h"
+#include "audio/audio.h"
 #include "video_types.h"
 #include "rtp/rtp.h"
+#include "rtp/rtp_callback.h"
 #include "tv.h"
 #include "transmit.h"
 #include "host.h"
-#include "audio/audio.h"
 
 #define TRANSMIT_MAGIC	0xe80ab15f
 #define DXT_HEIGHT 1080/4
@@ -108,15 +109,7 @@ tx_done(struct video_tx *tx)
 
 #define HD_WIDTH hd_size_x
 #define HD_HEIGHT hd_size_y
-#define HD_DEPTH    hd_color_bpp
 #define TS_WRAP     4294967296
-
-typedef struct {
-	uint16_t	scan_line;	/* pixels */
-	uint16_t	scan_offset;	/* pixels */
-	uint16_t	length;		/* octets */
-	uint16_t	flags;
-} payload_hdr_t;
 
 void
 dxt_tx_send(struct video_tx *tx, struct video_frame *frame, struct rtp *rtp_session)
@@ -161,9 +154,9 @@ dxt_tx_send(struct video_tx *tx, struct video_frame *frame, struct rtp *rtp_sess
 		while ((l % DXT_DEPTH) != 0) {	/* Only send complete pixels */
 			l--;
 		}
-
-		payload_hdr[payload_count].scan_line   = htons(y);
-		payload_hdr[payload_count].scan_offset = htons(x);
+// FIXME:
+//		payload_hdr[payload_count].scan_line   = htons(y);
+//		payload_hdr[payload_count].scan_offset = htons(x);
 		payload_hdr[payload_count].length      = htons(l);
 		payload_hdr[payload_count].flags       = htons(0);
 		payload_count++;
@@ -205,81 +198,52 @@ dxt_tx_send(struct video_tx *tx, struct video_frame *frame, struct rtp *rtp_sess
 void
 tx_send(struct video_tx *tx, struct video_frame *frame, struct rtp *rtp_session)
 {
-	int		 m, x, y, first_x, first_y, data_len, l, payload_count, octets_left_this_line, octets_left_this_packet;
-	payload_hdr_t	 payload_hdr[10];
-	int		 pt = 96;	/* A dynamic payload type for the tests... */
-	static uint32_t	 ts = 0;
-	char		*data;
+	int		        m, data_len;
+	payload_hdr_t	payload_hdr;
+	int		        pt = 96;	/* A dynamic payload type for the tests... */
+	static uint32_t	ts = 0;
+	char		    *data;
+    unsigned int    pos;
+#if HAVE_MACOSX
+	struct timeval  start, stop;
+#else /* HAVE_MACOSX */
+    struct timespec start, stop;
+#endif /* HAVE_MACOSX */
+	long            delta;
 
 	assert(tx->magic == TRANSMIT_MAGIC);
 
-	assert(frame->data_len == (hd_size_x * hd_size_y * hd_color_bpp));
-	data = frame->data + (hd_size_x * hd_size_y * hd_color_bpp);
-
 	m = 0;
-	x = 0; 
-	y = 0;
-	payload_count = 0;
-	data_len = 0;
-	first_x  = x;
-	first_y  = y;
 	ts = get_local_mediatime();
+    pos = 0;
+
+    payload_hdr.width = htons(hd_size_x);
+    payload_hdr.height = htons(hd_size_y);
+    payload_hdr.colorspc = hd_color_spc;
+
 	do {
-		if (payload_count == 0) {
-			data_len = 0;
-			first_x  = x;
-			first_y  = y;
-		}
+		payload_hdr.offset = htonl(pos);
+		payload_hdr.flags  = htons(1<<15);
 
-		octets_left_this_line   = (HD_WIDTH - x) * HD_DEPTH;
-		octets_left_this_packet = tx->mtu - 40 - data_len - (8 * (payload_count + 1));
-		if (octets_left_this_packet < octets_left_this_line) {
-			l = octets_left_this_packet;
-		} else {
-			l = octets_left_this_line;
-		}
-		while ((l % HD_DEPTH) != 0) {	/* Only send complete pixels */
-			l--;
-		}
+		data = frame->data + pos;
+        data_len = tx->mtu - 40 - (sizeof(payload_hdr_t));
+        if(pos + data_len > frame->data_len) {
+            m = 1;
+            data_len = frame->data_len - pos;
+        }
+        pos += data_len;
+		payload_hdr.length = htons(data_len);
+		GET_STARTTIME;
+    	rtp_send_data_hdr(rtp_session, ts, pt, m, 0, 0, (char *)&payload_hdr, 
+                                sizeof(payload_hdr_t), data, data_len, 0, 0, 0);
+		do {
+			GET_STOPTIME;
+			GET_DELTA;
+			if(delta < 0)
+				delta += 1000000000L;
+		} while(packet_rate - delta > 0);
 
-		payload_hdr[payload_count].scan_line   = htons(y);
-		payload_hdr[payload_count].scan_offset = htons(x);
-		payload_hdr[payload_count].length      = htons(l);
-		payload_hdr[payload_count].flags       = htons(0);
-		payload_count++;
-
-		data_len = data_len + l;
-
-		x += (l / HD_DEPTH);
-		if (x == (int)HD_WIDTH) {
-			x = 0;
-			y++;
-		}
-		if (y == (int)HD_HEIGHT) {
-			m = 1;
-		}
-
-		/* Is it time to send this packet? */
-		if ((y == (int)HD_HEIGHT) || (payload_count == 10) || ((40u + data_len + (8u * (payload_count + 1)) + HD_DEPTH) > tx->mtu)) {
-#if HAVE_MACOSX
-			struct timeval start, stop;
-#else /* HAVE_MACOSX */
-			struct timespec start, stop;
-#endif /* HAVE_MACOSX */
-			long delta;
-			payload_hdr[payload_count - 1].flags = htons(1<<15);
-			data = frame->data + (first_y * HD_WIDTH * HD_DEPTH) + (first_x * HD_DEPTH);
-			GET_STARTTIME;
-			rtp_send_data_hdr(rtp_session, ts, pt, m, 0, 0, (char *) payload_hdr, 8 * payload_count, data, data_len, 0, 0, 0);
-			do {
-				GET_STOPTIME;
-				GET_DELTA;
-				if(delta < 0)
-					delta += 1000000000L;
-			} while(packet_rate - delta > 0);
-			payload_count = 0;
-		}
-	} while (y < (int)HD_HEIGHT);
+	} while (pos < frame->data_len);
 }
 
 #ifdef HAVE_AUDIO

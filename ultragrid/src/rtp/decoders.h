@@ -38,8 +38,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.1 $
- * $Date: 2007/11/08 09:48:59 $
+ * $Revision: 1.1.2.1 $
+ * $Date: 2010/01/28 18:17:28 $
  *
  */
 
@@ -47,4 +47,4 @@
 /* 
  * External interface: 
  */
-void decode_frame(struct coded_data *compressed_frame, char *framebuffer, int compression);
+void decode_frame(struct coded_data *compressed_frame, frame_t *framebuffer, int compression);

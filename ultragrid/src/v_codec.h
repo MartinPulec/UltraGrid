@@ -59,7 +59,7 @@ typedef enum {
 } codec_t;
 
 struct codec_info_t {
-        int codec;
+        codec_t codec;
         const char *name;
         unsigned int fcc;
         int h_align;
@@ -70,5 +70,6 @@ struct codec_info_t {
 extern const struct codec_info_t codec_info[];
 
 void show_codec_help(void);
+double get_bpp(codec_t codec);
 
 #endif

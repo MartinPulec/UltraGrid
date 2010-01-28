@@ -47,8 +47,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.5 $
- * $Date: 2009/12/11 15:13:10 $
+ * $Revision: 1.5.2.1 $
+ * $Date: 2010/01/28 18:17:28 $
  *
  */
 
@@ -63,40 +63,41 @@
 #include "video_types.h"
 #include "video_capture.h"
 #include "video_capture/hdstation.h"
+#include "v_codec.h"
 #include "tv.h"
 #include "dvs_clib.h"		/* From the DVS SDK */
 #include "dvs_fifo.h"		/* From the DVS SDK */
 
 struct vidcap_hdstation_state {
-	sv_handle 	*sv;
-	sv_fifo	 	*fifo;
+	sv_handle 	    *sv;
+	sv_fifo	 	    *fifo;
 	sv_fifo_buffer	*dma_buffer;
-	char		*rtp_buffer;
-	char		*tmp_buffer;
-	int		 buffer_size;
-	pthread_t	 thread_id;
+	char		    *rtp_buffer;
+	char		    *tmp_buffer;
+	int		         buffer_size;
+	pthread_t	     thread_id;
 	pthread_mutex_t	 lock;
 	pthread_cond_t	 boss_cv;
 	pthread_cond_t	 worker_cv;
-	int		 boss_waiting;
-	int		 worker_waiting;
-	int		 work_to_do;
-	char		*bufs[2];
-	int		 bufs_index;
+	int		         boss_waiting;
+	int		         worker_waiting;
+	int		         work_to_do;
+	char		    *bufs[2];
+	int		         bufs_index;
+    codec_t          codec;
+    uint32_t         hd_video_mode;
+    double           bpp;
 };
 
 static void *
 vidcap_hdstation_grab_thread(void *arg)
 {
 	int		res;
-	struct vidcap_hdstation_state *s = (struct vidcap_hdstation_state *) arg;
+	struct  vidcap_hdstation_state *s = (struct vidcap_hdstation_state *) arg;
 
 	while (1) {
 		s->dma_buffer = NULL;
 		res = sv_fifo_vsyncwait(s->sv, s->fifo);
-		//if (res != SV_OK) {
-	//		printf("Unable to ysyncwait %s\n", sv_geterrortext(res));
-	//	}
 
 		res = sv_fifo_getbuffer(s->sv, s->fifo, &(s->dma_buffer), NULL, SV_FIFO_FLAG_VIDEOONLY|SV_FIFO_FLAG_FLUSH);
 		if (res != SV_OK) {
@@ -144,11 +145,10 @@ vidcap_hdstation_probe(void)
 		debug_msg("Cannot probe HDTV capture device\n");
 		return NULL;
 	}
-	if (sv_videomode(sv, hd_video_mode | SV_MODE_AUDIO_NOAUDIO) != SV_OK) {
-		sv_close(sv);
-		return NULL;
-	}
 	sv_close(sv);
+
+    hd_size_x = 1920;
+    hd_size_y = 1080;
 
 	vt = (struct vidcap_type *) malloc(sizeof(struct vidcap_type));
 	if (vt != NULL) {
@@ -165,16 +165,70 @@ vidcap_hdstation_probe(void)
 void *
 vidcap_hdstation_init(char *fmt)
 {
-	int fps = atoi(fmt); //What is fps good for?
+	int fps = 29; 
 	struct vidcap_hdstation_state	*s;
-	int 				 res;
+    int i;
+	int res;
 
-	//assert(fps == 60);
-    UNUSED(fmt);
+
+    if (fmt != NULL) {
+        if (strcmp(fmt, "help") == 0) {
+            printf("hdstation options:\n");
+            printf("\tfps:codec\n");
+
+            return 0;
+        }
+
+        char *tmp;
+
+        tmp = strtok(fmt, ":");
+        if (!tmp) {
+            fprintf(stderr, "Wrong config %s\n", fmt);
+            return 0;
+        }
+        fps = atoi(tmp);
+        tmp = strtok(NULL, ":");
+        if (!tmp) {
+            fprintf(stderr, "Wrong config %s\n", fmt);
+            return 0;
+        }
+        s->codec = 0xffffffff;
+        for(i = 0; codec_info[i].name != NULL; i++) {
+                if(strcmp(tmp, codec_info[i].name) == 0) {
+                    s->codec = codec_info[i].codec;
+                    s->bpp = codec_info[i].bpp;
+                }
+        }
+        if(s->codec == 0xffffffff) {
+            fprintf(stderr, "hdstation: unknown codec: %s\n", tmp);
+            free(tmp);
+            return 0;
+        }
+    }
+    
+    s->hd_video_mode=SV_MODE_COLOR_YUV422 | SV_MODE_ACTIVE_STREAMER;
+
+    if (s->codec == DVS10) {
+        s->hd_video_mode |= SV_MODE_NBIT_10BDVS;
+    }
+
+    if (fps == 25) {
+        s->hd_video_mode |= SV_MODE_SMPTE274_25P;
+    }
+    else if (fps == 29) {
+        s->hd_video_mode |= SV_MODE_SMPTE274_29I;
+    }
+    else {
+        fprintf(stderr, "Wrong framerate in config %s\n", fmt);
+        return 0;
+    }
+
+    hd_size_x = 1920;
+    hd_size_y = 1080;
+    hd_color_spc = s->codec;
 
 	s = (struct vidcap_hdstation_state *) malloc(sizeof(struct vidcap_hdstation_state));
 	if (s == NULL) {
-	//	debug_msg("Unable to allocate HDstation state\n",fps);
 		debug_msg("Unable to allocate HDstation state\n");
 		return NULL;
 	}
@@ -186,7 +240,7 @@ vidcap_hdstation_init(char *fmt)
 		return NULL;
 	}
 
-	res = sv_videomode(s->sv, hd_video_mode | SV_MODE_AUDIO_NOAUDIO);
+	res = sv_videomode(s->sv, s->hd_video_mode | SV_MODE_AUDIO_NOAUDIO);
 	if (res != SV_OK) {
 		goto error;
 	}
@@ -207,7 +261,7 @@ vidcap_hdstation_init(char *fmt)
 	pthread_cond_init(&(s->boss_cv), NULL);
 	pthread_cond_init(&(s->worker_cv), NULL);
 
-	s->buffer_size    = hd_color_bpp * hd_size_x * hd_size_y;
+	s->buffer_size    = s->bpp * hd_size_x * hd_size_y;
 	s->rtp_buffer     = NULL;
 	s->dma_buffer     = NULL;
 	s->tmp_buffer     = NULL;
@@ -275,7 +329,7 @@ vidcap_hdstation_grab(void *state)
 			vf->width       = hd_size_x;
 			vf->height      = hd_size_y;
 			vf->data        = s->rtp_buffer;
-			vf->data_len	= hd_size_x * hd_size_y * hd_color_bpp;
+			vf->data_len	= hd_size_x * hd_size_y * s->bpp;
 		}
 		return vf;
 	}

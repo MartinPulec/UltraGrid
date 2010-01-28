@@ -47,8 +47,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.3 $
- * $Date: 2009/12/11 15:27:17 $
+ * $Revision: 1.3.2.1 $
+ * $Date: 2010/01/28 18:17:28 $
  *
  */
 
@@ -62,6 +62,7 @@
 #include "debug.h"
 #include "video_display.h"
 #include "video_display/hdstation.h"
+#include "v_codec.h"
 #include "tv.h"
 
 #include "dvs_clib.h"		/* From the DVS SDK */
@@ -70,23 +71,26 @@
 #define HDSP_MAGIC	0x12345678
 
 struct state_hdsp {
-	pthread_t		 thread_id;
-	sv_handle 		*sv;
-	sv_fifo	 		*fifo;
-	char			*frame_buffer;
-	int			 frame_size;
-	sv_fifo_buffer		*fifo_buffer;
-	sv_fifo_buffer		*display_buffer;
-	sv_fifo_buffer		*tmp_buffer;
-	pthread_mutex_t		 lock;
-	pthread_cond_t		 boss_cv;
-	pthread_cond_t		 worker_cv;
-	int			 work_to_do;
-	int			 boss_waiting;
-	int			 worker_waiting;
-	uint32_t		 magic;
-	char			*bufs[2];
-	int			 bufs_index;
+    pthread_t        thread_id;
+    sv_handle       *sv;
+    sv_fifo         *fifo;
+    char            *frame_buffer;
+    int              frame_size;
+    sv_fifo_buffer  *fifo_buffer;
+    sv_fifo_buffer  *display_buffer;
+    sv_fifo_buffer  *tmp_buffer;
+    pthread_mutex_t  lock;
+    pthread_cond_t   boss_cv;
+    pthread_cond_t   worker_cv;
+    int              work_to_do;
+    int              boss_waiting;
+    int              worker_waiting;
+    uint32_t         magic;
+    char            *bufs[2];
+    int              bufs_index;
+    codec_t          codec;
+    int              hd_video_mode;
+    double           bpp;
 };
 
 static void*
@@ -137,7 +141,7 @@ display_hdstation_getf(void *state)
 	}
 	s->bufs_index   = (s->bufs_index + 1) % 2;
 	s->frame_buffer = s->bufs[s->bufs_index];
-	s->frame_size   = hd_size_x * hd_size_y * hd_color_bpp;
+	s->frame_size   = hd_size_x * hd_size_y * s->bpp;
 	s->fifo_buffer->dma.addr = s->frame_buffer;
 	s->fifo_buffer->dma.size = s->frame_size;
 
@@ -176,10 +180,64 @@ display_hdstation_putf(void *state, char *frame)
 }
 
 void *
-display_hdstation_init(void)
+display_hdstation_init(char *fmt)
 {
-	struct state_hdsp 	*s;
-	int 		 	 res;
+	struct state_hdsp   *s;
+    int                  fps;
+    int                  i;
+	int                  res;
+
+    if (fmt != NULL) {
+        if (strcmp(fmt, "help") == 0) {
+            printf("hdstation options:\n");
+            printf("\tfps:codec\n");
+
+            return 0;
+        }   
+
+        char *tmp;
+
+        tmp = strtok(fmt, ":");
+        if (!tmp) {
+            fprintf(stderr, "Wrong config %s\n", fmt);
+            return 0;
+        }
+        fps = atoi(tmp);
+        tmp = strtok(NULL, ":");
+        if (!tmp) {
+            fprintf(stderr, "Wrong config %s\n", fmt);
+            return 0;
+        }
+        s->codec = 0xffffffff;
+        for(i = 0; codec_info[i].name != NULL; i++) {
+                if(strcmp(tmp, codec_info[i].name) == 0) {
+                    s->codec = codec_info[i].codec;
+                    s->bpp = codec_info[i].bpp;
+                }
+        }
+        if(s->codec == 0xffffffff) {
+            fprintf(stderr, "hdstation: unknown codec: %s\n", tmp);
+            free(s);
+            free(tmp);
+            return 0;
+        }       
+    }
+
+    s->hd_video_mode=SV_MODE_COLOR_YUV422 | SV_MODE_ACTIVE_STREAMER;
+
+    if (s->codec == DVS10) {
+        s->hd_video_mode |= SV_MODE_NBIT_10BDVS;
+    }
+    if (fps == 25) {
+        s->hd_video_mode |= SV_MODE_SMPTE274_25P;
+    }
+    else if (fps == 29) {
+        s->hd_video_mode |= SV_MODE_SMPTE274_29I;
+    }
+    else {
+        fprintf(stderr, "Wrong framerate in config %s\n", fmt);
+        return 0;
+    }
 
 	/* Start the display thread... */
 	s = (struct state_hdsp *) malloc(sizeof(struct state_hdsp));
@@ -192,7 +250,7 @@ display_hdstation_init(void)
 		debug_msg("Cannot open HDTV display device\n");
 		return NULL;
 	}
-	res = sv_videomode(s->sv, hd_video_mode | SV_MODE_AUDIO_NOAUDIO);
+	res = sv_videomode(s->sv, s->hd_video_mode | SV_MODE_AUDIO_NOAUDIO);
 	if (res != SV_OK) {
 		debug_msg("Cannot set videomode %s\n", sv_geterrortext(res));
 	        return NULL;
@@ -222,11 +280,11 @@ display_hdstation_init(void)
 	s->worker_waiting = FALSE;
 	s->display_buffer = NULL;
 
-	s->bufs[0] = malloc(hd_size_x * hd_size_y * hd_color_bpp);
-	s->bufs[1] = malloc(hd_size_x * hd_size_y * hd_color_bpp);
+	s->bufs[0] = malloc(hd_size_x * hd_size_y * s->bpp);
+	s->bufs[1] = malloc(hd_size_x * hd_size_y * s->bpp);
 	s->bufs_index = 0;
-	memset(s->bufs[0], 0, hd_size_x * hd_size_y * hd_color_bpp);
-	memset(s->bufs[1], 0, hd_size_x * hd_size_y * hd_color_bpp);
+	memset(s->bufs[0], 0, hd_size_x * hd_size_y * s->bpp);
+	memset(s->bufs[1], 0, hd_size_x * hd_size_y * s->bpp);
 
 	if (pthread_create(&(s->thread_id), NULL, display_thread_hd, (void *) s) != 0) {
 		perror("Unable to create display thread\n");
@@ -268,10 +326,6 @@ display_hdstation_probe(void)
 	if (sv == NULL) {
 		debug_msg("Cannot probe HDTV display device\n");
 		return NULL;
-	}
-	if (sv_videomode(sv, hd_video_mode | SV_MODE_AUDIO_NOAUDIO) != SV_OK) {
-		debug_msg("Cannot set videomode\n");
-	        return NULL;
 	}
 	sv_close(sv);
 

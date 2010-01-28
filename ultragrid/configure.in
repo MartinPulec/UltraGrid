@@ -352,7 +352,7 @@ case $host_os in
 		then
 			QUICKTIME_INC=
 			QUICKTIME_LIB="-framework QuickTime -framework Carbon -framework AppKit"	
-			QUICKTIME_OBJ="src/video_capture/quicktime.o src/video_display/kona.o"
+			QUICKTIME_OBJ="src/video_capture/quicktime.o src/video_display/quicktime.o"
 		fi
 esac
 
