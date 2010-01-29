@@ -48,8 +48,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.15.2.1 $
- * $Date: 2010/01/28 18:17:28 $
+ * $Revision: 1.15.2.2 $
+ * $Date: 2010/01/29 11:26:04 $
  *
  */
 
@@ -61,7 +61,7 @@
 #include "video_types.h"
 #include "video_capture.h"
 #include "video_capture/quicktime.h"
-#include "v_codec.h"
+#include "video_codec.h"
 #include <math.h>
 
 #ifdef HAVE_MACOSX

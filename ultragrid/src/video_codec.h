@@ -1,15 +1,13 @@
 /*
- * FILE:   video_codec.h
- * AUTHOR: Colin Perkins <csp@csperkins.org>
- *         Martin Benes     <martinbenesh@gmail.com>
- *         Lukas Hejtmanek  <xhejtman@ics.muni.cz>
- *         Petr Holub       <hopet@ics.muni.cz>
- *         Milos Liska      <xliska@fi.muni.cz>
- *         Jiri Matela      <matela@ics.muni.cz>
- *         Dalibor Matura   <255899@mail.muni.cz>
- *         Ian Wesley-Smith <iwsmith@cct.lsu.edu>
+ * FILE:    video_codec.h
+ * AUTHORS: Martin Benes     <martinbenesh@gmail.com>
+ *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
+ *          Petr Holub       <hopet@ics.muni.cz>
+ *          Milos Liska      <xliska@fi.muni.cz>
+ *          Jiri Matela      <matela@ics.muni.cz>
+ *          Dalibor Matura   <255899@mail.muni.cz>
+ *          Ian Wesley-Smith <iwsmith@cct.lsu.edu>
  *
- * Copyright (c) 2004 University of Glasgow
  * Copyright (c) 2005-2010 CESNET z.s.p.o.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,16 +24,14 @@
  * 3. All advertising materials mentioning features or use of this software
  *    must display the following acknowledgement:
  * 
- *      This product includes software developed by the University of Southern
- *      California Information Sciences Institute. This product also includes
- *      software developed by CESNET z.s.p.o.
+ *      This product includes software developed by CESNET z.s.p.o.
  * 
- * 4. Neither the name of the University, Institute, CESNET nor the names of
- *    its contributors may be used to endorse or promote products derived from
- *    this software without specific prior written permission.
+ * 4. Neither the name of the CESNET nor the names of its contributors may be
+ *    used to endorse or promote products derived from this software without
+ *    specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHORS AND CONTRIBUTORS
- * ``AS IS'' AND ANY EXPRESSED OR IMPLIED WARRANTIES, INCLUDING,
+ * "AS IS" AND ANY EXPRESSED OR IMPLIED WARRANTIES, INCLUDING,
  * BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
  * AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
  * EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
@@ -47,54 +43,33 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.2 $
- * $Date: 2009/12/11 15:29:39 $
- *
  */
+#ifndef __video_codec_h
 
-#ifndef _VCODEC_H
-#define _VCODEC_H
+#define __video_codec_h
 
-typedef int vcodec_id_t;
+typedef enum {
+        RGBA,
+        UYVY,
+        Vuy2,
+        DVS8,
+        R10k,
+        v210,
+        DVS10,
+} codec_t;
 
-/*
- * Initialisation, probing of available codecs, name and RTP 
- * payload type mapping functions. 
- */
+struct codec_info_t {
+        codec_t codec;
+        const char *name;
+        unsigned int fcc;
+        int h_align;
+        double bpp;
+        unsigned rgb:1;
+} codec_info_t;
 
-void        vcodec_init(void);
-void        vcodec_done(void);
-unsigned    vcodec_get_num_codecs (void);
+extern const struct codec_info_t codec_info[];
 
-const char *vcodec_get_name       (unsigned id);	/* Single word name */
-const char *vcodec_get_description(unsigned id);	/* Descriptive text */
+void show_codec_help(void);
+double get_bpp(codec_t codec);
 
-int         vcodec_can_encode     (unsigned id);
-int         vcodec_can_decode     (unsigned id);
-
-int         vcodec_map_payload    (uint8_t pt, unsigned id);
-int         vcodec_unmap_payload  (uint8_t pt);
-uint8_t     vcodec_get_payload    (unsigned id);
-unsigned    vcodec_get_by_payload (uint8_t pt);
-
-/*
- * Video encoder and decoder functions. These operate on particular
- * instances of a codec, identified by the "state" parameter.
- */
-
-struct vcodec_state;
-
-struct vcodec_state *vcodec_encoder_create (unsigned id);
-void                 vcodec_encoder_destroy(struct vcodec_state *state);
-int                  vcodec_encode         (struct vcodec_state *state,
-                                            struct video_frame  *in,
-					    struct coded_data   *out);
-
-struct vcodec_state *vcodec_decoder_create (unsigned id);
-void                 vcodec_decoder_destroy(struct vcodec_state *state);
-int                  vcodec_decode         (struct vcodec_state *state,
-					    struct coded_data   *in,
-                                            struct video_frame  *out);
-
-#endif /* _VCODEC_H */
-
+#endif

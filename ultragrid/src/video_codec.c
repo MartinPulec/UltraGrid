@@ -1,15 +1,13 @@
 /*
- * FILE:   video_codec.c
- * AUTHOR: Colin Perkins <csp@csperkins.org>
- *         Martin Benes     <martinbenesh@gmail.com>
- *         Lukas Hejtmanek  <xhejtman@ics.muni.cz>
- *         Petr Holub       <hopet@ics.muni.cz>
- *         Milos Liska      <xliska@fi.muni.cz>
- *         Jiri Matela      <matela@ics.muni.cz>
- *         Dalibor Matura   <255899@mail.muni.cz>
- *         Ian Wesley-Smith <iwsmith@cct.lsu.edu>
+ * FILE:    video_codec.c
+ * AUTHORS: Martin Benes     <martinbenesh@gmail.com>
+ *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
+ *          Petr Holub       <hopet@ics.muni.cz>
+ *          Milos Liska      <xliska@fi.muni.cz>
+ *          Jiri Matela      <matela@ics.muni.cz>
+ *          Dalibor Matura   <255899@mail.muni.cz>
+ *          Ian Wesley-Smith <iwsmith@cct.lsu.edu>
  *
- * Copyright (c) 2004 University of Glasgow
  * Copyright (c) 2005-2010 CESNET z.s.p.o.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -26,16 +24,14 @@
  * 3. All advertising materials mentioning features or use of this software
  *    must display the following acknowledgement:
  * 
- *      This product includes software developed by the University of Southern
- *      California Information Sciences Institute. This product also includes
- *      software developed by CESNET z.s.p.o.
+ *      This product includes software developed by CESNET z.s.p.o.
  * 
- * 4. Neither the name of the University, Institute, CESNET nor the names of
- *    its contributors may be used to endorse or promote products derived from
- *    this software without specific prior written permission.
+ * 4. Neither the name of the CESNET nor the names of its contributors may be
+ *    used to endorse or promote products derived from this software without
+ *    specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHORS AND CONTRIBUTORS
- * ``AS IS'' AND ANY EXPRESSED OR IMPLIED WARRANTIES, INCLUDING,
+ * "AS IS" AND ANY EXPRESSED OR IMPLIED WARRANTIES, INCLUDING,
  * BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
  * AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
  * EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
@@ -47,224 +43,45 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.3 $
- * $Date: 2009/12/11 15:29:39 $
- *
  */
-
-#include "config.h"
-#include "config_unix.h"
-#include "config_win32.h"
-#include "debug.h"
-#include "rtp/rtp.h"		/* Needed by rtp/pbuf.h  */
-#include "rtp/pbuf.h"		/* For struct coded_data */
-#include "video_types.h"
+#include <stdio.h>
 #include "video_codec.h"
-#include "video_codec/dv.h"
-#include "video_codec/uv_yuv.h"
 
-struct vcodec_api {
-	int                  (*vcx_init)           (void);
-	void                 (*vcx_exit)           (void);
-	const char *         (*vcx_get_name)       (void);
-	const char *         (*vcx_get_desc)       (void);
-	int                  (*vcx_can_encode)     (void);
-	int                  (*vcx_can_decode)     (void);
-	struct vcodec_state *(*vcx_encoder_create) (void);
-	void                 (*vcx_encoder_destroy)(struct vcodec_state *state);
-	int                  (*vcx_encode)         (struct vcodec_state *state, 
-                                                    struct video_frame *in, 
-					            struct coded_data *out);
-	struct vcodec_state *(*vcx_decoder_create) (void);
-	void                 (*vcx_decoder_destroy)(struct vcodec_state *state);
-	int                  (*vcx_decode)         (struct vcodec_state *state, 
-                                                    struct coded_data *in, 
-						    struct video_frame *out);
-};
+const struct codec_info_t codec_info[] = {
+        {RGBA, "RGBA", 0, 0, 4.0, 1},
+        {UYVY, "UYVY", 846624121, 0, 2, 0},
+        {Vuy2, "2vuy", '2vuy', 0, 2, 0},
+        {DVS8, "DVS8", 0, 0, 2, 0},
+        {R10k, "R10k", 1378955371, 0, 4, 1},
+        {v210, "v210", 1983000880, 48, 8.0/3.0, 0},
+        {DVS10, "DVS10", 0, 48, 8.0/3.0, 0},
+        {0, NULL, 0, 0, 0.0, 0}};
 
-/* Table of pointers to codec functions, one for each codec we */
-/* support. These are not necessarily all available for use as */
-/* some codecs may fail their initialization (for example, if  */
-/* they depend on hardware devices that are not present). The  */
-/* available_vcodecs[] array contains pointers to those codecs */
-/* that are usable.                                            */
-static struct vcodec_api vcodec_table[] = {
-#ifdef HAVE_DV_CODEC
-	{
-		dv_init,
-		dv_exit,
-		dv_get_name,
-		dv_get_desc,
-		dv_can_encode,
-		dv_can_decode,
-		dv_encoder_create,
-		dv_encoder_destroy,
-		dv_encode,
-		dv_decoder_create,
-		dv_decoder_destroy,
-		dv_decode
-	},
-#endif /* HAVE_DV_CODEC */
-	{
-		uv_yuv_init,
-		uv_yuv_exit,
-		uv_yuv_get_name,
-		uv_yuv_get_desc,
-		uv_yuv_can_encode,
-		uv_yuv_can_decode,
-		uv_yuv_encoder_create,
-		uv_yuv_encoder_destroy,
-		uv_yuv_encode,
-		uv_yuv_decoder_create,
-		uv_yuv_decoder_destroy,
-		uv_yuv_decode
-	}
-};
-
-#define NUM_VCODEC_INTERFACES (sizeof(vcodec_table)/sizeof(struct vcodec_api))
-
-/* Pointers to entries in the vcodec_table[], for codecs that  */
-/* are usable...                                               */
-static struct vcodec_api *available_vcodecs[NUM_VCODEC_INTERFACES];
-static unsigned	          num_vcodecs;
-
-/*
- * Public interface functions follow...
- */
 
 void
-vcodec_init(void)
+show_codec_help(void)
 {
-	unsigned i;
-
-	num_vcodecs = 0;
-	for (i = 0; i < NUM_VCODEC_INTERFACES; i++) {
-		if (vcodec_table[i].vcx_init()) {
-			available_vcodecs[num_vcodecs++] = &vcodec_table[i];
-		}
-	}
+        printf("\tSupported codecs:\n");
+        printf("\t\t8bits\n");
+        printf("\t\t\t'RGBA' - Red Green Blue Alpha 32bit\n");
+        printf("\t\t\t'UYVY' - YUV 4:2:2\n");
+        printf("\t\t\t'2vuy' - YUV 4:2:2\n");
+        printf("\t\t\t'DVS8' - Centaurus 8bit YUV 4:2:2\n");
+        printf("\t\t10bits\n");
+        printf("\t\t\t'R10k' - RGB 4:4:4\n");
+        printf("\t\t\t'v210' - YUV 4:2:2\n");
+        printf("\t\t\t'DVS10' - Centaurus 10bit YUV 4:2:2\n");
 }
 
-void
-vcodec_done(void)
+double
+get_bpp(codec_t codec) 
 {
-	unsigned i;
+    int i=0;
 
-	for (i = 0; i < num_vcodecs; i++) {
-		available_vcodecs[i]->vcx_exit();
-	}
-	num_vcodecs = 0;
+    while(codec_info[i].name != NULL) {
+        if(codec == codec_info[i].codec)
+            return codec_info[i].bpp;
+        i++;
+    }
+    return 0;
 }
-
-unsigned
-vcodec_get_num_codecs(void)
-{
-	return num_vcodecs;
-}
-
-const char *
-vcodec_get_name(unsigned id)
-{
-	assert(id < num_vcodecs);
-	return available_vcodecs[id]->vcx_get_name();
-}
-
-const char *
-vcodec_get_description(unsigned id)
-{
-	assert(id < num_vcodecs);
-	return available_vcodecs[id]->vcx_get_desc();
-}
-
-int
-vcodec_can_encode(unsigned id)
-{
-	assert(id < num_vcodecs);
-	return available_vcodecs[id]->vcx_can_encode();
-}
-
-int
-vcodec_can_decode(unsigned id)
-{
-	assert(id < num_vcodecs);
-	return available_vcodecs[id]->vcx_can_decode();
-}
-
-int
-vcodec_map_payload(uint8_t pt, unsigned id)
-{
-	UNUSED(id);
-	UNUSED(pt);
-	return 0;
-}
-
-int
-vcodec_unmap_payload(uint8_t pt)
-{
-	UNUSED(pt);
-	return 0;
-}
-
-unsigned
-vcodec_get_by_payload (uint8_t pt)
-{
-	UNUSED(pt);
-	return 0; /* FIXME */
-}
-
-uint8_t
-vcodec_get_payload(unsigned id)
-{
-	UNUSED(id);
-	return 0;
-}
-
-/*****************************************************************************/
-struct vcodec_state {
-	uint32_t	magic;
-};
-
-struct vcodec_state *
-vcodec_encoder_create (unsigned id)
-{
-	UNUSED(id);
-	return NULL;
-}
-
-void
-vcodec_encoder_destroy(struct vcodec_state *state)
-{
-	UNUSED(state);
-}
-
-int
-vcodec_encode(struct vcodec_state *state, struct video_frame  *in, struct coded_data *out)
-{
-	UNUSED(state);
-	UNUSED(in);
-	UNUSED(out);
-	return 0;
-}
-
-struct vcodec_state *
-vcodec_decoder_create(unsigned id)
-{
-	UNUSED(id);
-	return NULL;
-}
-
-void
-vcodec_decoder_destroy(struct vcodec_state *state)
-{
-	UNUSED(state);
-}
-
-int
-vcodec_decode(struct vcodec_state *state, struct coded_data   *in, struct video_frame  *out)
-{
-	UNUSED(state);
-	UNUSED(in);
-	UNUSED(out);
-	return 0;
-}
-

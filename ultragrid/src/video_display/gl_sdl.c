@@ -72,7 +72,7 @@
 #include "config_win32.h"
 #include "video_display.h"
 #include "video_display/gl_sdl.h"
-#include "v_codec.h"
+#include "video_codec.h"
 
 #define HD_WIDTH        1920
 #define HD_HEIGHT       1080

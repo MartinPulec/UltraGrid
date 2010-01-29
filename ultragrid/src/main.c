@@ -49,8 +49,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.28.2.1 $
- * $Date: 2010/01/28 18:17:28 $
+ * $Revision: 1.28.2.2 $
+ * $Date: 2010/01/29 11:26:04 $
  *
  */
 
@@ -64,7 +64,6 @@
 #include "rtp/rtp_callback.h"
 #include "rtp/pbuf.h"
 #include "video_types.h"
-#include "video_codec.h"
 #include "video_capture.h"
 #include "video_display.h"
 #include "video_display/sdl.h"
@@ -145,29 +144,6 @@ usage(void)
     printf("\t                   \tuse -g help with a device to get info about\n");
     printf("\t                   \tsupported capture/display modes\n");
     printf("\t-i                 \tiHDTV compatibility mode\n");
-}
-
-static void
-initialize_video_codecs(void)
-{
-	int		nc, i;
-
-	vcodec_init();
-	nc = vcodec_get_num_codecs();
-	for (i = 0; i < nc; i++) {
-		if (vcodec_can_encode(i)) {
-			printf("Video encoder : %s\n", vcodec_get_description(i));
-		}
-		if (vcodec_can_decode(i)) {
-			printf("Video decoder : %s\n", vcodec_get_description(i));
-		}
-
-		/* Map static and "well-known" dynamic payload types */
-		//TODO: Is this where I would list DXT payload?
-		if (strcmp(vcodec_get_name(i), "uv_yuv") == 0) {
-			vcodec_map_payload(96, i);	/*  96 : Uncompressed YUV */
-		}
-	}
 }
 
 void
@@ -691,7 +667,6 @@ main(int argc, char *argv[])
 
 	gettimeofday(&uv->start_time, NULL);
 
-	initialize_video_codecs();
 	uv->participants = pdb_init();
 
 	if ((uv->capture_device = initialize_video_capture(uv->requested_capture, cfg)) == NULL) {
@@ -866,7 +841,6 @@ main(int argc, char *argv[])
 	rtp_done(uv->network_device);
 	vidcap_done(uv->capture_device);
 	display_done(uv->display_device);
-	vcodec_done();
 	if(uv->participants != NULL)
 		pdb_destroy(&uv->participants);
 	if(uv->audio_participants != NULL)
