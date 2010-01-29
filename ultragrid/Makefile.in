@@ -1,6 +1,6 @@
 #
-# $Revision: 1.20 $
-# $Date: 2009/12/02 10:42:56 $
+# $Revision: 1.20.2.1 $
+# $Date: 2010/01/29 11:46:51 $
 #
 
 AR            = ar
@@ -21,7 +21,6 @@ OBJS          = src/bitstream.o \
 		src/pdb.o \
 		src/tv.o \
 		src/transmit.o \
-		src/v_codec.o \
 		src/tfrc.o \
 		src/rtp/pbuf.o \
 		src/rtp/decoders.o \
@@ -36,8 +35,6 @@ OBJS          = src/bitstream.o \
 		src/crypto/md5.o \
 		src/crypto/random.o \
 		src/video_codec.o \
-		src/video_codec/dv.o \
-		src/video_codec/uv_yuv.o \
 		src/video_capture.o \
 		src/video_capture/null.o \
 		src/video_capture/firewire_dv_freebsd.o \
