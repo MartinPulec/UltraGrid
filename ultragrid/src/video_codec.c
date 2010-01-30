@@ -85,3 +85,262 @@ get_bpp(codec_t codec)
     }
     return 0;
 }
+
+/* linear blend deinterlace */
+void
+vc_deinterlace(unsigned char *src, long src_linesize, int lines)
+{
+        int i,j;
+        long pitch = src_linesize;
+        register long pitch2 = pitch*2;
+        unsigned char *bline1, *bline2, *bline3;
+        register unsigned char *line1, *line2, *line3;
+
+        bline1 = src;
+        bline2 = src + pitch;
+        bline3 = src + 3*pitch;
+        for(i=0; i < dst_linesize; i+=16) {
+        /* preload first two lines */
+        asm volatile(
+                 "movdqa (%0), %%xmm0\n"
+                 "movdqa (%1), %%xmm1\n"
+                 :
+                 : "r" ((unsigned long *)bline1),
+                               "r" ((unsigned long *)bline2));
+        line1 = bline2;
+        line2 = bline2 + pitch;
+        line3 = bline3;
+        for(j=0; j < lines-4; j+=2) {
+            asm  volatile(
+                  "movdqa (%1), %%xmm2\n"
+                  "pavgb %%xmm2, %%xmm0\n"
+                  "pavgb %%xmm1, %%xmm0\n"
+                  "movdqa (%2), %%xmm1\n"
+                  "movdqa %%xmm0, (%0)\n"
+                  "pavgb %%xmm1, %%xmm0\n"
+                  "pavgb %%xmm2, %%xmm0\n"
+                              "movdqa %%xmm0, (%1)\n"
+                  :
+                  :"r" ((unsigned long *)line1),
+                   "r" ((unsigned long *)line2),
+                   "r" ((unsigned long *)line3)
+                  );
+            line1 += pitch2;
+            line2 += pitch2;
+            line3 += pitch2;
+        }
+        bline1 += 16;
+        bline2 += 16;
+        bline3 += 16;
+    }
+}
+
+
+
+void
+vc_copylinev210(unsigned char *dst, unsigned char *src, int len)
+{
+        struct {
+                 unsigned a:10;
+                 unsigned b:10;
+                 unsigned c:10;
+                 unsigned p1:2;
+        } *s;
+        register uint32_t *d;
+        register uint32_t tmp;
+
+        d = (uint32_t *)dst;
+        s = (void*)src;
+
+        while(len > 0) {
+                tmp = (s->a >> 2) | (s->b >> 2) << 8 | (((s)->c >> 2) << 16);
+                s++;
+                *(d++) = tmp | ((s->a >> 2) << 24);
+                tmp = (s->b >> 2) | (((s)->c >> 2) << 8);
+                s++;
+                *(d++) = tmp | ((s->a >> 2) << 16) | ((s->b >> 2)<<24);
+                tmp = (s->c >> 2);
+                s++;
+                *(d++) = tmp | ((s->a >> 2) << 8) | ((s->b >> 2) << 16) | ((s->c >> 2) << 24);
+                s++;
+
+                len -= 16;
+        }
+}
+
+void
+vc_copyliner10k(unsigned char *dst, unsigned char *src, int len, int rshift, int gshift, int bshift)
+{
+        struct {
+                unsigned r:8;
+
+                unsigned gh:6;
+                unsigned p1:2;
+
+                unsigned bh:4;
+                unsigned p2:2;
+                unsigned gl:2;
+
+                unsigned p3:2;
+                unsigned p4:2;
+                unsigned bl:4;
+        } *s;
+        register uint32_t *d;
+        register uint32_t tmp;
+
+        d = (uint32_t *)dst;
+        s = (void*)src;
+
+        while(len > 0) {
+                tmp = (s->r << rshift) | (((s->gh << 2) | s->gl) << gshift) | (((s->bh << 4) | s->bl) << bshift);
+                s++;
+                *(d++) = tmp;
+                tmp = (s->r << rshift) | (((s->gh << 2) | s->gl) << gshift) | (((s->bh << 4) | s->bl) << bshift);
+                s++;
+                *(d++) = tmp;
+                tmp = (s->r << rshift) | (((s->gh << 2) | s->gl) << gshift) | (((s->bh << 4) | s->bl) << bshift);
+                s++;
+                *(d++) = tmp;
+                tmp = (s->r << rshift) | (((s->gh << 2) | s->gl) << gshift) | (((s->bh << 4) | s->bl) << bshift);
+                s++;
+                *(d++) = tmp;
+                len -= 16;
+        }
+}
+
+void
+vc_copylineRGBA(unsigned char *dst, unsigned char *src, int len, int rshift, int gshift, int bshift)
+{
+        register uint32_t *d=(uint32_t*)dst;
+        register uint32_t *s=(uint32_t*)src;
+        register uint32_t tmp;
+
+        if(rshift == 0 && gshift == 8 && bshift == 16) {
+                memcpy(dst, src, len);
+        } else {
+                while(len > 0) {
+                        register unsigned int r,g,b;
+                        tmp = *(s++);
+                        r = tmp & 0xff;
+                        g = (tmp >> 8) & 0xff;
+                        b = (tmp >> 16) & 0xff;
+                        tmp = (r << rshift) | (g << gshift) | (b << bshift);
+                        *(d++) = tmp;
+                        tmp = *(s++);
+                        r = tmp & 0xff;
+                        g = (tmp >> 8) & 0xff;
+                        b = (tmp >> 16) & 0xff;
+                        tmp = (r << rshift) | (g << gshift) | (b << bshift);
+                        *(d++) = tmp;
+                        tmp = *(s++);
+                        r = tmp & 0xff;
+                        g = (tmp >> 8) & 0xff;
+                        b = (tmp >> 16) & 0xff;
+                        tmp = (r << rshift) | (g << gshift) | (b << bshift);
+                        *(d++) = tmp;
+                        tmp = *(s++);
+                        r = tmp & 0xff;
+                        g = (tmp >> 8) & 0xff;
+                        b = (tmp >> 16) & 0xff;
+                        tmp = (r << rshift) | (g << gshift) | (b << bshift);
+                        *(d++) = tmp;
+                        len -= 16;
+                }
+        }
+}
+
+/* convert 10bits Cb Y Cr A Y Cb Y A to 8bits Cb Y Cr Y Cb Y */
+
+#if !(HAVE_MACOSX || HAVE_32B_LINUX)
+
+void
+vc_copylineDVS10(unsigned char *dst, unsigned char *src, int len)
+{
+        register unsigned char *_d=dst,*_s=src;
+
+        while(len > 0) {
+
+        asm ("movd %0, %%xmm4\n": : "r" (0xffffff));
+
+            asm volatile ("movdqa (%0), %%xmm0\n"
+            "movdqa 16(%0), %%xmm5\n"
+            "movdqa %%xmm0, %%xmm1\n"
+            "movdqa %%xmm0, %%xmm2\n"
+            "movdqa %%xmm0, %%xmm3\n"
+            "pand  %%xmm4, %%xmm0\n"
+            "movdqa %%xmm5, %%xmm6\n"
+            "movdqa %%xmm5, %%xmm7\n"
+            "movdqa %%xmm5, %%xmm8\n"
+            "pand  %%xmm4, %%xmm5\n"
+            "pslldq $4, %%xmm4\n"
+            "pand  %%xmm4, %%xmm1\n"
+            "pand  %%xmm4, %%xmm6\n"
+            "pslldq $4, %%xmm4\n"
+            "psrldq $1, %%xmm1\n"
+            "psrldq $1, %%xmm6\n"
+            "pand  %%xmm4, %%xmm2\n"
+            "pand  %%xmm4, %%xmm7\n"
+            "pslldq $4, %%xmm4\n"
+            "psrldq $2, %%xmm2\n"
+            "psrldq $2, %%xmm7\n"
+            "pand  %%xmm4, %%xmm3\n"
+            "pand  %%xmm4, %%xmm8\n"
+            "por %%xmm1, %%xmm0\n"
+            "psrldq $3, %%xmm3\n"
+            "psrldq $3, %%xmm8\n"
+            "por %%xmm2, %%xmm0\n"
+            "por %%xmm6, %%xmm5\n"
+            "por %%xmm3, %%xmm0\n"
+            "por %%xmm7, %%xmm5\n"
+            "movdq2q %%xmm0, %%mm0\n"
+            "por %%xmm8, %%xmm5\n"
+            "movdqa %%xmm5, %%xmm1\n"
+            "pslldq $12, %%xmm5\n"
+            "psrldq $4, %%xmm1\n"
+            "por %%xmm5, %%xmm0\n"
+            "psrldq $8, %%xmm0\n"
+            "movq %%mm0, (%1)\n"
+            "movdq2q %%xmm0, %%mm1\n"
+            "movdq2q %%xmm1, %%mm2\n"
+            "movq %%mm1, 8(%1)\n"
+            "movq %%mm2, 16(%1)\n"
+            :
+            : "r" (_s), "r" (_d));
+        _s += 32;
+        _d += 24;
+        len -= 32;
+    }
+}
+
+#else
+
+void
+vc_copylineDVS10(unsigned char *dst, unsigned char *src, int len)
+{
+        register uint64_t *d, *s;
+
+        register uint64_t a1,a2,a3,a4;
+
+        d = (uint64_t *)dst;
+        s = (uint64_t *)src;
+
+        while(len > 0) {
+                a1 = *(s++);
+                a2 = *(s++);
+                a3 = *(s++);
+                a4 = *(s++);
+
+                a1 = (a1 & 0xffffff) | ((a1 >> 8) & 0xffffff000000LL);
+                a2 = (a2 & 0xffffff) | ((a2 >> 8) & 0xffffff000000LL);
+                a3 = (a3 & 0xffffff) | ((a3 >> 8) & 0xffffff000000LL);
+                a4 = (a4 & 0xffffff) | ((a4 >> 8) & 0xffffff000000LL);
+
+                *(d++) = a1 | (a2 << 48);       /* 0xa2|a2|a1|a1|a1|a1|a1|a1 */
+                *(d++) = (a2 >> 16)|(a3 << 32); /* 0xa3|a3|a3|a3|a2|a2|a2|a2 */
+                *(d++) = (a3 >> 32)|(a4 << 16); /* 0xa4|a4|a4|a4|a4|a4|a3|a3 */
+
+                len -= 16;
+        }
+}
+
+#endif /* !(HAVE_MACOSX || HAVE_32B_LINUX) */

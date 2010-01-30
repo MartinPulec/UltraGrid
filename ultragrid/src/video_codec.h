@@ -65,6 +65,7 @@ struct video_frame {
         unsigned int   height;
         char           *data;
         unsigned int   data_len;      
+        unsigned int   linesize;
         /* Number of octets (8 bits, 1 byte) of data present */
 };
 
@@ -82,5 +83,11 @@ extern const struct codec_info_t codec_info[];
 
 void show_codec_help(void);
 double get_bpp(codec_t codec);
+
+void vc_deinterlace(unsigned char *src, long src_linesize, int lines);
+void vc_copylineDVS10(unsigned char *dst, unsigned char *src, int len);
+void vc_copylinev210(unsigned char *dst, unsigned char *src, int len);
+void vc_copyliner10k(unsigned char *dst, unsigned char *src, int len, int rshift, int gshift, int bshift);
+void vc_copylineRGBA(unsigned char *dst, unsigned char *src, int len, int rshift, int gshift, int bshift);
 
 #endif

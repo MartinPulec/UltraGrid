@@ -44,8 +44,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.15.2.5 $
- * $Date: 2010/01/30 20:25:51 $
+ * $Revision: 1.15.2.6 $
+ * $Date: 2010/01/30 21:24:49 $
  *
  */
 
@@ -137,12 +137,6 @@ struct state_sdl {
     pthread_mutex_t     idle_lock;
 };
 
-inline void copyline64(unsigned char *dst, unsigned char *src, int len);
-inline void copyline128(unsigned char *dst, unsigned char *src, int len);
-inline void copylinev210(unsigned char *dst, unsigned char *src, int len);
-inline void copyliner10k(struct state_sdl *s, unsigned char *dst, unsigned char *src, int len);
-void copylineRGBA(struct state_sdl *s, unsigned char *dst, unsigned char *src, int len);
-void deinterlace(struct state_sdl *s, unsigned char *buffer);
 void show_help(void);
 void cleanup_screen(struct state_sdl *s);
 void reconfigure_screen(struct state_sdl *s);
@@ -172,270 +166,6 @@ display_sdl_handle_events(void *arg)
     return 0;
 
 }
-
-
-/* linear blend deinterlace */
-void
-deinterlace(struct state_sdl *s, unsigned char *buffer)
-{
-    int i,j;
-    long pitch = s->dst_linesize;
-    register long pitch2 = pitch*2;
-    unsigned char *bline1, *bline2, *bline3;
-    register unsigned char *line1, *line2, *line3;
-
-    bline1 = buffer;
-    bline2 = buffer + pitch;
-    bline3 = buffer + 3*pitch; 
-        for(i=0; i < s->dst_linesize; i+=16) {
-        /* preload first two lines */
-        asm volatile(
-                 "movdqa (%0), %%xmm0\n"
-                 "movdqa (%1), %%xmm1\n"
-                 :
-                 : "r" ((unsigned long *)bline1),
-                               "r" ((unsigned long *)bline2));
-        line1 = bline2;
-        line2 = bline2 + pitch;
-        line3 = bline3;
-                for(j=0; j < s->height-4; j+=2) {
-            asm  volatile(
-                  "movdqa (%1), %%xmm2\n"
-                  "pavgb %%xmm2, %%xmm0\n" 
-                  "pavgb %%xmm1, %%xmm0\n"
-                  "movdqa (%2), %%xmm1\n"
-                  "movdqa %%xmm0, (%0)\n"
-                  "pavgb %%xmm1, %%xmm0\n"
-                  "pavgb %%xmm2, %%xmm0\n"
-                              "movdqa %%xmm0, (%1)\n"
-                  : 
-                  :"r" ((unsigned long *)line1),
-                   "r" ((unsigned long *)line2),
-                   "r" ((unsigned long *)line3)
-                  );
-            line1 += pitch2;
-            line2 += pitch2;
-            line3 += pitch2;
-        }
-        bline1 += 16;
-        bline2 += 16;
-        bline3 += 16;
-    }               
-}
-
-void
-copyline64(unsigned char *dst, unsigned char *src, int len)
-{
-        register uint64_t *d, *s;
-
-        register uint64_t a1,a2,a3,a4;
-
-        d = (uint64_t *)dst;
-        s = (uint64_t *)src;
-
-        while(len > 0) {
-                a1 = *(s++);
-                a2 = *(s++);
-                a3 = *(s++);
-                a4 = *(s++);
-
-                a1 = (a1 & 0xffffff) | ((a1 >> 8) & 0xffffff000000LL);
-                a2 = (a2 & 0xffffff) | ((a2 >> 8) & 0xffffff000000LL);
-                a3 = (a3 & 0xffffff) | ((a3 >> 8) & 0xffffff000000LL);
-                a4 = (a4 & 0xffffff) | ((a4 >> 8) & 0xffffff000000LL);
-
-                *(d++) = a1 | (a2 << 48);       /* 0xa2|a2|a1|a1|a1|a1|a1|a1 */
-                *(d++) = (a2 >> 16)|(a3 << 32); /* 0xa3|a3|a3|a3|a2|a2|a2|a2 */
-                *(d++) = (a3 >> 32)|(a4 << 16); /* 0xa4|a4|a4|a4|a4|a4|a3|a3 */
-
-                len -= 12;
-    }
-}
-
-void
-copylinev210(unsigned char *dst, unsigned char *src, int len)
-{
-    struct {
-                 unsigned a:10;
-                 unsigned b:10;
-                 unsigned c:10;
-                 unsigned p1:2;
-    } *s;
-    register uint32_t *d;
-    register uint32_t tmp;
-
-    d = (uint32_t *)dst;
-    s = (void*)src;
-
-    while(len > 0) {
-        tmp = (s->a >> 2) | (s->b >> 2) << 8 | (((s)->c >> 2) << 16);
-        s++;
-        *(d++) = tmp | ((s->a >> 2) << 24);
-        tmp = (s->b >> 2) | (((s)->c >> 2) << 8);
-        s++;
-        *(d++) = tmp | ((s->a >> 2) << 16) | ((s->b >> 2)<<24);
-        tmp = (s->c >> 2);
-        s++;
-        *(d++) = tmp | ((s->a >> 2) << 8) | ((s->b >> 2) << 16) | ((s->c >> 2) << 24);
-        s++;
-
-        len -= 12;
-    }
-}
-
-void
-copyliner10k(struct state_sdl *state, unsigned char *dst, unsigned char *src, int len)
-{
-    struct {
-        unsigned r:8;
-
-        unsigned gh:6;
-        unsigned p1:2;
-
-        unsigned bh:4;
-        unsigned p2:2;
-        unsigned gl:2;
-
-        unsigned p3:2;
-        unsigned p4:2;
-        unsigned bl:4;
-    } *s;
-    register uint32_t *d;
-    register uint32_t tmp;
-    int rshift = state->sdl_screen->format->Rshift;
-    int gshift = state->sdl_screen->format->Gshift;
-    int bshift = state->sdl_screen->format->Bshift;
-//    int ashift = state->sdl_screen->format->Ashift;
-
-    d = (uint32_t *)dst;
-    s = (void*)src;
-
-    while(len > 0) {
-        tmp = (s->r << rshift) | (((s->gh << 2) | s->gl) << gshift) | (((s->bh << 4) | s->bl) << bshift);// | (0xff << ashift);
-        s++;
-        *(d++) = tmp;
-        tmp = (s->r << rshift) | (((s->gh << 2) | s->gl) << gshift) | (((s->bh << 4) | s->bl) << bshift);// | (0xff << ashift);
-        s++;
-        *(d++) = tmp;
-        tmp = (s->r << rshift) | (((s->gh << 2) | s->gl) << gshift) | (((s->bh << 4) | s->bl) << bshift);// | (0xff << ashift);
-        s++;
-        *(d++) = tmp;
-        tmp = (s->r << rshift) | (((s->gh << 2) | s->gl) << gshift) | (((s->bh << 4) | s->bl) << bshift);// | (0xff << ashift);
-        s++;
-        *(d++) = tmp;
-        len -= 16;
-    }
-}
-
-void
-copylineRGBA(struct state_sdl *state, unsigned char *dst, unsigned char *src, int len)
-{
-    register uint32_t *d=(uint32_t*)dst;
-    register uint32_t *s=(uint32_t*)src;
-    register uint32_t tmp;
-    int rshift = state->sdl_screen->format->Rshift;
-    int gshift = state->sdl_screen->format->Gshift;
-    int bshift = state->sdl_screen->format->Bshift;
-
-    if(rshift == 0 && gshift == 8 && bshift == 16) {
-            memcpy(dst, src, len);
-    } else {
-            while(len > 0) {
-                register unsigned int r,g,b;
-                tmp = *(s++);
-                r = tmp & 0xff;
-                g = (tmp >> 8) & 0xff;
-                b = (tmp >> 16) & 0xff;
-                tmp = (r << rshift) | (g << gshift) | (b << bshift);
-                *(d++) = tmp; 
-                tmp = *(s++);
-                r = tmp & 0xff;
-                g = (tmp >> 8) & 0xff;
-                b = (tmp >> 16) & 0xff;
-                tmp = (r << rshift) | (g << gshift) | (b << bshift);
-                *(d++) = tmp; 
-                tmp = *(s++);
-                r = tmp & 0xff;
-                g = (tmp >> 8) & 0xff;
-                b = (tmp >> 16) & 0xff;
-                tmp = (r << rshift) | (g << gshift) | (b << bshift);
-                *(d++) = tmp; 
-                tmp = *(s++);
-                r = tmp & 0xff;
-                g = (tmp >> 8) & 0xff;
-                b = (tmp >> 16) & 0xff;
-                tmp = (r << rshift) | (g << gshift) | (b << bshift);
-                *(d++) = tmp;
-                len -= 16; 
-            }
-    }
-}
-
-/* convert 10bits Cb Y Cr A Y Cb Y A to 8bits Cb Y Cr Y Cb Y */
-
-#if !(HAVE_MACOSX || HAVE_32B_LINUX)
-
-void
-copyline128(unsigned char *d, unsigned char *s, int len)
-{
-    register unsigned char *_d=d,*_s=s;
-
-        while(len > 0) {
-
-        asm ("movd %0, %%xmm4\n": : "r" (0xffffff));
-
-            asm volatile ("movdqa (%0), %%xmm0\n"
-            "movdqa 16(%0), %%xmm5\n"
-            "movdqa %%xmm0, %%xmm1\n"
-            "movdqa %%xmm0, %%xmm2\n"
-            "movdqa %%xmm0, %%xmm3\n"
-            "pand  %%xmm4, %%xmm0\n"
-            "movdqa %%xmm5, %%xmm6\n"
-            "movdqa %%xmm5, %%xmm7\n"
-            "movdqa %%xmm5, %%xmm8\n"
-            "pand  %%xmm4, %%xmm5\n"
-            "pslldq $4, %%xmm4\n"
-            "pand  %%xmm4, %%xmm1\n"
-            "pand  %%xmm4, %%xmm6\n"
-            "pslldq $4, %%xmm4\n"
-            "psrldq $1, %%xmm1\n"
-            "psrldq $1, %%xmm6\n"
-            "pand  %%xmm4, %%xmm2\n"
-            "pand  %%xmm4, %%xmm7\n"
-            "pslldq $4, %%xmm4\n"
-            "psrldq $2, %%xmm2\n"
-            "psrldq $2, %%xmm7\n"
-            "pand  %%xmm4, %%xmm3\n"
-            "pand  %%xmm4, %%xmm8\n"
-            "por %%xmm1, %%xmm0\n"
-            "psrldq $3, %%xmm3\n"
-            "psrldq $3, %%xmm8\n"
-            "por %%xmm2, %%xmm0\n"
-            "por %%xmm6, %%xmm5\n"
-            "por %%xmm3, %%xmm0\n"
-            "por %%xmm7, %%xmm5\n"
-            "movdq2q %%xmm0, %%mm0\n"
-            "por %%xmm8, %%xmm5\n"
-            "movdqa %%xmm5, %%xmm1\n"
-            "pslldq $12, %%xmm5\n"
-            "psrldq $4, %%xmm1\n"
-            "por %%xmm5, %%xmm0\n"
-            "psrldq $8, %%xmm0\n"
-            "movq %%mm0, (%1)\n"
-            "movdq2q %%xmm0, %%mm1\n"
-            "movdq2q %%xmm1, %%mm2\n"
-            "movq %%mm1, 8(%1)\n"
-            "movq %%mm2, 16(%1)\n"
-            :
-            : "r" (_s), "r" (_d));
-        _s += 32;
-        _d += 24;
-        len -= 24;
-    }
-}
-
-#endif /* !(HAVE_MACOSX || HAVE_32B_LINUX) */
-
 
 static void*
 display_thread_sdl(void *arg)
@@ -504,14 +234,17 @@ display_thread_sdl(void *arg)
         switch(s->codec) {
                 case R10k:
                         for(i = 0; i < height; i++) {
-                                copyliner10k(s, line2, line1, linesize);
+                                vc_copyliner10k(line2, line1, linesize, 
+                                                s->sdl_screen->format->Rshift, 
+                                                s->sdl_screen->format->Gshift,
+                                                s->sdl_screen->format->Bshift);
                                 line1 += s->src_linesize;
                                 line2 += s->sdl_screen->pitch;;
                         }
                         break;
                 case v210:
                         for(i = 0; i < s->height; i++) {
-                                copylinev210(line2, line1, s->dst_linesize);
+                                vc_copylinev210(line2, line1, s->src_linesize);
                                 line1 += s->src_linesize;
                                 line2 += s->dst_linesize;
                         }
@@ -519,26 +252,16 @@ display_thread_sdl(void *arg)
                 case DVS10:
                         if(s->interlaced == 0) {
                                 for(i = 0; i < s->height; i++) {
-#if (HAVE_MACOSX || HAVE_32B_LINUX)
-                                        copyline64(line2, line1, s->dst_linesize);
-#else
-                                        copyline128(line2, line1, s->dst_linesize);
-#endif
+                                        vc_copylineDVS10(line2, line1, s->src_linesize);
                                         line1 += s->src_linesize;
                                         line2 += s->dst_linesize;
                                 }
                         } else {
                                 for(i = 0; i < s->height; i+=2) {
-#if (HAVE_MACOSX || HAVE_32B_LINUX)
-                                        copyline64(line2, line1, s->dst_linesize);
-                                        copyline64(line2+s->dst_linesize, 
+                                        vc_copylineDVS10(line2, line1, s->src_linesize);
+                                        vc_copylineDVS10(line2+s->dst_linesize, 
                                                    line1+s->src_linesize*s->height/2, 
-                                                   s->dst_linesize);
-#else /* (HAVE_MACOSX || HAVE_32B_LINUX) */
-                                        copyline128(line2, line1, s->dst_linesize);
-                                        copyline128(line2+s->dst_linesize, 
-                                                    line1+s->src_linesize*s->height/2, s->dst_linesize);
-#endif /* (HAVE_MACOSX || HAVE_32B_LINUX) */
+                                                   s->src_linesize);
                                         line1 += s->src_linesize;
                                         line2 += s->dst_linesize*2;
                                 }
@@ -567,15 +290,25 @@ display_thread_sdl(void *arg)
 
                         if(s->interlaced == 0) {
                                 for(i = 0; i < height; i++) {
-                                        copylineRGBA(s, line2, line1, linesize);
+                                        vc_copylineRGBA(line2, line1, linesize,
+                                                        s->sdl_screen->format->Rshift,
+                                                        s->sdl_screen->format->Gshift,
+                                                        s->sdl_screen->format->Bshift);
                                         line2 += s->sdl_screen->pitch;
                                         line1 += s->src_linesize;
                                 }
                         } else {
                                for(i = 0; i < height; i+=2) {
-                                       copylineRGBA(s, line2, line1, linesize);
-                                       copylineRGBA(s, line2+s->sdl_screen->pitch, line1+s->height/2*s->src_linesize,
-                                                       linesize);
+                                       vc_copylineRGBA(line2, line1, linesize,
+                                                       s->sdl_screen->format->Rshift,
+                                                       s->sdl_screen->format->Gshift,
+                                                       s->sdl_screen->format->Bshift);
+                                       vc_copylineRGBA(line2+s->sdl_screen->pitch, 
+                                                    line1+s->height/2*s->src_linesize,
+                                                    linesize,
+                                                    s->sdl_screen->format->Rshift,
+                                                    s->sdl_screen->format->Gshift,
+                                                    s->sdl_screen->format->Bshift);
                                        line1 += s->src_linesize;
                                        line2 += 2*s->sdl_screen->pitch;
                                }
@@ -588,9 +321,9 @@ display_thread_sdl(void *arg)
         if(s->deinterlace) {
                 if(s->rgb) {
                         /*FIXME: this will not work! Should not deinterlace whole screen, just subwindow*/
-                        deinterlace(s, s->rgb_image->pixels);
+                        vc_deinterlace(s->rgb_image->pixels, s->dst_linesize, s->height);
                 } else {
-                        deinterlace(s, *s->yuv_image->pixels);
+                        vc_deinterlace(*s->yuv_image->pixels, s->dst_linesize, s->height);
                 }
         }
 
