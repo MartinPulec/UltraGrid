@@ -53,7 +53,7 @@
 #include <ctype.h>
 #include <sys/socket.h>
 
-#include "video_types.h"
+#include "video_codec.h"
 
 void ihdtv_recieve_frames(void);
 

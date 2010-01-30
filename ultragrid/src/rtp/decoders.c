@@ -37,8 +37,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.1.2.2 $
- * $Date: 2010/01/30 19:53:37 $
+ * $Revision: 1.1.2.3 $
+ * $Date: 2010/01/30 20:07:35 $
  *
  */
 
@@ -50,6 +50,7 @@
 #include "rtp/rtp_callback.h"
 #include "rtp/pbuf.h"
 #include "rtp/decoders.h"
+#include "video_codec.h"
 
 #define DXT_WIDTH 1920/4
 #define DXT_DEPTH 8
@@ -69,7 +70,7 @@ copy_p2f (struct video_frame *frame, rtp_packet *pckt)
     data_pos = ntohl(hdr->offset);
    
     if(frame->data_len > data_pos + len) {
-        memcpy(frame->buffer + data_pos, offset, len);
+        memcpy(frame->data + data_pos, offset, len);
     }
 
     frame->width = ntohs(hdr->width);
@@ -135,7 +136,7 @@ decode_frame(struct coded_data *cdata, struct video_frame *frame, int compressio
 	/* get considerably more content...                              */
 	if(compression) {
 		while (cdata != NULL) {
-			dxt_copy_p2f(frame->buffer, cdata->data);
+			dxt_copy_p2f(frame->data, cdata->data);
 			cdata = cdata->nxt;
 		}
 	}else{

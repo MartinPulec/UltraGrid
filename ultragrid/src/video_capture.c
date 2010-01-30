@@ -47,8 +47,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.9 $
- * $Date: 2009/12/11 15:29:39 $
+ * $Revision: 1.9.2.1 $
+ * $Date: 2010/01/30 20:07:35 $
  *
  */
 
@@ -56,7 +56,7 @@
 #include "config_unix.h"
 #include "config_win32.h"
 #include "debug.h"
-#include "video_types.h"
+#include "video_codec.h"
 #include "video_capture.h"
 #include "video_capture/firewire_dv_freebsd.h"
 #include "video_capture/hdstation.h"

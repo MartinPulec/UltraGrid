@@ -49,8 +49,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.28.2.4 $
- * $Date: 2010/01/30 19:53:37 $
+ * $Revision: 1.28.2.5 $
+ * $Date: 2010/01/30 20:07:35 $
  *
  */
 
@@ -63,7 +63,7 @@
 #include "rtp/rtp.h"
 #include "rtp/rtp_callback.h"
 #include "rtp/pbuf.h"
-#include "video_types.h"
+#include "video_codec.h"
 #include "video_capture.h"
 #include "video_display.h"
 #include "video_display/sdl.h"
@@ -258,9 +258,9 @@ ihdtv_reciever_thread(void *arg)
 
 	while(!should_exit)
 	{
-		if(ihdtv_recieve(connection, frame_buffer->buffer, hd_size_x * hd_size_y * 3))
+		if(ihdtv_recieve(connection, frame_buffer->data, hd_size_x * hd_size_y * 3))
 			return 0;       // we've got some error. probably empty buffer
-		display_put_frame(display_device, frame_buffer->buffer);
+		display_put_frame(display_device, frame_buffer->data);
 		frame_buffer = display_get_frame(display_device);
 	}
 	return 0;
@@ -469,7 +469,7 @@ receiver_thread(void *arg)
 			if (pbuf_decode(cp->playout_buffer, uv->curr_time, frame_buffer, i, uv->dxt_display)) {
 				gettimeofday(&uv->curr_time, NULL);
 				fr = 1;
-				display_put_frame(uv->display_device, frame_buffer->buffer);
+				display_put_frame(uv->display_device, frame_buffer->data);
 				i = (i + 1) % 2;
 				frame_buffer = display_get_frame(uv->display_device);
 			}

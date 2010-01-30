@@ -48,8 +48,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.5.2.2 $
- * $Date: 2010/01/30 19:46:41 $
+ * $Revision: 1.5.2.3 $
+ * $Date: 2010/01/30 20:07:35 $
  *
  */
 
@@ -58,12 +58,12 @@
 #include "config_win32.h"
 #include "debug.h"
 #include "audio/audio.h"
-#include "video_types.h"
 #include "rtp/rtp.h"
 #include "rtp/rtp_callback.h"
 #include "tv.h"
 #include "transmit.h"
 #include "host.h"
+#include "video_codec.h"
 
 #define TRANSMIT_MAGIC	0xe80ab15f
 #define DXT_HEIGHT 1080/4

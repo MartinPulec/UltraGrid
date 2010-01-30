@@ -46,8 +46,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.5 $
- * $Date: 2009/12/11 15:29:39 $
+ * $Revision: 1.5.2.1 $
+ * $Date: 2010/01/30 20:07:35 $
  *
  */
 
@@ -64,7 +64,7 @@ struct vidcap_type {
 	const char		*description;
 	unsigned	 	 width;
 	unsigned	 	 height;
-	video_colour_mode_t	 colour_mode;
+	//video_colour_mode_t	 colour_mode;
 };
 
 int			 vidcap_init_devices(void);

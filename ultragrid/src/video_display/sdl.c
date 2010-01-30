@@ -44,8 +44,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.15.2.3 $
- * $Date: 2010/01/30 19:53:37 $
+ * $Revision: 1.15.2.4 $
+ * $Date: 2010/01/30 20:07:35 $
  *
  */
 
@@ -924,13 +924,13 @@ display_sdl_getf(void *state)
     assert(s->magic == MAGIC_SDL);
     assert(s->buffers[s->image_network] != NULL);
     pthread_mutex_lock(&s->bufflock);
-    s->frame.len = s->bufflen;
-    if(s->frame.buffer != NULL) {
-        if(s->frame.buffer != (char*)s->buffers[0] && 
-           s->frame.buffer != (char*)s->buffers[1])
-            free(s->frame.buffer);
+    s->frame.data_len = s->bufflen;
+    if(s->frame.data != NULL) {
+        if(s->frame.data != (char*)s->buffers[0] && 
+           s->frame.data != (char*)s->buffers[1])
+            free(s->frame.data);
     }
-    s->frame.buffer = (char*)s->buffers[s->image_network];
+    s->frame.data = (char*)s->buffers[s->image_network];
     pthread_mutex_unlock(&s->bufflock);
     return &s->frame;
 }

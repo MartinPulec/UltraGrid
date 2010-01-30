@@ -43,8 +43,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.3 $
- * $Date: 2009/12/02 10:37:30 $
+ * $Revision: 1.3.2.1 $
+ * $Date: 2010/01/30 20:07:35 $
  *
  */
 
@@ -52,7 +52,7 @@
 #include "config_unix.h"
 #include "config_win32.h"
 #include "debug.h"
-#include "video_types.h"
+#include "video_codec.h"
 #include "video_capture.h"
 #include "video_capture/null.h"
 
@@ -91,7 +91,6 @@ vidcap_null_probe(void)
 		vt->description = "No video capture device";
 		vt->width       = 0;
 		vt->height      = 0;
-		vt->colour_mode = YUV_422;
 	}
 	return vt;
 }

@@ -48,8 +48,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.8.2.2 $
- * $Date: 2010/01/29 11:26:04 $
+ * $Revision: 1.8.2.3 $
+ * $Date: 2010/01/30 20:07:35 $
  *
  */
 
@@ -58,7 +58,7 @@
 #include "config_win32.h"
 #include "debug.h"
 #include "tv.h"
-#include "video_types.h"
+#include "video_codec.h"
 #include "video_capture.h"
 #include "video_capture/testcard.h"
 #include "host.h"
@@ -72,17 +72,18 @@ unsigned char * tov210(unsigned char *in, unsigned int width, unsigned int heigh
 void toR10k(unsigned char *in, unsigned int width, unsigned int height);
 
 struct testcard_state {
-		struct timeval	last_frame_time;
-		int				fps;
-		int				count;
+	struct timeval	last_frame_time;
+	int		fps;
+	int		count;
         unsigned int    width;
         unsigned int    height;
         int             size;
         char            *frame;
-		int				linesize;
-		int 			pan;
-		SDL_Surface     *surface;
-		struct timeval  t0;
+	int		linesize;
+	int 		pan;
+	SDL_Surface     *surface;
+	struct timeval  t0;
+	codec_t		codec;
 };
 
 const int rect_colors[] = {
@@ -269,8 +270,7 @@ vidcap_testcard_init(char *fmt)
         FILE                    *in;
         struct stat             sb;
         unsigned int            i,j;
-		unsigned int		    rect_size=COL_NUM;
-		codec_t					codec;
+	unsigned int		rect_size=COL_NUM;
 
         if(strcmp(fmt, "help")==0) {
                 printf("testcard options:\n");
@@ -325,7 +325,7 @@ vidcap_testcard_init(char *fmt)
                 if(strcmp(tmp, codec_info[i].name) == 0) {
                         h_align = codec_info[i].h_align;
                         bpp = codec_info[i].bpp;
-						codec = codec_info[i].codec;
+			s->codec = codec_info[i].codec;
                         break;
                 }
         }
@@ -333,7 +333,7 @@ vidcap_testcard_init(char *fmt)
 
         hd_size_x = s->width;
         hd_size_y = s->height;
-        hd_color_spc = codec;
+        hd_color_spc = s->codec;
         if(h_align) {
                 hd_size_x = (hd_size_x + h_align - 1)/h_align*h_align;
 				s->width = hd_size_x;
@@ -410,15 +410,15 @@ vidcap_testcard_init(char *fmt)
 				}
 			}
 			s->frame = s->surface->pixels;	
-			if(codec == UYVY || codec == v210 || codec == Vuy2) {
+			if(s->codec == UYVY || s->codec == v210 || s->codec == Vuy2) {
 				rgb2yuv422((unsigned char*)s->frame, s->width, s->height);
 			} 
 
-			if(codec == v210) {
+			if(s->codec == v210) {
 				s->frame = (char*)tov210((unsigned char*)s->frame, s->width, s->height, bpp);
 			}
 
-			if(codec == R10k) {
+			if(s->codec == R10k) {
 				toR10k((unsigned char*)s->frame, s->width, s->height);
 			}
 		}
@@ -475,7 +475,7 @@ vidcap_testcard_grab(void *arg)
 		if (vf != NULL) {
 			char line[state->linesize*2+state->pan];
 			unsigned int  i;
-			vf->colour_mode = YUV_422;
+			vf->color_spec = state->codec;
 			vf->width       = hd_size_x;
 			vf->height      = hd_size_y;
 			vf->data        = state->frame;
@@ -514,7 +514,6 @@ vidcap_testcard_probe(void)
 		vt->description = "Video testcard";
 		vt->width       = hd_size_x;
 		vt->height      = hd_size_y;
-		vt->colour_mode = YUV_422;
 	}
 	return vt;
 }

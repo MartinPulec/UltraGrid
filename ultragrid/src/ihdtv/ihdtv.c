@@ -59,7 +59,6 @@
 #include <netdb.h>
 
 #include "ihdtv.h"
-#include "video_types.h"
 
 void init_reciever(void);
 

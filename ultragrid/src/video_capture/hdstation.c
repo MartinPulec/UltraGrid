@@ -47,8 +47,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.5.2.2 $
- * $Date: 2010/01/29 11:26:04 $
+ * $Revision: 1.5.2.3 $
+ * $Date: 2010/01/30 20:07:35 $
  *
  */
 
@@ -60,7 +60,6 @@
 #ifdef HAVE_HDSTATION		/* From config.h */
 
 #include "debug.h"
-#include "video_types.h"
 #include "video_capture.h"
 #include "video_capture/hdstation.h"
 #include "video_codec.h"
@@ -157,7 +156,6 @@ vidcap_hdstation_probe(void)
 		vt->description = "DVS HDstation (SMPTE 274M/25i)";
 		vt->width       = hd_size_x;
 		vt->height      = hd_size_y;
-		vt->colour_mode = YUV_422;
 	}
 	return vt;
 }
@@ -325,7 +323,6 @@ vidcap_hdstation_grab(void *state)
 	if (s->rtp_buffer != NULL) {
 		vf = (struct video_frame *) malloc(sizeof(struct video_frame));
 		if (vf != NULL) {
-			vf->colour_mode = YUV_422;
 			vf->width       = hd_size_x;
 			vf->height      = hd_size_y;
 			vf->data        = s->rtp_buffer;
