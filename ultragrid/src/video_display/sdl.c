@@ -44,8 +44,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.15.2.4 $
- * $Date: 2010/01/30 20:07:35 $
+ * $Revision: 1.15.2.5 $
+ * $Date: 2010/01/30 20:25:51 $
  *
  */
 
@@ -131,6 +131,10 @@ struct state_sdl {
     unsigned            deinterlace:1;
     unsigned            use_file:1;
     unsigned            fs:1;
+
+    unsigned            idle:1;
+    pthread_cond_t      idle_cond;
+    pthread_mutex_t     idle_lock;
 };
 
 inline void copyline64(unsigned char *dst, unsigned char *src, int len);
@@ -465,6 +469,9 @@ display_thread_sdl(void *arg)
 
         if(!(s->use_file && buff)) {
                 platform_sem_wait(&s->semaphore);
+                pthread_mutex_lock(&s->idle_lock);
+                s->idle = 0;
+                pthread_mutex_unlock(&s->idle_lock);
                 if((unsigned int)s->width != hd_size_x || (unsigned int)s->height != hd_size_y || 
                 s->codec != (codec_t)hd_color_spc) {
                     s->width = hd_size_x;
@@ -586,6 +593,11 @@ display_thread_sdl(void *arg)
                         deinterlace(s, *s->yuv_image->pixels);
                 }
         }
+
+        pthread_mutex_lock(&s->idle_lock);
+        s->idle = 1;
+        pthread_cond_signal(&s->idle_cond);
+        pthread_mutex_unlock(&s->idle_lock);
 
         if(s->rgb) {
                 SDL_UnlockSurface(s->sdl_screen);
@@ -893,6 +905,8 @@ display_sdl_init(char *fmt)
     s->image_display = 1;
 
     pthread_mutex_init(&s->bufflock, NULL);
+    pthread_mutex_init(&s->idle_lock, NULL);
+    pthread_cond_init(&s->idle_cond, NULL);
 
     if (pthread_create(&(s->thread_id), NULL, display_thread_sdl, (void *) s) != 0) {
         perror("Unable to create display thread\n");
@@ -933,6 +947,17 @@ display_sdl_getf(void *state)
     s->frame.data = (char*)s->buffers[s->image_network];
     pthread_mutex_unlock(&s->bufflock);
     return &s->frame;
+}
+
+void
+display_sdl_wait_idle(void *state) 
+{
+    struct state_sdl *s = (struct state_sdl *) state;
+
+    pthread_mutex_lock(&s->idle_lock);
+    if(!s->idle)
+            pthread_cond_wait(&s->idle_cond, &s->idle_lock);
+    pthread_mutex_unlock(&s->idle_lock);
 }
 
 int
