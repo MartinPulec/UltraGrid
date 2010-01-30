@@ -49,8 +49,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.28.2.2 $
- * $Date: 2010/01/29 11:26:04 $
+ * $Revision: 1.28.2.3 $
+ * $Date: 2010/01/30 19:46:41 $
  *
  */
 
@@ -497,11 +497,9 @@ sender_thread(void *arg)
 			if(uv->requested_compression) {
 #ifdef HAVE_FASTDXT
 				compress_data(uv->compression,tx_frame);
-				dxt_tx_send(uv->tx, tx_frame, uv->network_device);
 #endif /* HAVE_FASTDXT */
-			}else{
-				tx_send(uv->tx, tx_frame, uv->network_device);
 			}
+			tx_send(uv->tx, tx_frame, uv->network_device);
 			free(tx_frame);
 		}
 	}

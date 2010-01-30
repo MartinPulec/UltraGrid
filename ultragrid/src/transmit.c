@@ -48,8 +48,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.5.2.1 $
- * $Date: 2010/01/28 18:17:28 $
+ * $Revision: 1.5.2.2 $
+ * $Date: 2010/01/30 19:46:41 $
  *
  */
 
@@ -107,94 +107,6 @@ tx_done(struct video_tx *tx)
 	free(tx);
 }
 
-#define HD_WIDTH hd_size_x
-#define HD_HEIGHT hd_size_y
-#define TS_WRAP     4294967296
-
-void
-dxt_tx_send(struct video_tx *tx, struct video_frame *frame, struct rtp *rtp_session)
-{
-	int		 m, x, y, first_x, first_y, data_len, l, payload_count, octets_left_this_line, octets_left_this_packet;
-	payload_hdr_t	 payload_hdr[10];
-	int		 pt = 96;	/* A dynamic payload type for the tests... */
-	static uint32_t	 ts = 0;
-	char		*data;
-
-	assert(tx->magic == TRANSMIT_MAGIC);
-
-	/* Note: We are operating on DXT macroblocks instead of individual pixles. A macro-block corresponds
-	 * to a 4x4 block of real pixels, with 64 bits (8 bytes) as a length. We set this to our depth to ensure
-	 * that we only send a complete macro block. --iwsmith
-	 */ 
-	assert(frame->data_len == 1920*1080/16*8);
-	data = frame->data + 1920*1080/16*8;
-
-	m = 0;
-	x = 0; 
-	y = 0;
-	payload_count = 0;
-	data_len = 0;
-	first_x  = x;
-	first_y  = y;
-	ts = get_local_mediatime();
-	do {
-		if (payload_count == 0) {
-			data_len = 0;
-			first_x  = x;
-			first_y  = y;
-		}
-
-		octets_left_this_line   = (DXT_WIDTH - x) * DXT_DEPTH;
-		octets_left_this_packet = tx->mtu - 40 - data_len - (8 * (payload_count + 1));
-		if (octets_left_this_packet < octets_left_this_line) {
-			l = octets_left_this_packet;
-		} else {
-			l = octets_left_this_line;
-		}
-		while ((l % DXT_DEPTH) != 0) {	/* Only send complete pixels */
-			l--;
-		}
-// FIXME:
-//		payload_hdr[payload_count].scan_line   = htons(y);
-//		payload_hdr[payload_count].scan_offset = htons(x);
-		payload_hdr[payload_count].length      = htons(l);
-		payload_hdr[payload_count].flags       = htons(0);
-		payload_count++;
-
-		data_len = data_len + l;
-
-		x += (l / DXT_DEPTH);
-		if (x == (int)DXT_WIDTH) {
-			x = 0;
-			y++;
-		}
-		if (y == (int)DXT_HEIGHT) {
-			m = 1;
-		}
-
-		/* Is it time to send this packet? */
-		if ((y == (int)DXT_HEIGHT) || (payload_count == 10) || ((40u + data_len + (8u * (payload_count + 1)) + DXT_DEPTH) > tx->mtu)) {
-#if HAVE_MACOSX
-			struct timeval start, stop;
-#else /* HAVE_MACOSX */
-			struct timespec start, stop;
-#endif /* HAVE_MACOSX */
-			long delta;
-			payload_hdr[payload_count - 1].flags = htons(1<<15);
-			data = frame->data + (first_y * DXT_WIDTH * DXT_DEPTH) + (first_x * DXT_DEPTH);
-			GET_STARTTIME;
-			rtp_send_data_hdr(rtp_session, ts, pt, m, 0, 0, (char *) payload_hdr, 8 * payload_count, data, data_len, 0, 0, 0);
-			do {
-				GET_STOPTIME;
-				GET_DELTA;
-				if(delta < 0)
-					delta += 1000000000L;
-			} while(packet_rate - delta > 0);
-			payload_count = 0;
-		}
-	} while (y < (int)DXT_HEIGHT);
-}
-
 void
 tx_send(struct video_tx *tx, struct video_frame *frame, struct rtp *rtp_session)
 {
@@ -203,11 +115,11 @@ tx_send(struct video_tx *tx, struct video_frame *frame, struct rtp *rtp_session)
 	int		        pt = 96;	/* A dynamic payload type for the tests... */
 	static uint32_t	ts = 0;
 	char		    *data;
-    unsigned int    pos;
+        unsigned int    pos;
 #if HAVE_MACOSX
 	struct timeval  start, stop;
 #else /* HAVE_MACOSX */
-    struct timespec start, stop;
+        struct timespec start, stop;
 #endif /* HAVE_MACOSX */
 	long            delta;
 
@@ -215,26 +127,26 @@ tx_send(struct video_tx *tx, struct video_frame *frame, struct rtp *rtp_session)
 
 	m = 0;
 	ts = get_local_mediatime();
-    pos = 0;
+        pos = 0;
 
-    payload_hdr.width = htons(hd_size_x);
-    payload_hdr.height = htons(hd_size_y);
-    payload_hdr.colorspc = hd_color_spc;
+        payload_hdr.width = htons(frame->width);
+        payload_hdr.height = htons(frame->height);
+        payload_hdr.colorspc = frame->color_spec;
 
 	do {
 		payload_hdr.offset = htonl(pos);
 		payload_hdr.flags  = htons(1<<15);
 
 		data = frame->data + pos;
-        data_len = tx->mtu - 40 - (sizeof(payload_hdr_t));
-        if(pos + data_len > frame->data_len) {
-            m = 1;
-            data_len = frame->data_len - pos;
-        }
-        pos += data_len;
+                data_len = tx->mtu - 40 - (sizeof(payload_hdr_t));
+                if(pos + data_len > frame->data_len) {
+                    m = 1;
+                    data_len = frame->data_len - pos;
+                }
+                pos += data_len;
 		payload_hdr.length = htons(data_len);
 		GET_STARTTIME;
-    	rtp_send_data_hdr(rtp_session, ts, pt, m, 0, 0, (char *)&payload_hdr, 
+    	        rtp_send_data_hdr(rtp_session, ts, pt, m, 0, 0, (char *)&payload_hdr, 
                                 sizeof(payload_hdr_t), data, data_len, 0, 0, 0);
 		do {
 			GET_STOPTIME;
