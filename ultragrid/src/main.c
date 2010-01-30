@@ -49,8 +49,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.28.2.3 $
- * $Date: 2010/01/30 19:46:41 $
+ * $Revision: 1.28.2.4 $
+ * $Date: 2010/01/30 19:53:37 $
  *
  */
 
@@ -112,7 +112,7 @@ struct state_uv {
 long            packet_rate = 13600;
 int	        should_exit = FALSE;
 uint32_t  	RTT = 0;    /* this is computed by handle_rr in rtp_callback */
-frame_t		*frame_buffer = NULL;
+struct video_frame *frame_buffer = NULL;
 uint32_t        hd_size_x = 2048;
 uint32_t	hd_size_y = 1080;
 uint32_t    hd_color_spc = 0;

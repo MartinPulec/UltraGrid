@@ -44,8 +44,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.15.2.2 $
- * $Date: 2010/01/29 11:26:04 $
+ * $Revision: 1.15.2.3 $
+ * $Date: 2010/01/30 19:53:37 $
  *
  */
 
@@ -99,7 +99,7 @@ struct state_sdl {
     unsigned char       *buffers[2];
     pthread_mutex_t     bufflock;
     int                 bufflen;
-    frame_t             frame;
+    struct video_frame  frame;
     XShmSegmentInfo     vw_shm_segment[2];
     int                 image_display, image_network;
     XvAdaptorInfo       *ai;
@@ -917,7 +917,7 @@ display_sdl_done(void *state)
     SDL_Quit();
 }
 
-frame_t *
+struct video_frame *
 display_sdl_getf(void *state)
 {
     struct state_sdl *s = (struct state_sdl *) state;

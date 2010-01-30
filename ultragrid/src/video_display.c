@@ -47,8 +47,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.8.2.1 $
- * $Date: 2010/01/28 18:17:28 $
+ * $Revision: 1.8.2.2 $
+ * $Date: 2010/01/30 19:53:37 $
  *
  */
 
@@ -278,7 +278,7 @@ display_done(struct display *d)
 	display_device_table[d->index].func_done(d->state);
 }
 
-frame_t*
+struct video_frame*
 display_get_frame(struct display *d)
 {
 	assert(d->magic == DISPLAY_MAGIC);

@@ -47,8 +47,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.4.2.1 $
- * $Date: 2010/01/28 18:17:28 $
+ * $Revision: 1.4.2.2 $
+ * $Date: 2010/01/30 19:53:37 $
  *
  */
 
@@ -61,11 +61,6 @@
  */
 
 typedef uint32_t	display_id_t;
-
-typedef struct {
-    char *buffer;
-    unsigned int len;
-} frame_t;
 
 typedef enum {
 	DS_176x144,	/* Quarter CIF */
@@ -111,7 +106,7 @@ struct display;
 
 struct display	*display_init(display_id_t id, char *fmt);
 void 		 display_done(struct display *d);
-frame_t		*display_get_frame(struct display *d);
+struct video_frame *display_get_frame(struct display *d);
 void 		 display_put_frame(struct display *d, char *frame);
 display_colour_t display_get_colour_mode(struct display *d);
 
