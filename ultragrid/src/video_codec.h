@@ -58,6 +58,17 @@ typedef enum {
         DVS10,
 } codec_t;
 
+
+struct video_frame {
+        codec_t        color_spec;
+        unsigned int   width;
+        unsigned int   height;
+        char           *data;
+        unsigned int   data_len;      
+        /* Number of octets (8 bits, 1 byte) of data present */
+};
+
+
 struct codec_info_t {
         codec_t codec;
         const char *name;
