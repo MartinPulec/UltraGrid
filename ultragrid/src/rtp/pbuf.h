@@ -49,8 +49,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.4.2.2 $
- * $Date: 2010/01/30 19:53:37 $
+ * $Revision: 1.4.2.3 $
+ * $Date: 2010/01/30 20:11:45 $
  *
  */
 
@@ -79,7 +79,7 @@ struct pbuf;
  */
 struct pbuf	*pbuf_init(void);
 void		 pbuf_insert(struct pbuf *playout_buf, rtp_packet *r);
-int 	 	 pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time, struct video_frame *framebuffer, int i, int compression);
+int 	 	 pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time, struct video_frame *framebuffer, int i);
 void		 pbuf_remove(struct pbuf *playout_buf, struct timeval curr_time);
 #ifdef HAVE_AUDIO
 int          audio_pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time, audio_frame *frame);

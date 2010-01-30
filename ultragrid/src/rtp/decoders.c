@@ -37,8 +37,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.1.2.3 $
- * $Date: 2010/01/30 20:07:35 $
+ * $Revision: 1.1.2.4 $
+ * $Date: 2010/01/30 20:11:45 $
  *
  */
 
@@ -82,68 +82,12 @@ copy_p2f (struct video_frame *frame, rtp_packet *pckt)
 
 }
 
-static void 
-dxt_copy_p2f (char *frame, rtp_packet *pckt)
-{
-	/* Copy 1 rtp packet to frame for uncompressed HDTV data. */
-	/* We limit packets to having up to 10 payload headers... */
-	char                    *offset;
-	payload_hdr_t		*curr_hdr;
-	payload_hdr_t		*hdr[10];
-	int			 hdr_count = 0, i;
-	int		 	 frame_offset = 0;
-	char 			*base;
-	int  			 len;
-	unsigned int		 y=0;
-
-	/* figure out how many headers ? */
-	curr_hdr = (payload_hdr_t *) pckt->data;
-	while (1) {
-		hdr[hdr_count++] = curr_hdr;
-		if ((ntohs(curr_hdr->flags) & (1<<15)) != 0) {
-				/* Last header... */
-				break;
-		}
-		if (hdr_count == 10) {
-				/* Out of space... */
-			break;
-		}
-		curr_hdr++;
-	}
-
-        /* OK, now we can copy the data */
-	offset=(char *) (pckt->data) + hdr_count * 8;
-	for (i = 0; i < hdr_count ; i++) {
-	//	y=ntohs(hdr[i]->y_offset);
-                /*if(y < HD_HEIGHT/2) {
-                        y = y *2;
-                } else {
-                        y = (y-HD_HEIGHT/2) * 2 + 1;
-                }*/
-	/*	frame_offset = ((ntohs(hdr[i]->x_offset) + y * DXT_WIDTH)) * DXT_DEPTH;
-		base = frame + frame_offset;
-		len  = ntohs(hdr[i]->length);
-		memcpy(base,offset,len);
-		offset+=len;*/
-	}
-}
-
 void
-decode_frame(struct coded_data *cdata, struct video_frame *frame, int compression)
+decode_frame(struct coded_data *cdata, struct video_frame *frame)
 {
-	/* Given a list of coded_data, try to decode it. This is mostly  */
- 	/* a placeholder function: once we have multiple codecs, it will */
-	/* get considerably more content...                              */
-	if(compression) {
-		while (cdata != NULL) {
-			dxt_copy_p2f(frame->data, cdata->data);
-			cdata = cdata->nxt;
-		}
-	}else{
-		while (cdata != NULL) {
-			copy_p2f(frame, cdata->data);
-			cdata = cdata->nxt;
-		}
+	while (cdata != NULL) {
+		copy_p2f(frame, cdata->data);
+		cdata = cdata->nxt;
 	}
 }
 

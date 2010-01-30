@@ -49,8 +49,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.28.2.5 $
- * $Date: 2010/01/30 20:07:35 $
+ * $Revision: 1.28.2.6 $
+ * $Date: 2010/01/30 20:11:45 $
  *
  */
 
@@ -466,7 +466,7 @@ receiver_thread(void *arg)
 			}
 
 			/* Decode and render video... */
-			if (pbuf_decode(cp->playout_buffer, uv->curr_time, frame_buffer, i, uv->dxt_display)) {
+			if (pbuf_decode(cp->playout_buffer, uv->curr_time, frame_buffer, i)) {
 				gettimeofday(&uv->curr_time, NULL);
 				fr = 1;
 				display_put_frame(uv->display_device, frame_buffer->data);

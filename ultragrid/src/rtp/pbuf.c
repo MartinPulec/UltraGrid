@@ -51,8 +51,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.4.2.2 $
- * $Date: 2010/01/30 19:53:37 $
+ * $Revision: 1.4.2.3 $
+ * $Date: 2010/01/30 20:11:45 $
  *
  */
 
@@ -341,7 +341,7 @@ frame_complete(struct pbuf_node *frame)
 }
 
 int
-pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time, struct video_frame *framebuffer, int i, int compression)
+pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time, struct video_frame *framebuffer, int i)
 {
 	/* Find the first complete frame that has reached it's playout */
 	/* time, and decode it into the framebuffer. Mark the frame as */
@@ -362,7 +362,7 @@ pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time, struct video_fra
                                 if(temp < 0)
                                         temp += 1000000;
                                 //printf("Frame receive time: %d\n", (int)temp);	
-				decode_frame(curr->cdata, framebuffer, compression);
+				decode_frame(curr->cdata, framebuffer);
 				curr->decoded = 1;
 				return 1; 
 			} else {
