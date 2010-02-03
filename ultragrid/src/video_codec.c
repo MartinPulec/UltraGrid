@@ -45,6 +45,8 @@
  *
  */
 #include <stdio.h>
+#include <stdint.h>
+#include <string.h>
 #include "video_codec.h"
 
 const struct codec_info_t codec_info[] = {
@@ -86,6 +88,16 @@ get_bpp(codec_t codec)
     return 0;
 }
 
+
+int
+vc_getdst_linesize(unsigned int width, codec_t codec) 
+{
+        if(codec_info[codec].h_align) {
+                width = ((width + codec_info[codec].h_align - 1) / codec_info[codec].h_align) * codec_info[codec].h_align;
+        }
+        return width * codec_info[codec].bpp;
+}
+
 /* linear blend deinterlace */
 void
 vc_deinterlace(unsigned char *src, long src_linesize, int lines)
@@ -99,7 +111,7 @@ vc_deinterlace(unsigned char *src, long src_linesize, int lines)
         bline1 = src;
         bline2 = src + pitch;
         bline3 = src + 3*pitch;
-        for(i=0; i < dst_linesize; i+=16) {
+        for(i=0; i < src_linesize; i+=16) {
         /* preload first two lines */
         asm volatile(
                  "movdqa (%0), %%xmm0\n"

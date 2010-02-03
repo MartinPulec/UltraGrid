@@ -60,13 +60,23 @@ typedef enum {
 
 
 struct video_frame {
-        codec_t        color_spec;
-        unsigned int   width;
-        unsigned int   height;
-        char           *data;
-        unsigned int   data_len;      
-        unsigned int   linesize;
-        /* Number of octets (8 bits, 1 byte) of data present */
+        codec_t              color_spec;
+        unsigned int         width;
+        unsigned int         height;
+        char                 *data; /* this is not beginning of the frame buffer actually but beginning of displayed data,
+                                     * it is the case display is centered in larger window, 
+                                     * i.e., data = pixmap start + x_start + y_start*linesize
+                                     */
+        unsigned int         data_len; /* relative to data pos, not framebuffer size! */      
+        unsigned int         dst_linesize; /* framebuffer pitch */
+        unsigned int         visiblesize; /* min(linesize, datasize) */
+        unsigned int         src_linesize; /* display data pitch */
+        int                  rshift;
+        int                  gshift;
+        int                  bshift;
+        void                 (*decoder)(unsigned char *dst, unsigned char *src, int len, int rshift, int gshift, int bshift);
+        void                 (*reconfigure)(void *state, int width, int height, codec_t color_spec);
+        void                 *state;
 };
 
 
@@ -83,6 +93,8 @@ extern const struct codec_info_t codec_info[];
 
 void show_codec_help(void);
 double get_bpp(codec_t codec);
+
+int vc_getdst_linesize(unsigned int width, codec_t codec);
 
 void vc_deinterlace(unsigned char *src, long src_linesize, int lines);
 void vc_copylineDVS10(unsigned char *dst, unsigned char *src, int len);

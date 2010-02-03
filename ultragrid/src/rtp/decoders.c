@@ -37,8 +37,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.1.2.4 $
- * $Date: 2010/01/30 20:11:45 $
+ * $Revision: 1.1.2.5 $
+ * $Date: 2010/02/03 16:53:18 $
  *
  */
 
@@ -52,41 +52,67 @@
 #include "rtp/decoders.h"
 #include "video_codec.h"
 
-#define DXT_WIDTH 1920/4
-#define DXT_DEPTH 8
-
-static void 
-copy_p2f (struct video_frame *frame, rtp_packet *pckt)
-{
-    char            *offset;
-    payload_hdr_t   *hdr;
-    uint32_t        len;
-    uint32_t        data_pos;
-
-    hdr = (payload_hdr_t *)pckt->data;
-    offset = (char*)(pckt->data + sizeof(payload_hdr_t));
-
-    len = ntohs(hdr->length);
-    data_pos = ntohl(hdr->offset);
-   
-    if(frame->data_len > data_pos + len) {
-        memcpy(frame->data + data_pos, offset, len);
-    }
-
-    frame->width = ntohs(hdr->width);
-    frame->height = ntohs(hdr->height);
-    frame->color_spec = hdr->colorspc;
-
-//    fprintf(stdout, "Received: len %d, pos %d, width %d, height %d, color spc %d\n",
-  //      ntohs(hdr->length), ntohl(hdr->offset), hd_size_x, hd_size_y, hd_color_spc);
-
-}
-
 void
 decode_frame(struct coded_data *cdata, struct video_frame *frame)
 {
+        uint32_t width;
+        uint32_t height;
+        uint32_t offset;
+        uint32_t len;
+        codec_t color_spec;
+        rtp_packet *pckt;
+        unsigned char *source;
+        payload_hdr_t   *hdr;
+        uint32_t data_pos;
+
 	while (cdata != NULL) {
-		copy_p2f(frame, cdata->data);
+
+                pckt = cdata->data;
+                hdr = (payload_hdr_t *)pckt->data;
+                width = ntohs(hdr->width);
+                height = ntohs(hdr->height);
+                color_spec = hdr->colorspc;
+                len = ntohs(hdr->length);
+                data_pos = ntohl(hdr->offset);
+
+                /* Critical section 
+                 * each thread *MUST* wait here if this condition is true
+                 */
+                if(!(frame->width == width &&
+                     frame->height == height &&
+                     frame->color_spec == color_spec)) {
+                        frame->reconfigure(frame->state, width, height, color_spec);
+                        frame->src_linesize = vc_getdst_linesize(width, color_spec);
+                        if(frame->src_linesize < frame->dst_linesize) {
+                                frame->visiblesize = frame->src_linesize;
+                        } else {
+                                frame->visiblesize = frame->dst_linesize;
+                        }
+                }
+                /* End of critical section */
+        
+                /* MAGIC, don't touch it, you definitely break it */
+                int y = (data_pos / frame->src_linesize)*frame->dst_linesize;
+                int x = data_pos % frame->src_linesize;
+                source = pckt->data + sizeof(payload_hdr_t);
+                while(len > 0){
+                        int l = len;
+                        if(l + x > frame->visiblesize) {
+                                l = frame->visiblesize - x;
+                        }
+                        offset = y + x;
+                        if(l + offset < frame->data_len) {
+                                frame->decoder(frame->data+offset, source, l, 
+                                              frame->rshift, frame->gshift, frame->bshift);
+                                len -= frame->src_linesize - x;
+                                source += frame->src_linesize - x;
+                        } else {
+                                len = 0;
+                        }
+                        x = 0; /* next line from beginning */
+                        y += frame->dst_linesize; /* next line */
+                }
+
 		cdata = cdata->nxt;
 	}
 }

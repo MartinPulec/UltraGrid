@@ -44,8 +44,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.15.2.6 $
- * $Date: 2010/01/30 21:24:49 $
+ * $Revision: 1.15.2.7 $
+ * $Date: 2010/02/03 16:53:18 $
  *
  */
 
@@ -139,7 +139,7 @@ struct state_sdl {
 
 void show_help(void);
 void cleanup_screen(struct state_sdl *s);
-void reconfigure_screen(struct state_sdl *s);
+void reconfigure_screen(void *s, unsigned int width, unsigned int height, codec_t codec);
 
 extern int should_exit;
 
@@ -178,146 +178,18 @@ display_thread_sdl(void *arg)
     int                 linesize=0;
     int                 height=0;
 
-    if(s->use_file && s->filename) {
-            FILE *in;
-            buff = (unsigned char*)malloc(s->src_linesize*s->height);
-            in = fopen(s->filename, "r");
-            if(!in || fread(buff, s->src_linesize*s->height, 1, in) == 0) {
-                    printf("SDL: Cannot read image file %s\n", s->filename);
-                    exit(126);
-            }
-            fclose(in);
-    }
-
     gettimeofday(&s->tv, NULL);
 
-    if(s->use_file && buff) 
-        line1 = buff;
+    s->idle = 1;
 
     while (!should_exit) {
         display_sdl_handle_events(s);
 
-        if(!(s->use_file && buff)) {
-                platform_sem_wait(&s->semaphore);
-                pthread_mutex_lock(&s->idle_lock);
-                s->idle = 0;
-                pthread_mutex_unlock(&s->idle_lock);
-                if((unsigned int)s->width != hd_size_x || (unsigned int)s->height != hd_size_y || 
-                s->codec != (codec_t)hd_color_spc) {
-                    s->width = hd_size_x;
-                    s->height = hd_size_y;
-                    s->codec = hd_color_spc;
-                    cleanup_screen(s);
-                    reconfigure_screen(s);
-                    if(s->rgb) {
-                        linesize = s->sdl_screen->pitch;
-                        if(linesize > s->src_linesize)
-                            linesize = s->src_linesize;
-                        height = s->height;
-                        if(height > s->dst_rect.h)
-                            height = s->dst_rect.h;
-                    }
-                }
-                line1 = s->buffers[s->image_display];
-        }
+        platform_sem_wait(&s->semaphore);
+        pthread_mutex_lock(&s->idle_lock);
+        s->idle = 0;
+        pthread_mutex_unlock(&s->idle_lock);
 
-    
-        if(s->rgb) {
-                SDL_LockSurface(s->sdl_screen);
-                line2 = s->sdl_screen->pixels;
-                line2 += s->sdl_screen->pitch * s->dst_rect.y + s->dst_rect.x * s->sdl_screen->format->BytesPerPixel;
-        } else {
-                SDL_LockYUVOverlay(s->yuv_image);
-                line2 = *s->yuv_image->pixels;
-        }
-
-        switch(s->codec) {
-                case R10k:
-                        for(i = 0; i < height; i++) {
-                                vc_copyliner10k(line2, line1, linesize, 
-                                                s->sdl_screen->format->Rshift, 
-                                                s->sdl_screen->format->Gshift,
-                                                s->sdl_screen->format->Bshift);
-                                line1 += s->src_linesize;
-                                line2 += s->sdl_screen->pitch;;
-                        }
-                        break;
-                case v210:
-                        for(i = 0; i < s->height; i++) {
-                                vc_copylinev210(line2, line1, s->src_linesize);
-                                line1 += s->src_linesize;
-                                line2 += s->dst_linesize;
-                        }
-                        break;
-                case DVS10:
-                        if(s->interlaced == 0) {
-                                for(i = 0; i < s->height; i++) {
-                                        vc_copylineDVS10(line2, line1, s->src_linesize);
-                                        line1 += s->src_linesize;
-                                        line2 += s->dst_linesize;
-                                }
-                        } else {
-                                for(i = 0; i < s->height; i+=2) {
-                                        vc_copylineDVS10(line2, line1, s->src_linesize);
-                                        vc_copylineDVS10(line2+s->dst_linesize, 
-                                                   line1+s->src_linesize*s->height/2, 
-                                                   s->src_linesize);
-                                        line1 += s->src_linesize;
-                                        line2 += s->dst_linesize*2;
-                                }
-                        }
-                        break;
-                case DVS8:
-                case UYVY:
-                case Vuy2:
-                        if(s->interlaced == 0) {
-                                for(i = 0; i < s->height; i++) {
-                                        memcpy(line2, line1, s->dst_linesize);
-                                        line2 += s->dst_linesize;
-                                        line1 += s->src_linesize;
-                                }
-                        } else {
-                               for(i = 0; i < s->height; i+=2) {
-                                       memcpy(line2, line1, s->dst_linesize);
-                                       memcpy(line2+s->dst_linesize, line1+s->height/2*s->src_linesize,
-                                                       s->dst_linesize);
-                                       line1 += s->src_linesize;
-                                       line2 += 2*s->dst_linesize;
-                               }
-                        }
-                        break;
-                case RGBA:
-
-                        if(s->interlaced == 0) {
-                                for(i = 0; i < height; i++) {
-                                        vc_copylineRGBA(line2, line1, linesize,
-                                                        s->sdl_screen->format->Rshift,
-                                                        s->sdl_screen->format->Gshift,
-                                                        s->sdl_screen->format->Bshift);
-                                        line2 += s->sdl_screen->pitch;
-                                        line1 += s->src_linesize;
-                                }
-                        } else {
-                               for(i = 0; i < height; i+=2) {
-                                       vc_copylineRGBA(line2, line1, linesize,
-                                                       s->sdl_screen->format->Rshift,
-                                                       s->sdl_screen->format->Gshift,
-                                                       s->sdl_screen->format->Bshift);
-                                       vc_copylineRGBA(line2+s->sdl_screen->pitch, 
-                                                    line1+s->height/2*s->src_linesize,
-                                                    linesize,
-                                                    s->sdl_screen->format->Rshift,
-                                                    s->sdl_screen->format->Gshift,
-                                                    s->sdl_screen->format->Bshift);
-                                       line1 += s->src_linesize;
-                                       line2 += 2*s->sdl_screen->pitch;
-                               }
-                        }
-                        break;
-
-        }
-
- 
         if(s->deinterlace) {
                 if(s->rgb) {
                         /*FIXME: this will not work! Should not deinterlace whole screen, just subwindow*/
@@ -327,11 +199,6 @@ display_thread_sdl(void *arg)
                 }
         }
 
-        pthread_mutex_lock(&s->idle_lock);
-        s->idle = 1;
-        pthread_cond_signal(&s->idle_cond);
-        pthread_mutex_unlock(&s->idle_lock);
-
         if(s->rgb) {
                 SDL_UnlockSurface(s->sdl_screen);
                 SDL_Flip(s->sdl_screen);             
@@ -339,7 +206,12 @@ display_thread_sdl(void *arg)
                 SDL_UnlockYUVOverlay(s->yuv_image);
                 SDL_DisplayYUVOverlay(s->yuv_image, &(s->dst_rect));
         }
-               
+
+        pthread_mutex_lock(&s->idle_lock);
+        s->idle = 1;
+        pthread_cond_signal(&s->idle_cond);
+        pthread_mutex_unlock(&s->idle_lock);
+      
         s->frames++;
         gettimeofday(&tv, NULL);
         double seconds = tv_diff(tv, s->tv);
@@ -380,8 +252,9 @@ cleanup_screen(struct state_sdl *s)
 }
 
 void
-reconfigure_screen(struct state_sdl *s)
+reconfigure_screen(void *state, unsigned int width, unsigned int height, codec_t color_spec)
 {
+    struct state_sdl *s = (struct state_sdl *) state;
     int                 itemp;
     unsigned int        utemp;
     Window              wtemp;
@@ -390,6 +263,8 @@ reconfigure_screen(struct state_sdl *s)
     unsigned int        x_res_y;
 
     int                 ret, i;
+
+    cleanup_screen(s);
 
     ret = XGetGeometry(s->display, DefaultRootWindow(s->display), &wtemp, &itemp, 
                     &itemp, &x_res_x, &x_res_y, &utemp, &utemp);
@@ -412,7 +287,7 @@ reconfigure_screen(struct state_sdl *s)
     SDL_ShowCursor(SDL_DISABLE);
 
     for(i = 0; codec_info[i].name != NULL; i++) {
-        if(s->codec == codec_info[i].codec) {
+        if(color_spec == codec_info[i].codec) {
             s->c_info = &codec_info[i];
             s->rgb = codec_info[i].rgb;
             s->bpp = codec_info[i].bpp;
@@ -457,10 +332,7 @@ reconfigure_screen(struct state_sdl *s)
     if(s->bufflen < s->src_linesize * s->height) {
         pthread_mutex_lock(&s->bufflock);
         s->bufflen = s->src_linesize * s->height;
-        s->buffers[0] = malloc(s->bufflen);
-        s->buffers[1] = malloc(s->bufflen);
         pthread_mutex_unlock(&s->bufflock);
-        fprintf(stdout, "New buffers %p, %p\n", s->buffers[0], s->buffers[1]);
     }
 
     s->src_rect.w = s->width;
@@ -469,6 +341,44 @@ reconfigure_screen(struct state_sdl *s)
     fprintf(stdout,"Setting SDL rect %dx%d - %d,%d.\n", s->dst_rect.w, s->dst_rect.h, s->dst_rect.x, 
                     s->dst_rect.y);
 
+    s->frame.dst_linesize = s->dst_linesize;
+    s->frame.rshift = s->sdl_screen->format->Rshift;
+    s->frame.gshift = s->sdl_screen->format->Gshift;
+    s->frame.bshift = s->sdl_screen->format->Bshift;
+    s->frame.color_spec = s->c_info->codec;
+    s->frame.width = s->width;
+    s->frame.height = s->height;
+
+    if(s->rgb) {
+        s->frame.data = s->sdl_screen->pixels + 
+                s->sdl_screen->pitch * s->dst_rect.y + s->dst_rect.x * s->sdl_screen->format->BytesPerPixel;
+        s->frame.data_len = s->dst_linesize * s->height -
+                s->sdl_screen->pitch * s->dst_rect.y + s->dst_rect.x * s->sdl_screen->format->BytesPerPixel;
+    } else {
+        s->frame.data = (unsigned char*)*s->yuv_image->pixels;
+        s->frame.data_len = s->width * s->height * 2;
+    }
+
+    switch(color_spec) {
+        case R10k:
+                s->frame.decoder = vc_copyliner10k;
+                break;
+        case v210:
+                s->frame.decoder = vc_copylinev210;
+                break;
+        case DVS10:
+                s->frame.decoder = vc_copylineDVS10;
+                break;
+        case DVS8:
+        case UYVY:
+        case Vuy2:
+                s->frame.decoder = memcpy;
+                break;
+        case RGBA:
+                s->frame.decoder = vc_copylineRGBA;
+                break;
+
+    }
 }
 
 void *
@@ -598,7 +508,7 @@ display_sdl_init(char *fmt)
 
         hd_size_x = w;
         hd_size_y = s->height;
-        reconfigure_screen(s);
+        reconfigure_screen(s, w, s->height, s->c_info->codec);
         temp = SDL_LoadBMP("/usr/share/uv-0.3.1/uv_startup.bmp");
         if (temp == NULL) {
             temp = SDL_LoadBMP("/usr/local/share/uv-0.3.1/uv_startup.bmp");
@@ -629,13 +539,11 @@ display_sdl_init(char *fmt)
         }
     }
 
-    s->bufflen = hd_size_x*hd_size_y*s->bpp;
-
-    s->buffers[0] = malloc(s->bufflen);
-    s->buffers[1] = malloc(s->bufflen);
-
-    s->image_network = 0;
-    s->image_display = 1;
+    s->frame.width = 0;
+    s->frame.height = 0;
+    s->frame.color_spec = 0;
+    s->frame.state = s;
+    s->frame.reconfigure = reconfigure_screen;
 
     pthread_mutex_init(&s->bufflock, NULL);
     pthread_mutex_init(&s->idle_lock, NULL);
@@ -669,16 +577,6 @@ display_sdl_getf(void *state)
 {
     struct state_sdl *s = (struct state_sdl *) state;
     assert(s->magic == MAGIC_SDL);
-    assert(s->buffers[s->image_network] != NULL);
-    pthread_mutex_lock(&s->bufflock);
-    s->frame.data_len = s->bufflen;
-    if(s->frame.data != NULL) {
-        if(s->frame.data != (char*)s->buffers[0] && 
-           s->frame.data != (char*)s->buffers[1])
-            free(s->frame.data);
-    }
-    s->frame.data = (char*)s->buffers[s->image_network];
-    pthread_mutex_unlock(&s->bufflock);
     return &s->frame;
 }
 
