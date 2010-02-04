@@ -44,8 +44,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.15.2.7 $
- * $Date: 2010/02/03 16:53:18 $
+ * $Revision: 1.15.2.8 $
+ * $Date: 2010/02/04 09:30:36 $
  *
  */
 
@@ -354,6 +354,7 @@ reconfigure_screen(void *state, unsigned int width, unsigned int height, codec_t
                 s->sdl_screen->pitch * s->dst_rect.y + s->dst_rect.x * s->sdl_screen->format->BytesPerPixel;
         s->frame.data_len = s->dst_linesize * s->height -
                 s->sdl_screen->pitch * s->dst_rect.y + s->dst_rect.x * s->sdl_screen->format->BytesPerPixel;
+        s->frame.dst_x_offset = s->dst_rect.x * s->sdl_screen->format->BytesPerPixel;
     } else {
         s->frame.data = (unsigned char*)*s->yuv_image->pixels;
         s->frame.data_len = s->width * s->height * 2;

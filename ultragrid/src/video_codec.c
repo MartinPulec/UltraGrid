@@ -90,7 +90,7 @@ get_bpp(codec_t codec)
 
 
 int
-vc_getdst_linesize(unsigned int width, codec_t codec) 
+vc_getsrc_linesize(unsigned int width, codec_t codec) 
 {
         if(codec_info[codec].h_align) {
                 width = ((width + codec_info[codec].h_align - 1) / codec_info[codec].h_align) * codec_info[codec].h_align;

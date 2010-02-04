@@ -37,8 +37,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.1.2.5 $
- * $Date: 2010/02/03 16:53:18 $
+ * $Revision: 1.1.2.6 $
+ * $Date: 2010/02/04 09:30:36 $
  *
  */
 
@@ -82,11 +82,11 @@ decode_frame(struct coded_data *cdata, struct video_frame *frame)
                      frame->height == height &&
                      frame->color_spec == color_spec)) {
                         frame->reconfigure(frame->state, width, height, color_spec);
-                        frame->src_linesize = vc_getdst_linesize(width, color_spec);
-                        if(frame->src_linesize < frame->dst_linesize) {
+                        frame->src_linesize = vc_getsrc_linesize(width, color_spec);
+                        if(frame->src_linesize < frame->dst_linesize - frame->dst_x_offset) {
                                 frame->visiblesize = frame->src_linesize;
                         } else {
-                                frame->visiblesize = frame->dst_linesize;
+                                frame->visiblesize = frame->dst_linesize - frame->dst_x_offset;
                         }
                 }
                 /* End of critical section */

@@ -71,6 +71,7 @@ struct video_frame {
         unsigned int         dst_linesize; /* framebuffer pitch */
         unsigned int         visiblesize; /* min(linesize, datasize) */
         unsigned int         src_linesize; /* display data pitch */
+        unsigned int         dst_x_offset; /* X offset in frame buffer */
         int                  rshift;
         int                  gshift;
         int                  bshift;
@@ -94,7 +95,7 @@ extern const struct codec_info_t codec_info[];
 void show_codec_help(void);
 double get_bpp(codec_t codec);
 
-int vc_getdst_linesize(unsigned int width, codec_t codec);
+int vc_getsrc_linesize(unsigned int width, codec_t codec);
 
 void vc_deinterlace(unsigned char *src, long src_linesize, int lines);
 void vc_copylineDVS10(unsigned char *dst, unsigned char *src, int len);
