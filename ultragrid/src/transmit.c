@@ -48,8 +48,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.5.2.3 $
- * $Date: 2010/01/30 20:07:35 $
+ * $Revision: 1.5.2.4 $
+ * $Date: 2010/02/04 09:44:55 $
  *
  */
 
@@ -66,9 +66,6 @@
 #include "video_codec.h"
 
 #define TRANSMIT_MAGIC	0xe80ab15f
-#define DXT_HEIGHT 1080/4
-#define DXT_WIDTH 1920/4
-#define DXT_DEPTH 8
 
 extern long packet_rate;
 
