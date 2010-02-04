@@ -44,8 +44,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.15.2.8 $
- * $Date: 2010/02/04 09:30:36 $
+ * $Revision: 1.15.2.9 $
+ * $Date: 2010/02/04 15:51:33 $
  *
  */
 
@@ -266,6 +266,11 @@ reconfigure_screen(void *state, unsigned int width, unsigned int height, codec_t
 
     cleanup_screen(s);
 
+    fprintf(stdout, "Reconfigure to size %dx%d\n", width, height);
+
+    s->width = width;
+    s->height = height;
+
     ret = XGetGeometry(s->display, DefaultRootWindow(s->display), &wtemp, &itemp, 
                     &itemp, &x_res_x, &x_res_y, &utemp, &utemp);
 
@@ -348,6 +353,7 @@ reconfigure_screen(void *state, unsigned int width, unsigned int height, codec_t
     s->frame.color_spec = s->c_info->codec;
     s->frame.width = s->width;
     s->frame.height = s->height;
+    s->frame.src_bpp = s->bpp;
 
     if(s->rgb) {
         s->frame.data = s->sdl_screen->pixels + 
@@ -355,9 +361,11 @@ reconfigure_screen(void *state, unsigned int width, unsigned int height, codec_t
         s->frame.data_len = s->dst_linesize * s->height -
                 s->sdl_screen->pitch * s->dst_rect.y + s->dst_rect.x * s->sdl_screen->format->BytesPerPixel;
         s->frame.dst_x_offset = s->dst_rect.x * s->sdl_screen->format->BytesPerPixel;
+        s->frame.dst_bpp = s->sdl_screen->format->BytesPerPixel;
     } else {
         s->frame.data = (unsigned char*)*s->yuv_image->pixels;
         s->frame.data_len = s->width * s->height * 2;
+        s->frame.dst_bpp = 2;
     }
 
     switch(color_spec) {

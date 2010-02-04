@@ -48,8 +48,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.8.2.3 $
- * $Date: 2010/01/30 20:07:35 $
+ * $Revision: 1.8.2.4 $
+ * $Date: 2010/02/04 15:51:33 $
  *
  */
 
@@ -476,8 +476,8 @@ vidcap_testcard_grab(void *arg)
 			char line[state->linesize*2+state->pan];
 			unsigned int  i;
 			vf->color_spec = state->codec;
-			vf->width       = hd_size_x;
-			vf->height      = hd_size_y;
+			vf->width       = state->width;
+			vf->height      = state->height;
 			vf->data        = state->frame;
 			vf->data_len	= state->size;
 			memcpy(line, state->frame, state->linesize*2+state->pan);

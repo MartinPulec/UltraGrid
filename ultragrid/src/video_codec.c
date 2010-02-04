@@ -44,6 +44,11 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+
+#include "config.h"
+#include "config_unix.h"
+#include "config_win32.h"
+
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -150,7 +155,7 @@ vc_deinterlace(unsigned char *src, long src_linesize, int lines)
 
 
 void
-vc_copylinev210(unsigned char *dst, unsigned char *src, int len)
+vc_copylinev210(unsigned char *dst, unsigned char *src, int dst_len)
 {
         struct {
                  unsigned a:10;
@@ -164,7 +169,7 @@ vc_copylinev210(unsigned char *dst, unsigned char *src, int len)
         d = (uint32_t *)dst;
         s = (void*)src;
 
-        while(len > 0) {
+        while(dst_len >= 12) {
                 tmp = (s->a >> 2) | (s->b >> 2) << 8 | (((s)->c >> 2) << 16);
                 s++;
                 *(d++) = tmp | ((s->a >> 2) << 24);
@@ -176,7 +181,17 @@ vc_copylinev210(unsigned char *dst, unsigned char *src, int len)
                 *(d++) = tmp | ((s->a >> 2) << 8) | ((s->b >> 2) << 16) | ((s->c >> 2) << 24);
                 s++;
 
-                len -= 16;
+                dst_len -= 12;
+        }
+        if(dst_len >= 4) {
+            tmp = (s->a >> 2) | (s->b >> 2) << 8 | (((s)->c >> 2) << 16);
+            s++;
+            *(d++) = tmp | ((s->a >> 2) << 24);
+        }
+        if(dst_len >= 8) {
+            tmp = (s->b >> 2) | (((s)->c >> 2) << 8);
+            s++;
+            *(d++) = tmp | ((s->a >> 2) << 16) | ((s->b >> 2)<<24);
         }
 }
 
@@ -266,7 +281,7 @@ vc_copylineRGBA(unsigned char *dst, unsigned char *src, int len, int rshift, int
 #if !(HAVE_MACOSX || HAVE_32B_LINUX)
 
 void
-vc_copylineDVS10(unsigned char *dst, unsigned char *src, int len)
+vc_copylineDVS10(unsigned char *dst, unsigned char *src, int src_len)
 {
         register unsigned char *_d=dst,*_s=src;
 
@@ -320,14 +335,14 @@ vc_copylineDVS10(unsigned char *dst, unsigned char *src, int len)
             : "r" (_s), "r" (_d));
         _s += 32;
         _d += 24;
-        len -= 32;
+        src_len -= 32;
     }
 }
 
 #else
 
 void
-vc_copylineDVS10(unsigned char *dst, unsigned char *src, int len)
+vc_copylineDVS10(unsigned char *dst, unsigned char *src, int src_len)
 {
         register uint64_t *d, *s;
 
@@ -336,7 +351,7 @@ vc_copylineDVS10(unsigned char *dst, unsigned char *src, int len)
         d = (uint64_t *)dst;
         s = (uint64_t *)src;
 
-        while(len > 0) {
+        while(src_len > 0) {
                 a1 = *(s++);
                 a2 = *(s++);
                 a3 = *(s++);
@@ -351,7 +366,7 @@ vc_copylineDVS10(unsigned char *dst, unsigned char *src, int len)
                 *(d++) = (a2 >> 16)|(a3 << 32); /* 0xa3|a3|a3|a3|a2|a2|a2|a2 */
                 *(d++) = (a3 >> 32)|(a4 << 16); /* 0xa4|a4|a4|a4|a4|a4|a3|a3 */
 
-                len -= 16;
+                src_len -= 16;
         }
 }
 

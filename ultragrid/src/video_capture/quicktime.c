@@ -48,8 +48,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.15.2.2 $
- * $Date: 2010/01/29 11:26:04 $
+ * $Revision: 1.15.2.3 $
+ * $Date: 2010/02/04 15:51:33 $
  *
  */
 
@@ -58,7 +58,6 @@
 #include "config_unix.h"
 #include "debug.h"
 #include "tv.h"
-#include "video_types.h"
 #include "video_capture.h"
 #include "video_capture/quicktime.h"
 #include "video_codec.h"
@@ -552,7 +551,6 @@ struct vidcap_type *vidcap_quicktime_probe(void)
 		vt->description = "QuickTime capture device";
 		vt->width = hd_size_x;
 		vt->height = hd_size_y;
-		vt->colour_mode = YUV_422;
 	}
 
 	return vt;
@@ -626,7 +624,6 @@ struct video_frame *vidcap_quicktime_grab(void *state)
 
 	vf = malloc(sizeof(struct video_frame));
 	if (vf != NULL) {
-		vf->colour_mode = YUV_422;
 		vf->width = hd_size_x;
 		vf->height = hd_size_y;
 		vf->data = (char *)GetPixBaseAddr(GetGWorldPixMap(s->gworld));

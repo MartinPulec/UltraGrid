@@ -48,8 +48,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.5.2.4 $
- * $Date: 2010/02/04 09:44:55 $
+ * $Revision: 1.5.2.5 $
+ * $Date: 2010/02/04 15:51:33 $
  *
  */
 
@@ -107,52 +107,58 @@ tx_done(struct video_tx *tx)
 void
 tx_send(struct video_tx *tx, struct video_frame *frame, struct rtp *rtp_session)
 {
-	int		        m, data_len;
-	payload_hdr_t	payload_hdr;
-	int		        pt = 96;	/* A dynamic payload type for the tests... */
-	static uint32_t	ts = 0;
-	char		    *data;
+        int             m, data_len;
+        payload_hdr_t	payload_hdr;
+        int             pt = 96;	/* A dynamic payload type for the tests... */
+        static uint32_t	ts = 0;
+        char            *data;
         unsigned int    pos;
 #if HAVE_MACOSX
-	struct timeval  start, stop;
+        struct timeval  start, stop;
 #else /* HAVE_MACOSX */
         struct timespec start, stop;
 #endif /* HAVE_MACOSX */
-	long            delta;
+        long            delta;
 
-	assert(tx->magic == TRANSMIT_MAGIC);
+        assert(tx->magic == TRANSMIT_MAGIC);
 
-	m = 0;
-	ts = get_local_mediatime();
+        m = 0;
+        ts = get_local_mediatime();
         pos = 0;
 
         payload_hdr.width = htons(frame->width);
         payload_hdr.height = htons(frame->height);
         payload_hdr.colorspc = frame->color_spec;
 
-	do {
-		payload_hdr.offset = htonl(pos);
-		payload_hdr.flags  = htons(1<<15);
+        do {
+                payload_hdr.offset = htonl(pos);
+                payload_hdr.flags  = htons(1<<15);
 
-		data = frame->data + pos;
+                data = frame->data + pos;
                 data_len = tx->mtu - 40 - (sizeof(payload_hdr_t));
-                if(pos + data_len > frame->data_len) {
-                    m = 1;
-                    data_len = frame->data_len - pos;
+                if(pos + data_len >= frame->data_len) {
+                        m = 1;
+                        data_len = frame->data_len - pos;
                 }
+                /* send multiples of 192
+                 * why? 192 is nice!
+                 * 192 can be divided by 16,12,48,64  which are usual aligns
+                 * for data formats 
+                 */
+                data_len = (data_len / 192) * 192;
                 pos += data_len;
-		payload_hdr.length = htons(data_len);
-		GET_STARTTIME;
+                payload_hdr.length = htons(data_len);
+                GET_STARTTIME;
     	        rtp_send_data_hdr(rtp_session, ts, pt, m, 0, 0, (char *)&payload_hdr, 
                                 sizeof(payload_hdr_t), data, data_len, 0, 0, 0);
-		do {
-			GET_STOPTIME;
-			GET_DELTA;
-			if(delta < 0)
-				delta += 1000000000L;
-		} while(packet_rate - delta > 0);
+                do {
+                        GET_STOPTIME;
+                        GET_DELTA;
+                        if(delta < 0)
+                                delta += 1000000000L;
+                } while(packet_rate - delta > 0);
 
-	} while (pos < frame->data_len);
+        } while (pos < frame->data_len);
 }
 
 #ifdef HAVE_AUDIO

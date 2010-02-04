@@ -37,8 +37,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.1.2.6 $
- * $Date: 2010/02/04 09:30:36 $
+ * $Revision: 1.1.2.7 $
+ * $Date: 2010/02/04 15:51:33 $
  *
  */
 
@@ -52,20 +52,24 @@
 #include "rtp/decoders.h"
 #include "video_codec.h"
 
+//#define DEBUG 1
+
 void
 decode_frame(struct coded_data *cdata, struct video_frame *frame)
 {
         uint32_t width;
         uint32_t height;
         uint32_t offset;
-        uint32_t len;
+        int      len;
         codec_t color_spec;
         rtp_packet *pckt;
         unsigned char *source;
         payload_hdr_t   *hdr;
         uint32_t data_pos;
 
-	while (cdata != NULL) {
+        long pos=0;
+
+        while (cdata != NULL) {
 
                 pckt = cdata->data;
                 hdr = (payload_hdr_t *)pckt->data;
@@ -83,37 +87,62 @@ decode_frame(struct coded_data *cdata, struct video_frame *frame)
                      frame->color_spec == color_spec)) {
                         frame->reconfigure(frame->state, width, height, color_spec);
                         frame->src_linesize = vc_getsrc_linesize(width, color_spec);
-                        if(frame->src_linesize < frame->dst_linesize - frame->dst_x_offset) {
+/*                        if(frame->src_linesize < frame->dst_linesize - frame->dst_x_offset) {
                                 frame->visiblesize = frame->src_linesize;
                         } else {
-                                frame->visiblesize = frame->dst_linesize - frame->dst_x_offset;
-                        }
+                                frame->visiblesize = ((frame->dst_linesize - frame->dst_x_offset)/frame->dst_bpp)*frame->src_bpp;
+                        }*/
                 }
                 /* End of critical section */
         
+#ifdef DEBUG
+                fprintf(stdout, "Setup: src line size: %d, dst line size %d, visible size %d\n",
+                        frame->src_linesize, frame->dst_linesize, frame->visiblesize);
+                int b=0;
+#endif
                 /* MAGIC, don't touch it, you definitely break it */
                 int y = (data_pos / frame->src_linesize)*frame->dst_linesize;
-                int x = data_pos % frame->src_linesize;
+                int s_x = data_pos % frame->src_linesize;
+                int d_x = ((int)((s_x)/frame->src_bpp))*frame->dst_bpp;
                 source = pckt->data + sizeof(payload_hdr_t);
+#ifdef DEBUG
+                fprintf(stdout, "Computed start x %d, %d (%d %d), start y %d\n", s_x, d_x, (int)(s_x/frame->src_bpp),
+                        (int)(d_x/frame->dst_bpp),  y/frame->dst_linesize);
+#endif
                 while(len > 0){
-                        int l = len;
-                        if(l + x > frame->visiblesize) {
-                                l = frame->visiblesize - x;
+                        int l = ((int)(len/frame->src_bpp))*frame->dst_bpp;
+                        if(l + d_x > frame->dst_linesize) {
+                                l = frame->dst_linesize - d_x;
                         }
-                        offset = y + x;
+                        offset = y + d_x;
                         if(l + offset < frame->data_len) {
+#ifdef DEBUG
+                                if(b < 5) {
+                                        fprintf(stdout, "Computed offset: %d, original offset %d, memcpy length %d (pixels %d), original length %d, stored length %d, next line %d\n",
+                                                        offset, data_pos, l, (int)(l/frame->dst_bpp), len, pos, offset + l);
+                                        b++;
+                                }   
+#endif
                                 frame->decoder(frame->data+offset, source, l, 
                                               frame->rshift, frame->gshift, frame->bshift);
-                                len -= frame->src_linesize - x;
-                                source += frame->src_linesize - x;
+                                len -= frame->src_linesize - s_x;
+                                source += frame->src_linesize - s_x;
+#ifdef DEBUG
+                                data_pos += frame->src_linesize - s_x;
+                                pos += l;
+#endif
                         } else {
                                 len = 0;
                         }
-                        x = 0; /* next line from beginning */
+                        d_x = 0; /* next line from beginning */
+                        s_x = 0;
                         y += frame->dst_linesize; /* next line */
                 }
 
 		cdata = cdata->nxt;
 	}
+#ifdef DEBUG
+    fprintf(stdout, "Frame end\n");
+#endif
 }
 
