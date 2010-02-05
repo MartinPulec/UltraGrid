@@ -44,8 +44,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.3.2.3 $
- * $Date: 2010/01/30 20:25:51 $
+ * $Revision: 1.3.2.4 $
+ * $Date: 2010/02/05 13:56:49 $
  *
  */
 
@@ -57,6 +57,5 @@ void 			 display_sdl_done(void *state);
 struct video_frame	*display_sdl_getf(void *state);
 int  			 display_sdl_putf(void *state, char *frame);
 display_colour_t	 display_sdl_colour(void *state);
-void                     display_sdl_wait_idle(void *state);
 int			 display_sdl_handle_events(void *s);
 

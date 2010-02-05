@@ -44,8 +44,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.15.2.9 $
- * $Date: 2010/02/04 15:51:33 $
+ * $Revision: 1.15.2.10 $
+ * $Date: 2010/02/05 13:56:49 $
  *
  */
 
@@ -78,12 +78,12 @@ void NSApplicationLoad();
 #include <sys/io.h>
 #endif /* HAVE_MACOSX */
 #include <sys/time.h>
-#include "compat/platform_semaphore.h"
 
 #include <math.h>
 
 #include <SDL/SDL.h>
 #include <SDL/SDL_syswm.h>
+#include <SDL/SDL_mutex.h>
 
 #define MAGIC_SDL   DISPLAY_SDL_ID
 #define FOURCC_UYVY  0x59565955
@@ -96,9 +96,6 @@ struct state_sdl {
     Visual              *vw_visual;
     SDL_Overlay         *yuv_image;
     SDL_Surface         *rgb_image;
-    unsigned char       *buffers[2];
-    pthread_mutex_t     bufflock;
-    int                 bufflen;
     struct video_frame  frame;
     XShmSegmentInfo     vw_shm_segment[2];
     int                 image_display, image_network;
@@ -106,7 +103,7 @@ struct state_sdl {
     int                 xv_port;
     /* Thread related information follows... */
     pthread_t           thread_id;
-    sem_t               semaphore;
+    SDL_sem             *semaphore;
     /* For debugging... */
     uint32_t            magic; 
 
@@ -125,16 +122,10 @@ struct state_sdl {
 
     codec_t             codec;
     const struct codec_info_t *c_info;
-    char                *filename;
     unsigned            rgb:1;
     unsigned            interlaced:1;
     unsigned            deinterlace:1;
-    unsigned            use_file:1;
     unsigned            fs:1;
-
-    unsigned            idle:1;
-    pthread_cond_t      idle_cond;
-    pthread_mutex_t     idle_lock;
 };
 
 void show_help(void);
@@ -154,7 +145,7 @@ display_sdl_handle_events(void *arg)
             case SDL_KEYUP:
                 if (!strcmp(SDL_GetKeyName(sdl_event.key.keysym.sym), "q")) {
                     should_exit = 1;
-                    platform_sem_post(&s->semaphore);
+                    SDL_SemPost(s->semaphore);
                 }
                 break;
 
@@ -171,7 +162,7 @@ static void*
 display_thread_sdl(void *arg)
 {
     struct state_sdl    *s = (struct state_sdl *) arg;
-    struct timeval      tv;
+    struct timeval      tv,tv1;
     int                 i;
     unsigned char       *buff = NULL; 
     unsigned char       *line1=NULL, *line2;
@@ -180,15 +171,9 @@ display_thread_sdl(void *arg)
 
     gettimeofday(&s->tv, NULL);
 
-    s->idle = 1;
-
     while (!should_exit) {
         display_sdl_handle_events(s);
-
-        platform_sem_wait(&s->semaphore);
-        pthread_mutex_lock(&s->idle_lock);
-        s->idle = 0;
-        pthread_mutex_unlock(&s->idle_lock);
+        SDL_SemWait(s->semaphore);
 
         if(s->deinterlace) {
                 if(s->rgb) {
@@ -200,18 +185,15 @@ display_thread_sdl(void *arg)
         }
 
         if(s->rgb) {
-                SDL_UnlockSurface(s->sdl_screen);
-                SDL_Flip(s->sdl_screen);             
+                SDL_Flip(s->sdl_screen);
+                s->frame.data = s->sdl_screen->pixels +
+                    s->sdl_screen->pitch * s->dst_rect.y + s->dst_rect.x * s->sdl_screen->format->BytesPerPixel;
         } else {
                 SDL_UnlockYUVOverlay(s->yuv_image);
                 SDL_DisplayYUVOverlay(s->yuv_image, &(s->dst_rect));
+                s->frame.data = (unsigned char*)*s->yuv_image->pixels;
         }
 
-        pthread_mutex_lock(&s->idle_lock);
-        s->idle = 1;
-        pthread_cond_signal(&s->idle_cond);
-        pthread_mutex_unlock(&s->idle_lock);
-      
         s->frames++;
         gettimeofday(&tv, NULL);
         double seconds = tv_diff(tv, s->tv);
@@ -221,12 +203,6 @@ display_thread_sdl(void *arg)
                 s->tv = tv;
                 s->frames = 0;
         }
-
-        if(s->use_file && buff)
-                usleep(50000);
-
-        // printf("FPS: %f\n", 1000000.0/tv2);
-
     }
     return NULL;
 }
@@ -334,19 +310,12 @@ reconfigure_screen(void *state, unsigned int width, unsigned int height, codec_t
         s->dst_rect.h = x_res_y;
     }
 
-    if(s->bufflen < s->src_linesize * s->height) {
-        pthread_mutex_lock(&s->bufflock);
-        s->bufflen = s->src_linesize * s->height;
-        pthread_mutex_unlock(&s->bufflock);
-    }
-
     s->src_rect.w = s->width;
     s->src_rect.h = s->height;
 
     fprintf(stdout,"Setting SDL rect %dx%d - %d,%d.\n", s->dst_rect.w, s->dst_rect.h, s->dst_rect.x, 
                     s->dst_rect.y);
 
-    s->frame.dst_linesize = s->dst_linesize;
     s->frame.rshift = s->sdl_screen->format->Rshift;
     s->frame.gshift = s->sdl_screen->format->Gshift;
     s->frame.bshift = s->sdl_screen->format->Bshift;
@@ -354,18 +323,21 @@ reconfigure_screen(void *state, unsigned int width, unsigned int height, codec_t
     s->frame.width = s->width;
     s->frame.height = s->height;
     s->frame.src_bpp = s->bpp;
+    s->frame.dst_linesize = s->dst_linesize;
 
     if(s->rgb) {
         s->frame.data = s->sdl_screen->pixels + 
                 s->sdl_screen->pitch * s->dst_rect.y + s->dst_rect.x * s->sdl_screen->format->BytesPerPixel;
-        s->frame.data_len = s->dst_linesize * s->height -
+        s->frame.data_len = s->sdl_screen->pitch *  x_res_y - 
                 s->sdl_screen->pitch * s->dst_rect.y + s->dst_rect.x * s->sdl_screen->format->BytesPerPixel;
         s->frame.dst_x_offset = s->dst_rect.x * s->sdl_screen->format->BytesPerPixel;
         s->frame.dst_bpp = s->sdl_screen->format->BytesPerPixel;
+        s->frame.dst_pitch = s->sdl_screen->pitch;
     } else {
         s->frame.data = (unsigned char*)*s->yuv_image->pixels;
         s->frame.data_len = s->width * s->height * 2;
         s->frame.dst_bpp = 2;
+        s->frame.dst_pitch = s->dst_linesize;
     }
 
     switch(color_spec) {
@@ -466,10 +438,6 @@ display_sdl_init(char *fmt)
                                 s->interlaced = 1;
                         } else if(tok[0] == 'd') {
                                 s->deinterlace = 1;
-                        } else if(tok[0] == 'f') {
-                                s->use_file =1;
-                                tok = strtok(NULL, ":");
-                            s->filename = strdup(tok);
                         }
                         tok = strtok(NULL, ":");
                 }
@@ -487,7 +455,7 @@ display_sdl_init(char *fmt)
 
     asm("emms\n");
 
-    platform_sem_init(&s->semaphore, 0, 0);
+    s->semaphore = SDL_CreateSemaphore(0);
 
     if (!(s->display = XOpenDisplay(NULL))) {
                 printf("Unable to open display.\n");
@@ -554,10 +522,6 @@ display_sdl_init(char *fmt)
     s->frame.state = s;
     s->frame.reconfigure = reconfigure_screen;
 
-    pthread_mutex_init(&s->bufflock, NULL);
-    pthread_mutex_init(&s->idle_lock, NULL);
-    pthread_cond_init(&s->idle_cond, NULL);
-
     if (pthread_create(&(s->thread_id), NULL, display_thread_sdl, (void *) s) != 0) {
         perror("Unable to create display thread\n");
         return NULL;
@@ -574,8 +538,6 @@ display_sdl_done(void *state)
     assert(s->magic == MAGIC_SDL);
 
     /*FIXME: free all the stuff */
-    free(s->filename);
-
     SDL_ShowCursor(SDL_ENABLE);
 
     SDL_Quit();
@@ -589,17 +551,6 @@ display_sdl_getf(void *state)
     return &s->frame;
 }
 
-void
-display_sdl_wait_idle(void *state) 
-{
-    struct state_sdl *s = (struct state_sdl *) state;
-
-    pthread_mutex_lock(&s->idle_lock);
-    if(!s->idle)
-            pthread_cond_wait(&s->idle_cond, &s->idle_lock);
-    pthread_mutex_unlock(&s->idle_lock);
-}
-
 int
 display_sdl_putf(void *state, char *frame)
 {
@@ -609,16 +560,10 @@ display_sdl_putf(void *state, char *frame)
     assert(s->magic == MAGIC_SDL);
     assert(frame != NULL);
 
-    /* ...and give it more to do... */
-    tmp = s->image_display;
-    s->image_display = s->image_network;
-    s->image_network = tmp;
-
-    /* ...and signal the worker */
-    platform_sem_post(&s->semaphore);
-    sem_getvalue(&s->semaphore, &tmp);
+    SDL_SemPost(s->semaphore);
+    tmp = SDL_SemValue(s->semaphore);
     if(tmp > 1) 
-        printf("frame drop!\n");
+        printf("%d frame(s) dropped!\n", tmp);
     return 0;
 }
 

@@ -69,7 +69,7 @@ struct video_frame {
                                      */
         unsigned int         data_len; /* relative to data pos, not framebuffer size! */      
         unsigned int         dst_linesize; /* framebuffer pitch */
-        unsigned int         visiblesize; /* min(linesize, datasize) */
+        unsigned int         dst_pitch; /* framebuffer pitch - it can be larger if SDL resolution is larger than data */
         unsigned int         src_linesize; /* display data pitch */
         unsigned int         dst_x_offset; /* X offset in frame buffer */
         double               src_bpp;

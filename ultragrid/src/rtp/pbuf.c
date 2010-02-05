@@ -51,8 +51,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.4.2.3 $
- * $Date: 2010/01/30 20:11:45 $
+ * $Revision: 1.4.2.4 $
+ * $Date: 2010/02/05 13:56:49 $
  *
  */
 
@@ -354,14 +354,6 @@ pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time, struct video_fra
         while (curr != NULL) {
 		if (!curr->decoded && tv_gt(curr_time, curr->playout_time)) {
 			if (frame_complete(curr)) {
-				struct timeval curr_t;
-				int temp;
-	
-				gettimeofday(&curr_t, NULL);
-                                temp = curr_t.tv_usec - frame_begin[i];
-                                if(temp < 0)
-                                        temp += 1000000;
-                                //printf("Frame receive time: %d\n", (int)temp);	
 				decode_frame(curr->cdata, framebuffer);
 				curr->decoded = 1;
 				return 1; 

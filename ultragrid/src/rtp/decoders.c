@@ -37,8 +37,8 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Revision: 1.1.2.7 $
- * $Date: 2010/02/04 15:51:33 $
+ * $Revision: 1.1.2.8 $
+ * $Date: 2010/02/05 13:56:49 $
  *
  */
 
@@ -53,6 +53,7 @@
 #include "video_codec.h"
 
 //#define DEBUG 1
+//#define DEBUG_TIMING 1
 
 void
 decode_frame(struct coded_data *cdata, struct video_frame *frame)
@@ -66,11 +67,21 @@ decode_frame(struct coded_data *cdata, struct video_frame *frame)
         unsigned char *source;
         payload_hdr_t   *hdr;
         uint32_t data_pos;
-
+#ifdef DEBUG_TIMING
+        struct timeval tv,tv1;
+        int packets=0;
+#endif
+#ifdef DEBUG
         long pos=0;
+#endif
+#ifdef DEBUG_TIMING
+        gettimeofday(&tv, NULL);
+#endif
 
         while (cdata != NULL) {
-
+#ifdef DEBUG_TIMING
+                packets++;
+#endif
                 pckt = cdata->data;
                 hdr = (payload_hdr_t *)pckt->data;
                 width = ntohs(hdr->width);
@@ -87,21 +98,16 @@ decode_frame(struct coded_data *cdata, struct video_frame *frame)
                      frame->color_spec == color_spec)) {
                         frame->reconfigure(frame->state, width, height, color_spec);
                         frame->src_linesize = vc_getsrc_linesize(width, color_spec);
-/*                        if(frame->src_linesize < frame->dst_linesize - frame->dst_x_offset) {
-                                frame->visiblesize = frame->src_linesize;
-                        } else {
-                                frame->visiblesize = ((frame->dst_linesize - frame->dst_x_offset)/frame->dst_bpp)*frame->src_bpp;
-                        }*/
                 }
                 /* End of critical section */
         
 #ifdef DEBUG
-                fprintf(stdout, "Setup: src line size: %d, dst line size %d, visible size %d\n",
-                        frame->src_linesize, frame->dst_linesize, frame->visiblesize);
+                fprintf(stdout, "Setup: src line size: %d, dst line size %d, pitch %d\n",
+                        frame->src_linesize, frame->dst_linesize, frame->dst_pitch);
                 int b=0;
 #endif
                 /* MAGIC, don't touch it, you definitely break it */
-                int y = (data_pos / frame->src_linesize)*frame->dst_linesize;
+                int y = (data_pos / frame->src_linesize)*frame->dst_pitch;
                 int s_x = data_pos % frame->src_linesize;
                 int d_x = ((int)((s_x)/frame->src_bpp))*frame->dst_bpp;
                 source = pckt->data + sizeof(payload_hdr_t);
@@ -132,15 +138,22 @@ decode_frame(struct coded_data *cdata, struct video_frame *frame)
                                 pos += l;
 #endif
                         } else {
+#ifdef DEBUG
+                                fprintf(stderr, "Discarding data, framebuffer too small.\n");
+#endif
                                 len = 0;
                         }
                         d_x = 0; /* next line from beginning */
                         s_x = 0;
-                        y += frame->dst_linesize; /* next line */
+                        y += frame->dst_pitch; /* next line */
                 }
 
 		cdata = cdata->nxt;
 	}
+#ifdef DEBUG_TIMING
+    gettimeofday(&tv1, NULL);
+    fprintf(stdout, "Frame encoded in %fms, %d packets\n", (tv1.tv_usec - tv.tv_usec)/1000.0, packets);
+#endif
 #ifdef DEBUG
     fprintf(stdout, "Frame end\n");
 #endif
