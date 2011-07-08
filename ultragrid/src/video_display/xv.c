@@ -330,7 +330,9 @@ display_xv_init(void)
 	unsigned int		 p_version, p_release, p_request_base, p_event_base, p_error_base, p; 
 	unsigned int          	 p_num_adaptors, i, j;
         XWindowAttributes        xattr;
+#ifdef HAVE_XINERAMA
         XineramaScreenInfo      *screen_info;
+#endif
         int num;
 
 	s = (struct state_xv *) malloc(sizeof(struct state_xv));

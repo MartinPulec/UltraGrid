@@ -57,8 +57,10 @@
 #include "config_win32.h"
 #include "debug.h"
 #include "video_display.h"
+
 #include "video_display/null.h"
 #include "video_display/sdl.h"
+#include "video_display/decklink.h"
 #include "video_display/hdstation.h"
 #include "video_display/gl_sdl.h"
 #include "video_display/dxt.h"
@@ -133,6 +135,16 @@ static display_table_t display_device_table[] = {
 #endif                          /* HAVE_GL */
 #endif                          /* HAVE_SDL */
 #endif                          /* X_DISPLAY_MISSING */
+#ifdef HAVE_DECKLINK
+        {
+         0,
+         display_decklink_probe,
+         display_decklink_init,
+         display_decklink_done,
+         display_decklink_getf,
+         display_decklink_putf,
+         },
+#endif                          /* HAVE_DECKLINK */
 #ifdef HAVE_HDSTATION
         {
          0,
