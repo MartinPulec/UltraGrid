@@ -176,6 +176,7 @@ typedef struct _television_header
     uint8_t  reserved[76];        /* reserved for future use (padding) */
 } Television_Header;
 
+typedef void (*lut_func_t)(int *lut, char *data, int size);
 
 struct vidcap_dpx_state {
         struct video_frame *frame;
@@ -193,6 +194,7 @@ struct vidcap_dpx_state {
         int                 index;
         
         int                *lut;
+        lut_func_t          lut_func;
         
         struct file_information file_information;
         struct _image_information image_information;
@@ -200,9 +202,12 @@ struct vidcap_dpx_state {
         struct _motion_picture_film_header motion_header;
 };
 
+
 static void * vidcap_grab_thread(void *args);
 static void usage(void);
 static void create_lut(struct vidcap_dpx_state *s);
+static void apply_lut_8b(int *lut, char *data, int size);
+static void apply_lut_10b(int *lut, char *data, int size);
 
 static void usage()
 {
@@ -228,7 +233,7 @@ static void create_lut(struct vidcap_dpx_state *s)
                 x < s->image_information.image_element[0].ref_high_data;
                 ++x)
         {
-                s->lut[x] = pow(x, (float) (val - s->image_information.image_element[0].ref_low_data) / 
+                s->lut[x] = pow((float) (x - s->image_information.image_element[0].ref_low_data) / 
                                 s->image_information.image_element[0].ref_high_data, gamma) *
                                 max_val;
         }
@@ -238,22 +243,31 @@ static void apply_lut_10b(int *lut, char *data, int size)
 {
         int x;
         int elems = size / 4;
-        
-        struct in {
-                unsigned int _u:2;
-                unsigned int b:10;
-                unsigned int g:10;
-                unsigned int r:10;
-                
-        } __attribute__((packed));
-        
-        struct in *in = data;
+        register unsigned int *in = data;
+        register int r,g,b;
         
         for(x = 0; x < elems; ++x) {
-                in->r = lut[in->r];
-                in->g = lut[in->g];
-                in->b = lut[in->b];
-                ++in;
+                register unsigned int val = *in;
+                r = lut[val >> 22];
+                g = lut[(val >> 12) & 0x3ff];
+                b = lut[(val >> 2) & 0x3ff];
+                *in++ = r << 22 | g << 12 | b << 2;
+        }
+}
+
+static void apply_lut_8b(int *lut, char *data, int size)
+{
+        int x;
+        int elems = size / 4;
+        register unsigned int *in = data;
+        register int r,g,b;
+        
+        for(x = 0; x < elems; ++x) {
+                register unsigned int val = *in;
+                r = lut[val >> 24];
+                g = lut[(val >> 16) & 0xff];
+                b = lut[(val >> 8) & 0xff];
+                *in++ = r << 24 | g << 16 | b << 8;
         }
 }
 
@@ -312,9 +326,11 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         {
                 case 8:
                         s->frame->color_spec = RGBA;
+                        s->lut_func = apply_lut_8b;
                         break;
                 case 10:
                         s->frame->color_spec = DPX10;
+                        s->lut_func = apply_lut_10b;
                         break;
                 default:
                         error_with_code_msg(128, "[DPX] Currently no support for %d-bit images.", 
@@ -341,7 +357,7 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
                                 s->file_information.offset + bytes_read);
         } while(bytes_read < s->tile->data_len);
         
-        apply_lut_10b(s->lut, s->tile->data, s->tile->data_len);
+        s->lut_func(s->lut, s->tile->data, s->tile->data_len);
         close(fd);
         s->buffer_read = 1;
         s->index = 1;
@@ -392,6 +408,8 @@ static void * vidcap_grab_thread(void *args)
                                         s->tile->data_len - bytes_read,
                                         s->file_information.offset + bytes_read);
                 } while(bytes_read < s->tile->data_len);
+                
+                s->lut_func(s->buffers[s->buffer_read], s->lut, s->tile->data_len);
                 
                 s->tile->data = s->buffers[s->buffer_read];
                 s->buffer_read = (s->buffer_read + 1) % 2; /* and we will read next one */
