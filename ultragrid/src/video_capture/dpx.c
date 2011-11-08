@@ -409,7 +409,7 @@ static void * vidcap_grab_thread(void *args)
                                         s->file_information.offset + bytes_read);
                 } while(bytes_read < s->tile->data_len);
                 
-                s->lut_func(s->buffers[s->buffer_read], s->lut, s->tile->data_len);
+                s->lut_func(s->lut, s->buffers[s->buffer_read], s->tile->data_len);
                 
                 s->tile->data = s->buffers[s->buffer_read];
                 s->buffer_read = (s->buffer_read + 1) % 2; /* and we will read next one */
