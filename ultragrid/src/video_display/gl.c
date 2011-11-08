@@ -759,7 +759,7 @@ void display_gl_run(void *arg)
 
 void gl_resize(int width,int height)
 {
-	glViewport( 0, 0, ( GLint )width, ( GLint )height );
+	glViewport( 0, 0, ( GLint )width, ( GLint )height);
 	glMatrixMode( GL_PROJECTION );
 	glLoadIdentity( );
 
@@ -812,7 +812,7 @@ void gl_bind_texture(void *arg)
         
         glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT); 
         
-        float aspect = (double) s->tile->width / s->tile->height;
+        float aspect = (double) s->tile->width / s->tile->height * 2;
         glBegin(GL_QUADS);
         glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0/aspect);
         glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0/aspect);
