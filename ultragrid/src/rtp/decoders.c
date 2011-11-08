@@ -258,8 +258,8 @@ after_decoder_lookup:
          */
         //display_put_frame(decoder->display, frame);
         /* reconfigure VO and give it opportunity to pass us pitch */        
-        frame->reconfigure(frame->state, desc->width,
-                                        desc->height,
+        frame->reconfigure(frame->state, desc->width / 2,
+                                        desc->height * 2,
                                         out_codec, desc->fps, desc->aux);
         frame = display_get_frame(decoder->display);
         
@@ -292,9 +292,7 @@ after_decoder_lookup:
                                 for(y = 0; y < tile_info->y_count; ++y) {
                                         struct line_decoder *out = &decoder->line_decoder[x + 
                                                         tile_info->x_count * y];
-                                        out->base_offset = y * (desc->height / tile_info->y_count)
-                                                        * decoder->pitch + 
-                                                        vc_get_linesize(x * desc->width / tile_info->x_count, out_codec);
+                                        out->base_offset = x * decoder->pitch;
 
                                         out->src_bpp = get_bpp(in_codec);
                                         out->dst_bpp = get_bpp(out_codec);
@@ -305,11 +303,11 @@ after_decoder_lookup:
                 
                                         out->decode_line = decode_line;
 
-                                        out->dst_pitch = decoder->pitch;
+                                        out->dst_pitch = decoder->pitch * 2;
                                         out->src_linesize =
-                                                vc_get_linesize(desc->width / tile_info->x_count, in_codec);
+                                                vc_get_linesize(desc->width / tile_info->x_count, in_codec) * 2;
                                         out->dst_linesize =
-                                                vc_get_linesize(desc->width / tile_info->x_count, out_codec);
+                                                vc_get_linesize(desc->width / tile_info->x_count, out_codec) * 2;
                                 }
                         }
                         decoder->merged_fb = TRUE;

@@ -504,7 +504,7 @@ void gl_reconfigure_screen_post(void *arg, unsigned int width, unsigned int heig
 void glut_resize_window(struct state_gl *s)
 {
         if (!s->fs) {
-                glutReshapeWindow(s->tile->height * s->aspect, s->tile->height);
+                glutReshapeWindow(s->tile->width, s->tile->height / 2);
         } else {
                 glutFullScreen();
         }
@@ -526,7 +526,7 @@ void gl_reconfigure_screen(struct state_gl *s)
 
 	asm("emms\n");
         if(!s->video_aspect)
-                s->aspect = (double) s->tile->width / s->tile->height;
+                s->aspect = (double) s->tile->width / s->tile->height * 2;
         else
                 s->aspect = s->video_aspect;
 
