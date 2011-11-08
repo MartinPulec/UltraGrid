@@ -200,6 +200,7 @@ struct vidcap_dpx_state {
         struct _image_information image_information;
         struct _image_orientation image_orientation;
         struct _motion_picture_film_header motion_header;
+        struct _television_header television_header;
 };
 
 
@@ -230,7 +231,7 @@ static void create_lut(struct vidcap_dpx_state *s)
                         s->image_information.image_element[0].ref_high_data);
         
         for (x = s->image_information.image_element[0].ref_low_data;
-                x < s->image_information.image_element[0].ref_high_data;
+                x <= s->image_information.image_element[0].ref_high_data;
                 ++x)
         {
                 s->lut[x] = pow((float) (x - s->image_information.image_element[0].ref_low_data) / 
@@ -320,6 +321,7 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         read(fd, &s->image_information, sizeof(s->image_information));
         read(fd, &s->image_orientation, sizeof(s->image_orientation));
         read(fd, &s->motion_header, sizeof(s->motion_header));
+        read(fd, &s->television_header, sizeof(s->television_header));
         
         s->frame = vf_alloc(1, 1);
         switch (s->image_information.image_element[0].bit_size)
@@ -394,6 +396,7 @@ static void * vidcap_grab_thread(void *args)
                 gettimeofday(&cur_time, NULL);
                 
                 if(tv_diff_usec(cur_time, prev_time) > 1000000.0 / s->frame->fps) {
+                        s->tile->data = s->buffers[(s->buffer_read + 1) % 2];
                         sem_post(&s->have_item);
                         tv_add_usec(&prev_time, 1000000.0 / s->frame->fps);
                 } else {
@@ -411,7 +414,6 @@ static void * vidcap_grab_thread(void *args)
                 
                 s->lut_func(s->lut, s->buffers[s->buffer_read], s->tile->data_len);
                 
-                s->tile->data = s->buffers[s->buffer_read];
                 s->buffer_read = (s->buffer_read + 1) % 2; /* and we will read next one */
                 close(fd);
                 if( s->index == s->glob.gl_pathc)

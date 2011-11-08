@@ -489,9 +489,9 @@ vc_copylineDPX10toRGBA(unsigned char *dst, unsigned char *src, int dst_len, int 
        
         while(dst_len > 0) {
                 register unsigned int val = *in;
-                r = val >> 22;
-                g = 0x3ff & (val >> 12);
-                b = 0x3ff & (val >> 2);
+                r = val >> 24;
+                g = 0xff & (val >> 14);
+                b = 0xff & (val >> 4);
                 
                 *out++ = (r << rshift) | (g << gshift) | (b << bshift);
                 ++in;
