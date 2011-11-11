@@ -139,7 +139,7 @@ void *display_sage_init(char *fmt, unsigned int flags, struct state_decoder *dec
         s->frame = vf_alloc(1, 1);
         s->tile = tile_get(s->frame, 0, 0);
         s->decoder = decoder;
-        codec_t native[] = {UYVY, RGBA, RGB, DXT1};
+        codec_t native[] = {UYVY, RGBA, RGB};
         decoder_register_native_codecs(decoder, native, sizeof(native));
         decoder_set_param(decoder, 0, 8, 16, 0);
         /* sage init */

@@ -564,7 +564,7 @@ int video_desc_eq(struct video_desc a, struct video_desc b)
         return a.width == b.width &&
                a.height == b.height &&
                a.color_spec == b.color_spec &&
-               fabs(a.fps - b.fps) < 0.01 &&
+               fabs(a.fps - b.fps) < 0.01;
                // TODO: remove these obsolete constants
-               (a.aux & (~AUX_RGB & ~AUX_YUV & ~AUX_10Bit)) == (b.aux & (~AUX_RGB & ~AUX_YUV & ~AUX_10Bit));
+               //(a.aux & (~AUX_RGB & ~AUX_YUV & ~AUX_10Bit)) == (b.aux & (~AUX_RGB & ~AUX_YUV & ~AUX_10Bit));
 }
