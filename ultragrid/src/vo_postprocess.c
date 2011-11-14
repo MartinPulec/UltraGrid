@@ -52,94 +52,102 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include "video_codec.h"
-#include "video_compress.h"
-#include "video_compress/dxt_glsl.h"
-#include "video_compress/fastdxt.h"
+#include "vo_postprocess.h"
+#include "vo_postprocess/3d-interleaved.h"
 
-struct compress_t {
+struct vo_postprocess_t {
         const char * name;
-        compress_init_t init;
-        compress_compress_t compress;
-        compress_done_t done;
+        vo_postprocess_init_t init;
+        vo_postprocess_reconfigure_t reconfigure;
+        vo_postprocess_get_out_desc_t get_out_desc;
+        vo_postprocess_t vo_postprocess;
+        vo_postprocess_done_t done;
 };
 
-struct compress_state {
-        struct compress_t *handle;
+struct vo_postprocess_state {
+        struct vo_postprocess_t *handle;
         void *state;
 };
 
-const struct compress_t compress_modules[] = {
-#ifdef HAVE_FASTDXT
-        {"FastDXT", fastdxt_init, fastdxt_compress, fastdxt_done },
-#endif
-#ifdef HAVE_DXT_GLSL
-        {"RTDXT", dxt_glsl_compress_init, dxt_glsl_compress, dxt_glsl_compress_done},
-#endif
-        {NULL, NULL, NULL, NULL}
+const struct vo_postprocess_t vo_postprocess_modules[] = {
+        {"3d-interleaved", interleaved_3d_init, interleaved_3d_postprocess_reconfigure, 
+                        interleaved_3d_get_out_desc,
+                        interleaved_3d_postprocess, interleaved_3d_done },
+        {NULL, NULL, NULL, NULL, NULL, NULL}
 };
 
-void show_compress_help()
+void show_vo_postprocess_help()
 {
         int i;
-        printf("Possible compression modules (see '-c <module>:help' for options):\n");
-        for(i = 0; compress_modules[i].name != NULL; ++i)
-                printf("\t%s\n", compress_modules[i].name);
+        printf("Possible postprocess modules:\n");
+        for(i = 0; vo_postprocess_modules[i].name != NULL; ++i)
+                printf("\t%s\n", vo_postprocess_modules[i].name);
 }
 
-struct compress_state *compress_init(char *config_string)
+struct vo_postprocess_state *vo_postprocess_init(char *config_string)
 {
-        struct compress_state *s;
-        char *compress_options = NULL;
+        struct vo_postprocess_state *s;
+        char *vo_postprocess_options = NULL;
         
         if(!config_string) 
                 return NULL;
         
         if(strcmp(config_string, "help") == 0)
         {
-                show_compress_help();
+                show_vo_postprocess_help();
                 return NULL;
         }
         
-        s = (struct compress_state *) malloc(sizeof(struct compress_state));
+        s = (struct vo_postprocess_state *) malloc(sizeof(struct vo_postprocess_state));
         s->handle = NULL;
         int i;
-        for(i = 0; compress_modules[i].name != NULL; ++i) {
-                if(strncasecmp(config_string, compress_modules[i].name,
-                                strlen(compress_modules[i].name)) == 0) {
-                        s->handle = &compress_modules[i];
-                        if(config_string[strlen(compress_modules[i].name)] == ':') 
-                                        compress_options = config_string +
-                                                strlen(compress_modules[i].name) + 1;
+        for(i = 0; vo_postprocess_modules[i].name != NULL; ++i) {
+                if(strncasecmp(config_string, vo_postprocess_modules[i].name,
+                                strlen(vo_postprocess_modules[i].name)) == 0) {
+                        s->handle = &vo_postprocess_modules[i];
+                        if(config_string[strlen(vo_postprocess_modules[i].name)] == ':') 
+                                        vo_postprocess_options = config_string +
+                                                strlen(vo_postprocess_modules[i].name) + 1;
                 }
         }
         if(!s->handle) {
-                fprintf(stderr, "Unknown compression: %s\n", config_string);
+                fprintf(stderr, "Unknown postprocess module: %s\n", config_string);
                 free(s);
                 return NULL;
         }
-        s->state = s->handle->init(compress_options);
+        s->state = s->handle->init(vo_postprocess_options);
         if(!s->state) {
-                fprintf(stderr, "Compression initialization failed: %s\n", config_string);
+                fprintf(stderr, "Postprocessing initialization failed: %s\n", config_string);
                 free(s);
                 return NULL;
         }
         return s;
 }
 
-const char *get_compress_name(struct compress_state *s)
+struct video_frame * vo_postprocess_reconfigure(struct vo_postprocess_state *s,
+                struct video_desc desc, struct tile_info ti)
 {
-        if(s) return s->handle->name;
+        if(s) {
+                return s->handle->reconfigure(s->state, desc, ti);
+        } else {
+                return NULL;
+        }
 }
 
-struct video_frame *compress_frame(struct compress_state *s, struct video_frame *frame)
+void vo_postprocess(struct vo_postprocess_state *s, struct video_frame *in,
+                struct video_frame *out, int req_pitch)
 {
         if(s)
-                return s->handle->compress(s->state, frame);
+                s->handle->vo_postprocess(s->state, in, out, req_pitch);
 }
 
-void compress_done(struct compress_state *s)
+void vo_postprocess_done(struct vo_postprocess_state *s)
 {
         if(s) s->handle->done(s->state);
+}
+
+void vo_postprocess_get_out_desc(struct vo_postprocess_state *s, struct video_desc_ti *out)
+{
+        if(s) s->handle->get_out_desc(s->state, out);
 }
 

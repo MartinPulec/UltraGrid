@@ -66,7 +66,8 @@ const struct codec_info_t codec_info[] = {
         {v210, "v210", 1983000880, 48, 8.0 / 3.0, 0},
         {DVS10, "DVS10", 0, 48, 8.0 / 3.0, 0},
         {DXT1, "DXT1", 'DXT1', 1, 0.5, 1},
-        {DXT5, "DXT5", 'DXT5', 1, 1.0, 1},
+        {DXT1_YUV, "DXT1 YUV", 'DXTY', 1, 0.5, 0}, /* packet YCbCr inside DXT1 channels */
+        {DXT5, "DXT5", 'DXT5', 1, 1.0, 1},/* DXT5 YCoCg */
         {RGB, "RGB", 0x32424752, 1, 3.0, 1},
         {DPX10, "DPX10", 0, 1, 4.0, 1},
         {0, NULL, 0, 0, 0.0, 0}
@@ -80,6 +81,7 @@ const struct codec_info_t codec_info[] = {
  * list 10b->10b earlier to 10b->8b etc. */
 const struct line_decode_from_to line_decoders[] = {
         { RGBA, RGBA, vc_copylineRGBA},
+        { RGB, RGB, vc_copylineRGB},
         { DVS10, v210, vc_copylineDVS10toV210},
         { DVS10, UYVY, vc_copylineDVS10},
         { R10k, RGBA, vc_copyliner10k},
@@ -452,6 +454,30 @@ void vc_copylineDVS10(unsigned char *dst, unsigned char *src, int dst_len)
 
 #endif                          /* !(HAVE_MACOSX || HAVE_32B_LINUX) */
 
+void vc_copylineRGB(unsigned char *dst, unsigned char *src, int dst_len, int rshift, int gshift, int bshift)
+{
+        register unsigned int r, g, b;
+        union {
+                unsigned int out;
+                unsigned char c[4];
+        } u;
+
+        if (rshift == 0 && gshift == 8 && bshift == 16) {
+                memcpy(dst, src, dst_len);
+        } else {
+                while(dst_len > 0) {
+                        r = *src++;
+                        g = *src++;
+                        b = *src++;
+                        u.out = (r << rshift) | (g << gshift) | (b << bshift);
+                        *dst++ = u.c[0];
+                        *dst++ = u.c[1];
+                        *dst++ = u.c[2];
+                        dst_len -= 3;
+                }
+        }
+}
+
 void vc_copylineRGBAtoRGB(unsigned char *dst, unsigned char *src, int dst_len)
 {
         while(dst_len > 0) {
@@ -518,7 +544,7 @@ struct video_frame * vf_alloc(int grid_width, int grid_height)
         buf = (struct video_frame *) malloc(sizeof(struct video_frame));
         
         buf->tiles = (struct tiles *) 
-                        malloc(sizeof(struct tile) * grid_width *
+                        calloc(1, sizeof(struct tile) * grid_width *
                         grid_height);
         buf->grid_width = grid_width;
         buf->grid_height = grid_height;
@@ -555,3 +581,12 @@ struct tile * tile_get(struct video_frame *buf, int grid_x_pos, int grid_y_pos)
         return &buf->tiles[grid_x_pos + grid_y_pos * buf->grid_width];
 }
 
+int video_desc_eq(struct video_desc a, struct video_desc b)
+{
+        return a.width == b.width &&
+               a.height == b.height &&
+               a.color_spec == b.color_spec &&
+               fabs(a.fps - b.fps) < 0.01 &&
+               // TODO: remove these obsolete constants
+               (a.aux & (~AUX_RGB & ~AUX_YUV & ~AUX_10Bit)) == (b.aux & (~AUX_RGB & ~AUX_YUV & ~AUX_10Bit));
+}

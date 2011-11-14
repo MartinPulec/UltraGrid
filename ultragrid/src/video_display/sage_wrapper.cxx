@@ -51,53 +51,71 @@
 #include <sail.h>
 #include <misc.h>
 
-sail *sageInf; // sage sail object
-
-void initSage(int appID, int nodeID, int width, int height, int yuv, int dxt)
+void *initSage(int appID, int nodeID, int width, int height, codec_t codec)
 {
-            sageInf = new sail;
-            sailConfig sailCfg;
-            sailCfg.init("ultragrid.conf");
-            sailCfg.setAppName("ultragrid");
-            sailCfg.rank = nodeID;
-            sailCfg.resX = width;
-            sailCfg.resY = height;
+        sail *sageInf; // sage sail object
 
-            sageRect renderImageMap;
-            renderImageMap.left = 0.0;
-            renderImageMap.right = 1.0;
-            renderImageMap.bottom = 0.0;
-            renderImageMap.top = 1.0;
+        sageInf = new sail;
+        sailConfig sailCfg;
+        sailCfg.init("ultragrid.conf");
+        sailCfg.setAppName("ultragrid");
+        sailCfg.rank = nodeID;
+        sailCfg.resX = width;
+        sailCfg.resY = height;
+        
+        sageRect renderImageMap;
+        renderImageMap.left = 0.0;
+        renderImageMap.right = 1.0;
+        renderImageMap.bottom = 0.0;
+        renderImageMap.top = 1.0;
+        
+        sailCfg.imageMap = renderImageMap;
+        switch (codec) {
+                case DXT1:
+                        sailCfg.pixFmt = PIXFMT_DXT;
+                        break;
+                case RGBA:
+                        sailCfg.pixFmt = PIXFMT_8888;
+                        break;
+                case UYVY:
+                        sailCfg.pixFmt = PIXFMT_YUV;
+                        break;
+                case RGB:
+                        sailCfg.pixFmt = PIXFMT_888;
+                        break;
+        }
 
-            sailCfg.imageMap = renderImageMap;
-            if (!yuv) {
-                    if(dxt)
-                            sailCfg.pixFmt = PIXFMT_DXT;
-                    else
-                            sailCfg.pixFmt = PIXFMT_8888_INV;
-            } else {
-                    sailCfg.pixFmt = PIXFMT_YUV;
-            }
-            //sailCfg.rowOrd = BOTTOM_TO_TOP;
-            sailCfg.rowOrd = TOP_TO_BOTTOM;
-            sailCfg.master = true;
-
-            sageInf->init(sailCfg);
+        //sailCfg.rowOrd = BOTTOM_TO_TOP;
+        sailCfg.rowOrd = TOP_TO_BOTTOM;
+        sailCfg.master = true;
+        
+        sageInf->init(sailCfg);
+        
+        return sageInf;
 }
 
-void sage_shutdown()
+void sage_shutdown(void * state)
 {
+    sail *sageInf = (sail *) state;
     sageInf->shutdown();
     // don't try to delete, since it would probably cause crash with current SAGE
     //delete sageInf;
 }
 
-void sage_swapBuffer()
+void sage_swapBuffer(void *state)
 {
-    sageInf->swapBuffer(SAGE_NON_BLOCKING);
+        sail *sageInf = (sail *) state;
+        sageInf->swapBuffer(SAGE_NON_BLOCKING);
 }
 
-GLubyte * sage_getBuffer()
+GLubyte * sage_getBuffer(void *state)
 {
-    return (GLubyte *)sageInf->getBuffer();
+        sail *sageInf = (sail *) state;
+        return (GLubyte *)sageInf->getBuffer();
+}
+
+void sage_delete(void *state)
+{
+        sail *sageInf = (sail *) state;
+        delete sageInf;
 }

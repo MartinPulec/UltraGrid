@@ -52,7 +52,7 @@ if expr "$host_os" : ".*darwin.*" > /dev/null; then
 	CFLAGS+=" -m32 -I/opt/local/include"
 	CPPFLAGS+=" -m32 -I/opt/local/include"
 	CXXFLAGS+=" -m32 -I/opt/local/include"
-	LDFLAGS+=" -m32 -L/opt/local/lib"
+	LDFLAGS+=" -m32 -L/opt/local/lib -mmacosx-version-min=10.5"
 	X_CFLAGS+="-I/usr/X11R6/include"
 else
 	LINKER=$CC
@@ -125,6 +125,13 @@ AC_SUBST(MATHLIBS)
 # See if this system supports sched_setscheduler()
 
 AC_CHECK_FUNCS(sched_setscheduler)
+use_rt=no
+AC_ARG_ENABLE(dvs,
+              AS_HELP_STRING([--enable-rt], [enable RT priority]), 
+	[use_rt=$enableval])
+if [ "$use_rt" = "yes" ]; then
+        AC_DEFINE([USE_RT], [1], [We use RT priority])
+fi
 
 # -------------------------------------------------------------------------------------------------
 # Try to find the pthread library...
@@ -180,44 +187,50 @@ AC_ARG_ENABLE(ipv6,
 X_LIBS=
 X_OBJ=
 
-AC_PATH_XTRA
-
-if test ! $no_x ; then 
-	# Check if X headers are broken.  GCC 2.95 and up reject headers that don't
-	# have omit types, X11 headers have implicit int declarations on some systems
-	# (e.g. Solaris).
-	AC_CACHE_CHECK(whether X11 headers are broken, x11_cv_broken_headers, [
-		SAVED_CFLAGS=$CFLAGS
-		CFLAGS="$X_CFLAGS $CFLAGS"
-		AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <X11/Xlib.h>
-		#include <X11/Xutil.h>]], [[return 0]])],[x11_cv_broken_headers=no],[x11_cv_broken_headers=yes])
-		CFLAGS=$SAVED_CFLAGS
-	]);
-
-	# If X headers look broken, check if we can use -istdinc.  If so replace 
-	# -IXDIR with -istdincXDIR to suppress warnings.  NB it is possible to use
-	# -fpermissive, but not in conjunction with -Werror since warnings are still
-	# generated.  Could pull local headers through:
-	#			 's/^\(extern\) \([[A-Za-z0-9]]*($\)/\1 int \2/' 
-	if test $x11_cv_broken_headers = yes -a $GCC = "yes" ; then
-		SAVED_X_CFLAGS=$X_CFLAGS
-		X_CFLAGS=`echo $X_CFLAGS | sed 's%-I%-istdinc%'`
-		AC_CACHE_CHECK(whether -istdinc fixes X11 headers, x11_cv_gcc_istdinc_works, [
-			SAVED_CFLAGS=$CFLAGS
-			CFLAGS="$X_CFLAGS $CFLAGS"
-			AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <X11/Xlib.h>
-			#include <X11/Xutil.h>]], [[return 0]])],[x11_cv_gcc_istdinc_works=yes],[x11_cv_gcc_istdinc_works=no])
-			CFLAGS=$SAVED_CFLAGS
-		])
-		if test $x11_cv_gcc_istdinc_works = no ; then
-			X_CFLAGS=$SAVED_X_CFLAGS
-		fi
-	fi
-        X_LIBS+=" -lX11"
-        X_OBJ="src/x11_common.o"
-        CFLAGS+=""
-	HAVE_X11=yes
-fi
+case "$host_os" in
+	*darwin*)
+        ;;
+        *)
+        AC_PATH_XTRA
+        
+        if test ! $no_x ; then 
+                # Check if X headers are broken.  GCC 2.95 and up reject headers that don't
+                # have omit types, X11 headers have implicit int declarations on some systems
+                # (e.g. Solaris).
+                AC_CACHE_CHECK(whether X11 headers are broken, x11_cv_broken_headers, [
+                        SAVED_CFLAGS=$CFLAGS
+                        CFLAGS="$X_CFLAGS $CFLAGS"
+                        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <X11/Xlib.h>
+                        #include <X11/Xutil.h>]], [[return 0]])],[x11_cv_broken_headers=no],[x11_cv_broken_headers=yes])
+                        CFLAGS=$SAVED_CFLAGS
+                ]);
+        
+                # If X headers look broken, check if we can use -istdinc.  If so replace 
+                # -IXDIR with -istdincXDIR to suppress warnings.  NB it is possible to use
+                # -fpermissive, but not in conjunction with -Werror since warnings are still
+                # generated.  Could pull local headers through:
+                #			 's/^\(extern\) \([[A-Za-z0-9]]*($\)/\1 int \2/' 
+                if test $x11_cv_broken_headers = yes -a $GCC = "yes" ; then
+                        SAVED_X_CFLAGS=$X_CFLAGS
+                        X_CFLAGS=`echo $X_CFLAGS | sed 's%-I%-istdinc%'`
+                        AC_CACHE_CHECK(whether -istdinc fixes X11 headers, x11_cv_gcc_istdinc_works, [
+                                SAVED_CFLAGS=$CFLAGS
+                                CFLAGS="$X_CFLAGS $CFLAGS"
+                                AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <X11/Xlib.h>
+                                #include <X11/Xutil.h>]], [[return 0]])],[x11_cv_gcc_istdinc_works=yes],[x11_cv_gcc_istdinc_works=no])
+                                CFLAGS=$SAVED_CFLAGS
+                        ])
+                        if test $x11_cv_gcc_istdinc_works = no ; then
+                                X_CFLAGS=$SAVED_X_CFLAGS
+                        fi
+                fi
+                X_LIBS+=" -lX11"
+                X_OBJ="src/x11_common.o"
+                CFLAGS+=""
+                HAVE_X11=yes
+        fi
+        ;;
+esac
 
 AC_SUBST(X_CFLAGS)
 AC_SUBST(X_LIBS)
@@ -696,7 +709,7 @@ if test $fastdxt_req = yes -a $FOUND_DXT_L = yes -a $FOUND_DXT_H = yes
 then
 	DXT_INC=-I${DXT_INC}
 	DXT_LIB="-L${DXT_LIB} -ldxt"
-	COMPRESS_OBJ="$COMPRESS_OBJ src/video_compress.o"
+	COMPRESS_OBJ="$COMPRESS_OBJ src/video_compress/fastdxt.o"
         AC_DEFINE([HAVE_FASTDXT], [1], [Build with support for FastDXT])
 	LINKER=$CXX
         fastdxt=yes
@@ -739,7 +752,7 @@ then
         LIBS+=" -lGLEW -lGL -lX11"
         AC_DEFINE([HAVE_DXT_GLSL], [1], [Build with DXT_GLSL support])
         DXT_GLSL_OBJS="../dxt_compress/dxt_encoder.o ../dxt_compress/dxt_decoder.o  \
-../dxt_compress/dxt_common.o ../dxt_compress/dxt_util.o src/dxt_glsl_compress.o src/video_decompress/dxt_glsl.o"
+../dxt_compress/dxt_common.o ../dxt_compress/dxt_util.o src/video_compress/dxt_glsl.o src/video_decompress/dxt_glsl.o"
         DXT_GLSL_CFLAGS="-std=gnu99"
         rtdxt=yes
 else
@@ -875,6 +888,7 @@ Configuration summary:
   Debug output ................ $debug_output
   Profiling support ........... $profile
   IPv6 support ................ $ipv6
+  RT priority ................. $use_rt
 
   DeckLink .................... $decklink
   DVS ......................... $dvs

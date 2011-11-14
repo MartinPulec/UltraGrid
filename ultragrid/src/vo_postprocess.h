@@ -1,5 +1,5 @@
 /*
- * FILE:    dxt_glsl_compress.h
+ * FILE:    video_codec.h
  * AUTHORS: Martin Benes     <martinbenesh@gmail.com>
  *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
  *          Petr Holub       <hopet@ics.muni.cz>
@@ -44,12 +44,44 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#ifndef __vo_postprocess_h
 
+#define __vo_postprocess_h
 #include "video_codec.h"
 
-struct video_compress;
+struct vo_postprocess_state;
 
-struct video_compress * dxt_glsl_init(char * opts);
-struct video_frame * dxt_glsl_compress(void *args, struct video_frame * tx);
-void dxt_glsl_exit(void *args);
-void glx_init(void);
+typedef  void *(*vo_postprocess_init_t)(char *cfg);
+
+/**
+ * Reconfigures postprocessor for frame
+ * and returns resulting frame properties (they can be different)
+ * 
+ * @return frame to be written to
+ */
+typedef  struct video_frame * (*vo_postprocess_reconfigure_t)(void *state, struct video_desc desc, struct tile_info);
+typedef void (*vo_postprocess_get_out_desc_t)(struct vo_postprocess_state *, struct video_desc_ti *out);
+
+/**
+ * Postprocesses video frame
+ * 
+ * @param state postprocess state
+ * @param input frame
+ * @return output frame
+ */
+typedef  void (*vo_postprocess_t)(void *state, struct video_frame *in, struct video_frame *out, int req_out_pitch);
+
+/**
+ * Cleanup function
+ */
+typedef  void (*vo_postprocess_done_t)(void *);
+
+struct vo_postprocess_state *vo_postprocess_init(char *config_string);
+struct video_frame * vo_postprocess_reconfigure(struct vo_postprocess_state *, struct video_desc, struct tile_info);
+void vo_postprocess_get_out_desc(struct vo_postprocess_state *, struct video_desc_ti *out);
+void vo_postprocess(struct vo_postprocess_state *, struct video_frame*, struct video_frame*, int req_pitch);
+void compress_done(struct vo_postprocess_state *);
+
+void show_vo_postprocess_help(void);
+
+#endif /* __vo_postprocess_h */

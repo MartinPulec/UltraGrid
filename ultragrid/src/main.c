@@ -71,7 +71,6 @@
 #include "video_display.h"
 #include "video_display/sdl.h"
 #include "video_compress.h"
-#include "dxt_glsl_compress.h"
 #include "pdb.h"
 #include "tv.h"
 #include "transmit.h"
@@ -88,13 +87,10 @@
 #define EXIT_FAIL_NETWORK	5
 #define EXIT_FAIL_TRANSMIT	6
 #define EXIT_FAIL_COMPRESS	7
+#define EXIT_FAIL_DECODER	8
 
 #define PORT_BASE               5004
 #define PORT_AUDIO              5006
-
-#define COMPRESS_NONE        0
-#define COMPRESS_DXT_CPU     1
-#define COMPRESS_DXT_GPU     2
 
 struct state_uv {
         struct rtp **network_devices;
@@ -109,10 +105,10 @@ struct state_uv {
         uint32_t ts;
         struct video_tx *tx;
         struct display *display_device;
-        struct video_compress *compression; /* state */
+        struct compress_state *compression; /* state */
+        int requested_compression;
         const char *requested_display;
         const char *requested_capture;
-        int requested_compression;
         unsigned requested_mtu;
         
         int use_ihdtv_protocol;
@@ -134,7 +130,6 @@ static struct state_uv *uv_state;
 
 void cleanup_uv(void);
 void list_video_display_devices(void);
-void show_compress_help(void);
 void list_video_capture_devices(void);
 
 #ifndef WIN32
@@ -176,17 +171,6 @@ static void usage(void)
         printf("\t                         \tis entered, video frames are split\n");
         printf("\t                         \tand chunks are sent/received independently.\n");
         printf("\n");
-}
-
-void show_compress_help()
-{
-        printf("Possible compression modules:\n");
-        printf("\n");
-        printf("\tFastDXT\n");
-        printf("\t\tFastDXT DXT1 compression (CPU)\n");
-        printf("\n");
-        printf("\tRTDXT\n");
-        printf("\t\tReal-Time DXT Compression via OpenGL 3.0 - offers DXT1 and DXT5 YCoCg compressions (see '-c RTDXT:help')\n");
 }
 
 void list_video_display_devices()
@@ -492,7 +476,7 @@ static void *sender_thread(void *arg)
 {
         struct state_uv *uv = (struct state_uv *)arg;
 
-        struct video_frame *tx_frames, *splitted_frames = NULL;
+        struct video_frame *tx_frame, *splitted_frames = NULL;
         struct audio_frame *audio;
         //struct video_frame *splitted_frames = NULL;
         int tile_y_count;
@@ -507,29 +491,23 @@ static void *sender_thread(void *arg)
 
         while (!should_exit) {
                 /* Capture and transmit video... */
-                tx_frames = vidcap_grab(uv->capture_device, &audio);
-                if (tx_frames != NULL) {
+                tx_frame = vidcap_grab(uv->capture_device, &audio);
+                if (tx_frame != NULL) {
                         if(audio) {
                                 audio_sdi_send(uv->audio, audio);
                         }
                         //TODO: Unghetto this
-                        if (uv->requested_compression == COMPRESS_DXT_CPU) {
-#ifdef HAVE_FASTDXT
-                                tx_frames = compress_data(uv->compression, &tx_frames[0]);
-#endif                          /* HAVE_FASTDXT */
-                        } else if (uv->requested_compression == COMPRESS_DXT_GPU) {
-#ifdef HAVE_DXT_GLSL
-                                tx_frames = dxt_glsl_compress(uv->compression, &tx_frames[0]);
-#endif
+                        if (uv->requested_compression) {
+                                tx_frame = compress_frame(uv->compression, tx_frame);
                         }
                         if(uv->connections_count == 1) { /* normal case - only one connection */
-                                tx_send(uv->tx, tx_frames, 
+                                tx_send(uv->tx, tx_frame, 
                                                 uv->network_devices[0]);
                         } else { /* split */
                                 int i;
 
                                 //assert(frame_count == 1);
-                                vf_split_horizontal(splitted_frames, tx_frames,
+                                vf_split_horizontal(splitted_frames, tx_frame,
                                                tile_y_count);
                                 for (i = 0; i < tile_y_count; ++i) {
                                         tx_send_tile(uv->tx, splitted_frames, 0, i,
@@ -546,7 +524,7 @@ static void *sender_thread(void *arg)
 int main(int argc, char *argv[])
 {
 
-#ifdef HAVE_SCHED_SETSCHEDULER
+#if defined HAVE_SCHED_SETSCHEDULER && defined USE_RT
         struct sched_param sp;
 #endif
         char *network_device = NULL;
@@ -557,6 +535,7 @@ int main(int argc, char *argv[])
         char *audio_recv = NULL;
         char *jack_cfg = NULL;
         char *save_ptr = NULL;
+        char *requested_mode = NULL;
         
         struct state_uv *uv;
         char *compress_options = NULL;
@@ -578,6 +557,7 @@ int main(int argc, char *argv[])
                 {"display", required_argument, 0, 'd'},
                 {"capture", required_argument, 0, 't'},
                 {"mtu", required_argument, 0, 'm'},
+                {"mode", required_argument, 0, 'M'},
                 {"version", no_argument, 0, 'v'},
                 {"compress", required_argument, 0, 'c'},
                 {"ihdtv", no_argument, 0, 'i'},
@@ -597,7 +577,7 @@ int main(int argc, char *argv[])
         uv->compression = NULL;
         uv->requested_display = "none";
         uv->requested_capture = "none";
-        uv->requested_compression = COMPRESS_NONE;
+        uv->requested_compression = FALSE;
         uv->requested_mtu = 0;
         uv->use_ihdtv_protocol = 0;
         uv->participants = NULL;
@@ -607,7 +587,7 @@ int main(int argc, char *argv[])
         perf_record(UVP_INIT, 0);
 
         while ((ch =
-                getopt_long(argc, argv, "d:t:m:r:s:vc:ihj:", getopt_options,
+                getopt_long(argc, argv, "d:t:m:r:s:vc:ihj:M:", getopt_options,
                             &option_index)) != -1) {
                 switch (ch) {
                 case 'd':
@@ -631,37 +611,15 @@ int main(int argc, char *argv[])
                 case 'm':
                         uv->requested_mtu = atoi(optarg);
                         break;
+                case 'M':
+                        requested_mode = optarg;
+                        break;
                 case 'v':
                         printf("%s\n", ULTRAGRID_VERSION);
                         return EXIT_SUCCESS;
                 case 'c':
-                        if(strcasecmp(optarg, "help") == 0) {
-                                show_compress_help();
-                                return EXIT_SUCCESS;
-                        }
-                        if(strncasecmp(optarg, "RTDXT", strlen("RTDXT")) == 0) {
-#ifndef HAVE_DXT_GLSL
-                                fprintf(stderr, "GLSL DXT compression is not currently "
-                                                "compiled in UG!\n");
-                                exit(EXIT_FAIL_USAGE);
-#else
-                                uv->requested_compression = COMPRESS_DXT_GPU;
-                                if(optarg[strlen("RTDXT")] == ':') 
-                                        compress_options = optarg + strlen("RTDXT") + 1;
-#endif
-                        } else if(strncasecmp(optarg, "FastDXT", strlen("FastDXT")) == 0) {
-#ifndef HAVE_FASTDXT
-                                fprintf(stderr, "FastDXT compression is not currently "
-                                                "compiled in UG!\n");
-                                exit(EXIT_FAIL_USAGE);
-#endif
-                                uv->requested_compression = COMPRESS_DXT_CPU;
-                                if(optarg[strlen("FastDXT")] == ':')
-                                        compress_options = optarg + strlen("FastDXT") + 1;
-                        } else {
-                                fprintf(stderr, "Unknown compression!\n");
-                                exit(EXIT_FAIL_USAGE);
-                        }
+                        uv->requested_compression = TRUE;
+                        compress_options = optarg;
                         break;
                 case 'i':
                         uv->use_ihdtv_protocol = 1;
@@ -704,8 +662,19 @@ int main(int argc, char *argv[])
                 }
         }
         
-        uv->dec_state = decoder_init();
+        uv->dec_state = decoder_init(requested_mode);
+        if(uv->dec_state == NULL) {
+                fprintf(stderr, "Error initializing decoder ('-M' option).\n");
+                exit(EXIT_FAIL_DECODER);
+        }
         
+        uv->compression = compress_init(compress_options);
+        if(uv->requested_compression
+                        && uv->compression == NULL) {
+                fprintf(stderr, "Error initializing compression.\n");
+                exit(EXIT_FAIL_COMPRESS);
+        }
+
         uv->audio = audio_cfg_init (network_device, audio_send, audio_recv, jack_cfg);
         if(audio_does_send_sdi(uv->audio))
                 vidcap_flags |= VIDCAP_FLAG_ENABLE_AUDIO;
@@ -717,17 +686,12 @@ int main(int argc, char *argv[])
         printf("Capture device: %s\n", uv->requested_capture);
         printf("MTU           : %d\n", uv->requested_mtu);
         printf("Compression   : ");
-        switch (uv->requested_compression) {
-                case COMPRESS_NONE:
-                        printf("None\n");
-                        break;
-                case COMPRESS_DXT_CPU:
-                        printf("FastDXT\n");
-                        break;
-                case COMPRESS_DXT_GPU:
-                        printf("GLSL DXT\n");
-                        break;
+        if (uv->requested_compression) {
+                printf("%s", get_compress_name(uv->compression));
+        } else {
+                printf("none");
         }
+        printf("\n");
 
         if (uv->use_ihdtv_protocol)
                 printf("Network protocol: ihdtv\n");
@@ -755,23 +719,6 @@ int main(int argc, char *argv[])
         decoder_register_video_display(uv->dec_state, uv->display_device);
         printf("Display initialized-%s\n", uv->requested_display);
 
-
-        if (uv->requested_compression == COMPRESS_DXT_CPU) {
-#ifdef HAVE_FASTDXT
-                uv->compression = initialize_video_compression(compress_options);
-#endif  /* HAVE_FASTDXT */
-        } else if (uv->requested_compression == COMPRESS_DXT_GPU) {
-#ifdef HAVE_DXT_GLSL
-                uv->compression = dxt_glsl_init(compress_options);
-#endif                
-        }
-        
-        if(uv->requested_compression != COMPRESS_NONE
-                        && uv->compression == NULL) {
-                fprintf(stderr, "Error initializing compression.\n");
-                exit(EXIT_FAIL_COMPRESS);
-        }
-
 #ifndef WIN32
         signal(SIGINT, signal_handler);
         signal(SIGTERM, signal_handler);
@@ -780,6 +727,7 @@ int main(int argc, char *argv[])
         signal(SIGABRT, signal_handler);
 #endif
 
+#ifdef USE_RT
 #ifdef HAVE_SCHED_SETSCHEDULER
         sp.sched_priority = sched_get_priority_max(SCHED_FIFO);
         if (sched_setscheduler(0, SCHED_FIFO, &sp) != 0) {
@@ -787,7 +735,8 @@ int main(int argc, char *argv[])
         }
 #else
         printf("WARNING: System does not support real-time scheduling\n");
-#endif                          /* HAVE_SCHED_SETSCHEDULER */
+#endif /* HAVE_SCHED_SETSCHEDULER */
+#endif /* USE_RT */         
 
         if (uv->use_ihdtv_protocol) {
                 ihdtv_connection tx_connection, rx_connection;
@@ -937,6 +886,7 @@ void cleanup_uv(void)
 	should_exit = 1;
 	usleep(100000);
         
+        compress_done(uv_state->compression);
         audio_done(uv_state->audio);
         tx_done(uv_state->tx);
 	destroy_devices(uv_state->network_devices);

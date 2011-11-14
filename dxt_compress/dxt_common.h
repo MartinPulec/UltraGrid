@@ -71,9 +71,10 @@
  * DXT format
  */
 enum dxt_format {
-    DXT_FORMAT_RGB = 0,
-    DXT_FORMAT_YUV = 1,
-    DXT_FORMAT_YUV422 = 2
+    DXT_FORMAT_RGB,
+    DXT_FORMAT_RGBA,
+    DXT_FORMAT_YUV,
+    DXT_FORMAT_YUV422
 };
 
 /**
@@ -81,6 +82,7 @@ enum dxt_format {
  */
 enum dxt_type {
     DXT_TYPE_DXT1,
+    DXT_TYPE_DXT1_YUV,
     DXT_TYPE_DXT5_YCOCG
 };
 

@@ -61,6 +61,7 @@ typedef enum codec_t {
         v210,
         DVS10,
         DXT1,
+        DXT1_YUV,
         DXT5,
         RGB,
         DPX10
@@ -76,6 +77,13 @@ struct video_desc {
         codec_t              color_spec;
         int                  aux;
         double               fps;
+};
+
+/* contains full information both about video and about tiles.
+ */
+struct video_desc_ti {
+        struct video_desc desc;
+        struct tile_info ti;
 };
 
 struct video_frame 
@@ -140,6 +148,7 @@ void vc_copylineDVS10toV210(unsigned char *dst, unsigned char *src, int dst_len)
 void vc_copylineRGBAtoRGB(unsigned char *dst, unsigned char *src, int len);
 void vc_copylineRGBtoRGBA(unsigned char *dst, unsigned char *src, int len, int rshift, int gshift, int bshift);
 void vc_copylineDPX10toRGBA(unsigned char *dst, unsigned char *src, int dst_len, int rshift, int gshift, int bshift);
+void vc_copylineRGB(unsigned char *dst, unsigned char *src, int dst_len, int rshift, int gshift, int bshift);
 
 /*
  * @return TRUE or FALSE
@@ -149,13 +158,10 @@ int codec_is_a_rgb(codec_t codec);
 struct video_frame * vf_alloc(int grid_width, int grid_height);
 void vf_free(struct video_frame *buf);
 struct tile * tile_get(struct video_frame *buf, int grid_x_pos, int grid_y_pos);
+int video_desc_eq(struct video_desc, struct video_desc);
 
-/* AUX_RGB and AUX_YUV are currently used only when sending DXT1 compression
- * to indicate if it is YUV or RGB. Otherwise the usage is redundant since
- * codec info already holds that information.
- *
- * AUX_10Bit doesnt seem to be useful at all.
- * TODO: check if we cannot remove some of unused flags
+/*
+ * Currently used (pre 1.0) is only AUX_{INTERLACED, PROGRESSIVE, SF, TILED}
  */
 #define AUX_INTERLACED  (1<<0)
 #define AUX_PROGRESSIVE (1<<1)

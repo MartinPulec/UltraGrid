@@ -1,5 +1,5 @@
 /*
- * FILE:    video_codec.h
+ * FILE:    video_compress.h
  * AUTHORS: Martin Benes     <martinbenesh@gmail.com>
  *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
  *          Petr Holub       <hopet@ics.muni.cz>
@@ -44,37 +44,9 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#ifndef __video_decompress_h
 
-#define __video_decompress_h
 #include "video_codec.h"
 
-struct compress_state;
-
-/**
- * Initializes compression
- * 
- * @param cfg command-line argument
- * @return intern state
- */
-typedef  void *(*compress_init_t)(char *cfg);
-/**
- * Compresses video frame
- * 
- * @param state compressor state
- * @param uncompressed frame
- * @return compressed frame
- */
-typedef  struct video_frame * (*compress_compress_t)(void *state, struct video_frame *frame);
-/**
- * Cleanup function
- */
-typedef  void (*compress_done_t)(void *);
-
-void show_compress_help(void);
-struct compress_state *compress_init(char *config_string);
-const char *get_compress_name(struct compress_state *);
-struct video_frame *compress_frame(struct compress_state *, struct video_frame*);
-void compress_done(struct compress_state *);
-
-#endif /* __video_decompress_h */
+void * fastdxt_init(const char *num_threads_str);
+struct video_frame * fastdxt_compress(void *args, struct video_frame * tx);
+void fastdxt_done(void *args);
