@@ -30,6 +30,10 @@
 
 #include <string.h>
 
+
+#include "logo_sitola-1.c"
+#include "cesnet-logo-2.c"
+
 /** Documented at declaration */ 
 struct dxt_encoder
 {
@@ -53,6 +57,9 @@ struct dxt_encoder
     
     GLuint texture_yuv422;
     
+    GLuint sitola;
+    GLuint cesnet;
+    
     // Framebuffer
     GLuint fbo_id;
   
@@ -70,7 +77,7 @@ int dxt_prepare_yuv422_shader(struct dxt_encoder *encoder);
 
 int dxt_prepare_yuv422_shader(struct dxt_encoder *encoder) {
         encoder->yuv422_to_444_fp = 0;    
-        encoder->yuv422_to_444_fp = dxt_shader_create_from_source(fp_yuv422_to_yuv_444, GL_FRAGMENT_SHADER_ARB);
+        encoder->yuv422_to_444_fp = dxt_shader_create_from_source(fp_yuv422_to_rgb_4444, GL_FRAGMENT_SHADER_ARB);
         if ( encoder->yuv422_to_444_fp == 0) {
                 printf("Failed to compile YUV422->YUV444 fragment program!\n");
                 return 0;
@@ -88,8 +95,8 @@ int dxt_prepare_yuv422_shader(struct dxt_encoder *encoder) {
         
         glGenTextures(1, &encoder->texture_yuv422);
         glBindTexture(GL_TEXTURE_2D, encoder->texture_yuv422);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, encoder->width / 2, encoder->height,
@@ -118,6 +125,22 @@ dxt_encoder_create(enum dxt_type type, int width, int height, enum dxt_format fo
     encoder->height = height;
     encoder->format = format;
     
+    glGenTextures(1, &encoder->sitola);
+    glBindTexture(GL_TEXTURE_2D, encoder->sitola);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0 , GL_RGBA, logo_sitola.width, logo_sitola.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, logo_sitola.pixel_data); 
+    
+    glGenTextures(1, &encoder->cesnet);
+    glBindTexture(GL_TEXTURE_2D, encoder->cesnet);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0 , GL_RGBA, cesnet_logo.width, cesnet_logo.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, cesnet_logo.pixel_data); 
+    
     // Create empty data
     /*GLubyte * data = NULL;
     int data_size = 0;
@@ -143,8 +166,8 @@ dxt_encoder_create(enum dxt_type type, int width, int height, enum dxt_format fo
     GLuint fbo_tex;
     glGenTextures(1, &fbo_tex); 
     glBindTexture(GL_TEXTURE_2D, fbo_tex); 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP); 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP); 
     if ( encoder->type == DXT_TYPE_DXT5_YCOCG )
@@ -208,7 +231,7 @@ dxt_encoder_create(enum dxt_type type, int width, int height, enum dxt_format fo
     glUseProgramObjectARB(encoder->program_compress);
     glUniform1i(glGetUniformLocation(encoder->program_compress, "image"), 0);
     if(format == DXT_FORMAT_YUV422) {
-            glUniform1i(glGetUniformLocation(encoder->program_compress, "imageFormat"), DXT_FORMAT_YUV);
+            glUniform1i(glGetUniformLocation(encoder->program_compress, "imageFormat"), DXT_FORMAT_RGB);
     } else {
             glUniform1i(glGetUniformLocation(encoder->program_compress, "imageFormat"), encoder->format); 
     }
@@ -296,6 +319,24 @@ dxt_encoder_compress(struct dxt_encoder* encoder, DXT_IMAGE_TYPE* image, unsigne
     glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0);
     glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
     glEnd();
+    
+    glBindTexture(GL_TEXTURE_2D, encoder->sitola);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0, 0.0); glVertex2f(0.4, 0.6);
+    glTexCoord2f(1.0, 0.0); glVertex2f(0.6, 0.6);
+    glTexCoord2f(1.0, 1.0); glVertex2f(0.6, 1.0);
+    glTexCoord2f(0.0, 1.0); glVertex2f(0.4, 1.0);
+    glEnd();
+    
+    glBindTexture(GL_TEXTURE_2D, encoder->cesnet);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0, 0.0); glVertex2f(0.6, 0.6);
+    glTexCoord2f(1.0, 0.0); glVertex2f(0.98, 0.6);
+    glTexCoord2f(1.0, 1.0); glVertex2f(0.98, 0.96);
+    glTexCoord2f(0.0, 1.0); glVertex2f(0.6, 0.96);
+    glEnd();
+    
+    glBindTexture(GL_TEXTURE_2D, encoder->texture_id);
         
 #ifdef DEBUG
     glFinish();

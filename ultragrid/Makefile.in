@@ -65,7 +65,7 @@ OBJS          = src/bitstream.o \
 		src/video_decompress.o \
 		src/video_display.o \
 		src/video_display/null.o \
-		@DVS_OBJ@ \
+ 		@DVS_OBJ@ \
 		@QUICKTIME_OBJ@ \
 		@DECKLINK_OBJ@ \
 		@QUAD_OBJ@ \
@@ -124,7 +124,7 @@ src/video_display/sage_wrapper.o: src/video_display/sage_wrapper.cxx
 ../dxt_compress/dxt_glsl.h:../dxt_compress/compress_vp.glsl \
 		../dxt_compress/compress_dxt1_fp.glsl ../dxt_compress/compress_dxt5ycocg_fp.glsl \
 		../dxt_compress/display_fp.glsl ../dxt_compress/display_dxt5ycocg_fp.glsl \
-		../dxt_compress/yuv422_to_yuv444.glsl
+		../dxt_compress/yuv422_to_yuv444.glsl ../dxt_compress/yuv422_to_rgb4444.glsl
 	echo "/**" > $@
 	echo " * GLSL source codes for DXT compressions" >> $@
 	echo " *" >> $@
@@ -153,6 +153,10 @@ src/video_display/sage_wrapper.o: src/video_display/sage_wrapper.cxx
 	# yuv 422 to yuv 444 shader
 	echo "static const char fp_yuv422_to_yuv_444[] = " >> $@
 	cat ../dxt_compress/yuv422_to_yuv444.glsl | sed 's/\(.*\)/    \"\1\\n\"/' >> $@
+	echo ";" >> $@
+	# yuv 422 to rgb 444 shader
+	echo "static const char fp_yuv422_to_rgb_4444[] = " >> $@
+	cat ../dxt_compress/yuv422_to_rgb4444.glsl | sed 's/\(.*\)/    \"\1\\n\"/' >> $@
 	echo ";" >> $@
 
 
