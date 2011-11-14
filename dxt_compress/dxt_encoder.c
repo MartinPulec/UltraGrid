@@ -365,18 +365,18 @@ dxt_encoder_compress(struct dxt_encoder* encoder, DXT_IMAGE_TYPE* image, unsigne
     
     glBindTexture(GL_TEXTURE_2D, encoder->sitola);
     glBegin(GL_QUADS);
-    glTexCoord2f(0.0, 0.0); glVertex2f(0.3, 0.6);
-    glTexCoord2f(1.0, 0.0); glVertex2f(0.55, 0.6);
-    glTexCoord2f(1.0, 1.0); glVertex2f(0.55, 0.96);
-    glTexCoord2f(0.0, 1.0); glVertex2f(0.3, 0.96);
+    glTexCoord2f(0.0, 0.0); glVertex2f(0.4, 0.7);
+    glTexCoord2f(1.0, 0.0); glVertex2f(0.65, 0.7);
+    glTexCoord2f(1.0, 1.0); glVertex2f(0.65, 0.96);
+    glTexCoord2f(0.0, 1.0); glVertex2f(0.4, 0.96);
     glEnd();
     
     glBindTexture(GL_TEXTURE_2D, encoder->cesnet);
     glBegin(GL_QUADS);
-    glTexCoord2f(0.0, 0.0); glVertex2f(0.55, 0.6);
-    glTexCoord2f(1.0, 0.0); glVertex2f(0.98, 0.6);
+    glTexCoord2f(0.0, 0.0); glVertex2f(0.65, 0.7);
+    glTexCoord2f(1.0, 0.0); glVertex2f(0.98, 0.7);
     glTexCoord2f(1.0, 1.0); glVertex2f(0.98, 0.96);
-    glTexCoord2f(0.0, 1.0); glVertex2f(0.55, 0.96);
+    glTexCoord2f(0.0, 1.0); glVertex2f(0.65 , 0.96);
     glEnd();
     
     glBindTexture(GL_TEXTURE_2D, encoder->texture_id);
