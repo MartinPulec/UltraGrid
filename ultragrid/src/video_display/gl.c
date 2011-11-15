@@ -119,12 +119,12 @@ void main(void) {
         vec2 coor=gl_TexCoord[0].xy;
         if(gl_TexCoord[0].y * imageHeight / 2.0 - floor(gl_TexCoord[0].y * imageHeight / 2.0) < 0.5) 
         {
-                coor += 1.0 / (imageHeight * 2.0);
+                coor.y += 1.0 / (imageHeight * 2.0);
                 col = texture2D(tex1, coor);
         }
         else
         {
-                coor -= 1.0 / (imageHeight * 2.0);
+                coor.y -= 1.0 / (imageHeight * 2.0);
                 col = texture2D(tex2, coor);
         }
 
