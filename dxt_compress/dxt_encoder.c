@@ -334,7 +334,26 @@ dxt_encoder_compress(struct dxt_encoder* encoder, DXT_IMAGE_TYPE* image, unsigne
         glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0);
         glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
         glEnd();
+        glUseProgramObjectARB(0);
         
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        
+    glBindTexture(GL_TEXTURE_2D, encoder->sitola);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0, 0.0); glVertex2f(0.4, 0.7);
+    glTexCoord2f(1.0, 0.0); glVertex2f(0.65, 0.7);
+    glTexCoord2f(1.0, 1.0); glVertex2f(0.65, 0.96);
+    glTexCoord2f(0.0, 1.0); glVertex2f(0.4, 0.96);
+    glEnd();
+    
+    glBindTexture(GL_TEXTURE_2D, encoder->cesnet);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0, 0.0); glVertex2f(0.65, 0.7);
+    glTexCoord2f(1.0, 0.0); glVertex2f(0.98, 0.7);
+    glTexCoord2f(1.0, 1.0); glVertex2f(0.98, 0.96);
+    glTexCoord2f(0.0, 1.0); glVertex2f(0.65 , 0.96);
+    glEnd();
         glPopAttrib();
         
         //glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
@@ -363,21 +382,6 @@ dxt_encoder_compress(struct dxt_encoder* encoder, DXT_IMAGE_TYPE* image, unsigne
     glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
     glEnd();
     
-    glBindTexture(GL_TEXTURE_2D, encoder->sitola);
-    glBegin(GL_QUADS);
-    glTexCoord2f(0.0, 0.0); glVertex2f(0.4, 0.7);
-    glTexCoord2f(1.0, 0.0); glVertex2f(0.65, 0.7);
-    glTexCoord2f(1.0, 1.0); glVertex2f(0.65, 0.96);
-    glTexCoord2f(0.0, 1.0); glVertex2f(0.4, 0.96);
-    glEnd();
-    
-    glBindTexture(GL_TEXTURE_2D, encoder->cesnet);
-    glBegin(GL_QUADS);
-    glTexCoord2f(0.0, 0.0); glVertex2f(0.65, 0.7);
-    glTexCoord2f(1.0, 0.0); glVertex2f(0.98, 0.7);
-    glTexCoord2f(1.0, 1.0); glVertex2f(0.98, 0.96);
-    glTexCoord2f(0.0, 1.0); glVertex2f(0.65 , 0.96);
-    glEnd();
     
     glBindTexture(GL_TEXTURE_2D, encoder->texture_id);
         

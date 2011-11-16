@@ -52,6 +52,7 @@
 #include <X11/Xutil.h>
 #include <GL/glx.h>
 
+int glx = 0;
 static pthread_once_t XInitThreadsHasRun = PTHREAD_ONCE_INIT;
 static __thread pthread_once_t GLXInitHasRun = PTHREAD_ONCE_INIT;
 
@@ -122,9 +123,24 @@ void glx_init()
         pthread_once(&GLXInitHasRun, glx_init_once);
 }
 
+  GLXContext ctx = 0;
+  Window win;
+  Colormap cmap;
+        Display *display;
+
+void free_con() {
+          glXMakeCurrent( display, 0, 0 );
+            glXDestroyContext( display, ctx );
+             
+              XDestroyWindow( display, win );
+                XFreeColormap( display, cmap );
+                  XCloseDisplay( display );
+                  fprintf(stderr, "GLX context freeed\n");
+}
+
 static void glx_init_once()
 {
-        Display *display = XOpenDisplay(0);
+        display = XOpenDisplay(0);
  
   if ( !display )
   {
@@ -209,7 +225,6 @@ static void glx_init_once()
  
   printf( "Creating colormap\n" );
   XSetWindowAttributes swa;
-  Colormap cmap;
   swa.colormap = cmap = XCreateColormap( display,
                                          RootWindow( display, vi->screen ), 
                                          vi->visual, AllocNone );
@@ -218,7 +233,7 @@ static void glx_init_once()
   swa.event_mask        = StructureNotifyMask;
  
   printf( "Creating window\n" );
-  Window win = XCreateWindow( display, RootWindow( display, vi->screen ), 
+  win = XCreateWindow( display, RootWindow( display, vi->screen ), 
                               0, 0, 100, 100, 0, vi->depth, InputOutput, 
                               vi->visual, 
                               CWBorderPixel|CWColormap|CWEventMask, &swa );
@@ -247,7 +262,6 @@ static void glx_init_once()
   glXCreateContextAttribsARB = (glXCreateContextAttribsARBProc)
            glXGetProcAddressARB( (const GLubyte *) "glXCreateContextAttribsARB" );
  
-  GLXContext ctx = 0;
  
   // Install an X error handler so the application won't exit if GL 3.0
   // context allocation fails.
@@ -334,6 +348,9 @@ static void glx_init_once()
   glXMakeCurrent( display, win, ctx );
 
   glewInit();
+  glx = 1;
 }
+
+
 
 #endif /* HAVE_DXT_GLSL */

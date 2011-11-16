@@ -135,8 +135,10 @@ void list_video_capture_devices(void);
 #ifndef WIN32
 static void signal_handler(int signal)
 {
-        debug_msg("Caught signal %d\n", signal);
+        fprintf(stderr, "Caught signal %d\n", signal);
         should_exit = TRUE;
+        cleanup_uv();
+        fprintf(stderr, "Caught signal %d\n", signal);
         exit(0);
         return;
 }
@@ -720,6 +722,7 @@ int main(int argc, char *argv[])
         printf("Display initialized-%s\n", uv->requested_display);
 
 #ifndef WIN32
+        signal(SIGKILL, signal_handler);
         signal(SIGINT, signal_handler);
         signal(SIGTERM, signal_handler);
         signal(SIGQUIT, signal_handler);
@@ -876,6 +879,7 @@ int main(int argc, char *argv[])
 
         return EXIT_SUCCESS;
 }
+extern volatile int glx;
 
 void cleanup_uv(void)
 {
@@ -894,6 +898,8 @@ void cleanup_uv(void)
         display_done(uv_state->display_device);
         if (uv_state->participants != NULL)
                 pdb_destroy(&uv_state->participants);
+        if(glx)
+                free_con();
         printf("Exit\n");
 }
 

@@ -305,8 +305,8 @@ void audio_join(struct state_audio *s) {
         
 void audio_done(struct state_audio *s) {
         if(s) {
-                if(s->audio_participants)
-                        pdb_destroy(s->audio_participants);
+                /*if(s->audio_participants)
+                        pdb_destroy(s->audio_participants);*/
                 if(s->audio_playback_device.index)
                         audio_playback[s->audio_playback_device.index].playback_done(s->audio_playback_device.state);
                 free(s);
@@ -397,7 +397,7 @@ static void *audio_receiver_thread(void *arg)
                                         frame = audio_playback[s->audio_playback_device.index].audio_get_frame(
                                                 s->audio_playback_device.state);
                                 }
-                                pbuf_remove(cp->playout_buffer, curr_time);
+                                pbuf_remove(&cp->playout_buffer, curr_time);
                                 cp = pdb_iter_next(s->audio_participants);
                         }
                         pdb_iter_done(s->audio_participants);

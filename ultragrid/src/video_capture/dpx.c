@@ -437,7 +437,7 @@ static void * vidcap_grab_thread(void *args)
                 s->buffer_read = (s->buffer_read + 1) % 2; /* and we will read next one */
                 close(fd);
                 if( s->index == s->glob.gl_pathc)
-                        s->index = 0;
+                        exit(1);
         }
         
         return NULL;
