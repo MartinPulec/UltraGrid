@@ -176,6 +176,7 @@ typedef struct _television_header
     uint8_t  reserved[76];        /* reserved for future use (padding) */
 } Television_Header;
 
+typedef void (*lut_func_t)(int *lut, char *data, int size);
 
 struct vidcap_dpx_state {
         struct video_frame *frame;
@@ -193,21 +194,37 @@ struct vidcap_dpx_state {
         int                 index;
         
         int                *lut;
+        lut_func_t          lut_func;
+        
+        unsigned            big_endian:1;
         
         struct file_information file_information;
         struct _image_information image_information;
         struct _image_orientation image_orientation;
         struct _motion_picture_film_header motion_header;
+        struct _television_header television_header;
 };
+
 
 static void * vidcap_grab_thread(void *args);
 static void usage(void);
 static void create_lut(struct vidcap_dpx_state *s);
+static void apply_lut_8b(int *lut, char *data, int size);
+static void apply_lut_10b(int *lut, char *data, int size);
+static uint32_t to_native_order(struct vidcap_dpx_state *s, uint32_t num);
 
 static void usage()
 {
         printf("DPX video capture usage:\n");
         printf("\t-t dpx:<glob>\n");
+}
+
+static uint32_t to_native_order(struct vidcap_dpx_state *s, uint32_t num)
+{
+        if (s->big_endian)
+                return ntohl(num);
+        else
+                return num;
 }
 
 static void create_lut(struct vidcap_dpx_state *s)
@@ -217,20 +234,19 @@ static void create_lut(struct vidcap_dpx_state *s)
         float gamma;
         
         max_val = 1<<s->image_information.image_element[0].bit_size;
-        if(s->image_information.image_element[0].transfer == 0)
-                gamma = 1.0;
+        //if(s->image_information.image_element[0].transfer == 0)
+        gamma = 1.0;
         
         free(s->lut);
-        s->lut = (int *) malloc(sizeof(int) *
-                        s->image_information.image_element[0].ref_high_data);
+        s->lut = (unsigned int *) malloc(sizeof(unsigned int) *
+                        max_val);
         
-        for (x = s->image_information.image_element[0].ref_low_data;
-                x < s->image_information.image_element[0].ref_high_data;
+        for (x = 0;
+                x < max_val;
                 ++x)
         {
-                s->lut[x] = pow(x, (float) (val - s->image_information.image_element[0].ref_low_data) / 
-                                s->image_information.image_element[0].ref_high_data, gamma) *
-                                max_val;
+                s->lut[x] = pow((float) x / (max_val - 1), gamma) *
+                                (max_val - 1);
         }
 }
 
@@ -238,22 +254,31 @@ static void apply_lut_10b(int *lut, char *data, int size)
 {
         int x;
         int elems = size / 4;
-        
-        struct in {
-                unsigned int _u:2;
-                unsigned int b:10;
-                unsigned int g:10;
-                unsigned int r:10;
-                
-        } __attribute__((packed));
-        
-        struct in *in = data;
+        register unsigned int *in = data;
+        register int r,g,b;
         
         for(x = 0; x < elems; ++x) {
-                in->r = lut[in->r];
-                in->g = lut[in->g];
-                in->b = lut[in->b];
-                ++in;
+                register unsigned int val = *in;
+                r = lut[val >> 22];
+                g = lut[(val >> 12) & 0x3ff];
+                b = lut[(val >> 2) & 0x3ff];
+                *in++ = r << 22 | g << 12 | b << 2;
+        }
+}
+
+static void apply_lut_8b(int *lut, char *data, int size)
+{
+        int x;
+        int elems = size / 4;
+        register unsigned int *in = data;
+        register int r,g,b;
+        
+        for(x = 0; x < elems; ++x) {
+                register unsigned int val = *in;
+                r = lut[(val >> 16) & 0xff];
+                g = lut[(val >> 8) & 0xff];
+                b = lut[(val >> 0) & 0xff];
+                *in++ = r << 16 | g << 8 | b << 0;
         }
 }
 
@@ -306,15 +331,26 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         read(fd, &s->image_information, sizeof(s->image_information));
         read(fd, &s->image_orientation, sizeof(s->image_orientation));
         read(fd, &s->motion_header, sizeof(s->motion_header));
+        read(fd, &s->television_header, sizeof(s->television_header));
+        
+        if(s->file_information.magic_num == 'XPDS')
+                s->big_endian = TRUE;
+        else if(s->file_information.magic_num == 'SPDX')
+                s->big_endian = FALSE;
+        else
+                error_with_code_msg(128, "[DPX] corrupted file %s. "
+                        "Not recognised as DPX.", filename);
         
         s->frame = vf_alloc(1, 1);
         switch (s->image_information.image_element[0].bit_size)
         {
                 case 8:
                         s->frame->color_spec = RGBA;
+                        s->lut_func = apply_lut_8b;
                         break;
                 case 10:
                         s->frame->color_spec = DPX10;
+                        s->lut_func = apply_lut_10b;
                         break;
                 default:
                         error_with_code_msg(128, "[DPX] Currently no support for %d-bit images.", 
@@ -324,10 +360,10 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         create_lut(s);
         
         s->frame->aux = 0;
-        s->frame->fps = 25.0;
+        s->frame->fps = 30.0;
         s->tile = tile_get(s->frame, 0, 0);
-        s->tile->width = s->image_information.pixels_per_line;
-        s->tile->height = s->image_information.lines_per_image_ele;
+        s->tile->width = to_native_order(s, s->image_information.pixels_per_line);
+        s->tile->height = to_native_order(s, s->image_information.lines_per_image_ele);
         
         s->tile->data_len = s->tile->width * s->tile->height * 4;
         s->tile->data =
@@ -335,13 +371,14 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         s->buffers[1] = malloc(s->tile->data_len);
         
         ssize_t bytes_read = 0;
+        unsigned int file_offset = to_native_order(s, s->file_information.offset);
         do {
                 bytes_read += pread(fd, s->tile->data + bytes_read,
                                 s->tile->data_len - bytes_read,
-                                s->file_information.offset + bytes_read);
+                                file_offset + bytes_read);
         } while(bytes_read < s->tile->data_len);
         
-        apply_lut_10b(s->lut, s->tile->data, s->tile->data_len);
+        s->lut_func(s->lut, s->tile->data, s->tile->data_len);
         close(fd);
         s->buffer_read = 1;
         s->index = 1;
@@ -378,6 +415,7 @@ static void * vidcap_grab_thread(void *args)
                 gettimeofday(&cur_time, NULL);
                 
                 if(tv_diff_usec(cur_time, prev_time) > 1000000.0 / s->frame->fps) {
+                        s->tile->data = s->buffers[(s->buffer_read + 1) % 2];
                         sem_post(&s->have_item);
                         tv_add_usec(&prev_time, 1000000.0 / s->frame->fps);
                 } else {
@@ -387,13 +425,15 @@ static void * vidcap_grab_thread(void *args)
                 char *filename = s->glob.gl_pathv[s->index++];
                 int fd = open(filename, O_RDONLY);
                 ssize_t bytes_read = 0;
+                unsigned int file_offset = to_native_order(s, s->file_information.offset);
                 do {
                         bytes_read += pread(fd, s->buffers[s->buffer_read] + bytes_read,
                                         s->tile->data_len - bytes_read,
-                                        s->file_information.offset + bytes_read);
+                                        file_offset + bytes_read);
                 } while(bytes_read < s->tile->data_len);
                 
-                s->tile->data = s->buffers[s->buffer_read];
+                s->lut_func(s->lut, s->buffers[s->buffer_read], s->tile->data_len);
+                
                 s->buffer_read = (s->buffer_read + 1) % 2; /* and we will read next one */
                 close(fd);
                 if( s->index == s->glob.gl_pathc)
