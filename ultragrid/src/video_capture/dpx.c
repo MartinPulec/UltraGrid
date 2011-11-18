@@ -195,6 +195,7 @@ struct vidcap_dpx_state {
         
         int                *lut;
         lut_func_t          lut_func;
+        float               gamma;
         
         unsigned            big_endian:1;
         
@@ -211,6 +212,7 @@ static void usage(void);
 static void create_lut(struct vidcap_dpx_state *s);
 static void apply_lut_8b(int *lut, char *data, int size);
 static void apply_lut_10b(int *lut, char *data, int size);
+static void apply_lut_10b_be(int *lut, char *data, int size);
 static uint32_t to_native_order(struct vidcap_dpx_state *s, uint32_t num);
 
 static void usage()
@@ -235,7 +237,6 @@ static void create_lut(struct vidcap_dpx_state *s)
         
         max_val = 1<<s->image_information.image_element[0].bit_size;
         //if(s->image_information.image_element[0].transfer == 0)
-        gamma = 1.0;
         
         free(s->lut);
         s->lut = (unsigned int *) malloc(sizeof(unsigned int) *
@@ -245,7 +246,7 @@ static void create_lut(struct vidcap_dpx_state *s)
                 x < max_val;
                 ++x)
         {
-                s->lut[x] = pow((float) x / (max_val - 1), gamma) *
+                s->lut[x] = pow((float) x / (max_val - 1), s->gamma) *
                                 (max_val - 1);
         }
 }
@@ -265,6 +266,23 @@ static void apply_lut_10b(int *lut, char *data, int size)
                 *in++ = r << 22 | g << 12 | b << 2;
         }
 }
+
+static void apply_lut_10b_be(int *lut, char *data, int size)
+{
+        int x;
+        int elems = size / 4;
+        register unsigned int *in = data;
+        register int r,g,b;
+        
+        for(x = 0; x < elems; ++x) {
+                register unsigned int val = htonl(*in);
+                r = lut[val >> 22];
+                g = lut[(val >> 12) & 0x3ff];
+                b = lut[(val >> 2) & 0x3ff];
+                *in++ = r << 22 | g << 12 | b << 2;
+        }
+}
+
 
 static void apply_lut_8b(int *lut, char *data, int size)
 {
@@ -301,6 +319,9 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
 {
         
 	struct vidcap_dpx_state *s;
+        char *item;
+        char *glob_pattern;
+        char *save_ptr = NULL;
 
 	printf("vidcap_dpx_init\n");
 
@@ -311,7 +332,24 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
                 return NULL;
         } 
         
-        int ret = glob(fmt, 0, NULL, &s->glob);
+        s->frame = vf_alloc(1, 1);
+        s->frame->fps = 30.0;
+        s->gamma = 1.0;
+        
+        item = strtok_r(fmt, ":", &save_ptr);
+        while(item) {
+                if(strncmp("files=", item, strlen("files=")) == 0) {
+                        glob_pattern = item + strlen("files=");
+                } else if(strncmp("fps=", item, strlen("fps=")) == 0) {
+                        s->frame->fps = atof(item + strlen("fps="));
+                } else if(strncmp("gamma=", item, strlen("gamma=")) == 0) {
+                        s->gamma = atof(item + strlen("gamma="));
+                }
+                
+                item = strtok_r(NULL, ":", &save_ptr);
+        }
+        
+        int ret = glob(glob_pattern, 0, NULL, &s->glob);
         if (ret)
         {
                 perror("Opening DPX files failed");
@@ -341,7 +379,6 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
                 error_with_code_msg(128, "[DPX] corrupted file %s. "
                         "Not recognised as DPX.", filename);
         
-        s->frame = vf_alloc(1, 1);
         switch (s->image_information.image_element[0].bit_size)
         {
                 case 8:
@@ -350,7 +387,10 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
                         break;
                 case 10:
                         s->frame->color_spec = DPX10;
-                        s->lut_func = apply_lut_10b;
+                        if(s->big_endian)
+                                s->lut_func = apply_lut_10b_be;
+                        else
+                                s->lut_func = apply_lut_10b;
                         break;
                 default:
                         error_with_code_msg(128, "[DPX] Currently no support for %d-bit images.", 
@@ -360,7 +400,6 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         create_lut(s);
         
         s->frame->aux = 0;
-        s->frame->fps = 30.0;
         s->tile = tile_get(s->frame, 0, 0);
         s->tile->width = to_native_order(s, s->image_information.pixels_per_line);
         s->tile->height = to_native_order(s, s->image_information.lines_per_image_ele);
