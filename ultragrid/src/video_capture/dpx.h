@@ -1,5 +1,5 @@
 /*
- * FILE:    video_codec.h
+ * FILE:    dpx.h
  * AUTHORS: Martin Benes     <martinbenesh@gmail.com>
  *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
  *          Petr Holub       <hopet@ics.muni.cz>
@@ -44,52 +44,9 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#ifndef __video_codec_h
+#define VIDCAP_DPX_ID	0x553D1F03
 
-#define __video_codec_h
-#include "video.h"
-
-typedef  void (*decoder_t)(unsigned char *dst, unsigned char *src, int dst_len, int rshift, int gshift, int bshift);
-
-struct codec_info_t {
-        codec_t codec;
-        const char *name;
-        unsigned int fcc;
-        int h_align;
-        double bpp;
-        unsigned rgb:1;
-};
-
-struct line_decode_from_to {
-        codec_t from;
-        codec_t to;
-        decoder_t line_decoder;
-};
-
-extern const struct codec_info_t codec_info[];           /* defined int .c */
-extern const struct line_decode_from_to line_decoders[]; /* defined int .c */
-
-void show_codec_help(char *mode);
-double get_bpp(codec_t codec);
-int get_haligned(int width_pixels, codec_t codec);
-
-int vc_get_linesize(unsigned int width, codec_t codec);
-
-void vc_deinterlace(unsigned char *src, long src_linesize, int lines);
-void vc_copylineDVS10(unsigned char *dst, unsigned char *src, int dst_len);
-void vc_copylinev210(unsigned char *dst, unsigned char *src, int dst_len);
-void vc_copyliner10k(unsigned char *dst, unsigned char *src, int len, int rshift, int gshift, int bshift);
-void vc_copylineRGBA(unsigned char *dst, unsigned char *src, int len, int rshift, int gshift, int bshift);
-void vc_copylineDVS10toV210(unsigned char *dst, unsigned char *src, int dst_len);
-void vc_copylineRGBAtoRGB(unsigned char *dst, unsigned char *src, int len);
-void vc_copylineRGBtoRGBA(unsigned char *dst, unsigned char *src, int len, int rshift, int gshift, int bshift);
-void vc_copylineRGB(unsigned char *dst, unsigned char *src, int dst_len, int rshift, int gshift, int bshift);
-void vc_copylineDPX10toRGBA(unsigned char *dst, unsigned char *src, int dst_len, int rshift, int gshift, int bshift);
-
-/*
- * @return TRUE or FALSE
- */
-int codec_is_a_rgb(codec_t codec);
-
-#endif
-
+struct vidcap_type	*vidcap_dpx_probe(void);
+void                    *vidcap_dpx_init(char *fmt, unsigned int flags);
+void                     vidcap_dpx_done(void *state);
+struct video_frame	*vidcap_dpx_grab(void *state, struct audio_frame **audio);
