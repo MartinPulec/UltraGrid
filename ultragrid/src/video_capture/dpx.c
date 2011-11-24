@@ -527,7 +527,7 @@ static void * reading_thread(void *args)
                         pthread_cond_signal(&s->processing_cv);
                 pthread_mutex_unlock(&s->lock);
                 
-                if( s->index == s->glob.gl_pathc) {
+                if( s->index == s->glob.gl_pathc - 1) {
                         if(s->loop) {
                                 s->index = 0;
                         } else {
