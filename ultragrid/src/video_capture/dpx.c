@@ -191,9 +191,8 @@ struct vidcap_dpx_state {
         volatile int processing_waiting;
         
         unsigned int        loop:1;
-        unsigned int        finished:1;
-        
-        volatile int should_exit_thread;
+        volatile unsigned int        finished:1;
+        volatile unsigned int        should_exit_thread:1;
         
         char               *buffer_read[BUFFER_LEN];
         volatile int        buffer_read_start, buffer_read_end;
@@ -527,12 +526,12 @@ static void * reading_thread(void *args)
                         pthread_cond_signal(&s->processing_cv);
                 pthread_mutex_unlock(&s->lock);
                 
-                if( s->index == s->glob.gl_pathc - 1) {
+                if( s->index == s->glob.gl_pathc) {
                         if(s->loop) {
                                 s->index = 0;
                         } else {
                                 s->finished = TRUE;
-                                break;
+                                goto after_while;
                         }
                 }
         }
@@ -610,7 +609,7 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
                 return NULL;
         }
         
-        while(s->buffer_processed_start == s->buffer_processed_end && !should_exit)
+        while(s->buffer_processed_start == s->buffer_processed_end && !should_exit && !s->finished)
                 ;
 
         if(s->prev_time.tv_sec == 0 && s->prev_time.tv_usec == 0) { /* first run */
