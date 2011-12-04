@@ -39,6 +39,7 @@ OBJS          = src/bitstream.o \
 		src/transmit.o \
 		src/tfrc.o \
 		src/rtp/xor.o \
+		src/rtp/xor2.o \
 		src/rtp/pbuf.o \
 		src/rtp/decoders.o \
 		src/rtp/ptime.o \
