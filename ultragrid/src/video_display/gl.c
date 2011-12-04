@@ -186,6 +186,7 @@ struct state_gl {
 
         struct video_frame *frame;
         struct tile     *tile;
+        char            *buffer[2];
         volatile unsigned    needs_reconfigure:1;
         pthread_mutex_t lock;
         pthread_cond_t  reconf_cv;
@@ -195,6 +196,16 @@ struct state_gl {
         unsigned long int frames;
         
         int             dxt_height;
+
+        char            *buffers[2];
+        int              image_display;
+
+        pthread_cond_t boss_cv;
+        pthread_cond_t worker_cv;
+        volatile int work_to_do;
+        volatile int boss_waiting;
+        volatile int worker_waiting;
+
 
         struct timeval  tv;
 };
@@ -326,6 +337,15 @@ void * display_gl_init(char *fmt, unsigned int flags) {
         s->tile = tile_get(s->frame, 0, 0);
         s->tile->data = NULL;
         
+        pthread_mutex_init(&s->lock, NULL);
+        pthread_cond_init(&s->boss_cv, NULL);
+        pthread_cond_init(&s->worker_cv, NULL);
+        s->work_to_do     = FALSE;
+        s->boss_waiting   = FALSE;
+        s->worker_waiting = TRUE;
+
+        s->image_display = 0;
+
         s->frames = 0ul;
         gettimeofday(&s->tv, NULL);
 
@@ -487,10 +507,25 @@ void display_gl_reconfigure(void *state, struct video_desc desc)
 
         pthread_mutex_lock(&s->lock);
         s->needs_reconfigure = TRUE;
-	s->new_frame = 1;
+
+        while (s->work_to_do) {
+                s->boss_waiting = TRUE;
+                pthread_cond_wait(&s->boss_cv, &s->lock);
+                s->boss_waiting = FALSE;
+        }
+
+        /* ...and give it more to do... */
+        s->image_display = (s->image_display + 1) % 2;
+        s->work_to_do    = TRUE;
+
+        /* ...and signal the worker */
+        if (s->worker_waiting) {
+                pthread_cond_signal(&s->worker_cv);
+        }
 
         while(s->needs_reconfigure)
                 pthread_cond_wait(&s->reconf_cv, &s->lock);
+
         pthread_mutex_unlock(&s->lock);
 }
 
@@ -523,7 +558,8 @@ void gl_reconfigure_screen(struct state_gl *s)
                         * s->tile->height;
         }
         
-        s->tile->data = (char *) malloc(s->tile->data_len);
+        s->buffers[0] = (char *) malloc(s->tile->data_len);
+        s->buffers[1] = (char *) malloc(s->tile->data_len);
 
 	asm("emms\n");
         if(!s->video_aspect)
@@ -598,12 +634,19 @@ void glut_idle_callback(void)
         struct timeval tv;
         double seconds;
 
-        pthread_mutex_lock(&s->lock);
-	if(!s->new_frame) {
-                pthread_mutex_unlock(&s->lock);
-                return;
-        }
-	s->new_frame = 0;
+       pthread_mutex_lock(&s->lock);
+
+       while (s->work_to_do == FALSE) {
+               s->worker_waiting = TRUE;
+               pthread_cond_wait(&s->worker_cv, &s->lock);
+               s->worker_waiting = FALSE;
+       }
+
+       s->work_to_do     = FALSE;
+
+       if (s->boss_waiting) {
+               pthread_cond_signal(&s->boss_cv);
+       }
 
         if (s->needs_reconfigure) {
                 /* there has been scheduled request for win reconfiguration */
@@ -973,6 +1016,7 @@ struct video_frame * display_gl_getf(void *state)
         struct state_gl *s = (struct state_gl *) state;
         assert(s->magic == MAGIC_GL);
 
+        s->tile->data = s->buffers[(s->image_display + 1) % 2];
         return s->frame;
 }
 
@@ -983,15 +1027,23 @@ int display_gl_putf(void *state, char *frame)
 
         assert(s->magic == MAGIC_GL);
         UNUSED(frame);
+        pthread_mutex_lock(&s->lock);
+        while (s->work_to_do) {
+                s->boss_waiting = TRUE;
+                pthread_cond_wait(&s->boss_cv, &s->lock);
+                s->boss_waiting = FALSE;
+        }
+
+        /* ...and give it more to do... */
+        tmp = s->image_display;
+        s->image_display = (s->image_display + 1) % 2;
+        s->work_to_do    = TRUE;
 
         /* ...and signal the worker */
-        pthread_mutex_lock(&s->lock);
-        if(s->new_frame != 0) {
-                printf("frame drop!\n");
-        } else {
-		s->new_frame++;
-	}
-
+        if (s->worker_waiting) {
+                pthread_cond_signal(&s->worker_cv);
+        }
         pthread_mutex_unlock(&s->lock);
+
         return 0;
 }
