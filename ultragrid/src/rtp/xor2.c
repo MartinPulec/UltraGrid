@@ -74,6 +74,9 @@
 #include "ntp.h"
 #include "xor2.h"
 
+#define PCKT_TYPE_P 0
+#define PCKT_TYPE_Q 0
+
 /*
  * These two tables represent powers and logs of 2 in the Galois field defined
  * above. These values were computed by repeatedly multiplying by 2 as above.
@@ -164,20 +167,23 @@ vdev_raidz_exp2(uint8_t a, int exp)
 }
 
 struct xor2_pkt_hdr {
-        uint32_t pkt_count;
 #ifdef WORDS_BIGENDIAN
-        uint16_t header_len;
-        uint16_t payload_len;
+        unsigned int   cu:6;
+        unsigned int   type:2;
 #else
+        unsigned int   type:2;
+        unsigned int   cu:6;
+#endif
+        uint16_t  pkt_count;
+        uint8_t   cu2;
         uint16_t payload_len;
         uint16_t header_len;
-#endif
 }__attribute__((packed));
 
 
 struct xor2_session {
-        char            *P;
-        char            *Q;
+        char            *p;
+        char            *q;
 
         char            *tmp;
 
@@ -199,8 +205,8 @@ struct xor2_session * xor2_init(int header_len, int max_payload_len)
         s->pkt_count = 0;
         s->header_len = header_len;
         /* calloc is really needed here, because we will xor2 with this place incomming packets */
-        s->P = (char *) calloc(1, header_len + max_payload_len);
-        s->Q = (char *) calloc(1, header_len + max_payload_len);
+        s->p = (char *) calloc(1, header_len + max_payload_len);
+        s->q = (char *) calloc(1, header_len + max_payload_len);
         s->tmp = (char *) malloc(header_len + max_payload_len);
         s->max_payload_len = max_payload_len;
 
@@ -213,76 +219,124 @@ struct xor2_session * xor2_init(int header_len, int max_payload_len)
 void xor2_add_packet(struct xor2_session *session, const char *hdr, const char *payload, int payload_len)
 {
         int linepos;
-        register unsigned int *line1;
-        register const unsigned int *line2;
-
         session->pkt_count++;
 
+        {
+                register unsigned int *line1;
+                register const unsigned int *line2;
 
-        /* First compute P, which is quite straightforward (XOR) */
+                /* First compute P, which is quite straightforward (XOR) */
+                line1 = (unsigned int *) session->p;
+                line2 = (const unsigned int *) hdr;
+                for(linepos = 0; linepos < session->header_len; linepos += 4) {
+                        *line1 ^= *line2;
+                        line1 += 1;
+                        line2 += 1;
+                }
 
-        line1 = (unsigned int *) session->P;
-        line2 = (const unsigned int *) hdr;
-        for(linepos = 0; linepos < session->header_len; linepos += 4) {
-                *line1 ^= *line2;
-                line1 += 1;
-                line2 += 1;
-        }
-
-        line1 = (unsigned int *) ((char *) session->P + session->header_len);
-        line2 = (const unsigned int *) payload;
-        for(linepos = 0; linepos < (payload_len - 15); linepos += 16) {
-                asm volatile ("movdqu (%0), %%xmm0\n"
-                        "movdqu (%1), %%xmm1\n"
-                        "pxor %%xmm1, %%xmm0\n"
-                        "movdqu %%xmm0, (%0)\n"
-                        ::"r" ((unsigned long *) line1),
-                        "r"((unsigned long *) line2));
-                line1 += 4;
-                line2 += 4;
-        }
-        if(linepos != payload_len) {
-                char *line1c = line1;
-                char *line2c = line1;
-                for(; linepos < payload_len; linepos += 1) {
-                        *line1c ^= *line2c;
-                        line1c += 1;
-                        line2c += 1;
+                line1 = (unsigned int *) ((char *) session->p + session->header_len);
+                line2 = (const unsigned int *) payload;
+                for(linepos = 0; linepos < (payload_len - 15); linepos += 16) {
+                        asm volatile ("movdqu (%0), %%xmm0\n"
+                                "movdqu (%1), %%xmm1\n"
+                                "pxor %%xmm1, %%xmm0\n"
+                                "movdqu %%xmm0, (%0)\n"
+                                ::"r" ((unsigned long *) line1),
+                                "r"((unsigned long *) line2));
+                        line1 += 4;
+                        line2 += 4;
+                }
+                if(linepos != payload_len) {
+                        char *line1c = line1;
+                        char *line2c = line1;
+                        for(; linepos < payload_len; linepos += 1) {
+                                *line1c ^= *line2c;
+                                line1c += 1;
+                                line2c += 1;
+                        }
                 }
         }
 
-        /* then Q */
-        line1 = (unsigned int *) session->tmp;
-        line2 = (const unsigned int *) hdr;
-        for(linepos = 0; linepos < session->header_len; linepos++) {
+        {
+                int exp = session->pkt_count - 1;
+                int total_len = session->header_len + payload_len;
+                /* then Q */
+                register uint8_t *line1;
+                register const uint8_t *line2;
+                line1 = (uint8_t *) session->tmp;
+                line2 = (const uint8_t *) hdr;
 
+                for(linepos = 0; linepos < session->header_len; linepos++) {
+                        *line1++ = vdev_raidz_exp2(*line2++, exp);
+                }
+
+                line2 = (const uint8_t *) payload;
+                for(linepos = 0; linepos < payload_len; linepos++) {
+                        *line1++ = vdev_raidz_exp2(*line2++, exp);
+                }
+
+
+                line1 = (uint8_t *) session->tmp;
+                line2 = (const uint8_t *) session->q;
+                for(linepos = 0; linepos < (total_len - 15); linepos += 16) {
+                        asm volatile ("movdqu (%0), %%xmm0\n"
+                                "movdqu (%1), %%xmm1\n"
+                                "pxor %%xmm1, %%xmm0\n"
+                                "movdqu %%xmm0, (%0)\n"
+                                ::"r" ((unsigned long *) line1),
+                                "r"((unsigned long *) line2));
+                        line1 += 16;
+                        line2 += 16;
+                }
+                if(linepos != total_len) {
+                        for(; linepos < total_len; linepos += 1) {
+                                *line1++ ^= *line2++;
+                        }
+                }
         }
 
 
 
 }
 
-void xor2_emit_xor2_packet(struct xor2_session *session, const char **hdr, size_t *hdr_len, const char **payload, size_t *payload_len)
+void xor2_emit_xor2_packet_p(struct xor2_session *session, const char **hdr, size_t *hdr_len, const char **payload, size_t *payload_len)
 {
-        session->xor2_hdr.pkt_count = htonl(session->pkt_count);
+        session->xor2_hdr.pkt_count = htons(session->pkt_count);
         session->xor2_hdr.header_len = htons(session->header_len);
         session->xor2_hdr.payload_len = htons(session->max_payload_len);
+        session->xor2_hdr.type = PCKT_TYPE_P;
 
         *hdr = (char *)  &session->xor2_hdr;
         *hdr_len = (size_t) sizeof(struct xor2_pkt_hdr);
-        *payload = (const char *) session->header_xor2;
+        *payload = (const char *) session->P;
+        *payload_len = (size_t) (session->header_len + session->max_payload_len);
+}
+
+void xor2_emit_xor2_packet_q(struct xor2_session *session, const char **hdr, size_t *hdr_len, const char **payload, size_t *payload_len)
+{
+        session->xor2_hdr.pkt_count = htons(session->pkt_count);
+        session->xor2_hdr.header_len = htons(session->header_len);
+        session->xor2_hdr.payload_len = htons(session->max_payload_len);
+        session->xor2_hdr.type = PCKT_TYPE_Q;
+
+        *hdr = (char *)  &session->xor2_hdr;
+        *hdr_len = (size_t) sizeof(struct xor2_pkt_hdr);
+        *payload = (const char *) session->Q;
         *payload_len = (size_t) (session->header_len + session->max_payload_len);
 }
 
 void xor2_clear(struct xor2_session *session)
 {
         session->pkt_count = 0;
-        memset(session->header_xor2, 0, session->header_len + session->max_payload_len);
+        memset(session->p, 0, session->header_len + session->max_payload_len);
+        memset(session->q, 0, session->header_len + session->max_payload_len);
 }
 
 void xor2_destroy(struct xor2_session * session)
 {
-        free(session->header_xor2);
+        free(session->p);
+        free(session->q);
+        free(session->tmp);
         free(session);
 }
 

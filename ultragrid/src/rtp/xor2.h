@@ -41,7 +41,9 @@ struct xor2_session;
 
 struct xor2_session * xor2_init(int header_len, int max_payload_len);
 void xor2_add_packet(struct xor2_session *session, const char *hdr, const char *payload, int payload_len);
-void xor2_emit_xor2_packet(struct xor2_session *session, const char **hdr, size_t *hdr_len, const char **payload, size_t *payload_len);
+void xor2_add_packet(struct xor2_session *session, const char *hdr, const char *payload, int payload_len);
+void xor2_emit_xor2_packet_p(struct xor2_session *session, const char **hdr, size_t *hdr_len, const char **payload, size_t *payload_len);
+void xor2_emit_xor2_packet_q(struct xor2_session *session, const char **hdr, size_t *hdr_len, const char **payload, size_t *payload_len);
 void xor2_clear(struct xor2_session *session);
 void xor2_destroy(struct xor2_session * session);
 
