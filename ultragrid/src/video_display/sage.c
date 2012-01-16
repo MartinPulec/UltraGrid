@@ -49,8 +49,9 @@
 #include "config.h"
 #include "config_unix.h"
 #include "config_win32.h"
-
 #include "debug.h"
+
+#include "audio/audio.h"
 #include "video_codec.h"
 #include "video_display.h"
 #include "video_display/sage.h"
@@ -70,9 +71,13 @@
 
 #include <video_codec.h>
 
+void display_sage_reconfigure_audio(void *state, int quant_samples, int channels,
+                                int sample_rate);
+
 #define MAGIC_SAGE	DISPLAY_SAGE_ID
 
 struct state_sage {
+        struct audio_frame audio_frame;
         struct video_frame *frame;
         struct tile *tile;
 
@@ -89,6 +94,12 @@ struct state_sage {
         int appID, nodeID;
         
         void *sage_state;
+        unsigned int play_audio:1;
+
+        pthread_mutex_t reconfigure_lock;
+        pthread_cond_t reconfigure_cv;
+        volatile unsigned int audio_configured:1;
+        volatile unsigned int audio_initialized:1;
 };
 
 /** Prototyping */
@@ -122,7 +133,6 @@ void display_sage_run(void *arg)
 void *display_sage_init(char *fmt, unsigned int flags)
 {
         UNUSED(fmt);
-        UNUSED(flags);
         struct state_sage *s;
 
         if(fmt && strcmp(fmt, "help") == 0) {
@@ -130,7 +140,7 @@ void *display_sage_init(char *fmt, unsigned int flags)
                 return NULL;
         }
         
-        s = (struct state_sage *)malloc(sizeof(struct state_sage));
+        s = (struct state_sage *) calloc(1, sizeof(struct state_sage));
         s->magic = MAGIC_SAGE;
 
         s->frame = vf_alloc(1);
@@ -150,11 +160,25 @@ void *display_sage_init(char *fmt, unsigned int flags)
         pthread_mutex_init(&s->buffer_writable_lock, 0);
         pthread_cond_init(&s->buffer_writable_cond, NULL);
 
+        pthread_mutex_init(&s->reconfigure_lock, 0);
+        pthread_cond_init(&s->reconfigure_cv, NULL);
+
         /*if (pthread_create
             (&(s->thread_id), NULL, display_thread_sage, (void *)s) != 0) {
                 perror("Unable to create display thread\n");
                 return NULL;
         }*/
+
+        if(flags & DISPLAY_FLAG_ENABLE_AUDIO) {
+                s->play_audio = TRUE;
+                s->audio_configured = FALSE;
+                s->audio_initialized = FALSE;
+                s->audio_frame.state = s;
+                s->audio_frame.reconfigure_audio = display_sage_reconfigure_audio;
+        } else {
+                s->play_audio = FALSE;
+        }
+         
 
         debug_msg("Window initialized %p\n", s);
 
@@ -177,9 +201,13 @@ void display_sage_done(void *state)
         sem_destroy(&s->semaphore);
         pthread_cond_destroy(&s->buffer_writable_cond);
         pthread_mutex_destroy(&s->buffer_writable_lock);
+
+        pthread_mutex_destroy(&s->reconfigure_lock);
+        pthread_cond_destroy(&s->reconfigure_cv);
         vf_free(s->frame);
         sage_shutdown(s->sage_state);
         //sage_delete(s->sage_state);
+        free(s->audio_frame.data);
 }
 
 struct video_frame *display_sage_getf(void *state)
@@ -216,6 +244,19 @@ int display_sage_putf(void *state, char *frame)
         if (tmp > 1)
                 printf("frame drop!\n");
 #endif
+
+        /* check for audio reconfigurstion request */
+        if(s->play_audio) {
+                if(!s->audio_initialized) { /* audio properties have changed */
+                        struct video_desc desc;
+                        desc.width = s->tile->width;
+                        desc.height = s->tile->height;
+                        desc.fps = s->frame->fps;
+                        desc.interlacing = s->frame->interlacing;
+                        desc.color_spec = s->frame->color_spec;
+                        display_sage_reconfigure(s, desc);
+                }
+        }
         return 0;
 }
 
@@ -226,6 +267,15 @@ int display_sage_reconfigure(void *state, struct video_desc desc)
         assert(s->magic == MAGIC_SAGE);
         assert(desc.color_spec == RGBA || desc.color_spec == RGB || desc.color_spec == UYVY ||
                         desc.color_spec == DXT1);
+
+        pthread_mutex_lock(&s->reconfigure_lock);
+        if(s->play_audio) {
+                while(!s->audio_configured) {
+                        fprintf(stderr, "[SAGE] Waiting for audio data.\n");
+                        pthread_cond_wait(&s->reconfigure_cv, &s->reconfigure_lock);
+                }
+        }
+        pthread_mutex_unlock(&s->reconfigure_lock);
         
         s->tile->width = desc.width;
         s->tile->height = desc.height;
@@ -237,10 +287,16 @@ int display_sage_reconfigure(void *state, struct video_desc desc)
                 sage_shutdown(s->sage_state);
         }
 
-        s->sage_state = initSage(s->appID, s->nodeID, s->tile->width, s->tile->height, desc.color_spec);
+        s->sage_state = initSage(s->appID, s->nodeID, s->tile->width, s->tile->height, desc.color_spec, s->play_audio,
+                        s->audio_frame.bps, s->audio_frame.sample_rate, s->audio_frame.ch_count, s->audio_frame.max_size);
 
         s->tile->data = (char *) sage_getBuffer(s->sage_state);
         s->tile->data_len = vc_get_linesize(s->tile->width, desc.color_spec) * s->tile->height;
+
+        pthread_mutex_lock(&s->reconfigure_lock);
+        s->audio_initialized = TRUE;
+        pthread_cond_signal(&s->reconfigure_cv);
+        pthread_mutex_unlock(&s->reconfigure_lock);
 
         return TRUE;
 }
@@ -295,15 +351,45 @@ int display_sage_get_property(void *state, int property, void *val, size_t *len)
         return TRUE;
 }
 
+/*
+ * AUDIO
+ */
 struct audio_frame * display_sage_get_audio_frame(void *state)
 {
-        UNUSED(state);
-        return NULL;
+        struct state_sage *s = (struct state_sage *)state;
+
+        return &s->audio_frame;
 }
 
 void display_sage_put_audio_frame(void *state, struct audio_frame *frame)
 {
-        UNUSED(state);
-        UNUSED(frame);
+        struct state_sage *s = (struct state_sage *)state;
+
+        sage_push_audiodata(s->sage_state, frame->data, frame->data_len);
+}
+
+void display_sage_reconfigure_audio(void *state, int quant_samples, int channels,
+                                int sample_rate)
+{
+        struct state_sage *s = (struct state_sage *)state;
+
+        free(s->audio_frame.data);
+
+        s->audio_frame.max_size = (quant_samples / 8) * channels * sample_rate;
+        s->audio_frame.data = malloc(s->audio_frame.max_size);
+
+        s->audio_frame.bps = quant_samples / 8;
+        s->audio_frame.ch_count = channels;
+        s->audio_frame.sample_rate = sample_rate;
+
+        pthread_mutex_lock(&s->reconfigure_lock);
+        s->audio_configured = TRUE;
+        s->audio_initialized = FALSE;
+        pthread_cond_signal(&s->reconfigure_cv);
+
+        while(!s->audio_initialized) {
+                pthread_cond_wait(&s->reconfigure_cv, &s->reconfigure_lock);
+        }
+        pthread_mutex_unlock(&s->reconfigure_lock);
 }
 

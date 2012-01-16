@@ -46,7 +46,7 @@
  *
  */
 
-#include <GL/glut.h>
+#include "audio/audio.h"
 #include "sage_wrapper.h"
 #include <sail.h>
 #include <misc.h>
@@ -54,7 +54,8 @@ extern "C" {
 #include "host.h"
 }
 
-void *initSage(int appID, int nodeID, int width, int height, codec_t codec)
+void *initSage(int appID, int nodeID, int width, int height, codec_t codec, int play_audio, int bps,
+                int samplingRate, int channels, int abuffsize)
 {
         sail *sageInf; // sage sail object
 
@@ -91,6 +92,22 @@ void *initSage(int appID, int nodeID, int width, int height, codec_t codec)
         //sailCfg.rowOrd = BOTTOM_TO_TOP;
         sailCfg.rowOrd = TOP_TO_BOTTOM;
         sailCfg.master = true;
+
+        if(play_audio) {
+                sailCfg.audioOn = true;
+                sailCfg.audioMode = SAGE_AUDIO_APP;
+                switch(bps) {
+                        case 16:
+                                sailCfg.sampleFmt = SAGE_SAMPLE_INT16;
+                                break;
+                        case 8:
+                                sailCfg.sampleFmt = SAGE_SAMPLE_INT8;
+                                break;
+                }
+                sailCfg.samplingRate = samplingRate;
+                sailCfg.channels = channels;
+                sailCfg.audioBuffSize = abuffsize;
+        }
         
         sageInf->init(sailCfg);
         
@@ -122,10 +139,17 @@ void sage_swapBuffer(void *state)
     }
 }
 
-GLubyte * sage_getBuffer(void *state)
+char * sage_getBuffer(void *state)
 {
         sail *sageInf = (sail *) state;
-        return (GLubyte *)sageInf->getBuffer();
+        return (char *)sageInf->getBuffer();
+}
+
+void sage_push_audiodata(void *state, char *data, int len)
+{
+        sail *sageInf = (sail *) state;
+
+        sageInf->pushAudioData(len, (void*)data);
 }
 
 void sage_delete(void *state)
@@ -133,3 +157,4 @@ void sage_delete(void *state)
         sail *sageInf = (sail *) state;
         delete sageInf;
 }
+

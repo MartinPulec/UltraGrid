@@ -56,17 +56,17 @@
 
 // SAGE headers
 #ifdef __cplusplus
-extern "C" void *initSage(int appID, int nodeID, int width, int height, codec_t codec);
-extern "C" void sage_shutdown(void *);
-extern "C" void sage_swapBuffer(void *);
-extern "C" GLubyte * sage_getBuffer(void *);
-extern "C" void sage_delete(void *);
-#else
-void* initSage(int appID, int nodeID, int width, int height, codec_t codec);
+extern "C" {
+#endif
+void *initSage(int appID, int nodeID, int width, int height, codec_t codec, int play_audio, int bps,
+                int samplingRate, int channels, int abuffsize);
 void sage_swapBuffer(void *);
-GLubyte * sage_getBuffer(void *);
+char * sage_getBuffer(void *);
+void sage_push_audiodata(void *state, char *data, int len);
 void sage_shutdown(void *);
 void sage_delete(void *);
+#ifdef __cplusplus
+} /* extern "C" */
 #endif
 
 #endif
