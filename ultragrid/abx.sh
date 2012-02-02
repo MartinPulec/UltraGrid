@@ -27,7 +27,6 @@ do
 		$CMD -c $compression:$opts &>> $$.log
 	else
 		echo $CMD 2>&1 |tee $$.log
-		echo $CMD &>> $$.log
 		$CMD &>> $$.log
 	fi
 	sleep 1
