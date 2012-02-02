@@ -173,8 +173,9 @@ struct state_gl {
 
         // Framebuffer
         GLuint fbo_id;
-	GLuint		texture_display;
+	GLuint		texture_display1;
 	GLuint		texture_uyvy;
+	GLuint		texture_display2;
 
         /* Thread related information follows... */
         pthread_t	thread_id;
@@ -339,7 +340,7 @@ void * display_gl_init(char *fmt, unsigned int flags) {
 		free(tmp);
 	}
 
-        s->frame = vf_alloc(1);
+        s->frame = vf_alloc(2);
         s->tile = vf_get_tile(s->frame, 0);
         s->buffers[0] = NULL;
         s->buffers[1] = NULL;
@@ -492,10 +493,8 @@ int display_gl_reconfigure(void *state, struct video_desc desc)
 
         assert (desc.color_spec == RGBA ||
                 desc.color_spec == RGB  ||
-                desc.color_spec == UYVY ||
-                desc.color_spec == DXT1 ||
-                desc.color_spec == DXT1_YUV ||
-                desc.color_spec == DXT5);
+                desc.color_spec == UYVY
+                );
 
         s->tile->width = desc.width;
         s->tile->height = desc.height;
@@ -544,6 +543,8 @@ void gl_reconfigure_screen(struct state_gl *s)
                 s->tile->data_len = vc_get_linesize(s->tile->width, s->frame->color_spec)
                         * s->tile->height;
         }
+
+        s->frame->tiles[1].data_len = s->tile->data_len;
         
         s->buffers[0] = (char *) malloc(s->tile->data_len);
         s->buffers[1] = (char *) malloc(s->tile->data_len);
@@ -562,16 +563,6 @@ void gl_reconfigure_screen(struct state_gl *s)
 	glUseProgramObjectARB(0);
 
         if(s->frame->color_spec == DXT1 || s->frame->color_spec == DXT1_YUV) {
-		glBindTexture(GL_TEXTURE_2D,s->texture_display);
-		glCompressedTexImage2D(GL_TEXTURE_2D, 0,
-				GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
-				s->tile->width, s->dxt_height, 0,
-				(s->tile->width * s->dxt_height/16)*8,
-				NULL);
-		if(s->frame->color_spec == DXT1_YUV) {
-			glBindTexture(GL_TEXTURE_2D,s->texture_display);
-			glUseProgramObjectARB(s->PHandle_dxt);
-		}
         } else if (s->frame->color_spec == UYVY) {
                 glActiveTexture(GL_TEXTURE0 + 2);
                 glBindTexture(GL_TEXTURE_2D,s->texture_uyvy);
@@ -585,32 +576,19 @@ void gl_reconfigure_screen(struct state_gl *s)
                         (GLfloat) s->tile->width);
                 glUseProgramObjectARB(0);
                 glActiveTexture(GL_TEXTURE0 + 0);
-                glBindTexture(GL_TEXTURE_2D,s->texture_display);
+                glBindTexture(GL_TEXTURE_2D,s->texture_display1);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                                s->tile->width, s->tile->height, 0,
+                                GL_RGBA, GL_UNSIGNED_BYTE,
+                                NULL);
+                glBindTexture(GL_TEXTURE_2D,s->texture_display2);
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
                                 s->tile->width, s->tile->height, 0,
                                 GL_RGBA, GL_UNSIGNED_BYTE,
                                 NULL);
         } else if (s->frame->color_spec == RGBA) {
-                glBindTexture(GL_TEXTURE_2D,s->texture_display);
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-                                s->tile->width, s->tile->height, 0,
-                                GL_RGBA, GL_UNSIGNED_BYTE,
-                                NULL);
         } else if (s->frame->color_spec == RGB) {
-                glBindTexture(GL_TEXTURE_2D,s->texture_display);
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
-                                s->tile->width, s->tile->height, 0,
-                                GL_RGB, GL_UNSIGNED_BYTE,
-                                NULL);
         } else if (s->frame->color_spec == DXT5) {
-                glUseProgramObjectARB(s->PHandle_dxt5);
-                
-                glBindTexture(GL_TEXTURE_2D,s->texture_display);
-                glCompressedTexImage2D(GL_TEXTURE_2D, 0,
-				GL_COMPRESSED_RGBA_S3TC_DXT5_EXT,
-				s->tile->width, s->dxt_height, 0,
-				s->tile->width * s->dxt_height,
-				NULL);
         }
         gl_check_error();
 }
@@ -696,7 +674,6 @@ void glut_idle_callback(void)
                 s->tv = tv;
         }
 
-        gl_draw(s->aspect);
         glutPostRedisplay();
         s->processed = TRUE;
 }
@@ -768,8 +745,14 @@ void display_gl_run(void *arg)
         glClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
         glEnable( GL_TEXTURE_2D );
         
-	glGenTextures(1, &s->texture_display);
-	glBindTexture(GL_TEXTURE_2D, s->texture_display);
+	glGenTextures(1, &s->texture_display1);
+	glBindTexture(GL_TEXTURE_2D, s->texture_display1);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glGenTextures(1, &s->texture_display2);
+	glBindTexture(GL_TEXTURE_2D, s->texture_display2);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -829,7 +812,7 @@ void gl_bind_texture(void *arg)
 	struct state_gl        *s = (struct state_gl *) arg;
         
         glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, s->fbo_id);
-        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, s->texture_display, 0);
+        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, s->texture_display1, 0);
         //assert(GL_FRAMEBUFFER_COMPLETE_EXT == glCheckFramebufferStatusEXT(GL_FRAMEBUFFER_EXT));
         glActiveTexture(GL_TEXTURE0 + 2);
         glBindTexture(GL_TEXTURE_2D, s->texture_uyvy);
@@ -868,27 +851,90 @@ void gl_bind_texture(void *arg)
         glMatrixMode( GL_MODELVIEW );
         glPopMatrix();
         
+        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, s->fbo_id);
+        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, s->texture_display2, 0);
+        //assert(GL_FRAMEBUFFER_COMPLETE_EXT == glCheckFramebufferStatusEXT(GL_FRAMEBUFFER_EXT));
+        glActiveTexture(GL_TEXTURE0 + 2);
+        glBindTexture(GL_TEXTURE_2D, s->texture_uyvy);
+        
+        glMatrixMode( GL_PROJECTION );
+        glPushMatrix();
+	glLoadIdentity( );
+	glOrtho(-1,1,-1/gl->aspect,1/gl->aspect,10,-10);
+        
+	glMatrixMode( GL_MODELVIEW );
+        glPushMatrix();
+	glLoadIdentity( );
+        
+        glPushAttrib(GL_VIEWPORT_BIT);
+        
+        glViewport( 0, 0, s->tile->width, s->tile->height);
+
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, s->tile->width / 2, s->tile->height,  GL_RGBA, GL_UNSIGNED_BYTE, s->buffers[1]);
+        glUseProgramObjectARB(s->PHandle);
+        
+        glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT); 
+        
+        glBegin(GL_QUADS);
+        glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0/aspect);
+        glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0/aspect);
+        glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0/aspect);
+        glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0/aspect);
+        glEnd();
+        
+        glPopAttrib();
+        
+	
+        glMatrixMode( GL_PROJECTION );
+        glPopMatrix();
+        glMatrixMode( GL_MODELVIEW );
+        glPopMatrix();
         glUseProgramObjectARB(0);
         glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
         glActiveTexture(GL_TEXTURE0 + 0);
-        glBindTexture(GL_TEXTURE_2D, s->texture_display);
+        glBindTexture(GL_TEXTURE_2D, s->texture_display1);
+
+        float bottom;
+        
+    /* Clear the screen */
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    glLoadIdentity( );
+    glTranslatef( 0.0f, 0.0f, -1.35f );
+    
+    /* Reflect that we may have taller texture than reasonable data
+     * if we use DXT and source height was not divisible by 4 
+     * In normal case, there would be 1.0 */
+    bottom = 1.0f - (gl->dxt_height - gl->tile->height) / (float) gl->dxt_height * 2;
+
+    gl_check_error();
+    glBegin(GL_QUADS);
+      /* Front Face */
+      /* Bottom Left Of The Texture and Quad */
+      glTexCoord2f( 0.0f, bottom ); glVertex2f( -1.0f, -1/s->aspect);
+      /* Bottom Right Of The Texture and Quad */
+      glTexCoord2f( 0.5f, bottom ); glVertex2f(  0.0f, -1/s->aspect);
+      /* Top Right Of The Texture and Quad */
+      glTexCoord2f( 0.5f, 0.0f ); glVertex2f(  0.0f,  1/s->aspect);
+      /* Top Left Of The Texture and Quad */
+      glTexCoord2f( 0.0f, 0.0f ); glVertex2f( -1.0f,  1/s->aspect);
+    glEnd( );
+        glBindTexture(GL_TEXTURE_2D, s->texture_display2);
+    glBegin(GL_QUADS);
+      /* Front Face */
+      /* Bottom Left Of The Texture and Quad */
+      glTexCoord2f( 0.5f, bottom ); glVertex2f(0.0f, -1/s->aspect);
+      /* Bottom Right Of The Texture and Quad */
+      glTexCoord2f( 1.0f, bottom ); glVertex2f(  1.0f, -1/s->aspect);
+      /* Top Right Of The Texture and Quad */
+      glTexCoord2f( 1.0f, 0.0f ); glVertex2f(  1.0f,  1/s->aspect);
+      /* Top Left Of The Texture and Quad */
+      glTexCoord2f( 0.5f, 0.0f ); glVertex2f( 0.0f,  1/s->aspect);
+    glEnd( );
 }    
 
 void dxt_bind_texture(void *arg)
 {
-        struct state_gl        *s = (struct state_gl *) arg;
-        static int i=0;
-
-        //TODO: does OpenGL use different stuff here?
-        glActiveTexture(GL_TEXTURE0);
-        i=glGetUniformLocationARB(s->PHandle,"yuvtex");
-        glUniform1iARB(i,0); 
-        glBindTexture(GL_TEXTURE_2D,gl->texture_display);
-	glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-			s->tile->width, s->tile->height,
-			GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
-			(s->tile->width * s->tile->height/16)*8,
-			s->buffers[s->image_display]);
 }    
 
 void gl_draw(double ratio)
@@ -943,7 +989,7 @@ display_type_t *display_gl_probe(void)
 int display_gl_get_property(void *state, int property, void *val, size_t *len)
 {
         UNUSED(state);
-        codec_t codecs[] = {UYVY, RGBA, RGB, DXT1, DXT1_YUV, DXT5};
+        codec_t codecs[] = {UYVY, RGBA, RGB };
         enum interlacing_t supported_il_modes[] = {PROGRESSIVE, INTERLACED_MERGED, SEGMENTED_FRAME};
                 
         switch (property) {
@@ -980,6 +1026,11 @@ int display_gl_get_property(void *state, int property, void *val, size_t *len)
                         }
                         *len = sizeof(supported_il_modes);
                         break;
+
+                case DISPLAY_PROPERTY_VIDEO_MODE:
+                        *(int *) val = DISPLAY_PROPERTY_VIDEO_SEPARATE_TILES;
+                        break;
+
                 default:
                         return FALSE;
         }
@@ -1018,12 +1069,8 @@ struct video_frame * display_gl_getf(void *state)
         struct state_gl *s = (struct state_gl *) state;
         assert(s->magic == MAGIC_GL);
 
-        if(s->double_buf) {
-                s->tile->data = s->buffers[(s->image_display + 1) % 2];
-        } else {
-                s->tile->data = s->buffers[s->image_display];
-        }
-
+        s->frame->tiles[0].data = s->buffers[0];
+        s->frame->tiles[1].data = s->buffers[1];
 
         return s->frame;
 }
@@ -1041,7 +1088,6 @@ int display_gl_putf(void *state, char *frame)
                 s->processed = FALSE;
 
                 /* ...and give it more to do... */
-                s->image_display = (s->image_display + 1) % 2;
         }
 
 

@@ -526,6 +526,7 @@ static void *sender_thread(void *arg)
         struct state_uv *uv = (struct state_uv *)arg;
 
         struct video_frame *tx_frame, *splitted_frames = NULL;
+        struct video_frame *frame = vf_alloc(2);
         struct audio_frame *audio;
         //struct video_frame *splitted_frames = NULL;
         int tile_y_count;
@@ -550,17 +551,20 @@ static void *sender_thread(void *arg)
                 /* Capture and transmit video... */
                 tx_frame = vidcap_grab(uv->capture_device, &audio);
                 if (tx_frame != NULL) {
+                        frame->interlacing = tx_frame->interlacing;
+                        frame->fps = tx_frame->fps;
+                        frame->tiles[0] = tx_frame->tiles[0];
                         if(audio) {
                                 audio_sdi_send(uv->audio, audio);
                         }
                         //TODO: Unghetto this
                         if (uv->requested_compression) {
                                 tx_frame = compress_frame(compression, tx_frame);
+                                frame->tiles[1] = tx_frame->tiles[0];
+                                frame->color_spec = tx_frame->color_spec;
                         }
-                        if(!tx_frame)
-                                continue;
                         if(uv->connections_count == 1) { /* normal case - only one connection */
-                                tx_send(uv->tx, tx_frame, 
+                                tx_send(uv->tx, frame, 
                                                 uv->network_devices[0]);
                         } else { /* split */
                                 int i;

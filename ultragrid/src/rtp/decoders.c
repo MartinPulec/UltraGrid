@@ -576,7 +576,7 @@ struct video_frame * reconfigure_decoder(struct state_decoder * const decoder, s
                 int i;
                 
                 buf_size = decompress_reconfigure(decoder->ext_decoder, desc, 
-                                decoder->rshift, decoder->gshift, decoder->bshift, decoder->pitch , out_codec);
+                                decoder->rshift, decoder->gshift, decoder->bshift, decoder->pitch , out_codec) * 10;
                 if(!buf_size) {
                         return NULL;
                 }
@@ -786,7 +786,7 @@ packet_restored:
                 /* Critical section 
                  * each thread *MUST* wait here if this condition is true
                  */
-                if (!(decoder->received_vid_desc.width == width &&
+                if (substream == 0 && !(decoder->received_vid_desc.width == width &&
                       decoder->received_vid_desc.height == height &&
                       decoder->received_vid_desc.color_spec == color_spec &&
                       decoder->received_vid_desc.interlacing == interlacing  &&
@@ -939,10 +939,12 @@ packet_restored:
                                         tile = vf_get_tile(output, x);
                                         out = tile->data;
                                 }
-                                decompress_frame(decoder->ext_decoder,
+                                if(x ==1 && y == 0) decompress_frame(decoder->ext_decoder,
                                                 (unsigned char *) out,
                                                 (unsigned char *) decoder->ext_recv_buffer[pos],
                                                 decoder->total_bytes[pos]);
+                                else
+                                        memcpy(out, decoder->ext_recv_buffer[pos],decoder->total_bytes[pos]);
                         }
                 }
         }
