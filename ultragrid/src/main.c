@@ -562,7 +562,10 @@ static void *sender_thread(void *arg)
                                 tx_frame = compress_frame(compression, tx_frame);
                                 frame->tiles[1] = tx_frame->tiles[0];
                                 frame->color_spec = tx_frame->color_spec;
-                        }
+                        } else {
+                                frame->tiles[1] = tx_frame->tiles[0];
+                                frame->color_spec = tx_frame->color_spec;
+			}
                         if(uv->connections_count == 1) { /* normal case - only one connection */
                                 tx_send(uv->tx, frame, 
                                                 uv->network_devices[0]);
