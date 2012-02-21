@@ -71,7 +71,7 @@ const struct codec_info_t codec_info[] = {
         {DXT1_YUV, "DXT1 YUV", to_fourcc('D','X','T','Y'), 1, 0.5, FALSE, TRUE}, /* packet YCbCr inside DXT1 channels */
         {DXT5, "DXT5", to_fourcc('D','X','T','5'), 1, 1.0, FALSE, TRUE},/* DXT5 YCoCg */
         {RGB, "RGB", 0x32424752, 1, 3.0, TRUE, FALSE},
-        {DPX10, "DPX10", 0, 1, 4.0, TRUE, FALSE},
+        {DPX10, "DPX10", to_fourcc('D','P','1','0'), 1, 4.0, TRUE, FALSE},
         {JPEG, "JPEG", to_fourcc('J','P','E','G'), 0, 0.0, FALSE, TRUE},
         {RAW, "raw", to_fourcc('r','a','w','s'), 0, 1.0, FALSE, TRUE}, /* raw SDI */
         {0, NULL, 0, 0, 0.0, FALSE, FALSE}

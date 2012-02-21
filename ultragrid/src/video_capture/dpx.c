@@ -407,7 +407,7 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         
         if(s->file_information.magic_num == 'XPDS')
                 s->big_endian = TRUE;
-        else if(s->file_information.magic_num == 'SPDX')
+        else if(s->file_information.magic_num == 'SDPX')
                 s->big_endian = FALSE;
         else {
                 fprintf(stderr, "[DPX] corrupted file %s. "
@@ -459,6 +459,12 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         s->prev_time.tv_sec = s->prev_time.tv_usec = 0;
 
 	return s;
+}
+
+void
+vidcap_dpx_finish(void *state)
+{
+        UNUSED(state);
 }
 
 void
@@ -583,8 +589,6 @@ static void * processing_thread(void *args)
                 }
                 
                 pthread_mutex_unlock(&s->lock);
-                
-                
                 
                 s->lut_func(s->lut, s->buffer_processed[s->buffer_processed_end],
                                 s->buffer_read[s->buffer_read_start], s->tile->data_len);
