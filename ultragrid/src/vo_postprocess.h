@@ -57,10 +57,11 @@ typedef  void *(*vo_postprocess_init_t)(char *cfg);
  * Reconfigures postprocessor for frame
  * and returns resulting frame properties (they can be different)
  * 
- * @return frame to be written to
+ * @return true or false
  */
-typedef  struct video_frame * (*vo_postprocess_reconfigure_t)(void *state, struct video_desc desc);
-typedef void (*vo_postprocess_get_out_desc_t)(struct vo_postprocess_state *, struct video_desc *out, int *display_mode);
+typedef  int (*vo_postprocess_reconfigure_t)(void *state, struct video_desc desc);
+typedef  struct video_frame * (*vo_postprocess_getf_t)(void *state);
+typedef void (*vo_postprocess_get_out_desc_t)(void *, struct video_desc *out, int *display_mode, int *out_frame_count);
 
 /**
  * Postprocesses video frame
@@ -77,8 +78,9 @@ typedef  void (*vo_postprocess_t)(void *state, struct video_frame *in, struct vi
 typedef  void (*vo_postprocess_done_t)(void *);
 
 struct vo_postprocess_state *vo_postprocess_init(char *config_string);
-struct video_frame * vo_postprocess_reconfigure(struct vo_postprocess_state *, struct video_desc);
-void vo_postprocess_get_out_desc(struct vo_postprocess_state *, struct video_desc *out, int *display_mode);
+int vo_postprocess_reconfigure(struct vo_postprocess_state *, struct video_desc);
+struct video_frame * vo_postprocess_getf(struct vo_postprocess_state *);
+void vo_postprocess_get_out_desc(struct vo_postprocess_state *, struct video_desc *out, int *display_mode, int *out_frames_count);
 void vo_postprocess(struct vo_postprocess_state *, struct video_frame*, struct video_frame*, int req_pitch);
 void vo_postprocess_done(struct vo_postprocess_state *s);
 

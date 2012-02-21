@@ -1,5 +1,5 @@
 /*
- * FILE:    audio/audio.c
+ * FILE:    audio/capture/coreaudio.c
  * AUTHORS: Martin Benes     <martinbenesh@gmail.com>
  *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
  *          Petr Holub       <hopet@ics.muni.cz>
@@ -51,11 +51,14 @@
 #ifdef HAVE_COREAUDIO
 
 #include "audio/audio.h"
+#include "audio/utils.h"
 #include "audio/capture/coreaudio.h" 
 #include "utils/ring_buffer.h"
 #include "debug.h"
 #include <stdlib.h>
 #include <AudioUnit/AudioUnit.h>
+#include <CoreAudio/AudioHardware.h>
+#include <QuickTime/QuickTime.h>
 #include <pthread.h>
 
 #ifdef HAVE_SPEEX
@@ -63,7 +66,7 @@
 #endif
 
 struct state_ca_capture {
-#if MACOSX_VERSION_MAJOR <= 9
+#if OS_VERSION_MAJOR <= 9
         ComponentInstance 
 #else
         AudioComponentInstance
@@ -141,6 +144,7 @@ static OSStatus InputProc(void *inRefCon,
                 UInt32 inNumberFrames,
                 AudioBufferList * ioData)
 {
+	UNUSED(ioData);
         struct state_ca_capture * s = (struct state_ca_capture *) inRefCon;
 
         OSStatus err =noErr;
@@ -159,12 +163,12 @@ static OSStatus InputProc(void *inRefCon,
                 if(s->nominal_sample_rate != s->frame.sample_rate) {
                         int err;
                         uint32_t in_frames = inNumberFrames;
-                        err = speex_resampler_process_interleaved_int(s->resampler, s->tmp, &in_frames, s->resampled, &write_bytes);
+                        err = speex_resampler_process_interleaved_int(s->resampler, (spx_int16_t *) s->tmp, &in_frames, (spx_int16_t *) s->resampled, &write_bytes);
                         //speex_resampler_process_int(resampler, channelID, in, &in_length, out, &out_length); 
                         write_bytes *= s->frame.bps * s->frame.ch_count;
                         if(err) {
                                 fprintf(stderr, "Resampling data error.\n");
-                                return;
+                                return err;
                         }
                 }
 #endif
@@ -181,7 +185,7 @@ static OSStatus InputProc(void *inRefCon,
                         pthread_cond_signal(&s->cv);
                 pthread_mutex_unlock(&s->lock);
         } else {
-                fprintf(stderr, "[CoreAudio] writing buffer caused error %i.\n", err);
+                fprintf(stderr, "[CoreAudio] writing buffer caused error %i.\n", (int) err);
         }
 
         return err;
@@ -190,7 +194,6 @@ static OSStatus InputProc(void *inRefCon,
 void audio_cap_ca_help(void)
 {
         OSErr ret;
-        AudioDeviceID device;
         AudioDeviceID *dev_ids;
         int dev_items;
         int i;
@@ -210,7 +213,7 @@ void audio_cap_ca_help(void)
                 
                 size = sizeof(name);
                 ret = AudioDeviceGetProperty(dev_ids[i], 0, 0, kAudioDevicePropertyDeviceName, &size, name);
-                fprintf(stderr,"\tcoreaudio:%d : %s\n", dev_ids[i], name);
+                fprintf(stderr,"\tcoreaudio:%d : %s\n", (int) dev_ids[i], name);
         }
         free(dev_ids);
 
@@ -224,7 +227,7 @@ void * audio_cap_ca_init(char *cfg)
 {
         struct state_ca_capture *s;
         OSErr ret = noErr;
-#if MACOSX_VERSION_MAJOR <= 9
+#if OS_VERSION_MAJOR <= 9
         Component comp;
         ComponentDescription desc;
 #else
@@ -301,23 +304,23 @@ void * audio_cap_ca_init(char *cfg)
         desc.componentFlagsMask = 0;
 
 #if MACOSX_VERSION_MAJOR <= 9
-        comp = FindNextComponent(NULL, &desc);
-        if(!comp) {
-                fprintf(stderr, "Error finding AUHAL component.\n");
-                goto error;
-        }
-        ret = OpenAComponent(comp, &s->auHALComponentInstance);
-        if (ret != noErr) {
-                fprintf(stderr, "Error opening AUHAL component.\n");
-                goto error;
-        }
-#else
         comp = AudioComponentFindNext(NULL, &desc);
         if(!comp) {
                 fprintf(stderr, "Error finding AUHAL component.\n");
                 goto error;
         }
         ret = AudioComponentInstanceNew(comp, &s->auHALComponentInstance);
+        if (ret != noErr) {
+                fprintf(stderr, "Error opening AUHAL component.\n");
+                goto error;
+        }
+#else
+        comp = FindNextComponent(NULL, &desc);
+        if(!comp) {
+                fprintf(stderr, "Error finding AUHAL component.\n");
+                goto error;
+        }
+        ret = OpenAComponent(comp, &s->auHALComponentInstance);
         if (ret != noErr) {
                 fprintf(stderr, "Error opening AUHAL component.\n");
                 goto error;
@@ -371,7 +374,6 @@ void * audio_cap_ca_init(char *cfg)
 
         {
                 AudioStreamBasicDescription desc;
-                AURenderCallbackStruct  renderStruct;
 
                 size = sizeof(desc);
                 ret = AudioUnitGetProperty(s->auHALComponentInstance, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input,
@@ -465,7 +467,7 @@ struct audio_frame *audio_cap_ca_read(void *state)
 
 void audio_cap_ca_finish(void *state)
 {
-        struct state_ca_capture *s = (struct state_ca_capture *) state;
+        UNUSED(state);
 }
 
 void audio_cap_ca_done(void *state)

@@ -57,9 +57,6 @@
 
 struct state_audio;
 
-typedef void (*reconfigure_audio_t)(void *state, int quant_samples, int channels,
-                int sample_rate);
-
 typedef struct audio_frame
 {
         int bps;                /* bytes per sample */
@@ -68,26 +65,30 @@ typedef struct audio_frame
         int data_len;           /* size of useful data in buffer */
         int ch_count;		/* count of channels */
         unsigned int max_size;  /* maximal size of data in buffer */
-        
-        reconfigure_audio_t reconfigure_audio;
-        void *state;
 }
 audio_frame;
 
-struct state_audio * audio_cfg_init(char *addrs, char *send_cfg, char *recv_cfg, char *jack_cfg);
+struct state_audio * audio_cfg_init(char *addrs, int port, char *send_cfg, char *recv_cfg, char *jack_cfg);
 void audio_finish(struct state_audio *s);
 void audio_done(struct state_audio *s);
 void audio_join(struct state_audio *s);
 
 void audio_sdi_send(struct state_audio *s, struct audio_frame *frame);
-int audio_does_send_sdi(struct state_audio *s);
-int audio_does_receive_sdi(struct state_audio *s);
 struct audio_frame * sdi_get_frame(void *state);
 void sdi_put_frame(void *state, struct audio_frame *frame);
 void audio_register_put_callback(struct state_audio *s, void (*callback)(void *, struct audio_frame *),
                 void *udata);
 void audio_register_get_callback(struct state_audio *s, struct audio_frame * (*callback)(void *),
                 void *udata);
+void audio_register_reconfigure_callback(struct state_audio *s, int (*callback)(void *, int, int, int),
+                void *udata);
+
+struct audio_frame * audio_get_frame(struct state_audio *s);
+int audio_reconfigure(struct state_audio *s, int quant_samples, int channels,
+                int sample_rate);
+
+int audio_does_send_sdi(struct state_audio *s);
+int audio_does_receive_sdi(struct state_audio *s);
 
 /**
  * Changes bps for everey sample.

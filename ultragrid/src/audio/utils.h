@@ -74,4 +74,13 @@ void copy_channel(char *out, const char *in, int bps, int in_len /* bytes */, in
 void mux_channel(char *out, char *in, int bps, int in_len, int out_stream_channels, int chan_pos_stream);
 void demux_channel(char *out, char *in, int bps, int in_len, int in_stream_channels, int pos_in_stream);
 
+/* 
+ * Those 2 fuctions convert from/to normalized float and int32_t representations.
+ * Input and output data may overlap.
+ */
+void float2int(char *out, char *in, int len);
+void int2float(char *out, char *in, int len);
+void short_int2float(char *out, char *in, int in_len);
+
+
 #endif

@@ -63,7 +63,7 @@ void vf_split(struct video_frame *out, struct video_frame *src,
 {
         unsigned int               tile_idx, line_idx;
         struct tile        *cur_tiles;
-        unsigned int               tile_line;
+        unsigned int               tile_line = 0;
 
         out->color_spec = src->color_spec;
         out->fps = src->fps;
@@ -131,39 +131,6 @@ void vf_split_horizontal(struct video_frame *out, struct video_frame *src,
                         out->tiles[i].height;
                 out->tiles[i].data = src->tiles[0].data + i * out->tiles[i].height 
                         * out->tiles[i].linesize;
-        }
-}
-
-
-uint32_t hton_tileinfo2uint(struct tile_info tile_info)
-{
-        union {
-                struct tile_info t_info;
-                uint32_t res;
-        } trans;
-        trans.t_info = tile_info;
-        trans.t_info.h_reserved = MAGIC_H;
-        trans.t_info.t_reserved = MAGIC_T;
-        return htonl(trans.res);
-}
-
-struct tile_info ntoh_uint2tileinfo(uint32_t packed)
-{
-        union {
-                struct tile_info t_info;
-                uint32_t src;
-        } trans;
-        trans.src = ntohl(packed);
-        if(trans.t_info.h_reserved = MAGIC_H)
-                return trans.t_info;
-        else { /* == MAGIC_T */
-                  int tmp;
-                  tmp = trans.t_info.x_count << 4u & trans.t_info.y_count;
-                  trans.t_info.x_count = trans.t_info.pos_x;
-                  trans.t_info.y_count = trans.t_info.pos_y;
-                  trans.t_info.pos_x = tmp >> 4u;
-                  trans.t_info.pos_y = tmp & 0xF;
-                  return trans.t_info;
         }
 }
 

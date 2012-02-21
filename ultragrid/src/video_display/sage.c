@@ -89,6 +89,9 @@ struct state_sage {
         int appID, nodeID;
         
         void *sage_state;
+
+        int                     frames;
+        struct timeval          t, t0;
 };
 
 /** Prototyping */
@@ -106,6 +109,8 @@ void display_sage_run(void *arg)
                 //display_sage_handle_events();
 
                 sem_wait(&s->semaphore);
+                if (should_exit)
+                        break;
 
                 sage_swapBuffer(s->sage_state);
                 s->tile->data = (char *) sage_getBuffer(s->sage_state);
@@ -114,6 +119,15 @@ void display_sage_run(void *arg)
                 s->buffer_writable = 1;
                 pthread_cond_broadcast(&s->buffer_writable_cond);
                 pthread_mutex_unlock(&s->buffer_writable_lock);
+
+                double seconds = tv_diff(t, t0);
+                if (seconds >= 5) {
+                        float fps = frames / seconds;
+                        fprintf(stderr, "[SAGE] %d frames in %g seconds = %g FPS\n",
+                                frames, seconds, fps);
+                        t0 = t;
+                        frames = 0;
+                }
         }
 }
 
@@ -131,6 +145,7 @@ void *display_sage_init(char *fmt, unsigned int flags)
         s = (struct state_sage *)malloc(sizeof(struct state_sage));
         s->magic = MAGIC_SAGE;
 
+        s->frames = 0;
         s->frame = vf_alloc(1);
         s->tile = vf_get_tile(s->frame, 0);
         
@@ -159,6 +174,14 @@ void *display_sage_init(char *fmt, unsigned int flags)
         return (void *)s;
 }
 
+void display_sage_finish(void *state)
+{
+        struct state_sage *s = (struct state_sage *)state;
+
+        assert(s->magic == MAGIC_SAGE);
+        display_sage_putf(s, NULL);
+}
+
 void display_sage_done(void *state)
 {
         struct state_sage *s = (struct state_sage *)state;
@@ -169,7 +192,7 @@ void display_sage_done(void *state)
         pthread_mutex_destroy(&s->buffer_writable_lock);
         vf_free(s->frame);
         sage_shutdown(s->sage_state);
-        sage_delete(s->sage_state);
+        //sage_delete(s->sage_state);
 }
 
 struct video_frame *display_sage_getf(void *state)
@@ -209,7 +232,7 @@ int display_sage_putf(void *state, char *frame)
         return 0;
 }
 
-void display_sage_reconfigure(void *state, struct video_desc desc)
+int display_sage_reconfigure(void *state, struct video_desc desc)
 {
         struct state_sage *s = (struct state_sage *)state;
 
@@ -231,6 +254,8 @@ void display_sage_reconfigure(void *state, struct video_desc desc)
 
         s->tile->data = (char *) sage_getBuffer(s->sage_state);
         s->tile->data_len = vc_get_linesize(s->tile->width, desc.color_spec) * s->tile->height;
+
+        return TRUE;
 }
 
 display_type_t *display_sage_probe(void)
@@ -282,3 +307,27 @@ int display_sage_get_property(void *state, int property, void *val, size_t *len)
         }
         return TRUE;
 }
+
+struct audio_frame * display_sage_get_audio_frame(void *state)
+{
+        UNUSED(state);
+        return NULL;
+}
+
+void display_sage_put_audio_frame(void *state, struct audio_frame *frame)
+{
+        UNUSED(state);
+        UNUSED(frame);
+}
+
+int display_sage_reconfigure_audio(void *state, int quant_samples, int channels,
+                int sample_rate)
+{
+        UNUSED(state);
+        UNUSED(quant_samples);
+        UNUSED(channels);
+        UNUSED(sample_rate);
+
+        return FALSE;
+}
+

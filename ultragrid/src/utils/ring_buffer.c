@@ -99,7 +99,7 @@ void ring_buffer_write(struct ring_buffer * ring, const char *in, int len) {
         int to_end;
 
         if(len > ring->len) {
-                fprintf(stderr, "Warning: to long write request for ring buffer (%d B)!!!\n", len);
+                fprintf(stderr, "Warning: too long write request for ring buffer (%d B)!!!\n", len);
                 return;
         }
         /* detect overrun */
@@ -113,7 +113,7 @@ void ring_buffer_write(struct ring_buffer * ring, const char *in, int len) {
                 if(read_len_new < 0)
                         read_len_new += ring->len;
                 if(read_len_new < read_len_old) {
-                        fprintf(stderr, "Warning: ring buffer underflow!!!\n");
+                        fprintf(stderr, "Warning: ring buffer overflow!!!\n");
                 }
         }
         
@@ -130,3 +130,9 @@ void ring_buffer_write(struct ring_buffer * ring, const char *in, int len) {
 int ring_get_size(struct ring_buffer * ring) {
         return ring->len;
 }
+
+int ring_get_current_size(struct ring_buffer * ring)
+{
+        return (ring->end - ring->start + ring->len) % ring->len;
+}
+

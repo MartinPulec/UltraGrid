@@ -67,7 +67,6 @@
 #include "rtp/ptime.h"
 #include "rtp/pbuf.h"
 #include "rtp/decoders.h"
-#include "audio/audio.h"
 
 #define PBUF_MAGIC	0xcafebabe
 
@@ -338,9 +337,8 @@ static int frame_complete(struct pbuf_node *frame)
 
 int
 pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time,
-            struct video_frame *framebuffer, int i, struct state_decoder *decoder)
+                             decode_frame_t decode_func, void *data, int wait_for_playout)
 {
-        UNUSED(i);
         /* Find the first complete frame that has reached it's playout */
         /* time, and decode it into the framebuffer. Mark the frame as */
         /* decoded, but otherwise leave it in the playout buffer.      */
@@ -350,9 +348,9 @@ pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time,
 
         curr = playout_buf->frst;
         while (curr != NULL) {
-                if (!curr->decoded && tv_gt(curr_time, curr->playout_time)) {
+                if (!curr->decoded && (!wait_for_playout || tv_gt(curr_time, curr->playout_time))) {
                         if (frame_complete(curr)) {
-                                int ret = decode_frame(curr->cdata, framebuffer, decoder);
+                                int ret = decode_func(curr->cdata, data);
                                 curr->decoded = 1;
                                 return ret;
                         } else {
@@ -366,86 +364,3 @@ pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time,
         return 0;
 }
 
-int
-audio_pbuf_decode(struct pbuf *playout_buf, struct timeval curr_time,
-                  audio_frame * buffer)
-{
-        UNUSED(curr_time);
-        struct pbuf_node *curr;
-        struct coded_data *cdata;
-        static int prints = 0;
-
-        pbuf_validate(playout_buf);     // should be run in debug mode
-
-        curr = playout_buf->frst;
-        
-        while (curr != NULL) {
-                if (!curr->decoded && frame_complete(curr)) {   // FIXME: figure out then right frames ordering (if needed) - se pbuf_decode
-                        
-                        curr->decoded = 1;
-                                
-                        cdata = curr->cdata;
-                        while (cdata != NULL) {
-                                char *data;
-                                audio_payload_hdr_t *hdr = 
-                                        (audio_payload_hdr_t *) cdata->data->data;
-                                        
-                                int total_channels, bps,
-                                        sample_rate;
-                                int channel;
-                                
-                                if(cdata->data->m) {
-                                        total_channels = ((ntohl(hdr->substream_bufnum) >> 22) & 0x3ff) + 1;
-                                }
-
-                                channel = (ntohl(hdr->substream_bufnum) >> 22) & 0x3ff;
-                                sample_rate = ntohl(hdr->quant_sample_rate) & 0x3fffff;
-                                bps = (ntohl(hdr->quant_sample_rate) >> 26) / 8;
-                                
-                                if(buffer->ch_count != total_channels ||
-                                                buffer->bps != bps ||
-                                                buffer->sample_rate != sample_rate) {
-                                        buffer->reconfigure_audio(buffer->state, bps * 8, total_channels,
-                                                sample_rate);
-                                        //buffer = display_get_audio_frame(buffer->state);
-                                }
-                                
-                                data = cdata->data->data + sizeof(audio_payload_hdr_t);
-                                
-                                int length = cdata->data->data_len - sizeof(audio_payload_hdr_t);
-
-                                int offset = ntohl(hdr->offset);
-                                if(length * total_channels <= ((int) buffer->max_size) - offset) {
-                                        mux_channel(buffer->data + offset * total_channels, data, bps, length, total_channels, channel);
-                                        //memcpy(buffer->data + ntohl(hdr->offset), data, ntohs(hdr->length));
-                                } else { /* discarding data - buffer to small */
-                                        int copy_len = buffer->max_size - offset * total_channels;
-
-                                        if(copy_len > 0)
-                                                mux_channel(buffer->data + offset * total_channels, data, bps, copy_len, total_channels, channel);
-                                                //memcpy(buffer->data + ntohl(hdr->offset), data, 
-                                                //        copy_len);
-                                        if(++prints % 100 == 0)
-                                                fprintf(stdout, "Warning: "
-                                                        "discarding audio data "
-                                                        "- buffer too small (audio init failed?)\n");
-                                }
-                                
-                                /* buffer size same for every packet of the frame */
-                                if(ntohl(hdr->length) <= buffer->max_size) {
-                                        buffer->data_len = ntohl(hdr->length) * total_channels;
-                                } else { /* overflow */
-                                        buffer->data_len = buffer->max_size;
-                                }
-                                
-                                cdata = cdata->nxt;
-                        }
-                        
-                        
-                        return 1;
-                }
-                curr = curr->nxt;
-        }
-
-        return 0;
-}

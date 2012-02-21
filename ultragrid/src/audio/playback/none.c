@@ -1,5 +1,5 @@
 /*
- * FILE:    audio/audio.c
+ * FILE:    audio/playback/none.c
  * AUTHORS: Martin Benes     <martinbenesh@gmail.com>
  *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
  *          Petr Holub       <hopet@ics.muni.cz>
@@ -46,9 +46,20 @@
  *
  */
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#endif
 #include "audio/playback/none.h" 
 #include "debug.h"
 #include <stdlib.h>
+
+#define AUDIO_PLAYBACK_NONE_MAGIC 0x3bcf376au
+
+struct state_audio_playback_none
+{
+        uint32_t magic;
+};
 
 void audio_play_none_help(void)
 {
@@ -57,22 +68,49 @@ void audio_play_none_help(void)
 void * audio_play_none_init(char *cfg)
 {
         UNUSED(cfg);
-        return NULL;
+        struct state_audio_playback_none *s;
+
+        s = (struct state_audio_playback_none *)
+                malloc(sizeof(struct state_audio_playback_none));
+        assert(s != NULL);
+        s->magic = AUDIO_PLAYBACK_NONE_MAGIC;
+                                
+        return s;
 }
 
 struct audio_frame *audio_play_none_get_frame(void *state)
 {
-        UNUSED(state);
+        struct state_audio_playback_none *s = 
+                (struct state_audio_playback_none *) state;
+        assert(s->magic == AUDIO_PLAYBACK_NONE_MAGIC);
+        return NULL;
 }
 
 void audio_play_none_put_frame(void *state, struct audio_frame *frame)
 {
-        UNUSED(state);
         UNUSED(frame);
+        struct state_audio_playback_none *s = 
+                (struct state_audio_playback_none *) state;
+        assert(s->magic == AUDIO_PLAYBACK_NONE_MAGIC);
 }
 
 void audio_play_none_done(void *state)
 {
-        UNUSED(state);
+        struct state_audio_playback_none *s = 
+                (struct state_audio_playback_none *) state;
+        assert(s->magic == AUDIO_PLAYBACK_NONE_MAGIC);
+        free(s);
 }
 
+int audio_play_none_reconfigure(void *state, int quant_samples, int channels,
+                                                int sample_rate)
+{
+        UNUSED(quant_samples);
+        UNUSED(channels);
+        UNUSED(sample_rate);
+        struct state_audio_playback_none *s = 
+                (struct state_audio_playback_none *) state;
+        assert(s->magic == AUDIO_PLAYBACK_NONE_MAGIC);
+
+        return TRUE;
+}

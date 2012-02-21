@@ -242,11 +242,9 @@ char *four_char_decode(int format);
 static int find_mode(ComponentInstance *ci, int width, int height, 
                 const char * codec_name, double fps);
 void display_quicktime_audio_init(struct state_quicktime *s);
-void display_quicktime_reconfigure_audio(void *state, int quant_samples, int channels,
-                int sample_rate);
 
 static void
-nprintf(unsigned char *str)
+nprintf(char *str)
 {
         char tmp[((int)str[0]) + 1];
 
@@ -320,7 +318,7 @@ static void reconf_common(struct state_quicktime *s)
                                                NULL,
                                                srcCopy,
                                                NULL,
-                                               (CodecFlags) NULL,
+                                               (CodecFlags) 0,
                                                codecNormalQuality, bestSpeedCodec);
                 if (ret != noErr)
                         fprintf(stderr, "Failed DecompressSequenceBeginS\n");
@@ -340,7 +338,7 @@ void display_quicktime_run(void *arg)
 
         while (!should_exit) {
                 int i;
-                platform_sem_wait(&s->semaphore);
+                platform_sem_wait((void *) &s->semaphore);
 
                 for (i = 0; i < s->devices_cnt; ++i) {
                         struct tile *tile = vf_get_tile(s->frame, i);
@@ -354,7 +352,7 @@ void display_quicktime_run(void *arg)
                                                         * the decompressor does not call the completion 
                                                         * function. 
                                                         */
-                                                       0, &ignore, -1,       
+                                                       0, &ignore, (void *) -1,       
                                                           NULL);
                         if (ret != noErr) {
                                 fprintf(stderr,
@@ -365,10 +363,11 @@ void display_quicktime_run(void *arg)
 
                 frames++;
                 gettimeofday(&t, NULL);
+
                 double seconds = tv_diff(t, t0);
                 if (seconds >= 5) {
                         float fps = frames / seconds;
-                        fprintf(stderr, "%d frames in %g seconds = %g FPS\n",
+                        fprintf(stderr, "[QuickTime disp.] %d frames in %g seconds = %g FPS\n",
                                 frames, seconds, fps);
                         t0 = t;
                         frames = 0;
@@ -392,7 +391,7 @@ int display_quicktime_putf(void *state, char *frame)
         assert(s->magic == MAGIC_QT_DISPLAY);
 
         /* ...and signal the worker */
-        platform_sem_post(&s->semaphore);
+        platform_sem_post((void *) &s->semaphore);
         return 0;
 }
 
@@ -557,7 +556,7 @@ void *display_quicktime_init(char *fmt, unsigned int flags)
         struct state_quicktime *s;
         int ret;
         int i;
-        char *codec_name;
+        char *codec_name = NULL;
 
         /* Parse fmt input */
         s = (struct state_quicktime *)calloc(1, sizeof(struct state_quicktime));
@@ -717,14 +716,13 @@ void *display_quicktime_init(char *fmt, unsigned int flags)
                 }
         }
         
-        s->audio.state = s;
         if(flags & DISPLAY_FLAG_ENABLE_AUDIO) {
                 display_quicktime_audio_init(s);
         } else {
                 s->play_audio = FALSE;
         }
 
-        platform_sem_init(&s->semaphore, 0, 0);
+        platform_sem_init((void *) &s->semaphore, 0, 0);
 
         /*if (pthread_create
             (&(s->thread_id), NULL, display_thread_quicktime, (void *)s) != 0) {
@@ -738,7 +736,7 @@ void *display_quicktime_init(char *fmt, unsigned int flags)
 void display_quicktime_audio_init(struct state_quicktime *s)
 {
         OSErr ret = noErr;
-#if MACOSX_VERSION_MAJOR <= 9
+#if OS_VERSION_MAJOR <= 9
         Component comp;
         ComponentDescription desc;
 #else
@@ -761,7 +759,7 @@ void display_quicktime_audio_init(struct state_quicktime *s)
         desc.componentFlags = 0;
         desc.componentFlagsMask = 0;
 
-#if MACOSX_VERSION_MAJOR <= 9
+#if OS_VERSION_MAJOR <= 9
         comp = FindNextComponent(NULL, &desc);
         if(!comp) goto audio_error;
         ret = OpenAComponent(comp, &s->auHALComponentInstance);
@@ -779,7 +777,6 @@ void display_quicktime_audio_init(struct state_quicktime *s)
         s->audio.data = NULL;
         s->audio_data = NULL;
         s->audio.max_size = 0;
-        s->audio.reconfigure_audio = display_quicktime_reconfigure_audio;
         Component audioComponent;
         ret = QTVideoOutputGetIndSoundOutput(s->videoDisplayComponentInstance[0], 1, &audioComponent);
         if (ret != noErr) goto audio_error;
@@ -788,7 +785,7 @@ void display_quicktime_audio_init(struct state_quicktime *s)
         ret = GetComponentInfo(audioComponent, 0, componentNameHandle, NULL, NULL);
         if (ret != noErr) goto audio_error;
         HLock(componentNameHandle);
-        s->audio_name = CFStringCreateWithPascalString(NULL, *componentNameHandle,
+        s->audio_name = CFStringCreateWithPascalString(NULL, (ConstStr255Param) *componentNameHandle,
                         kCFStringEncodingMacRoman);
         HUnlock(componentNameHandle);
         DisposeHandle(componentNameHandle);
@@ -799,6 +796,11 @@ void display_quicktime_audio_init(struct state_quicktime *s)
 audio_error:
         fprintf(stderr, "There is no audio support (%x).\n", ret);
         s->play_audio = FALSE;
+}
+
+void display_quicktime_finish(void *state)
+{
+        UNUSED(state);
 }
 
 void display_quicktime_done(void *state)
@@ -882,12 +884,12 @@ int display_quicktime_get_property(void *state, int property, void *val, size_t 
         return TRUE;
 }
 
-void display_quicktime_reconfigure(void *state, struct video_desc desc)
+int display_quicktime_reconfigure(void *state, struct video_desc desc)
 {
         struct state_quicktime *s = (struct state_quicktime *) state;
         int i;
         int ret;
-        const char *codec_name;
+        const char *codec_name = NULL;
 
         for (i = 0; codec_info[i].name != NULL; i++) {
                 if (codec_info[i].codec == desc.color_spec) {
@@ -895,6 +897,7 @@ void display_quicktime_reconfigure(void *state, struct video_desc desc)
                         codec_name = s->cinfo->name;
                 }
         }
+	assert(codec_name != NULL);
         if(desc.color_spec == UYVY || desc.color_spec == DVS8) /* just aliases for 2vuy,
                                             * but would confuse QT */
                 codec_name = "2vuy";
@@ -936,15 +939,15 @@ void display_quicktime_reconfigure(void *state, struct video_desc desc)
                     QTVideoOutputSetDisplayMode(s->videoDisplayComponentInstance[i],
                                                 s->mode);
                 if (ret != noErr) {
-                        fprintf(stderr, "Failed to set video output display mode.\n");
-                        exit(128);
+                        fprintf(stderr, "[QuickTime] Failed to set video output display mode.\n");
+                        return FALSE;
                 }
                 
                 /* We don't want to use the video output component instance echo port */
                 ret = QTVideoOutputSetEchoPort(s->videoDisplayComponentInstance[i], nil);
                 if (ret != noErr) {
-                        fprintf(stderr, "Failed to set video output echo port.\n");
-                        exit(128);
+                        fprintf(stderr, "[QuickTime] Failed to set video output echo port.\n");
+                        return FALSE;
                 }
 
                 /* Register Ultragrid with instande of the video outpiut */
@@ -953,15 +956,15 @@ void display_quicktime_reconfigure(void *state, struct video_desc desc)
                                                (ConstStr255Param) "Ultragrid");
                 if (ret != noErr) {
                         fprintf(stderr,
-                                "Failed to register Ultragrid with selected video output instance.\n");
-                        exit(128);
+                                "[QuickTime] Failed to register Ultragrid with selected video output instance.\n");
+                        return FALSE;
                 }
 
                 ret = QTVideoOutputBegin(s->videoDisplayComponentInstance[i]);
                 if (ret != noErr) {
                         fprintf(stderr,
-                                "Failed to get exclusive access to selected video output instance.\n");
-                        exit(128);
+                                "[QuickTime] Failed to get exclusive access to selected video output instance.\n");
+                        return FALSE;
                 }
                 /* Get a pointer to the gworld used by video output component */
                 ret =
@@ -969,12 +972,13 @@ void display_quicktime_reconfigure(void *state, struct video_desc desc)
                                            &s->gworld[i]);
                 if (ret != noErr) {
                         fprintf(stderr,
-                                "Failed to get selected video output instance GWorld.\n");
-                        exit(128);
+                                "[QuickTime] Failed to get selected video output instance GWorld.\n");
+                        return FALSE;
                 }
         }
 
         reconf_common(s);
+        return TRUE;
 }
 
 static int find_mode(ComponentInstance *ci, int width, int height, 
@@ -1104,7 +1108,7 @@ struct audio_frame *display_quicktime_get_audio_frame(void *state)
                 return NULL;
 }
 
-void display_quicktime_put_audio_frame(void *state, const struct audio_frame *frame)
+void display_quicktime_put_audio_frame(void *state, struct audio_frame *frame)
 {
         struct state_quicktime * s = (struct state_quicktime *) state;
         int to_end = frame->data_len;
@@ -1123,6 +1127,10 @@ static OSStatus theRenderProc(void *inRefCon,
                               UInt32 inBusNumber, UInt32 inNumFrames,
                               AudioBufferList *ioData)
 {
+	UNUSED(inActionFlags);
+	UNUSED(inTimeStamp);
+	UNUSED(inBusNumber);
+
         struct state_quicktime * s = (struct state_quicktime *) inRefCon;
         int write_bytes = inNumFrames * s->audio_packet_size;
         int bytes_in_buffer = s->audio_end - s->audio_start;
@@ -1149,7 +1157,7 @@ static OSStatus theRenderProc(void *inRefCon,
         return noErr;
 }
 
-void display_quicktime_reconfigure_audio(void *state, int quant_samples, int channels,
+int display_quicktime_reconfigure_audio(void *state, int quant_samples, int channels,
                 int sample_rate) 
 {
         struct state_quicktime *s = (struct state_quicktime *)state;
@@ -1237,7 +1245,7 @@ void display_quicktime_reconfigure_audio(void *state, int quant_samples, int cha
         ret = AudioOutputUnitStart(s->auHALComponentInstance);
         if(ret) goto error;
 
-        return;
+        return TRUE;
 error:
         fprintf(stderr, "Audio setting error, disabling audio.\n");
         debug_msg("[quicktime] error: %d", ret);
@@ -1247,6 +1255,7 @@ error:
         s->audio.data = NULL;
 
         s->play_audio = FALSE;
+        return FALSE;
 }
 
 #endif                          /* HAVE_MACOSX */

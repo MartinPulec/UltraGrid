@@ -64,9 +64,11 @@ extern "C" {
 #include "video_display/decklink.h"
 #include "debug.h"
 #include "video_capture.h"
-#include "DeckLinkAPI.h"
 #include "audio/audio.h"
 #include "audio/utils.h"
+
+#include "DeckLinkAPI.h"
+#include "DeckLinkAPIVersion.h"
 
 #ifdef __cplusplus
 } // END of extern "C"
@@ -234,9 +236,6 @@ struct state_decklink {
  };
 
 static void show_help(void);
-void display_decklink_reconfigure_audio(void *state, int quant_samples, int channels,
-                int sample_rate);
-
 
 static void show_help(void)
 {
@@ -252,7 +251,9 @@ static void show_help(void)
         deckLinkIterator = CreateDeckLinkIteratorInstance();
         if (deckLinkIterator == NULL)
         {
-                fprintf(stderr, "A DeckLink iterator could not be created.  The DeckLink drivers may not be installed.\n");
+		fprintf(stderr, "\nA DeckLink iterator could not be created. The DeckLink drivers may not be installed or are outdated.\n");
+		fprintf(stderr, "This UltraGrid version was compiled with DeckLink drivers %s. You should have at least this version.\n\n",
+                                BLACKMAGIC_DECKLINK_API_VERSION_STRING);
                 return;
         }
         
@@ -457,7 +458,7 @@ static BMDDisplayMode get_mode(IDeckLinkOutput *deckLinkOutput, struct video_des
         return displayMode;
 }
 
-void
+int
 display_decklink_reconfigure(void *state, struct video_desc desc)
 {
         struct state_decklink            *s = (struct state_decklink *)state;
@@ -577,10 +578,10 @@ display_decklink_reconfigure(void *state, struct video_desc desc)
 	}
 
         s->initialized = true;
-        return;
+        return TRUE;
 
 error:
-        exit_uv(128);
+        return FALSE;
 }
 
 
@@ -617,7 +618,7 @@ void *display_decklink_init(char *fmt, unsigned int flags)
                 do {
                         cardIdx[s->devices_cnt] = atoi(ptr);
                         ++s->devices_cnt;
-                } while (ptr = strtok_r(NULL, ",", &saveptr2));
+                } while ((ptr = strtok_r(NULL, ",", &saveptr2)));
                 free(devices);
                 
                 ptr = strtok_r(NULL, ":", &saveptr1);
@@ -644,9 +645,9 @@ void *display_decklink_init(char *fmt, unsigned int flags)
         deckLinkIterator = CreateDeckLinkIteratorInstance();
         if (!deckLinkIterator)
         {
-                fprintf(stderr, "This application requires the DeckLink drivers installed.\n");
-                if (deckLinkIterator != NULL)
-                        deckLinkIterator->Release();
+		fprintf(stderr, "\nA DeckLink iterator could not be created. The DeckLink drivers may not be installed or are outdated.\n");
+		fprintf(stderr, "This UltraGrid version was compiled with DeckLink drivers %s. You should have at least this version.\n\n",
+                                BLACKMAGIC_DECKLINK_API_VERSION_STRING);
                 return NULL;
         }
 
@@ -677,11 +678,9 @@ void *display_decklink_init(char *fmt, unsigned int flags)
                 }
         }
 
-	s->audio.state = s;
         if(flags & DISPLAY_FLAG_ENABLE_AUDIO) {
                 s->play_audio = TRUE;
                 s->audio.data = NULL;
-                s->audio.reconfigure_audio = display_decklink_reconfigure_audio;
         } else {
                 s->play_audio = FALSE;
         }
@@ -720,6 +719,11 @@ void *display_decklink_init(char *fmt, unsigned int flags)
 }
 
 void display_decklink_run(void *state)
+{
+        UNUSED(state);
+}
+
+void display_decklink_finish(void *state)
 {
         UNUSED(state);
 }
@@ -847,7 +851,7 @@ void display_decklink_put_audio_frame(void *state, struct audio_frame *frame)
 
 }
 
-void display_decklink_reconfigure_audio(void *state, int quant_samples, int channels,
+int display_decklink_reconfigure_audio(void *state, int quant_samples, int channels,
                 int sample_rate) {
         struct state_decklink *s = (struct state_decklink *)state;
         BMDAudioSampleType sample_type;
@@ -865,7 +869,7 @@ void display_decklink_reconfigure_audio(void *state, int quant_samples, int chan
                 fprintf(stderr, "[decklink] requested channel count isn't supported: "
                         "%d\n", s->audio.ch_count);
                 s->play_audio = FALSE;
-                return;
+                return FALSE;
         }
         
         /* toggle one channel to supported two */
@@ -879,7 +883,7 @@ void display_decklink_reconfigure_audio(void *state, int quant_samples, int chan
                         "samples: %d, sample rate: %d\n",
                         quant_samples, sample_rate);
                 s->play_audio = FALSE;
-                return;
+                return FALSE;
         }
         switch(quant_samples) {
                 case 16:
@@ -888,6 +892,8 @@ void display_decklink_reconfigure_audio(void *state, int quant_samples, int chan
                 case 32:
                         sample_type = bmdAudioSampleType32bitInteger;
                         break;
+                default:
+                        return FALSE;
         }
                         
         s->state[0].deckLinkOutput->EnableAudioOutput(bmdAudioSampleRate48kHz,
@@ -900,6 +906,8 @@ void display_decklink_reconfigure_audio(void *state, int quant_samples, int chan
                         * s->audio.ch_count
                         * sample_rate;                
         s->audio.data = (char *) malloc (s->audio.max_size);
+
+        return TRUE;
 }
 
 bool operator==(const REFIID & first, const REFIID & second){

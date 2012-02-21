@@ -1,5 +1,5 @@
 /*
- * FILE:    audio/audio.h
+ * FILE:    audio/playback/coreaudio.h
  * AUTHORS: Martin Benes     <martinbenesh@gmail.com>
  *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
  *          Petr Holub       <hopet@ics.muni.cz>
@@ -53,4 +53,6 @@ void * audio_play_ca_init(char *cfg);
 struct audio_frame *audio_play_ca_get_frame(void *state);
 void audio_play_ca_put_frame(void *state, struct audio_frame *frame);
 void audio_play_ca_done(void *state);
+int audio_play_ca_reconfigure (void *state, int quant_samples, int channels,
+                                                int sample_rate);
 

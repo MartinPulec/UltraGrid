@@ -239,7 +239,7 @@ get_carrier (int fd, const char *device)
  * But the didn't seem worked at time of writing 
  * TODO: revide if the driver is still buggy, if so, consider removing function
  */
-static const struct frame_mode * get_video_standard (int fd, const char *device)
+/*static const struct frame_mode * get_video_standard (int fd, const char *device)
 {
 	unsigned int val;
 
@@ -259,7 +259,7 @@ static const struct frame_mode * get_video_standard (int fd, const char *device)
                         return NULL;
                 }
 	}
-}
+}*/
 
 struct vidcap_type *
 vidcap_quad_probe(void)
@@ -384,9 +384,7 @@ vidcap_quad_init(char *init_fmt, unsigned int flags)
 
         fmt_dup = strdup(init_fmt);
 
-
-
-        item = strtok_r(NULL, ":", &save_ptr);
+        item = strtok_r(fmt_dup, ":", &save_ptr);
         assert(item != NULL);
         char *devices_str = strdup(item);
         s->devices_cnt = 0;
@@ -395,10 +393,10 @@ vidcap_quad_init(char *init_fmt, unsigned int flags)
         do {
                 devices[s->devices_cnt] = atoi(ptr);
                 ++s->devices_cnt;
-        } while (ptr = strtok_r(NULL, ",", &saveptr2));
+        } while ((ptr = strtok_r(NULL, ",", &saveptr2)));
         free(devices_str);
 
-        item = strtok_r(fmt_dup, ":", &save_ptr);
+        item = strtok_r(NULL, ":", &save_ptr);
         assert(item);
 	frame_mode_number = atoi(item);
 	if(frame_mode_number < 0 || 
@@ -661,6 +659,12 @@ vidcap_quad_init(char *init_fmt, unsigned int flags)
 }
 
 void
+vidcap_quad_finish(void *state)
+{
+        UNUSED(state);
+}
+
+void
 vidcap_quad_done(void *state)
 {
 	struct vidcap_quad_state *s = (struct vidcap_quad_state *) state;
@@ -836,7 +840,7 @@ vidcap_quad_grab(void *state, struct audio_frame **audio)
         double seconds = tv_diff(t, t0);    
         if (seconds >= 5) {
             float fps  = frames / seconds;
-            fprintf(stderr, "%d frames in %g seconds = %g FPS\n", frames, seconds, fps);
+            fprintf(stderr, "[quad] %d frames in %g seconds = %g FPS\n", frames, seconds, fps);
             t0 = t;
             frames = 0;
         }  

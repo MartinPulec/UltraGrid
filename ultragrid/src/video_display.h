@@ -102,18 +102,26 @@ struct display;
 struct display	*display_init(display_id_t id, char *fmt, unsigned int flags);
 void 		 display_run(struct display *d);
 void 		 display_done(struct display *d);
+/**
+ * This function should tell the driver to finish (eg. unlocking semaphores, locks, signalling cv etc.)
+ * When this function is called, should_exit variable is set to TRUE
+ */
 void 		 display_finish(struct display *d);
 struct video_frame *display_get_frame(struct display *d);
+/* TODO: figure out what with frame parameter, which is no longer used. Leave out? */
 void 		 display_put_frame(struct display *d, char *frame);
-void             display_reconfigure(struct display *d, struct video_desc desc);
+int              display_reconfigure(struct display *d, struct video_desc desc);
 
 struct audio_frame * display_get_audio_frame(struct display *d);
-void 		 display_put_audio_frame(struct display *d, const struct audio_frame *frame);
+void 		 display_put_audio_frame(struct display *d, struct audio_frame *frame);
+int              display_reconfigure_audio(struct display *d, int quant_samples, int channels, int sample_rate);
 
 int              display_get_property(struct display *d, int property, void *val, size_t *len);
 
 /*
  * Additional interface allowing querying properties and monitoring changes
+ *
+ * TODO: currently unused - should be implemented at least for SDL (toggling fullscreen for RGB videos)
  */
 typedef void (*observer_callback_t)(void *udata);
  

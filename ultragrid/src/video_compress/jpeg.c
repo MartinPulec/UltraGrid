@@ -48,18 +48,18 @@
 #include "config.h"
 #include "config_unix.h"
 #include "debug.h"
-#include "x11_common.h"
+#include "host.h"
 #include "video_compress/jpeg.h"
-#include "jpeg_compress/jpeg_encoder.h"
-#include "jpeg_compress/jpeg_common.h"
+#include "libgpujpeg/gpujpeg_encoder.h"
+#include "libgpujpeg/gpujpeg_common.h"
 #include "compat/platform_semaphore.h"
 #include "video_codec.h"
 #include <pthread.h>
 #include <stdlib.h>
 
 struct compress_jpeg_state {
-        struct jpeg_encoder *encoder;
-        struct jpeg_encoder_parameters encoder_param;
+        struct gpujpeg_encoder *encoder;
+        struct gpujpeg_parameters encoder_param;
         
         struct video_frame *out;
         int     jpeg_height;
@@ -75,10 +75,8 @@ static int configure_with(struct compress_jpeg_state *s, struct video_frame *fra
 
 static int configure_with(struct compress_jpeg_state *s, struct video_frame *frame)
 {
-        int x, y;
-	int h_align = 0;
+        unsigned int x;
         
-        assert(vf_get_tile(frame, 0)->width % 4 == 0);
         s->out = vf_alloc(frame->tile_count);
         
         for (x = 0; x < frame->tile_count; ++x) {
@@ -106,7 +104,7 @@ static int configure_with(struct compress_jpeg_state *s, struct video_frame *fra
                         s->decoder = (decoder_t) vc_copylineRGBAtoRGB;
                         s->rgb = TRUE;
                         break;
-                /* TODO: enable
+                /* TODO: enable (we need R10k -> RGB)
                  * case R10k:
                         s->decoder = (decoder_t) vc_copyliner10k;
                         s->rgb = TRUE;
@@ -146,25 +144,53 @@ static int configure_with(struct compress_jpeg_state *s, struct video_frame *fra
                 return FALSE;
         }
 
+	s->encoder_param.verbose = 0;
+
+        if(s->rgb) {
+                s->encoder_param.interleaved = 0;
+                s->encoder_param.restart_interval = 8;
+                /* LUMA */
+                s->encoder_param.sampling_factor[0].horizontal = 1;
+                s->encoder_param.sampling_factor[0].vertical = 1;
+                /* Cb and Cr */
+                s->encoder_param.sampling_factor[1].horizontal = 1;
+                s->encoder_param.sampling_factor[1].vertical = 1;
+                s->encoder_param.sampling_factor[2].horizontal = 1;
+                s->encoder_param.sampling_factor[2].vertical = 1;
+        } else {
+                s->encoder_param.interleaved = 1;
+                s->encoder_param.restart_interval = 2;
+                /* LUMA */
+                s->encoder_param.sampling_factor[0].horizontal = 2;
+                s->encoder_param.sampling_factor[0].vertical = 1;
+                /* Cb and Cr */
+                s->encoder_param.sampling_factor[1].horizontal = 1;
+                s->encoder_param.sampling_factor[1].vertical = 1;
+                s->encoder_param.sampling_factor[2].horizontal = 1;
+                s->encoder_param.sampling_factor[2].vertical = 1;
+        }
+
         
         s->out->color_spec = JPEG;
-        struct jpeg_image_parameters param_image;
+        struct gpujpeg_image_parameters param_image;
         s->jpeg_height = (s->out->tiles[0].height + 7) / 8 * 8;
         param_image.width = s->out->tiles[0].width;
         param_image.height = s->jpeg_height;
         param_image.comp_count = 3;
         if(s->rgb) {
-                param_image.color_space = JPEG_RGB;
-                param_image.sampling_factor = JPEG_4_4_4;
+                param_image.color_space = GPUJPEG_RGB;
+                param_image.sampling_factor = GPUJPEG_4_4_4;
         } else {
-                param_image.color_space = JPEG_YUV;
-                param_image.sampling_factor = JPEG_4_2_2;
+                param_image.color_space = GPUJPEG_YCBCR_ITU_R;
+                param_image.sampling_factor = GPUJPEG_4_2_2;
         }
         
-        s->encoder = jpeg_encoder_create(&param_image, &s->encoder_param);
+        s->encoder = gpujpeg_encoder_create(&s->encoder_param, &param_image);
         
         for (x = 0; x < frame->tile_count; ++x) {
                         vf_get_tile(s->out, x)->data = (char *) malloc(s->out->tiles[0].width * s->jpeg_height * 3);
+                        vf_get_tile(s->out, x)->linesize = s->out->tiles[0].width * (param_image.color_space == GPUJPEG_RGB ? 3 : 2);
+
         }
         
         if(!s->encoder) {
@@ -188,9 +214,9 @@ void * jpeg_compress_init(char * opts)
                 
         if(opts && strcmp(opts, "help") == 0) {
                 printf("JPEG comperssion usage:\n");
-                printf("\t-c JPEG:[<quality>:<restart_interval>:[<cuda_device>]]\n");
+                printf("\t-c JPEG[:<quality>][:<cuda_device>]]\n");
                 printf("\nCUDA devices:\n");
-                jpeg_get_device_list();
+                gpujpeg_print_devices_info();
                 return NULL;
         }
 
@@ -199,16 +225,9 @@ void * jpeg_compress_init(char * opts)
                 tok = strtok_r(opts, ":", &save_ptr);
                 s->encoder_param.quality = atoi(tok);
                 tok = strtok_r(NULL, ":", &save_ptr);
-                if(!tok) {
-                        fprintf(stderr, "[JPEG] Quality set but restart interval unset\n");
-                        free(s);
-                        return NULL;
-                }
-                s->encoder_param.restart_interval = atoi(tok);
-                tok = strtok_r(NULL, ":", &save_ptr);
                 if(tok) {
                         int ret;
-                        ret = jpeg_init_device(atoi(tok), TRUE);
+                        ret = gpujpeg_init_device(atoi(tok), TRUE);
 
                         if(ret != 0) {
                                 fprintf(stderr, "[JPEG] initializing CUDA device %d failed.\n", atoi(tok));
@@ -216,7 +235,7 @@ void * jpeg_compress_init(char * opts)
                         }
                 } else {
                         printf("Initializing CUDA device 0...\n");
-                        int ret = jpeg_init_device(0, TRUE);
+                        int ret = gpujpeg_init_device(0, TRUE);
                         if(ret != 0) {
                                 fprintf(stderr, "[JPEG] initializing default CUDA device failed.\n");
                                 return NULL;
@@ -228,10 +247,10 @@ void * jpeg_compress_init(char * opts)
                 }
                         
         } else {
-                jpeg_encoder_set_default_parameters(&s->encoder_param);
-                printf("[JPEG] setting default encode parameters (%d, %d)\n", 
-                                s->encoder_param.quality,
-                                s->encoder_param.restart_interval);
+                gpujpeg_set_default_parameters(&s->encoder_param);
+                printf("[JPEG] setting default encode parameters (quality: %d)\n", 
+                                s->encoder_param.quality
+                );
         }
                 
         s->encoder = NULL; /* not yet configured */
@@ -245,7 +264,7 @@ struct video_frame * jpeg_compress(void *arg, struct video_frame * tx)
         int i;
         unsigned char *line1, *line2;
 
-        int x, y;
+        unsigned int x;
         
         if(!s->encoder) {
                 int ret;
@@ -268,7 +287,7 @@ struct video_frame * jpeg_compress(void *arg, struct video_frame * tx)
                         line2 += out_tile->linesize;
                 }
                 
-                line1 = out_tile->data + (in_tile->height - 1) * out_tile->linesize;
+                line1 = (unsigned char *) out_tile->data + (in_tile->height - 1) * out_tile->linesize;
                 for( ; i < s->jpeg_height; ++i) {
                         memcpy(line2, line1, out_tile->linesize);
                         line2 += out_tile->linesize;
@@ -281,7 +300,7 @@ struct video_frame * jpeg_compress(void *arg, struct video_frame * tx)
                 uint8_t *compressed;
                 int size;
                 int ret;
-                ret = jpeg_encoder_encode(s->encoder, s->decoded, &compressed, &size);
+                ret = gpujpeg_encoder_encode(s->encoder, (unsigned char *) s->decoded, &compressed, &size);
                 
                 if(ret != 0)
                         return NULL;
@@ -301,7 +320,7 @@ void jpeg_compress_done(void *arg)
                 free(s->out->tiles[0].data);
         vf_free(s->out);
         if(s->encoder)
-                jpeg_encoder_destroy(s->encoder);
+                gpujpeg_encoder_destroy(s->encoder);
         
         free(s);
 }

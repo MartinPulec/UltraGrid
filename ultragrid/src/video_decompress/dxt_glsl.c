@@ -48,16 +48,20 @@
 #include "config.h"
 #include "config_unix.h"
 #include "debug.h"
+#include "host.h"
 
-#include "x11_common.h"
 #include "dxt_compress/dxt_decoder.h"
 //#include "compat/platform_semaphore.h"
 #include "video_codec.h"
 #include <pthread.h>
 #include <stdlib.h>
 #include "video_decompress/dxt_glsl.h"
-#include <GL/glew.h>
+#ifdef HAVE_MACOSX
+#include "mac_gl_common.h"
+#else
 #include "x11_common.h"
+#include "glx_common.h"
+#endif
 
 struct state_decompress {
         struct dxt_decoder *decoder;
@@ -70,17 +74,43 @@ struct state_decompress {
         unsigned int configured:1;
         
         int dxt_height; /* dxt_height is alligned height to 4 lines boundry */
-        
-        void *glx_context;
+        void *gl_context;
+        unsigned int legacy:1;
 };
 
 static void configure_with(struct state_decompress *decompressor, struct video_desc desc)
 {
         enum dxt_type type;
-        
-        decompressor->glx_context = glx_init();
-        if(!decompressor->glx_context) {
-                fprintf(stderr, "Failed to create GLX context.");
+
+#ifndef HAVE_MACOSX
+        printf("[RTDXT] Trying OpenGL 3.1 context first.\n");
+        decompressor->gl_context = glx_init(MK_OPENGL_VERSION(3,1));
+        decompressor->legacy = FALSE;
+        if(!decompressor->gl_context) {
+                fprintf(stderr, "[RTDXT] OpenGL 3.1 profile failed to initialize, falling back to legacy profile.\n");
+                decompressor->gl_context = glx_init(OPENGL_VERSION_UNSPECIFIED);
+                decompressor->legacy = TRUE;
+        }
+        glx_validate(decompressor->gl_context);
+#else
+        decompressor->gl_context = NULL;
+        if(get_mac_kernel_version_major() >= 11) {
+                printf("[RTDXT] Mac 10.7 or latter detected. Trying OpenGL 3.2 Core profile first.\n");
+                decompressor->gl_context = mac_gl_init(MAC_GL_PROFILE_3_2);
+                if(!decompressor->gl_context) {
+                        fprintf(stderr, "[RTDXT] OpenGL 3.2 Core profile failed to initialize, falling back to legacy profile.\n");
+                } else {
+                        decompressor->legacy = FALSE;
+                }
+        }
+
+        if(!decompressor->gl_context) {
+                decompressor->gl_context = mac_gl_init(MAC_GL_PROFILE_LEGACY);
+                decompressor->legacy = TRUE;
+        }
+#endif
+        if(!decompressor->gl_context) {
+                fprintf(stderr, "[RTDXT decompress] Failed to create GL context.");
                 exit_uv(128);
                 decompressor->compressed_len = 0;
                 return;
@@ -102,9 +132,9 @@ static void configure_with(struct state_decompress *decompressor, struct video_d
         decompressor->desc = desc;
 
         decompressor->decoder = dxt_decoder_create(type, desc.width,
-                        decompressor->dxt_height, decompressor->out_codec == RGBA ? DXT_FORMAT_RGBA : DXT_FORMAT_YUV422);
+                        decompressor->dxt_height, decompressor->out_codec == RGBA ? DXT_FORMAT_RGBA : DXT_FORMAT_YUV422, decompressor->legacy);
         
-        decompressor->compressed_len = desc.width * decompressor->dxt_height /
+        decompressor->compressed_len = (desc.width + 3) / 4 * 4 * decompressor->dxt_height /
                 (desc.color_spec == DXT5 ? 1 : 2);
         decompressor->configured = TRUE;
 }
@@ -115,8 +145,9 @@ void * dxt_glsl_decompress_init(void)
         
         s = (struct state_decompress *) malloc(sizeof(struct state_decompress));
         s->configured = FALSE;
+#ifndef HAVE_MACOSX
         x11_enter_thread();
-
+#endif
         return s;
 }
 
@@ -150,9 +181,9 @@ void dxt_glsl_decompress(void *state, unsigned char *dst, unsigned char *buffer,
         } else {
                 int i;
                 int linesize;
-                char *line_src, *line_dst;
+                unsigned char *line_src, *line_dst;
                 
-                char *tmp;
+                unsigned char *tmp;
                 
                 if(s->out_codec == UYVY)
                         linesize = s->desc.width * 2;
@@ -185,7 +216,11 @@ void dxt_glsl_decompress_done(void *state)
         
         if(s->configured) {
                 dxt_decoder_destroy(s->decoder);
-                glx_free(s->glx_context);
+#ifdef HAVE_MACOSX
+                mac_gl_free(s->gl_context);
+#else
+                glx_free(s->gl_context);
+#endif
         }
         free(s);
 }

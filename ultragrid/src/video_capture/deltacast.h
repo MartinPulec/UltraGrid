@@ -1,5 +1,5 @@
 /*
- * FILE:    deltacast.h
+ * FILE:    video_capture/deltacast.h
  * AUTHORS: Martin Benes     <martinbenesh@gmail.com>
  *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
  *          Petr Holub       <hopet@ics.muni.cz>
@@ -44,7 +44,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#define VIDCAP_QUAD_ID	0x10265304
+#define VIDCAP_DELTACAST_ID 0x10265304
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,6 +52,7 @@ extern "C" {
 
 struct vidcap_type	*vidcap_deltacast_probe(void);
 void			*vidcap_deltacast_init(char *fmt, unsigned int flags);
+void			 vidcap_deltacast_finish(void *state);
 void			 vidcap_deltacast_done(void *state);
 struct video_frame	*vidcap_deltacast_grab(void *state, struct audio_frame **audio);
 

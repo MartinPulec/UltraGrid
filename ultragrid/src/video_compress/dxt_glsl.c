@@ -48,19 +48,20 @@
 #include "config.h"
 #include "config_unix.h"
 #include "debug.h"
-#include "x11_common.h"
+#include "host.h"
 #include "video_compress/dxt_glsl.h"
 #include "dxt_compress/dxt_encoder.h"
 #include "compat/platform_semaphore.h"
 #include "video_codec.h"
 #include <pthread.h>
 #include <stdlib.h>
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
+#ifdef HAVE_MACOSX
+#include "mac_gl_common.h"
+#else
 #include <GL/glew.h>
-#include <GL/gl.h>
-#include <GL/glx.h>
 #include "x11_common.h"
+#include "glx_common.h"
+#endif
 
 struct video_compress {
         struct dxt_encoder *encoder;
@@ -73,33 +74,30 @@ struct video_compress {
         codec_t color_spec;
         
         int dxt_height;
-        
-        void *glx_context;
+        void *gl_context;
+        int legacy:1;
 };
 
 static int configure_with(struct video_compress *s, struct video_frame *frame);
 
 static int configure_with(struct video_compress *s, struct video_frame *frame)
 {
-        int i;
-        int x, y;
-	int h_align = 0;
+        unsigned int x;
         enum dxt_format format;
         
-        assert(vf_get_tile(frame, 0)->width % 4 == 0);
         s->out = vf_alloc(frame->tile_count);
         
         for (x = 0; x < frame->tile_count; ++x) {
-                        if (vf_get_tile(frame, x)->width != vf_get_tile(frame, 0)->width ||
-                                        vf_get_tile(frame, x)->width != vf_get_tile(frame, 0)->width) {
+                if (vf_get_tile(frame, x)->width != vf_get_tile(frame, 0)->width ||
+                                vf_get_tile(frame, x)->width != vf_get_tile(frame, 0)->width) {
 
-                                fprintf(stderr,"[RTDXT] Requested to compress tiles of different size!");
-                                exit_uv(128);
-                                return FALSE;
-                        }
-                                
-                        vf_get_tile(s->out, x)->width = vf_get_tile(frame, 0)->width;
-                        vf_get_tile(s->out, x)->height = vf_get_tile(frame, 0)->height;
+                        fprintf(stderr,"[RTDXT] Requested to compress tiles of different size!");
+                        exit_uv(128);
+                        return FALSE;
+                }
+                        
+                vf_get_tile(s->out, x)->width = vf_get_tile(frame, 0)->width;
+                vf_get_tile(s->out, x)->height = vf_get_tile(frame, 0)->height;
         }
         
         s->out->interlacing = PROGRESSIVE;
@@ -152,11 +150,11 @@ static int configure_with(struct video_compress *s, struct video_frame *frame)
         s->dxt_height = (s->out->tiles[0].height + 3) / 4 * 4;
 
         if(s->out->color_spec == DXT1) {
-                s->encoder = dxt_encoder_create(DXT_TYPE_DXT1, s->out->tiles[0].width, s->dxt_height, format);
-                s->out->tiles[0].data_len = s->out->tiles[0].width * s->dxt_height / 2;
+                s->encoder = dxt_encoder_create(DXT_TYPE_DXT1, s->out->tiles[0].width, s->dxt_height, format, s->legacy);
+                s->out->tiles[0].data_len = (s->out->tiles[0].width + 3) / 4 * 4 * s->dxt_height / 2;
         } else if(s->out->color_spec == DXT5){
-                s->encoder = dxt_encoder_create(DXT_TYPE_DXT5_YCOCG, s->out->tiles[0].width, s->dxt_height, format);
-                s->out->tiles[0].data_len = s->out->tiles[0].width * s->dxt_height;
+                s->encoder = dxt_encoder_create(DXT_TYPE_DXT5_YCOCG, s->out->tiles[0].width, s->dxt_height, format, s->legacy);
+                s->out->tiles[0].data_len = (s->out->tiles[0].width + 3) / 4 * 4 * s->dxt_height;
         }
         
         for (x = 0; x < frame->tile_count; ++x) {
@@ -171,13 +169,17 @@ static int configure_with(struct video_compress *s, struct video_frame *frame)
                         case DXT_FORMAT_YUV422:
                                 vf_get_tile(s->out, x)->linesize *= 2;
                                 break;
+                        case DXT_FORMAT_YUV:
+                                /* not used - just not compilator to complain */
+                                abort();
+                                break;
                 }
                 vf_get_tile(s->out, x)->data_len = s->out->tiles[0].data_len;
                 vf_get_tile(s->out, x)->data = (char *) malloc(s->out->tiles[0].data_len);
         }
         
         if(!s->encoder) {
-                fprintf(stderr, "[RTDXT] Failed to create decoder.\n");
+                fprintf(stderr, "[RTDXT] Failed to create encoder.\n");
                 exit_uv(128);
                 return FALSE;
         }
@@ -195,10 +197,37 @@ void * dxt_glsl_compress_init(char * opts)
         s = (struct video_compress *) malloc(sizeof(struct video_compress));
         s->out = NULL;
         s->decoded = NULL;
-        
+
+#ifndef HAVE_MACOSX
         x11_enter_thread();
-        s->glx_context = glx_init();
-        if(!s->glx_context) {
+        printf("Trying OpenGL 3.1 first.\n");
+        s->gl_context = glx_init(MK_OPENGL_VERSION(3,1));
+        s->legacy = FALSE;
+        if(!s->gl_context) {
+                fprintf(stderr, "[RTDXT] OpenGL 3.1 profile failed to initialize, falling back to legacy profile.\n");
+                s->gl_context = glx_init(OPENGL_VERSION_UNSPECIFIED);
+                s->legacy = TRUE;
+        }
+        glx_validate(s->gl_context);
+#else
+        s->gl_context = NULL;
+        if(get_mac_kernel_version_major() >= 11) {
+                printf("[RTDXT] Mac 10.7 or latter detected. Trying OpenGL 3.2 Core profile first.\n");
+                s->gl_context = mac_gl_init(MAC_GL_PROFILE_3_2);
+                if(!s->gl_context) {
+                        fprintf(stderr, "[RTDXT] OpenGL 3.2 Core profile failed to initialize, falling back to legacy profile.\n");
+                } else {
+                        s->legacy = FALSE;
+                }
+        }
+
+        if(!s->gl_context) {
+                s->gl_context = mac_gl_init(MAC_GL_PROFILE_LEGACY);
+                s->legacy = TRUE;
+        }
+#endif
+
+        if(!s->gl_context) {
                 fprintf(stderr, "[RTDXT] Error initializing GLX context");
                 exit_uv(128);
                 return NULL;
@@ -237,7 +266,7 @@ struct video_frame * dxt_glsl_compress(void *arg, struct video_frame * tx)
         int i;
         unsigned char *line1, *line2;
         
-        int x, y;
+        unsigned int x;
         
         if(!s->configured) {
                 int ret;
@@ -261,9 +290,9 @@ struct video_frame * dxt_glsl_compress(void *arg, struct video_frame * tx)
                 }
                 
                 /* if height % 4 != 0, copy last line to align */
-                if(s->dxt_height != out_tile->height) {
+                if((unsigned int) s->dxt_height != out_tile->height) {
                         int y;
-                        line1 = s->decoded + out_tile->linesize * (out_tile->height - 1);
+                        line1 = (unsigned char *) s->decoded + out_tile->linesize * (out_tile->height - 1);
                         for (y = out_tile->height; y < s->dxt_height; ++y)
                         {
                                 memcpy(line2, line1, out_tile->linesize);
@@ -288,10 +317,18 @@ void dxt_glsl_compress_done(void *arg)
 {
         struct video_compress *s = (struct video_compress *) arg;
         
+        dxt_encoder_destroy(s->encoder);
+
         if(s->out)
                 free(s->out->tiles[0].data);
         vf_free(s->out);
-        
-        glx_free(s->glx_context);
+
+        free(s->decoded);
+
+#ifdef HAVE_MACOSX
+        mac_gl_free(s->gl_context);
+#else
+        glx_free(s->gl_context);
+#endif
         free(s);
 }

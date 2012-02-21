@@ -46,9 +46,12 @@
  *
  */
 
+#ifdef HAVE_CONFIG_H
 #include "config.h"
 #include "config_unix.h"
 #include "config_win32.h"
+#endif
+
 #include "host.h"
 
 #define GL_GLEXT_PROTOTYPES 1
@@ -94,12 +97,12 @@ void main()
         yuv.rgba  = texture2D(image, gl_TexCoord[0].xy).grba;
         if(gl_TexCoord[0].x * imageWidth / 2.0 - floor(gl_TexCoord[0].x * imageWidth / 2.0) > 0.5)
                 yuv.r = yuv.a;
-        yuv.r = 1.1643*(yuv.r-0.0625);
-        yuv.g = yuv.g - 0.5;
-        yuv.b = yuv.b - 0.5;
-        gl_FragColor.r = yuv.r + 1.5958 * yuv.b;
-        gl_FragColor.g = yuv.r - 0.39173* yuv.g - 0.81290 * yuv.b;
-        gl_FragColor.b = yuv.r + 2.017 * yuv.g;
+        yuv.r = 1.1643 * (yuv.r - 0.0625);
+        yuv.g = 1.1384 * (yuv.g - 0.5);
+        yuv.b = 1.1384 * (yuv.b - 0.5);
+        gl_FragColor.r = yuv.r + 1.7926 * yuv.b;
+        gl_FragColor.g = yuv.r - 0.2132 * yuv.g - 0.5328 * yuv.b;
+        gl_FragColor.b = yuv.r + 1.7926 * yuv.g;
 });
 
 static char * yuv422_to_rgb_vp = STRINGIFY(
@@ -109,52 +112,53 @@ void main() {
 });
 
 /* DXT YUV (FastDXT) related */
-static char * frag = "\
-uniform sampler2D yuvtex;\
-\
-void main(void) {\
-vec4 col = texture2D(yuvtex, gl_TexCoord[0].st);\
-\
-float Y = col[0];\
-float U = col[1]-0.5;\
-float V = col[2]-0.5;\
-Y=1.1643*(Y-0.0625);\
-\
-float G = Y-0.39173*U-0.81290*V;\
-float B = Y+2.017*U;\
-float R = Y+1.5958*V;\
-\
-gl_FragColor=vec4(R,G,B,1.0);}";
+static char * frag = STRINGIFY(
+        uniform sampler2D yuvtex;
 
-static char * vert = "\
-void main() {\
-gl_TexCoord[0] = gl_MultiTexCoord0;\
-gl_Position = ftransform();}";
+        void main(void) {
+        vec4 col = texture2D(yuvtex, gl_TexCoord[0].st);
 
-static const char fp_display_dxt5ycocg[] = 
-    "#extension GL_EXT_gpu_shader4 : enable\n"
-    "uniform sampler2D _image;\n"
-    "void main()\n"
-    "{\n"
-    "    vec4 _rgba;\n"
-    "    float _scale;\n"
-    "    float _Co;\n"
-    "    float _Cg;\n"
-    "    float _R;\n"
-    "    float _G;\n"
-    "    float _B;\n"
-    "    _rgba = texture2D(_image, gl_TexCoord[0].xy);\n"
-    "    _scale = 1.00000000E+00/(3.18750000E+01*_rgba.z + 1.00000000E+00);\n"
-    "    _Co = (_rgba.x - 5.01960814E-01)*_scale;\n"
-    "    _Cg = (_rgba.y - 5.01960814E-01)*_scale;\n"
-    "    _R = (_rgba.w + _Co) - _Cg;\n"
-    "    _G = _rgba.w + _Cg;\n"
-    "    _B = (_rgba.w - _Co) - _Cg;\n"
-    "    _rgba = vec4(_R, _G, _B, 1.00000000E+00);\n"
-    "    gl_FragColor = _rgba;\n"
-    "    return;\n"
-    "} // main end\n"
-;
+        float Y = 1.1643 * (col[0] - 0.0625);
+        float U = 1.1384 * (col[1] - 0.5);
+        float V = 1.1384 * (col[2] - 0.5);
+
+        float G = Y-0.39173*U-0.81290*V;
+        float B = Y+2.017*U;
+        float R = Y+1.5958*V;
+
+        gl_FragColor=vec4(R,G,B,1.0);
+}
+);
+
+static char * vert = STRINGIFY(
+void main() {
+        gl_TexCoord[0] = gl_MultiTexCoord0;
+        gl_Position = ftransform();}
+);
+
+static const char fp_display_dxt5ycocg[] = STRINGIFY(
+uniform sampler2D _image;
+void main()
+{
+        vec4 _rgba;
+        float _scale;
+        float _Co;
+        float _Cg;
+        float _R;
+        float _G;
+        float _B;
+        _rgba = texture2D(_image, gl_TexCoord[0].xy);
+        _scale = 1.00000000E+00/(3.18750000E+01*_rgba.z + 1.00000000E+00);
+        _Co = (_rgba.x - 5.01960814E-01)*_scale;
+        _Cg = (_rgba.y - 5.01960814E-01)*_scale;
+        _R = (_rgba.w + _Co) - _Cg;
+        _G = _rgba.w + _Cg;
+        _B = (_rgba.w - _Co) - _Cg;
+        _rgba = vec4(_R, _G, _B, 1.00000000E+00);
+        gl_FragColor = _rgba;
+        return;
+} // main end
+);
 
 /* defined in main.c */
 extern int uv_argc;
@@ -221,6 +225,10 @@ void glut_idle_callback(void);
 void glut_key_callback(unsigned char key, int x, int y);
 void glut_close_callback(void);
 void glut_resize_window(struct state_gl *s);
+
+#ifdef HAVE_MACOSX
+void NSApplicationLoad(void);
+#endif
 
 /**
  * Show help
@@ -478,7 +486,7 @@ void dxt5_arb_init(struct state_gl *s)
  * inside appropriate thread and make changes we can do. The rest does
  * gl_reconfigure_screen.
  */
-void display_gl_reconfigure(void *state, struct video_desc desc)
+int display_gl_reconfigure(void *state, struct video_desc desc)
 {
         struct state_gl	*s = (struct state_gl *) state;
 
@@ -503,6 +511,8 @@ void display_gl_reconfigure(void *state, struct video_desc desc)
                 pthread_cond_wait(&s->reconf_cv, &s->lock);
         pthread_mutex_unlock(&s->lock);
 	s->processed = TRUE;
+
+        return TRUE;
 }
 
 void glut_resize_window(struct state_gl *s)
@@ -527,7 +537,7 @@ void gl_reconfigure_screen(struct state_gl *s)
         
         if(s->frame->color_spec == DXT1 || s->frame->color_spec == DXT1_YUV || s->frame->color_spec == DXT5) {
                 s->dxt_height = (s->tile->height + 3) / 4 * 4;
-                s->tile->data_len = vc_get_linesize(s->tile->width, s->frame->color_spec)
+                s->tile->data_len = vc_get_linesize((s->tile->width + 3) / 4 * 4, s->frame->color_spec)
                         * s->dxt_height;
         } else {
                 s->dxt_height = s->tile->height;
@@ -555,8 +565,8 @@ void gl_reconfigure_screen(struct state_gl *s)
 		glBindTexture(GL_TEXTURE_2D,s->texture_display);
 		glCompressedTexImage2D(GL_TEXTURE_2D, 0,
 				GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
-				s->tile->width, s->dxt_height, 0,
-				(s->tile->width * s->dxt_height/16)*8,
+				(s->tile->width + 3) / 4 * 4, s->dxt_height, 0,
+				((s->tile->width + 3) / 4 * 4* s->dxt_height)/2,
 				NULL);
 		if(s->frame->color_spec == DXT1_YUV) {
 			glBindTexture(GL_TEXTURE_2D,s->texture_display);
@@ -570,8 +580,8 @@ void gl_reconfigure_screen(struct state_gl *s)
                                 GL_RGBA, GL_UNSIGNED_BYTE,
                                 NULL);
                 glUseProgramObjectARB(s->PHandle);
-                glUniform1i(glGetUniformLocation(s->PHandle, "image"), 2);
-                glUniform1f(glGetUniformLocation(s->PHandle, "imageWidth"),
+                glUniform1i(glGetUniformLocationARB(s->PHandle, "image"), 2);
+                glUniform1f(glGetUniformLocationARB(s->PHandle, "imageWidth"),
                         (GLfloat) s->tile->width);
                 glUseProgramObjectARB(0);
                 glActiveTexture(GL_TEXTURE0 + 0);
@@ -598,8 +608,8 @@ void gl_reconfigure_screen(struct state_gl *s)
                 glBindTexture(GL_TEXTURE_2D,s->texture_display);
                 glCompressedTexImage2D(GL_TEXTURE_2D, 0,
 				GL_COMPRESSED_RGBA_S3TC_DXT5_EXT,
-				s->tile->width, s->dxt_height, 0,
-				s->tile->width * s->dxt_height,
+				(s->tile->width + 3) / 4 * 4, s->dxt_height, 0,
+				(s->tile->width + 3) / 4 * 4 * s->dxt_height,
 				NULL);
         }
         gl_check_error();
@@ -638,9 +648,9 @@ void glut_idle_callback(void)
         switch(s->frame->color_spec) {
                 case DXT1:
                         glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                                        s->tile->width, s->dxt_height,
+                                        (s->tile->width + 3) / 4 * 4, s->dxt_height,
                                         GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
-                                        (s->tile->width * s->dxt_height/16)*8,
+                                        ((s->tile->width + 3) / 4 * 4 * s->dxt_height)/2,
                                         s->buffers[s->image_display]);
                         break;
                 case DXT1_YUV:
@@ -663,9 +673,9 @@ void glut_idle_callback(void)
                         break;
                 case DXT5:                        
                         glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                                        s->tile->width, s->dxt_height,
+                                        (s->tile->width + 3) / 4 * 4, s->dxt_height,
                                         GL_COMPRESSED_RGBA_S3TC_DXT5_EXT,
-                                        s->tile->width * s->dxt_height,
+                                        (s->tile->width + 3) / 4 * 4 * s->dxt_height,
                                         s->buffers[s->image_display]);
                         break;
                 default:
@@ -681,7 +691,7 @@ void glut_idle_callback(void)
 
         if (seconds > 5) {
                 double fps = s->frames / seconds;
-                fprintf(stderr, "%lu frames in %g seconds = %g FPS\n", s->frames, seconds, fps);
+                fprintf(stderr, "[GL] %lu frames in %g seconds = %g FPS\n", s->frames, seconds, fps);
                 s->frames = 0;
                 s->tv = tv;
         }
@@ -934,7 +944,8 @@ int display_gl_get_property(void *state, int property, void *val, size_t *len)
 {
         UNUSED(state);
         codec_t codecs[] = {UYVY, RGBA, RGB, DXT1, DXT1_YUV, DXT5};
-        
+        enum interlacing_t supported_il_modes[] = {PROGRESSIVE, INTERLACED_MERGED, SEGMENTED_FRAME};
+                
         switch (property) {
                 case DISPLAY_PROPERTY_CODECS:
                         if(sizeof(codecs) <= *len) {
@@ -961,6 +972,14 @@ int display_gl_get_property(void *state, int property, void *val, size_t *len)
                         *(int *) val = PITCH_DEFAULT;
                         *len = sizeof(int);
                         break;
+                case DISPLAY_PROPERTY_SUPPORTED_IL_MODES:
+                        if(sizeof(supported_il_modes) <= *len) {
+                                memcpy(val, supported_il_modes, sizeof(supported_il_modes));
+                        } else {
+                                return FALSE;
+                        }
+                        *len = sizeof(supported_il_modes);
+                        break;
                 default:
                         return FALSE;
         }
@@ -983,6 +1002,15 @@ void display_gl_done(void *state)
         free(s->buffers[1]);
         vf_free(s->frame);
         free(s);
+}
+
+void display_gl_finish(void *state)
+{
+        struct state_gl *s = (struct state_gl *) state;
+
+        assert(s->magic == MAGIC_GL);
+
+        s->processed = TRUE;
 }
 
 struct video_frame * display_gl_getf(void *state)
@@ -1023,3 +1051,28 @@ int display_gl_putf(void *state, char *frame)
         pthread_mutex_unlock(&s->lock);
         return 0;
 }
+
+struct audio_frame * display_gl_get_audio_frame(void *state)
+{
+        UNUSED(state);
+        return NULL;
+}
+
+void display_gl_put_audio_frame(void *state, struct audio_frame *frame)
+{
+        UNUSED(state);
+        UNUSED(frame);
+}
+
+int display_gl_reconfigure_audio(void *state, int quant_samples, int channels,
+                int sample_rate)
+{
+        UNUSED(state);
+        UNUSED(quant_samples);
+        UNUSED(channels);
+        UNUSED(sample_rate);
+
+        return FALSE;
+}
+
+

@@ -28,22 +28,22 @@
 #include "dxt_util.h"
 
 /** Documented at declaration */
-GLhandleARB
+GLuint
 dxt_shader_create_from_source(const char* source, GLenum type)
 {
     // Create shader
-    GLhandleARB shader = glCreateShaderObjectARB(type);
+    GLuint shader = glCreateShader(type);
     
     // Compile shader source
-    glShaderSourceARB(shader, 1, (const GLcharARB**)&source, NULL);
-    glCompileShaderARB(shader);    
+    glShaderSource(shader, 1, (const GLchar**)&source, NULL);
+    glCompileShader(shader);    
     
     // Check result
     GLint status;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
     if ( status == GL_FALSE ) {
         char log[32768];
-        glGetInfoLogARB(shader, 32768, NULL, (GLchar*)log);
+        glGetShaderInfoLog(shader, 32768, NULL, (GLchar*)log);
         printf("Shader Compilation Failed : %s\n", log);
         return 0;
     }
@@ -66,7 +66,7 @@ dxt_shader_create_from_file(const char* filename, GLenum type)
     int data_size = ftell(file);
     rewind(file);
     char* program = (char*)malloc((data_size  + 1) * sizeof(char));
-    if ( data_size != fread(program, sizeof(char), data_size, file) ) {
+    if ( (size_t) data_size != fread(program, sizeof(char), data_size, file) ) {
         fprintf(stderr, "Failed to load program [%d bytes] from file %s!\n", data_size, filename);
         return 0;
     }

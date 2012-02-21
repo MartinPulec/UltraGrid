@@ -73,7 +73,7 @@ void * interlaced_3d_init(char *config) {
         return s;
 }
 
-struct video_frame * interlaced_3d_postprocess_reconfigure(void *state, struct video_desc desc)
+int interlaced_3d_postprocess_reconfigure(void *state, struct video_desc desc)
 {
         struct state_interlaced_3d *s = (struct state_interlaced_3d *) state;
         
@@ -93,12 +93,21 @@ struct video_frame * interlaced_3d_postprocess_reconfigure(void *state, struct v
         vf_get_tile(s->in, 0)->data = malloc(vf_get_tile(s->in, 0)->data_len);
         vf_get_tile(s->in, 1)->data = malloc(vf_get_tile(s->in, 1)->data_len);
         
+        return TRUE;
+}
+
+struct video_frame * interlaced_3d_getf(void *state)
+{
+        struct state_interlaced_3d *s = (struct state_interlaced_3d *) state;
+
         return s->in;
 }
 
 void interlaced_3d_postprocess(void *state, struct video_frame *in, struct video_frame *out, int req_pitch)
 {
-        int x;
+        UNUSED (state);
+        UNUSED (req_pitch);
+        unsigned int x;
         
         char *out_data = vf_get_tile(out, 0)->data;
         int linesize = vc_get_linesize(vf_get_tile(out, 0)->width, out->color_spec);
@@ -136,7 +145,7 @@ void interlaced_3d_done(void *state)
         free(state);
 }
 
-void interlaced_3d_get_out_desc(void *state, struct video_desc *out, int *in_display_mode)
+void interlaced_3d_get_out_desc(void *state, struct video_desc *out, int *in_display_mode, int *out_frames)
 {
         struct state_interlaced_3d *s = (struct state_interlaced_3d *) state;
 
@@ -148,4 +157,6 @@ void interlaced_3d_get_out_desc(void *state, struct video_desc *out, int *in_dis
         out->tile_count = 1;
 
         *in_display_mode = DISPLAY_PROPERTY_VIDEO_SEPARATE_TILES;
+        *out_frames = 1;
 }
+

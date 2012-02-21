@@ -1,5 +1,5 @@
 /*
- * FILE:   testcard.c
+ * FILE:   testcard2.c
  * AUTHOR: Colin Perkins <csp@csperkins.org
  *         Alvaro Saurin <saurin@dcs.gla.ac.uk>
  *         Martin Benes     <martinbenesh@gmail.com>
@@ -122,7 +122,7 @@ static int configure_audio(struct testcard_state2 *s)
         s->audio_silence = calloc(1, AUDIO_BUFFER_SIZE /* 1 sec */);
         
         s->audio_tone = calloc(1, AUDIO_BUFFER_SIZE /* 1 sec */);
-        short int * data = s->audio_tone;
+        short int * data = (short int *) s->audio_tone;
         for( i=0; i < AUDIO_BUFFER_SIZE/2; i+=2 )
         {
                 data[i] = data[i+1] = (float) sin( ((double)i/(double)200) * M_PI * 2. ) * SHRT_MAX;
@@ -141,10 +141,7 @@ static int configure_audio(struct testcard_state2 *s)
 void *vidcap_testcard2_init(char *fmt, unsigned int flags)
 {
         struct testcard_state2 *s;
-        char *filename;
         const char *strip_fmt = NULL;
-        FILE *in;
-        struct stat sb;
         unsigned int i, j;
         unsigned int rect_size = COL_NUM;
         codec_t codec=0;
@@ -236,15 +233,7 @@ void *vidcap_testcard2_init(char *fmt, unsigned int flags)
                     SDL_CreateRGBSurface(SDL_SWSURFACE, s->aligned_x, s->tile->height * 2,
                                          32, 0xff, 0xff00, 0xff0000,
                                          0xff000000);
-                if (filename) {
-                        if(filename[0] == 'p')
-                                s->pan = 48;
-                        else if(filename[0] == 's')
-                                strip_fmt = filename;
-                }
-
                 for (j = 0; j < s->tile->height; j += rect_size) {
-                        int grey = 0xff010101;
                         if (j == rect_size * 2) {
                                 r.w = s->tile->width;
                                 r.h = rect_size / 4;
@@ -327,6 +316,11 @@ void *vidcap_testcard2_init(char *fmt, unsigned int flags)
         return s;
 }
 
+void vidcap_testcard2_finish(void *state)
+{
+        UNUSED(state);
+}
+
 void vidcap_testcard2_done(void *state)
 {
         struct testcard_state2 *s = state;
@@ -346,8 +340,6 @@ void * vidcap_testcard2_thread(void *arg)
         struct timeval next_frame_time;
         SDL_Surface *copy;
         SDL_Surface *old = NULL;
-        SDL_Surface *text;
-        SDL_Color col = { 0, 0, 0, 0 };
         unsigned int seed = time(NULL);
         int prev_x1 = rand_r(&seed) % (s->tile->width - 300);
         int prev_y1 = rand_r(&seed) % (s->tile->height - 300);
@@ -361,6 +353,8 @@ void * vidcap_testcard2_thread(void *arg)
         gettimeofday(&s->last_audio_time, NULL);
         
 #ifdef HAVE_LIBSDL_TTF
+        SDL_Surface *text;
+        SDL_Color col = { 0, 0, 0, 0 };
         TTF_Font * font;
         
         if(TTF_Init() == -1)
@@ -392,8 +386,8 @@ void * vidcap_testcard2_thread(void *arg)
                 r.y = prev_y1 + (down1 ? 1 : -1) * 4;
                 if(r.x < 0) right1 = 1;
                 if(r.y < 0) down1 = 1;
-                if(r.x + r.w > s->tile->width) right1 = 0;
-                if(r.y + r.h > s->tile->height) down1 = 0;
+                if((unsigned int) r.x + r.w > s->tile->width) right1 = 0;
+                if((unsigned int) r.y + r.h > s->tile->height) down1 = 0;
                 prev_x1 = r.x;
                 prev_y1 = r.y;
                 
@@ -405,8 +399,8 @@ void * vidcap_testcard2_thread(void *arg)
                 r.y = prev_y2 + (down2 ? 1 : -1) * 9;
                 if(r.x < 0) right2 = 1;
                 if(r.y < 0) down2 = 1;
-                if(r.x + r.w > s->tile->width) right2 = 0;
-                if(r.y + r.h > s->tile->height) down2 = 0;
+                if((unsigned int) r.x + r.w > s->tile->width) right2 = 0;
+                if((unsigned int) r.y + r.h > s->tile->height) down2 = 0;
                 prev_x2 = r.x;
                 prev_y2 = r.y;
                 
@@ -418,10 +412,9 @@ void * vidcap_testcard2_thread(void *arg)
                 r.y = s->tile->height - r.h - 30;
                 SDL_FillRect(copy, &r, 0xffffffff);
                 
+#ifdef HAVE_LIBSDL_TTF                
                 char frames[20];
                 double since_start = tv_diff(next_frame_time, s->start_time);
-
-#ifdef HAVE_LIBSDL_TTF                
                 snprintf(frames, 20, "%02d:%02d:%02d %3d", (int) since_start / 3600 ,
                                 (int) since_start / 60 % 60,
                                 (int) since_start % 60,
@@ -490,12 +483,14 @@ next_frame:
                 double seconds = tv_diff(curr_time, s->t0);
                 if (seconds >= 5) {
                         float fps = (s->count - stat_count_prev) / seconds;
-                        fprintf(stderr, "%d frames in %g seconds = %g FPS\n",
+                        fprintf(stderr, "[testcard2] %d frames in %g seconds = %g FPS\n",
                                 (s->count - stat_count_prev), seconds, fps);
                         s->t0 = curr_time;
                         stat_count_prev = s->count;
                 }
         }
+
+        return NULL;
 }
 
 static void grab_audio(struct testcard_state2 *s)

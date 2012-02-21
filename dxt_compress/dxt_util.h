@@ -27,8 +27,20 @@
 #ifndef DXT_UTIL_H
 #define DXT_UTIL_H
 
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
+#if defined HAVE_CONFIG_H && defined HAVE_MACOSX
+#include <OpenGL/gl.h>
+#include <OpenGL/glext.h>
+#include <GLUT/glut.h>
+#else /* HAVE_MACOSX */
 #include <GL/glew.h>
+#include <GL/gl.h>
+#include <GL/glext.h>
+#include <GL/glut.h>
+#endif /* HAVE_MACOSX */
+
 #include <string.h>
 #ifdef HAVE_GLUT
 #include <GL/glut.h>
@@ -46,7 +58,7 @@ glutMainLoopEvent(void);
  * @param type  Shader type
  * @return shader handle if succeeds, otherwise zero
  */
-GLhandleARB
+GLuint
 dxt_shader_create_from_source(const char* source, GLenum type);
 
 /**

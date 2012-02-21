@@ -61,7 +61,7 @@ struct video_frame * vf_alloc(int count)
         
         buf = (struct video_frame *) calloc(1, sizeof(struct video_frame));
         
-        buf->tiles = (struct tiles *) 
+        buf->tiles = (struct tile *) 
                         calloc(1, sizeof(struct tile) * count);
         buf->tile_count = count;
 
@@ -78,7 +78,7 @@ void vf_free(struct video_frame *buf)
 
 struct tile * vf_get_tile(struct video_frame *buf, int pos)
 {
-        assert (pos < buf->tile_count);
+        assert ((unsigned int) pos < buf->tile_count);
 
         return &buf->tiles[pos];
 }
@@ -95,7 +95,7 @@ int video_desc_eq(struct video_desc a, struct video_desc b)
 
 int get_video_mode_tiles_x(int video_type)
 {
-        int ret;
+        int ret = 0;
         switch(video_type) {
                 case VIDEO_NORMAL:
                 case VIDEO_DUAL:
@@ -111,7 +111,7 @@ int get_video_mode_tiles_x(int video_type)
 
 int get_video_mode_tiles_y(int video_type)
 {
-        int ret;
+        int ret = 0;
         switch(video_type) {
                 case VIDEO_NORMAL:
                 case VIDEO_STEREO:
@@ -139,6 +139,8 @@ const char *get_interlacing_description(enum interlacing_t interlacing)
                 case SEGMENTED_FRAME:
                         return "progressive segmented";
         }
+
+        return NULL;
 }
 
 const char *get_video_mode_description(int video_mode)
@@ -156,6 +158,7 @@ const char *get_video_mode_description(int video_mode)
         return NULL;
 }
 
+/* TODO: rewrite following 2 functions in more efficient way */
 void il_upper_to_merged(char *dst, char *src, int linesize, int height)
 {
         int y;
@@ -164,14 +167,14 @@ void il_upper_to_merged(char *dst, char *src, int linesize, int height)
 
         line1 = tmp;
         line2 = src;
-        for(y = 0; y < height / 2; y ++) {
+        for(y = 0; y < (height + 1) / 2; y ++) {
                 memcpy(line1, line2, linesize);
                 line1 += linesize * 2;
                 line2 += linesize;
         }
 
         line1 = tmp + linesize;
-        line2 = src + linesize * height / 2;
+        line2 = src + linesize * ((height + 1) / 2);
         for(y = 0; y < height / 2; y ++) {
                 memcpy(line1, line2, linesize);
                 line1 += linesize * 2;
@@ -189,13 +192,13 @@ void il_merged_to_upper(char *dst, char *src, int linesize, int height)
 
         line1 = tmp;
         line2 = src;
-        for(y = 0; y < height / 2; y ++) {
+        for(y = 0; y < (height + 1) / 2; y ++) {
                 memcpy(line1, line2, linesize);
                 line1 += linesize;
                 line2 += linesize * 2;
         }
 
-        line1 = tmp + linesize * height / 2;
+        line1 = tmp + linesize * ((height + 1) / 2);
         line2 = src + linesize;
         for(y = 0; y < height / 2; y ++) {
                 memcpy(line1, line2, linesize);

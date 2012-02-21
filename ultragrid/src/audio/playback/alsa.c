@@ -54,7 +54,11 @@
  * - used format SND_PCM_FORMAT_S24_LE
  * - used "default" device for arbitrary number of channels
  */
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#include "config_unix.h"
+#endif
+#include "debug.h"
 #ifdef HAVE_ALSA
 #include "audio/audio.h"
 #include <alsa/asoundlib.h>
@@ -67,10 +71,7 @@ struct state_alsa_playback {
         struct audio_frame frame;
 };
 
-static void alsa_reconfigure_audio(void *state, int quant_samples, int channels,
-                                int sample_rate);
-
-static void alsa_reconfigure_audio(void *state, int quant_samples, int channels,
+int audio_play_alsa_reconfigure(void *state, int quant_samples, int channels,
                                 int sample_rate)
 {
         struct state_alsa_playback *s = (struct state_alsa_playback *) state;
@@ -112,8 +113,8 @@ static void alsa_reconfigure_audio(void *state, int quant_samples, int channels,
                         format = SND_PCM_FORMAT_S32_LE;
                         break;
                 default:
-                        /* todo - fix correct exiting */
-                        abort();
+                        fprintf(stderr, "[ALSA playback] Unsupported BPS for audio (%d).\n", quant_samples);
+                        return FALSE;
         }
         /* Signed 16-bit little-endian format */
         snd_pcm_hw_params_set_format(s->handle, params,
@@ -138,7 +139,7 @@ static void alsa_reconfigure_audio(void *state, int quant_samples, int channels,
                 fprintf(stderr,
                         "unable to set hw parameters: %s\n",
                         snd_strerror(rc));
-                abort();
+                return FALSE;
         }
 
         free(s->frame.data);
@@ -146,6 +147,8 @@ static void alsa_reconfigure_audio(void *state, int quant_samples, int channels,
         s->frame.max_size = s->frame.bps * s->frame.ch_count * s->frame.sample_rate; // can hold up to 1 sec
         s->frame.data = (char*)malloc(s->frame.max_size);
         assert(s->frame.data != NULL);
+
+        return TRUE;
 }
 
 void audio_play_alsa_help(void)
@@ -156,8 +159,7 @@ void audio_play_alsa_help(void)
         snd_device_name_hint(-1, "pcm", &hints); 
         while(*hints != NULL) {
                 char *tmp = strdup(*(char **) hints);
-                char *save_ptr = NULL,
-                     *item;
+                char *save_ptr = NULL;
                 char *name_part;
                 char *name;
                 char *desc;
@@ -167,14 +169,19 @@ void audio_play_alsa_help(void)
                 name_part = strtok_r(tmp + 4, "|", &save_ptr);
                 desc = strtok_r(NULL, "|", &save_ptr);
                 char *character;
-                while(character = strchr(desc, '\n')) {
+                while((character = strchr(desc, '\n'))) {
                         *character = ' ';
                 }
                 name = strtok_r(name_part, ":", &save_ptr);
                 details = strtok_r(NULL, ":", &save_ptr);
                 if(details) {
-                        char * index = strstr(details, "DEV") + 4;
-                        printf("\talsa:%s:%s : %s\n", name, index, desc + 4);
+                        char * index = strstr(details, "DEV");
+			if(index) {
+                                index += 4;
+				printf("\talsa:%s:%s : %s\n", name, index, desc + 4);
+			} else {
+				printf("\talsa:%s : %s\n", name, desc + 4);
+                        }
                 } else {
                         printf("\talsa:%s : %s\n", name, desc + 4);
                 }
@@ -203,8 +210,6 @@ void * audio_play_alsa_init(char *cfg)
                                     snd_strerror(rc));
                     goto error;
         }
-        s->frame.reconfigure_audio = alsa_reconfigure_audio;
-        s->frame.state = s;
         
         return s;
 
@@ -232,6 +237,7 @@ void audio_play_alsa_put_frame(void *state, struct audio_frame *frame)
                 fprintf(stderr, "underrun occurred\n");
                 snd_pcm_prepare(s->handle);
                 /* duplicate last data into stream */
+                snd_pcm_writei(s->handle, frame->data, frames);
                 snd_pcm_writei(s->handle, frame->data, frames);
         } else if (rc < 0) {
                 fprintf(stderr, "error from writei: %s\n",

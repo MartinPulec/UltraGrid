@@ -1,5 +1,5 @@
 /*
- * FILE:    audio/audio.c
+ * FILE:    audio/playback/coreaudio.c
  * AUTHORS: Martin Benes     <martinbenesh@gmail.com>
  *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
  *          Petr Holub       <hopet@ics.muni.cz>
@@ -56,10 +56,11 @@
 #include "debug.h"
 #include <stdlib.h>
 #include <AudioUnit/AudioUnit.h>
+#include <CoreAudio/AudioHardware.h>
 
 
 struct state_ca_playback {
-#if MACOSX_VERSION_MAJOR <= 9
+#if OS_VERSION_MAJOR <= 9
         ComponentInstance 
 #else
         AudioComponentInstance
@@ -70,8 +71,6 @@ struct state_ca_playback {
         int audio_packet_size;
 };
 
-static void ca_reconfigure_audio(void *state, int quant_samples, int channels,
-                                                int sample_rate);
 static OSStatus theRenderProc(void *inRefCon,
                               AudioUnitRenderActionFlags *inActionFlags,
                               const AudioTimeStamp *inTimeStamp,
@@ -84,6 +83,10 @@ static OSStatus theRenderProc(void *inRefCon,
                               UInt32 inBusNumber, UInt32 inNumFrames,
                               AudioBufferList *ioData)
 {
+        UNUSED(inActionFlags);
+        UNUSED(inTimeStamp);
+        UNUSED(inBusNumber);
+
         struct state_ca_playback * s = (struct state_ca_playback *) inRefCon;
         int write_bytes = inNumFrames * s->audio_packet_size;
         int ret;
@@ -91,14 +94,15 @@ static OSStatus theRenderProc(void *inRefCon,
         ret = ring_buffer_read(s->buffer, ioData->mBuffers[0].mData, write_bytes);
         ioData->mBuffers[0].mDataByteSize = ret;
 
-        if(!write_bytes) {
+        if(!ret) {
                 fprintf(stderr, "[CoreAudio] Audio buffer underflow.\n");
-                //usleep(10 * 1000 * 1000);
+		memset(ioData->mBuffers[0].mData, 0, write_bytes);
+		ioData->mBuffers[0].mDataByteSize = write_bytes;
         }  
         return noErr;
 }
 
-static void ca_reconfigure_audio(void *state, int quant_samples, int channels,
+int audio_play_ca_reconfigure(void *state, int quant_samples, int channels,
                                                 int sample_rate)
 {
         struct state_ca_playback *s = (struct state_ca_playback *)state;
@@ -124,15 +128,24 @@ static void ca_reconfigure_audio(void *state, int quant_samples, int channels,
         s->buffer = ring_buffer_init(s->frame.max_size);
 
         ret = AudioOutputUnitStop(s->auHALComponentInstance);
-        if(ret) goto error;
+        if(ret) {
+                fprintf(stderr, "[CoreAudio playback] Cannot stop AUHAL instance.\n");
+                goto error;
+        }
 
         ret = AudioUnitUninitialize(s->auHALComponentInstance);
-        if(ret) goto error;
+        if(ret) {
+                fprintf(stderr, "[CoreAudio playback] Cannot uninitialize AUHAL instance.\n");
+                goto error;
+        }
 
         size = sizeof(desc);
         ret = AudioUnitGetProperty(s->auHALComponentInstance, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input,
                         0, &desc, &size);
-        if(ret) goto error;
+        if(ret) {
+                fprintf(stderr, "[CoreAudio playback] Cannot get device format from AUHAL instance.\n");
+                goto error;
+        }
         desc.mSampleRate = sample_rate;
         desc.mFormatID = kAudioFormatLinearPCM;
         desc.mChannelsPerFrame = channels;
@@ -143,32 +156,42 @@ static void ca_reconfigure_audio(void *state, int quant_samples, int channels,
         
         ret = AudioUnitSetProperty(s->auHALComponentInstance, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input,
                         0, &desc, sizeof(desc));
-        if(ret) goto error;
+        if(ret) {
+                fprintf(stderr, "[CoreAudio playback] Cannot set device format to AUHAL instance.\n");
+                goto error;
+        }
 
         renderStruct.inputProc = theRenderProc;
         renderStruct.inputProcRefCon = s;
         ret = AudioUnitSetProperty(s->auHALComponentInstance, kAudioUnitProperty_SetRenderCallback,
                         kAudioUnitScope_Input, 0, &renderStruct, sizeof(AURenderCallbackStruct));
-        if(ret) goto error;
+        if(ret) {
+                fprintf(stderr, "[CoreAudio playback] Cannot register audio processing callback.\n");
+                goto error;
+        }
 
         ret = AudioUnitInitialize(s->auHALComponentInstance);
-        if(ret) goto error;
+        if(ret) {
+                fprintf(stderr, "[CoreAudio playback] Cannot initialize AUHAL.\n");
+                goto error;
+        }
 
         ret = AudioOutputUnitStart(s->auHALComponentInstance);
-        if(ret) goto error;
+        if(ret) {
+                fprintf(stderr, "[CoreAudio playback] Cannot start AUHAL.\n");
+                goto error;
+        }
 
-        return;
+        return TRUE;
 
 error:
-        /* TODO: finish gracefully */
-        abort();
+        return FALSE;
 }
 
 
 void audio_play_ca_help(void)
 {
         OSErr ret;
-        AudioDeviceID device;
         AudioDeviceID *dev_ids;
         int dev_items;
         int i;
@@ -188,7 +211,7 @@ void audio_play_ca_help(void)
                 
                 size = sizeof(name);
                 ret = AudioDeviceGetProperty(dev_ids[i], 0, 0, kAudioDevicePropertyDeviceName, &size, name);
-                fprintf(stderr,"\tcoreaudio:%d : %s\n", dev_ids[i], name);
+                fprintf(stderr,"\tcoreaudio:%d : %s\n", (int) dev_ids[i], name);
         }
         free(dev_ids);
 
@@ -202,7 +225,7 @@ void * audio_play_ca_init(char *cfg)
 {
         struct state_ca_playback *s;
         OSErr ret = noErr;
-#if MACOSX_VERSION_MAJOR <= 9
+#if OS_VERSION_MAJOR <= 9
         Component comp;
         ComponentDescription desc;
 #else
@@ -230,7 +253,7 @@ void * audio_play_ca_init(char *cfg)
         desc.componentFlags = 0;
         desc.componentFlagsMask = 0;
 
-#if MACOSX_VERSION_MAJOR <= 9
+#if OS_VERSION_MAJOR <= 9
         comp = FindNextComponent(NULL, &desc);
         if(!comp) goto error;
         ret = OpenAComponent(comp, &s->auHALComponentInstance);
@@ -245,9 +268,6 @@ void * audio_play_ca_init(char *cfg)
         s->frame.data = NULL;
         s->buffer = NULL;
         s->frame.max_size = 0;
-        s->frame.reconfigure_audio = ca_reconfigure_audio;
-        s->frame.state = s;
-
 
         ret = AudioUnitUninitialize(s->auHALComponentInstance);
         if(ret) goto error;

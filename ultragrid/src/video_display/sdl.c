@@ -62,6 +62,7 @@
 
 #ifdef HAVE_MACOSX
 #include <architecture/i386/io.h>
+#include "utils/autorelease_pool.h"
 void NSApplicationLoad();
 #else                           /* HAVE_MACOSX */
 #include <sys/io.h>
@@ -116,6 +117,9 @@ struct state_sdl {
         
         int                     rshift, gshift, bshift;
         int                     pitch;
+#ifdef HAVE_MACOSX
+        void                   *autorelease_pool;
+#endif
 };
 
 static void toggleFullscreen(struct state_sdl *s);
@@ -129,8 +133,8 @@ void deinterlace(struct state_sdl *s, unsigned char *buffer);
 static void show_help(void);
 void cleanup_screen(struct state_sdl *s);
 static void configure_audio(struct state_sdl *s);
-void display_sdl_reconfigure_audio(void *state, int quant_samples, int channels,
-                int sample_rate);
+int display_sdl_handle_events(void *arg, int post);
+void sdl_audio_callback(void *userdata, Uint8 *stream, int len);
                 
 /** 
  * Load splashscreen
@@ -266,6 +270,8 @@ static void toggleFullscreen(struct state_sdl *s) {
 	/* and post for reconfiguration */
         if(!s->rgb)
                 s->toggle_fullscreen = TRUE;
+#else
+        UNUSED(s);
 #endif
 }
 
@@ -385,7 +391,7 @@ void display_sdl_run(void *arg)
 		double seconds = tv_diff(tv, s->tv);
 		if (seconds > 5) {
 			double fps = s->frames / seconds;
-			fprintf(stdout, "%d frames in %g seconds = %g FPS\n",
+			fprintf(stdout, "[SDL] %d frames in %g seconds = %g FPS\n",
 				s->frames, seconds, fps);
 			s->tv = tv;
 			s->frames = 0;
@@ -417,7 +423,7 @@ void cleanup_screen(struct state_sdl *s)
         }
 }
 
-void display_sdl_reconfigure(void *state, struct video_desc desc)
+int display_sdl_reconfigure(void *state, struct video_desc desc)
 {
 	struct state_sdl *s = (struct state_sdl *)state;
 
@@ -468,8 +474,7 @@ void display_sdl_reconfigure(void *state, struct video_desc desc)
 	if (s->sdl_screen == NULL) {
 		fprintf(stderr, "Error setting video mode %dx%d!\n", x_res_x,
 			x_res_y);
-		free(s);
-		exit(128);
+                return FALSE;
 	}
 	SDL_WM_SetCaption("Ultragrid - SDL Display", "Ultragrid");
 
@@ -484,8 +489,7 @@ void display_sdl_reconfigure(void *state, struct video_desc desc)
 						 s->sdl_screen);
                 if (s->yuv_image == NULL) {
                         printf("SDL_overlay initialization failed.\n");
-                        free(s);
-                        exit(127);
+                        return FALSE;
                 }
 #ifndef HAVE_MACOSX
                 SDL_LockYUVOverlay(s->yuv_image);
@@ -550,6 +554,8 @@ void display_sdl_reconfigure(void *state, struct video_desc desc)
         s->rshift = s->sdl_screen->format->Rshift;
         s->gshift = s->sdl_screen->format->Gshift;
         s->bshift = s->sdl_screen->format->Bshift;
+
+        return TRUE;
 }
 
 void *display_sdl_init(char *fmt, unsigned int flags)
@@ -598,6 +604,7 @@ void *display_sdl_init(char *fmt, unsigned int flags)
          * Whatever the fuck that means. 
          * Avoids uncaught exception (1002)  when creating CGSWindow */
         NSApplicationLoad();
+        s->autorelease_pool = autorelease_pool_allocate();
 #endif
 
         s->yuv_image = NULL;
@@ -636,7 +643,12 @@ void *display_sdl_init(char *fmt, unsigned int flags)
 #endif
 
         struct video_desc desc = {500, 500, RGBA, 30.0, PROGRESSIVE, 1};
-        display_sdl_reconfigure(s, desc);
+        ret = display_sdl_reconfigure(s, desc);
+
+        if(!ret) {
+                free(s);
+                return NULL;
+        }
         loadSplashscreen(s);	
 
 
@@ -656,6 +668,11 @@ void *display_sdl_init(char *fmt, unsigned int flags)
         return (void *)s;
 }
 
+void display_sdl_finish(void *state)
+{
+        UNUSED(state);
+}
+
 void display_sdl_done(void *state)
 {
         struct state_sdl *s = (struct state_sdl *)state;
@@ -670,7 +687,10 @@ void display_sdl_done(void *state)
         SDL_ShowCursor(SDL_ENABLE);
 
         SDL_Quit();
-
+#ifdef HAVE_MACOSX
+        autorelease_pool_destroy(s->autorelease_pool);
+#endif
+        free(s);
 }
 
 struct video_frame *display_sdl_getf(void *state)
@@ -679,9 +699,13 @@ struct video_frame *display_sdl_getf(void *state)
         assert(s->magic == MAGIC_SDL);
 
         if(s->toggle_fullscreen) {
+                int ret;
                 struct video_desc desc = {s->tile->width, s->tile->height, s->frame->color_spec, s->frame->fps, s->frame->interlacing, 1};
-                display_sdl_reconfigure(s, desc);
+                ret = display_sdl_reconfigure(s, desc);
                 s->toggle_fullscreen = FALSE;
+                if(!ret) {
+                        return NULL;
+                }
         }
 
         return s->frame;
@@ -693,7 +717,7 @@ int display_sdl_putf(void *state, char *frame)
         struct state_sdl *s = (struct state_sdl *)state;
 
         assert(s->magic == MAGIC_SDL);
-        assert(frame != NULL);
+        UNUSED(frame);
 
         SDL_mutexP(s->buffer_writable_lock);
         s->buffer_writable = 0;
@@ -761,7 +785,7 @@ int display_sdl_get_property(void *state, int property, void *val, size_t *len)
 
 void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
         struct state_sdl *s = (struct state_sdl *)userdata;
-        if (ring_buffer_read(s->audio_buffer, stream, len) != len)
+        if (ring_buffer_read(s->audio_buffer, (char *) stream, len) != len)
         {
                 fprintf(stderr, "[SDL] audio buffer underflow!!!\n");
                 usleep(500);
@@ -771,8 +795,6 @@ void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
 static void configure_audio(struct state_sdl *s)
 {
         s->audio_frame.data = NULL;
-        s->audio_frame.reconfigure_audio = display_sdl_reconfigure_audio;
-        s->audio_frame.state = s;
         
         SDL_Init(SDL_INIT_AUDIO);
         
@@ -785,7 +807,7 @@ static void configure_audio(struct state_sdl *s)
         s->audio_buffer = ring_buffer_init(1<<20);
 }
 
-void display_sdl_reconfigure_audio(void *state, int quant_samples, int channels,
+int display_sdl_reconfigure_audio(void *state, int quant_samples, int channels,
                 int sample_rate) {
         struct state_sdl *s = (struct state_sdl *)state;
         SDL_AudioSpec desired, obtained;
@@ -810,13 +832,15 @@ void display_sdl_reconfigure_audio(void *state, int quant_samples, int channels,
                 case 8:
                         sample_type = AUDIO_S8;
                         break;
-                default:
+                case 16:
                         sample_type = AUDIO_S16LSB;
                         break;
                 /* TO enable in sdl 1.3
                  * case 32:
                         sample_type = AUDIO_S32;
                         break; */
+                default:
+                        return FALSE;
         }
         
         desired.freq=sample_rate;
@@ -844,11 +868,12 @@ void display_sdl_reconfigure_audio(void *state, int quant_samples, int channels,
         /* Start playing */
         SDL_PauseAudio(0);
 
-        return;
+        return TRUE;
 error:
         s->play_audio = FALSE;
         s->audio_frame.max_size = 0;
         s->audio_frame.data = NULL;
+        return FALSE;
 }
 
 
@@ -860,7 +885,7 @@ struct audio_frame * display_sdl_get_audio_frame(void *state) {
                 return NULL;
 }
 
-void display_sdl_put_audio_frame(void *state, const struct audio_frame *frame) {
+void display_sdl_put_audio_frame(void *state, struct audio_frame *frame) {
         struct state_sdl *s = (struct state_sdl *)state;
         char *tmp;
 

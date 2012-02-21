@@ -105,10 +105,13 @@ struct testcard_state {
         struct audio_frame audio;
         char **tiles_data;
         int tiles_cnt_horizontal;
+        int tiles_cnt_vertical;
         
         char *audio_data;
         volatile int audio_start, audio_end;
         unsigned int grab_audio:1;
+
+        unsigned int still_image;
 };
 
 const int rect_colors[] = {
@@ -298,14 +301,15 @@ void toR10k(unsigned char *in, unsigned int width, unsigned int height)
 
 char *toRGB(unsigned char *in, unsigned int width, unsigned int height)
 {
-        int i;
-        char *ret = malloc(width * height * 3);
+        unsigned int i;
+        unsigned char *ret = malloc(width * height * 3);
         for(i = 0; i < height; ++i) {
                 vc_copylineRGBAtoRGB(ret + i * width * 3, in + i * width * 4, width * 3);
         }
-        return ret;
+        return (char *) ret;
 }
 
+#if defined HAVE_LIBSDL_MIXER && ! defined HAVE_MACOSX
 static void grab_audio(int chan, void *stream, int len, void *udata)
 {
         UNUSED(chan);
@@ -323,6 +327,7 @@ static void grab_audio(int chan, void *stream, int len, void *udata)
         /* just hack - Mix_Volume doesn't mute correctly the audio */
         memset(stream, 0, len);
 }
+#endif
 
 static int configure_audio(struct testcard_state *s)
 {
@@ -400,7 +405,8 @@ static int configure_tiling(struct testcard_state *s, const char *fmt)
         free(tmp);
         
         s->tiled = vf_alloc(grid_w * grid_h);
-        s->tiles_cnt_horizontal = grid_h;
+        s->tiles_cnt_horizontal = grid_w;
+        s->tiles_cnt_vertical = grid_h;
         s->tiled->color_spec = s->frame->color_spec;
         s->tiled->fps = s->frame->fps;
         s->tiled->interlacing = s->frame->interlacing;
@@ -465,9 +471,11 @@ void *vidcap_testcard_init(char *fmt, unsigned int flags)
 
         if (fmt == NULL || strcmp(fmt, "help") == 0) {
                 printf("testcard options:\n");
-                printf("\t-t testcard:<width>:<height>:<fps>:<codec>[:<filename>][:p][:s=<X>x<Y>]\n");
+                printf("\t-t testcard:<width>:<height>:<fps>:<codec>[:<filename>][:p][:s=<X>x<Y>][:i|:sf]:still\n");
                 printf("\tp - pan with frame\n");
                 printf("\ts - split the frames into XxY separate tiles\n");
+                printf("\ti|sf - send as interlaced or segmented frame (if none of those is set, progressive is assumed)\n");
+                printf("\tstill - send still image\n");
                 show_codec_help("testcard");
                 return NULL;
         }
@@ -523,6 +531,7 @@ void *vidcap_testcard_init(char *fmt, unsigned int flags)
         }
 
         s->frame->color_spec = codec;
+        s->still_image = FALSE;
 
         if(bpp == 0) {
                 fprintf(stderr, "Unknown codec '%s'\n", tmp);
@@ -542,8 +551,10 @@ void *vidcap_testcard_init(char *fmt, unsigned int flags)
 
         filename = strtok(NULL, ":");
         if (filename && strcmp(filename, "p") != 0
-                        && strncmp(filename, "s=", 2ul) != 0) {
-                s->data = malloc(s->size * 2);
+                        && strncmp(filename, "s=", 2ul) != 0
+                        && strcmp(filename, "i") != 0
+                        && strcmp(filename, "sf") != 0) {
+                s->data = malloc(s->size * bpp * 2);
                 if (stat(filename, &sb)) {
                         perror("stat");
                         free(s);
@@ -569,19 +580,16 @@ void *vidcap_testcard_init(char *fmt, unsigned int flags)
                 }
 
                 fclose(in);
+                tmp = strtok(NULL, ":");
+
+                memcpy(s->data + s->size, s->data, s->size);
+                vf_get_tile(s->frame, 0)->data = s->data;
         } else {
                 struct testcard_rect r;
                 int col_num = 0;
                 s->pixmap.w = aligned_x;
                 s->pixmap.h = vf_get_tile(s->frame, 0)->height * 2;
                 s->pixmap.data = malloc(s->pixmap.w * s->pixmap.h * sizeof(int));
-
-                if (filename) {
-                        if(filename[0] == 'p')
-                                s->pan = 48;
-                        else if(filename[0] == 's')
-                                strip_fmt = filename;
-                }
 
                 for (j = 0; j < vf_get_tile(s->frame, 0)->height; j += rect_size) {
                         int grey = 0xff010101;
@@ -639,33 +647,35 @@ void *vidcap_testcard_init(char *fmt, unsigned int flags)
                         toRGB((unsigned char *) s->data, vf_get_tile(s->frame, 0)->width,
                                            vf_get_tile(s->frame, 0)->height);
                 }
+                tmp = filename;
+
+                vf_get_tile(s->frame, 0)->data = malloc(2 * s->size);
+
+                memcpy(vf_get_tile(s->frame, 0)->data, s->data, s->size);
+                memcpy(vf_get_tile(s->frame, 0)->data + s->size, vf_get_tile(s->frame, 0)->data, s->size);
+                if(s->pixmap.data)
+                        free(s->pixmap.data);
+                else
+                        free(vf_get_tile(s->frame, 0)->data);
+
+                s->data = vf_get_tile(s->frame, 0)->data;
         }
 
-        vf_get_tile(s->frame, 0)->data = malloc(2 * s->size);
-
-        memcpy(vf_get_tile(s->frame, 0)->data, s->data, s->size);
-        memcpy(vf_get_tile(s->frame, 0)->data + s->size, vf_get_tile(s->frame, 0)->data, s->size);
-        if(s->pixmap.data)
-                free(s->pixmap.data);
-        else
-                free(vf_get_tile(s->frame, 0)->data);
-
-        s->data = vf_get_tile(s->frame, 0)->data;
-
-        tmp = strtok(NULL, ":");
-        if (tmp) {
-                if (tmp[0] == 'p') {
+        while (tmp) {
+                if (strcmp(tmp, "p") == 0) {
                         s->pan = 48;
-                } else if (tmp[0] == 's') {
+                } else if (strncmp(tmp, "s=", 2) == 0) {
                         strip_fmt = tmp;
+                } else if (strcmp(tmp, "i") == 0) {
+                        s->frame->interlacing = INTERLACED_MERGED;
+                } else if (strcmp(tmp, "sf") == 0) {
+                        s->frame->interlacing = SEGMENTED_FRAME;
+                } else if (strcmp(tmp, "still") == 0) {
+                        s->still_image = TRUE;
                 }
+                tmp = strtok(NULL, ":");
         }
-        tmp = strtok(NULL, ":");
-        if (tmp) {
-                if (tmp[0] == 's') {
-                        strip_fmt = tmp;
-                }
-        }
+
 
         s->count = 0;
         gettimeofday(&(s->last_frame_time), NULL);
@@ -694,23 +704,26 @@ void *vidcap_testcard_init(char *fmt, unsigned int flags)
         return s;
 }
 
+void vidcap_testcard_finish(void *state)
+{
+        UNUSED(state);
+}
+
 void vidcap_testcard_done(void *state)
 {
         struct testcard_state *s = state;
-#if 0
         free(s->data);
-        if (tile_get(s->frame, 0, 0)->aux & AUX_TILED) {
+        if (s->tiled) {
                 int i;
-                for (i = 0; i < s->frame.grid_width; ++i) {
+                for (i = 0; i < s->tiles_cnt_horizontal; ++i) {
                         free(s->tiles_data[i]);
                 }
-                free(s->tiles);
+                vf_free(s->tiled);
         }
         if(s->audio_data) {
                 free(s->audio_data);
         }
         free(s);
-#endif
 }
 
 struct video_frame *vidcap_testcard_grab(void *arg, struct audio_frame **audio)
@@ -729,7 +742,7 @@ struct video_frame *vidcap_testcard_grab(void *arg, struct audio_frame **audio)
                 double seconds = tv_diff(curr_time, state->t0);
                 if (seconds >= 5) {
                         float fps = state->count / seconds;
-                        fprintf(stderr, "%d frames in %g seconds = %g FPS\n",
+                        fprintf(stderr, "[testcard] %d frames in %g seconds = %g FPS\n",
                                 state->count, seconds, fps);
                         state->t0 = curr_time;
                         state->count = 0;
@@ -757,8 +770,9 @@ struct video_frame *vidcap_testcard_grab(void *arg, struct audio_frame **audio)
                         *audio = NULL;
                 }
 
-                
-                vf_get_tile(state->frame, 0)->data += vf_get_tile(state->frame, 0)->linesize;
+                if(!state->still_image) {
+                        vf_get_tile(state->frame, 0)->data += vf_get_tile(state->frame, 0)->linesize;
+                }
                 if(vf_get_tile(state->frame, 0)->data > state->data + state->size)
                         vf_get_tile(state->frame, 0)->data = state->data;
 
@@ -799,7 +813,7 @@ struct video_frame *vidcap_testcard_grab(void *arg, struct audio_frame **audio)
                                  * keep in mind that we have two "pictures" for
                                  * every tile stored sequentially */
                                 if(state->tiled->tiles[i].data >= state->tiles_data[i] +
-                                                state->tiled->tiles[i].data_len * state->tiles_cnt_horizontal) {
+                                                state->tiled->tiles[i].data_len * state->tiles_cnt_vertical) {
                                         state->tiled->tiles[i].data = state->tiles_data[i];
                                 }
                         }
@@ -823,3 +837,5 @@ struct vidcap_type *vidcap_testcard_probe(void)
         }
         return vt;
 }
+
+/* vim: set expandtab: sw=8 */

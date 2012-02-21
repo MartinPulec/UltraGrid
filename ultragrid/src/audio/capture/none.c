@@ -1,5 +1,5 @@
 /*
- * FILE:    audio/audio.c
+ * FILE:    audio/capture/none.h
  * AUTHORS: Martin Benes     <martinbenesh@gmail.com>
  *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
  *          Petr Holub       <hopet@ics.muni.cz>
@@ -47,8 +47,19 @@
  */
 
 #include "audio/capture/none.h" 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#endif
 #include "debug.h"
+#include <assert.h>
 #include <stdlib.h>
+
+#define AUDIO_CAPTURE_NONE_MAGIC 0x43fb99ccu
+
+struct state_audio_capture_none {
+        uint32_t magic;
+};
 
 void audio_cap_none_help(void)
 {
@@ -56,8 +67,13 @@ void audio_cap_none_help(void)
 
 void * audio_cap_none_init(char *cfg)
 {
+        struct state_audio_capture_none *s;
+
+        s = (struct state_audio_capture_none *) malloc(sizeof(struct state_audio_capture_none));
+        s->magic = AUDIO_CAPTURE_NONE_MAGIC;
+        assert(s != 0);
         UNUSED(cfg);
-        return NULL;
+        return s;
 }
 
 struct audio_frame *audio_cap_none_read(void *state)
@@ -73,6 +89,9 @@ void audio_cap_none_finish(void *state)
 
 void audio_cap_none_done(void *state)
 {
-        UNUSED(state);
+        struct state_audio_capture_none *s = (struct state_audio_capture_none *) state;
+
+        assert(s->magic == AUDIO_CAPTURE_NONE_MAGIC);
+        free(s);
 }
 

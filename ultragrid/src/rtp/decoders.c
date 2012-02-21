@@ -43,6 +43,7 @@
 #include "config_unix.h"
 #include "config_win32.h"
 #include "debug.h"
+#include "host.h"
 #include "perf.h"
 #include "rtp/xor.h"
 #include "rtp/rtp.h"
@@ -87,7 +88,7 @@ struct state_decoder {
         /* requested values */
         int               requested_pitch;
         int               rshift, gshift, bshift;
-        int               max_substreams;
+        unsigned int      max_substreams;
         
         struct display   *display;
         codec_t          *native_codecs;
@@ -101,9 +102,8 @@ struct state_decoder {
         struct {
                 struct line_decoder *line_decoder;
                 struct {                           /* OR - it is not union for easier freeing*/
-                        const struct decode_from_to *ext_decoder_funcs;
-                        int *total_bytes;
-                        void *ext_decoder_state;
+                        struct state_decompress *ext_decoder;
+                        unsigned int *total_bytes;
                         char **ext_recv_buffer;
                 };
         };
@@ -113,6 +113,7 @@ struct state_decoder {
         struct {
                 struct vo_postprocess_state *postprocess;
                 struct video_frame *pp_frame;
+                int pp_output_frames_count;
         };
 
         unsigned int      video_mode;
@@ -137,6 +138,7 @@ struct state_decoder *decoder_init(char *requested_mode, char *postprocess)
                         printf("Video mode options\n\n");
                         printf("-M {tiled-4K | 3D | dual-link }\n");
                         free(s);
+                        exit_uv(129);
                         return NULL;
                 } else if(strcasecmp(requested_mode, "tiled-4K") == 0) {
                         s->video_mode = VIDEO_4K;
@@ -147,6 +149,7 @@ struct state_decoder *decoder_init(char *requested_mode, char *postprocess)
                 } else {
                         fprintf(stderr, "[decoder] Unknown video mode (see -M help)\n");
                         free(s);
+                        exit_uv(129);
                         return NULL;
                 }
         }
@@ -155,9 +158,14 @@ struct state_decoder *decoder_init(char *requested_mode, char *postprocess)
 
         if(postprocess) {
                 s->postprocess = vo_postprocess_init(postprocess);
+                if(strcmp(postprocess, "help") == 0) {
+                        exit_uv(0);
+                        return NULL;
+                }
                 if(!s->postprocess) {
                         fprintf(stderr, "Initializing postprocessor \"%s\" failed.\n", postprocess);
                         free(s);
+                        exit_uv(129);
                         return NULL;
                 }
         }
@@ -177,7 +185,7 @@ void decoder_register_video_display(struct state_decoder *decoder, struct displa
         ret = display_get_property(decoder->display, DISPLAY_PROPERTY_CODECS, decoder->native_codecs, &decoder->native_count);
         decoder->native_count /= sizeof(codec_t);
         if(!ret) {
-                fprintf(stderr, "Failed to query codecs from video display.");
+                fprintf(stderr, "Failed to query codecs from video display.\n");
                 exit_uv(129);
                 return;
         }
@@ -207,9 +215,9 @@ void decoder_destroy(struct state_decoder *decoder)
         if(!decoder)
                 return;
 
-        if(decoder->ext_decoder_funcs) {
-                decoder->ext_decoder_funcs->done(decoder->ext_decoder_state);
-                decoder->ext_decoder_funcs = NULL;
+        if(decoder->ext_decoder) {
+                decompress_done(decoder->ext_decoder);
+                decoder->ext_decoder = NULL;
         }
         if(decoder->ext_recv_buffer) {
                 char **buf = decoder->ext_recv_buffer;
@@ -233,7 +241,7 @@ void decoder_destroy(struct state_decoder *decoder)
 static codec_t choose_codec_and_decoder(struct state_decoder * const decoder, struct video_desc desc,
                                 codec_t *in_codec, decoder_t *decode_line)
 {
-        codec_t out_codec;
+        codec_t out_codec = (codec_t) -1;
         *decode_line = NULL;
         *in_codec = desc.color_spec;
         
@@ -296,12 +304,17 @@ after_linedecoder_lookup:
                         if(out_codec == DVS8 || out_codec == Vuy2)
                                 out_codec = UYVY;
                                 
-                        for(trans = 0; decoders[trans].init != NULL;
+                        for(trans = 0; trans < decoders_for_codec_count;
                                         ++trans) {
-                                if(*in_codec == decoders[trans].from &&
-                                                out_codec == decoders[trans].to) {
+                                if(*in_codec == decoders_for_codec[trans].from &&
+                                                out_codec == decoders_for_codec[trans].to) {
+                                        decoder->ext_decoder = decompress_init(decoders_for_codec[trans].decompress_index);
+                                        if(!decoder->ext_decoder) {
+                                                debug_msg("Decompressor with magic %x was not found.\n");
+                                                continue;
+                                        }
                                         decoder->decoder_type = EXTERNAL_DECODER;
-                                        decoder->ext_decoder_funcs = &decoders[trans];
+
                                         goto after_decoder_lookup;
                                 }
                         }
@@ -310,7 +323,7 @@ after_linedecoder_lookup:
 after_decoder_lookup:
 
         if(decoder->decoder_type == UNSET) {
-                fprintf(stderr, "Unable to find decoder for input codec!!!");
+                fprintf(stderr, "Unable to find decoder for input codec!!!\n");
                 exit_uv(128);
                 return (codec_t) -1;
         }
@@ -346,6 +359,8 @@ static change_il_t select_il_func(enum interlacing_t in_il, enum interlacing_t *
                         }
                 }
         }
+
+        return NULL;
 }
 
 struct video_frame * reconfigure_decoder(struct state_decoder * const decoder, struct video_desc desc,
@@ -353,20 +368,19 @@ struct video_frame * reconfigure_decoder(struct state_decoder * const decoder, s
 {
         codec_t out_codec, in_codec;
         decoder_t decode_line;
-        enum interlacing_t display_il;
+        enum interlacing_t display_il = 0;
         struct video_frame *frame;
         int render_mode;
-        int i;
-        
+
         assert(decoder != NULL);
         assert(decoder->native_codecs != NULL);
         
         free(decoder->line_decoder);
         decoder->line_decoder = NULL;
         decoder->decoder_type = UNSET;
-        if(decoder->ext_decoder_funcs) {
-                decoder->ext_decoder_funcs->done(decoder->ext_decoder_state);
-                decoder->ext_decoder_funcs = NULL;
+        if(decoder->ext_decoder) {
+                decompress_done(decoder->ext_decoder);
+                decoder->ext_decoder = NULL;
         }
         if(decoder->ext_recv_buffer) {
                 char **buf = decoder->ext_recv_buffer;
@@ -390,8 +404,9 @@ struct video_frame * reconfigure_decoder(struct state_decoder * const decoder, s
         if(decoder->postprocess) {
                 struct video_desc pp_desc = desc;
                 pp_desc.color_spec = out_codec;
-                decoder->pp_frame = vo_postprocess_reconfigure(decoder->postprocess, pp_desc);
-                vo_postprocess_get_out_desc(decoder->postprocess, &display_desc, &render_mode);
+                vo_postprocess_reconfigure(decoder->postprocess, pp_desc);
+                decoder->pp_frame = vo_postprocess_getf(decoder->postprocess);
+                vo_postprocess_get_out_desc(decoder->postprocess, &display_desc, &render_mode, &decoder->pp_output_frames_count);
         }
         
         if(!is_codec_opaque(out_codec)) {
@@ -426,13 +441,19 @@ struct video_frame * reconfigure_decoder(struct state_decoder * const decoder, s
 
         if(!video_desc_eq(decoder->display_desc, display_desc))
         {
+                int ret;
                 /*
                  * TODO: put frame should be definitely here. On the other hand, we cannot be sure
                  * that vo driver is initialized so far:(
                  */
                 //display_put_frame(decoder->display, frame);
                 /* reconfigure VO and give it opportunity to pass us pitch */        
-                display_reconfigure(decoder->display, display_desc);
+                ret = display_reconfigure(decoder->display, display_desc);
+                if(!ret) {
+                        fprintf(stderr, "[decoder] Unable to reconfigure display.\n");
+                        exit_uv(128);
+                        return NULL;
+                }
                 frame_display = display_get_frame(decoder->display);
                 decoder->display_desc = display_desc;
         }
@@ -445,23 +466,26 @@ struct video_frame * reconfigure_decoder(struct state_decoder * const decoder, s
         ret = display_get_property(decoder->display, DISPLAY_PROPERTY_RSHIFT,
                         &decoder->rshift, &len);
         if(!ret) {
-                debug_msg("Failed to get properties from video driver.");
+                debug_msg("Failed to get rshift property from video driver.\n");
+                decoder->rshift = 0;
         }
         ret = display_get_property(decoder->display, DISPLAY_PROPERTY_GSHIFT,
                         &decoder->gshift, &len);
         if(!ret) {
-                debug_msg("Failed to get properties from video driver.");
+                debug_msg("Failed to get gshift property from video driver.\n");
+                decoder->gshift = 8;
         }
         ret = display_get_property(decoder->display, DISPLAY_PROPERTY_BSHIFT,
                         &decoder->bshift, &len);
         if(!ret) {
-                debug_msg("Failed to get properties from video driver.");
+                debug_msg("Failed to get bshift property from video driver.\n");
+                decoder->bshift = 16;
         }
         
         ret = display_get_property(decoder->display, DISPLAY_PROPERTY_BUF_PITCH,
                         &decoder->requested_pitch, &len);
         if(!ret) {
-                debug_msg("Failed to get pitch from video driver.");
+                debug_msg("Failed to get pitch from video driver.\n");
                 decoder->requested_pitch = PITCH_DEFAULT;
         }
         
@@ -560,14 +584,13 @@ struct video_frame * reconfigure_decoder(struct state_decoder * const decoder, s
                 int buf_size;
                 int i;
                 
-                decoder->ext_decoder_state = decoder->ext_decoder_funcs->init();
-                buf_size = decoder->ext_decoder_funcs->reconfigure(decoder->ext_decoder_state, desc, 
+                buf_size = decompress_reconfigure(decoder->ext_decoder, desc, 
                                 decoder->rshift, decoder->gshift, decoder->bshift, decoder->pitch , out_codec);
                 if(!buf_size) {
                         return NULL;
                 }
                 decoder->ext_recv_buffer = malloc((src_x_tiles * src_y_tiles + 1) * sizeof(char *));
-                decoder->total_bytes = calloc(1, (src_x_tiles * src_y_tiles) * sizeof(int));
+                decoder->total_bytes = calloc(1, (src_x_tiles * src_y_tiles) * sizeof(unsigned int));
                 for (i = 0; i < src_x_tiles * src_y_tiles; ++i)
                         decoder->ext_recv_buffer[i] = malloc(buf_size);
                 decoder->ext_recv_buffer[i] = NULL;
@@ -590,6 +613,10 @@ struct linked_list {
         struct node *head;
 };
 
+struct linked_list  *ll_create(void);
+void ll_insert(struct linked_list *ll, int val);
+void ll_destroy(struct linked_list *ll);
+unsigned int ll_count (struct linked_list *ll);
 
 struct linked_list  *ll_create()
 {
@@ -637,8 +664,8 @@ void ll_destroy(struct linked_list *ll) {
         free(ll);
 }
 
-int ll_count (struct linked_list *ll) {
-        int ret = 0;
+unsigned int ll_count (struct linked_list *ll) {
+        unsigned int ret = 0u;
         struct node *cur = ll->head;
         while(cur != NULL) {
                 ++ret;
@@ -647,8 +674,12 @@ int ll_count (struct linked_list *ll) {
         return ret;
 }
 
-int decode_frame(struct coded_data *cdata, struct video_frame *frame, struct state_decoder *decoder)
+int decode_frame(struct coded_data *cdata, void *decode_data)
 {
+        struct pbuf_video_data *pbuf_data = (struct pbuf_video_data *) decode_data;
+        struct video_frame *frame = pbuf_data->frame_buffer;
+        struct state_decoder *decoder = pbuf_data->decoder;
+
         int ret = TRUE;
         uint32_t width;
         uint32_t height;
@@ -669,17 +700,14 @@ int decode_frame(struct coded_data *cdata, struct video_frame *frame, struct sta
         int fps_pt, fpsd, fd, fi;
 
         struct xor_session **xors = calloc(10, sizeof(struct xor_session *));
-        uint16_t last_rtp_seq;
+        uint16_t last_rtp_seq = 0;
         struct linked_list *pckt_list = ll_create();
         uint32_t total_packets_sent = 0u;
 
         perf_record(UVP_DECODEFRAME, frame);
 
-        if(!frame)
-                return;
-
         if(decoder->decoder_type == EXTERNAL_DECODER) {
-                memset(decoder->total_bytes, 0, sizeof(int) * 2); 
+                memset(decoder->total_bytes, 0, sizeof(unsigned int) * 2); 
         }
 
         while (cdata != NULL) {
@@ -710,7 +738,7 @@ int decode_frame(struct coded_data *cdata, struct video_frame *frame, struct sta
                                 uint16_t payload_len;
                                 rtp_packet *pckt_old = pckt;
                                 /* try to restore packet */
-                                ret = xor_restore_packet(xor, &hdr, &payload_len);
+                                ret = xor_restore_packet(xor, (char **) &hdr, &payload_len);
                                 /* register current xor packet */
                                 xor_restore_start(xor, pckt_old->data);
                                 /* if we didn't recovered any packet, jump to next */
@@ -728,7 +756,7 @@ int decode_frame(struct coded_data *cdata, struct video_frame *frame, struct sta
                         while (xors[i]) {
                                 if(xors[i]) {
                                         if(last_rtp_seq >= pckt->seq) {
-                                                xor_add_packet(xors[i], hdr, (char *) hdr + sizeof(video_payload_hdr_t), pckt->data_len - sizeof(video_payload_hdr_t));
+                                                xor_add_packet(xors[i], (char *) hdr, (char *) (hdr + sizeof(video_payload_hdr_t)), pckt->data_len - sizeof(video_payload_hdr_t));
                                         } else {
                                                 xor_restore_invalidate(xors[i]);
                                         }
@@ -762,7 +790,7 @@ packet_restored:
                 if(substream >= decoder->max_substreams) {
                         fprintf(stderr, "[decoder] received substream ID %d. Expecting at most %d substreams. Did you set -M option?\n", substream, decoder->max_substreams);
                         exit_uv(1);
-                        return;
+                        return FALSE;
                 }
 
 
@@ -786,9 +814,10 @@ packet_restored:
 
                         frame = reconfigure_decoder(decoder, decoder->received_vid_desc,
                                         frame);
-                        if(!frame) {
-                                return;
-                        }
+                }
+
+                if(!frame) {
+                        return FALSE;
                 }
                 
                 if(!decoder->postprocess) {
@@ -915,13 +944,14 @@ packet_restored:
                                 char *out;
                                 if(decoder->merged_fb) {
                                         tile = vf_get_tile(output, 0);
+                                        // TODO: OK when rendering directly to display FB, otherwise, do not reflect pitch (we use PP)
                                         out = tile->data + y * decoder->pitch * tile_height +
                                                 vc_get_linesize(tile_width, decoder->out_codec) * x;
                                 } else {
                                         tile = vf_get_tile(output, x);
                                         out = tile->data;
                                 }
-                                decoder->ext_decoder_funcs->decompress(decoder->ext_decoder_state,
+                                decompress_frame(decoder->ext_decoder,
                                                 (unsigned char *) out,
                                                 (unsigned char *) decoder->ext_recv_buffer[pos],
                                                 decoder->total_bytes[pos]);
@@ -930,14 +960,26 @@ packet_restored:
         }
         
         if(decoder->postprocess) {
+                int i;
                 vo_postprocess(decoder->postprocess,
                                decoder->pp_frame,
                                frame,
-                               decoder->requested_pitch);
+                               decoder->pitch);
+                for (i = 1; i < decoder->pp_output_frames_count; ++i) {
+                        display_put_frame(decoder->display, (char *) frame);
+                        frame = display_get_frame(decoder->display);
+                        vo_postprocess(decoder->postprocess,
+                                       NULL,
+                                       frame,
+                                       decoder->pitch);
+                }
+
+                /* get new postprocess frame */
+                decoder->pp_frame = vo_postprocess_getf(decoder->postprocess);
         }
 
         if(decoder->change_il) {
-                int i;
+                unsigned int i;
                 for(i = 0; i < frame->tile_count; ++i) {
                         struct tile *tile = vf_get_tile(frame, i);
                         decoder->change_il(tile->data, tile->data, vc_get_linesize(tile->width, decoder->out_codec), tile->height);

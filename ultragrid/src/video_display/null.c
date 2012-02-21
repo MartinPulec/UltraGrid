@@ -74,6 +74,11 @@ void display_null_run(void *arg)
         UNUSED(arg);
 }
 
+void display_null_finish(void *state)
+{
+        UNUSED(state);
+}
+
 void display_null_done(void *state)
 {
         struct state_null *s = (struct state_null *)state;
@@ -81,7 +86,7 @@ void display_null_done(void *state)
         free(s);
 }
 
-char *display_null_getf(void *state)
+struct video_frame *display_null_getf(void *state)
 {
         struct state_null *s = (struct state_null *)state;
         assert(s->magic == MAGIC_NULL);
@@ -119,9 +124,35 @@ int display_null_get_property(void *state, int property, void *val, size_t *len)
         return TRUE;
 }
 
-void display_null_reconfigure(void *state, struct video_desc desc)
+int display_null_reconfigure(void *state, struct video_desc desc)
 {
         UNUSED(desc);
         struct state_null *s = (struct state_null *)state;
         assert(s->magic == MAGIC_NULL);
+
+        return TRUE;
 }
+
+struct audio_frame * display_null_get_audio_frame(void *state)
+{
+        UNUSED(state);
+        return NULL;
+}
+
+void display_null_put_audio_frame(void *state, struct audio_frame *frame)
+{
+        UNUSED(state);
+        UNUSED(frame);
+}
+
+int display_null_reconfigure_audio(void *state, int quant_samples, int channels,
+                int sample_rate)
+{
+        UNUSED(state);
+        UNUSED(quant_samples);
+        UNUSED(channels);
+        UNUSED(sample_rate);
+
+        return FALSE;
+}
+

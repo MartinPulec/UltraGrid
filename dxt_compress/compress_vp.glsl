@@ -1,11 +1,14 @@
-#if GL_compatibility_profile
-    varying out vec4 TEX0;
-#else
-    out vec4 TEX0;
+#if ! GL_legacy
+out vec4 TEX0;
+in vec4 position;
 #endif
 
 void main() {
+#if GL_legacy
     gl_Position = gl_Vertex;
     gl_TexCoord[0] = gl_MultiTexCoord0;
-    TEX0 = gl_TexCoord[0];
+#else
+    gl_Position = position;
+    TEX0 = position * vec4(0.5) + vec4(0.5);
+#endif
 }

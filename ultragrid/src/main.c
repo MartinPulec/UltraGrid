@@ -68,11 +68,11 @@
 #include "video_display.h"
 #include "video_display/sdl.h"
 #include "video_compress.h"
+#include "video_decompress.h"
 #include "pdb.h"
 #include "tv.h"
 #include "transmit.h"
 #include "tfrc.h"
-#include "version.h"
 #include "ihdtv/ihdtv.h"
 #include "compat/platform_semaphore.h"
 #include "audio/audio.h"
@@ -90,6 +90,7 @@
 #define PORT_AUDIO              5006
 
 struct state_uv {
+        int port_number;
         struct rtp **network_devices;
         unsigned int connections_count;
         
@@ -132,6 +133,10 @@ static struct state_uv *uv_state;
 
 void list_video_display_devices(void);
 void list_video_capture_devices(void);
+struct display *initialize_video_display(const char *requested_display,
+                                                char *fmt, unsigned int flags);
+struct vidcap *initialize_video_capture(const char *requested_capture,
+                                               char *fmt, unsigned int flags);
 
 #ifndef WIN32
 static void signal_handler(int signal)
@@ -142,11 +147,15 @@ static void signal_handler(int signal)
 }
 #endif                          /* WIN32 */
 
-void exit_uv(int status) {
+void _exit_uv(int status);
+
+void _exit_uv(int status) {
         exit_status = status;
         wait_to_finish = TRUE;
         should_exit = TRUE;
         if(!threads_joined) {
+                if(uv_state->capture_device)
+                        vidcap_finish(uv_state->capture_device);
                 if(uv_state->display_device)
                         display_finish(uv_state->display_device);
                 if(uv_state->audio)
@@ -155,11 +164,13 @@ void exit_uv(int status) {
         wait_to_finish = FALSE;
 }
 
+void (*exit_uv)(int status) = _exit_uv;
+
 static void usage(void)
 {
         /* TODO -c -p -b are deprecated options */
         printf("\nUsage: uv [-d <display_device>] [-t <capture_device>] [-r <audio_playout>] [-s <audio_caputre>] \n");
-        printf("          [-m <mtu>] [-c] [-i] [-M <video_mode>] [-p <postprocess>] [-f <FEC_options>] address(es)\n\n");
+        printf("          [-m <mtu>] [-c] [-i] [-M <video_mode>] [-p <postprocess>] [-f <FEC_options>] [-P <port>] address(es)\n\n");
         printf
             ("\t-d <display_device>        \tselect display device, use '-d help' to get\n");
         printf("\t                         \tlist of supported devices\n");
@@ -184,6 +195,8 @@ static void usage(void)
         printf("\n");
         printf("\t-f <settings>            \tconfig forward error checking, currently \"XOR:<leap>:<nr_streams>\" or \"mult:<nr>\"\n");
         printf("\n");
+        printf("\t-P <port>                \tbase port number, also 3 subsequent ports can be used (default: %d)\n", PORT_BASE);
+        printf("\n");
         printf("\taddress(es)              \tdestination address\n");
         printf("\n");
         printf("\t                         \tIf comma-separated list of addresses\n");
@@ -206,7 +219,7 @@ void list_video_display_devices()
         display_free_devices();
 }
 
-static struct display *initialize_video_display(const char *requested_display,
+struct display *initialize_video_display(const char *requested_display,
                                                 char *fmt, unsigned int flags)
 {
         struct display *d;
@@ -243,9 +256,6 @@ static struct display *initialize_video_display(const char *requested_display,
         display_free_devices();
 
         d = display_init(id, fmt, flags);
-        if (d != NULL) {
-                frame_buffer = display_get_frame(d);
-        }
         return d;
 }
 
@@ -263,7 +273,7 @@ void list_video_capture_devices()
         vidcap_free_devices();
 }
 
-static struct vidcap *initialize_video_capture(const char *requested_capture,
+struct vidcap *initialize_video_capture(const char *requested_capture,
                                                char *fmt, unsigned int flags)
 {
         struct vidcap_type *vt;
@@ -291,7 +301,7 @@ static struct vidcap *initialize_video_capture(const char *requested_capture,
         return vidcap_init(id, fmt, flags);
 }
 
-static struct rtp **initialize_network(char *addrs, struct pdb *participants)
+static struct rtp **initialize_network(char *addrs, int port_base, struct pdb *participants)
 {
 	struct rtp **devices = NULL;
         double rtcp_bw = 5 * 1024 * 1024;       /* FIXME */
@@ -300,7 +310,7 @@ static struct rtp **initialize_network(char *addrs, struct pdb *participants)
 	char *addr;
 	char *tmp;
 	int required_connections, index;
-        int port = PORT_BASE;
+        int port = port_base;
 
 	tmp = strdup(addrs);
 	if(strtok_r(tmp, ",", &saveptr) == NULL) {
@@ -331,7 +341,13 @@ static struct rtp **initialize_network(char *addrs, struct pdb *participants)
 				TRUE);
 			rtp_set_sdes(devices[index], rtp_my_ssrc(devices[index]),
 				RTCP_SDES_TOOL,
-				ULTRAGRID_VERSION, strlen(ULTRAGRID_VERSION));
+				PACKAGE_STRING, strlen(PACKAGE_STRING));
+#ifdef HAVE_MACOSX
+                        rtp_set_recv_buf(devices[index], 5944320);
+#else
+                        rtp_set_recv_buf(devices[index], 8*1024*1024);
+#endif
+
 			pdb_add(participants, rtp_my_ssrc(devices[index]));
 		}
 		else {
@@ -410,19 +426,21 @@ static void *receiver_thread(void *arg)
         struct pdb_e *cp;
         struct timeval timeout;
         int fr;
-        int i = 0;
         int ret;
         unsigned int tiles_post = 0;
-        struct timeval last_tile_received;
-        struct state_decoder *dec_state;
+        struct timeval last_tile_received = {0, 0};
+        struct pbuf_video_data pbuf_data;
 
-        dec_state = decoder_init(uv->decoder_mode, uv->postprocess);
-        if(!dec_state) {
+
+        initialize_video_decompress();
+        pbuf_data.decoder = decoder_init(uv->decoder_mode, uv->postprocess);
+        if(!pbuf_data.decoder) {
                 fprintf(stderr, "Error initializing decoder ('-M' option).\n");
                 exit_uv(1);
         } else {
-                decoder_register_video_display(dec_state, uv->display_device);
+                decoder_register_video_display(pbuf_data.decoder, uv->display_device);
         }
+        pbuf_data.frame_buffer = frame_buffer;
 
         fr = 1;
 
@@ -437,7 +455,6 @@ static void *receiver_thread(void *arg)
                 /* to match the video capture rate, so the transmitter works.  */
                 if (fr) {
                         gettimeofday(&uv->curr_time, NULL);
-                        frame_begin[i] = uv->curr_time.tv_usec;
                         fr = 0;
                 }
 
@@ -462,8 +479,7 @@ static void *receiver_thread(void *arg)
 
                         /* Decode and render video... */
                         if (pbuf_decode
-                            (cp->playout_buffer, uv->curr_time, frame_buffer,
-                             i, dec_state)) {
+                            (cp->playout_buffer, uv->curr_time, decode_frame, &pbuf_data, TRUE)) {
                                 tiles_post++;
                                 /* we have data from all connections we need */
                                 if(tiles_post == uv->connections_count) 
@@ -472,9 +488,8 @@ static void *receiver_thread(void *arg)
                                         gettimeofday(&uv->curr_time, NULL);
                                         fr = 1;
                                         display_put_frame(uv->display_device,
-                                                          frame_buffer);
-                                        i = (i + 1) % 2;
-                                        frame_buffer =
+                                                          (char *) pbuf_data.frame_buffer);
+                                        pbuf_data.frame_buffer =
                                             display_get_frame(uv->display_device);
                                 }
                                 last_tile_received = uv->curr_time;
@@ -484,22 +499,21 @@ static void *receiver_thread(void *arg)
                 }
                 pdb_iter_done(uv->participants);
 
-                /* TIMEOUT - we won't wait for next tiles */
+                /* dual-link TIMEOUT - we won't wait for next tiles */
                 if(tiles_post > 1 && tv_diff(uv->curr_time, last_tile_received) > 
                                 999999 / 59.94 / uv->connections_count) {
                         tiles_post = 0;
                         gettimeofday(&uv->curr_time, NULL);
                         fr = 1;
                         display_put_frame(uv->display_device,
-                                          frame_buffer->tiles[0].data);
-                        i = (i + 1) % 2;
-                        frame_buffer =
+                                          pbuf_data.frame_buffer->tiles[0].data);
+                        pbuf_data.frame_buffer =
                             display_get_frame(uv->display_device);
                         last_tile_received = uv->curr_time;
                 }
         }
         
-        decoder_destroy(dec_state);
+        decoder_destroy(pbuf_data.decoder);
 
         return 0;
 }
@@ -609,6 +623,7 @@ int main(int argc, char *argv[])
                 {"help", no_argument, 0, 'h'},
                 {"jack", required_argument, 0, 'j'},
                 {"fec", required_argument, 0, 'f'},
+                {"port", required_argument, 0, 'P'},
                 {0, 0, 0, 0}
         };
         int option_index = 0;
@@ -631,12 +646,13 @@ int main(int argc, char *argv[])
         uv->participants = NULL;
         uv->tx = NULL;
         uv->network_devices = NULL;
+        uv->port_number = PORT_BASE;
 
         perf_init();
         perf_record(UVP_INIT, 0);
 
         while ((ch =
-                getopt_long(argc, argv, "d:t:m:r:s:vc:ihj:M:p:f:", getopt_options,
+                getopt_long(argc, argv, "d:t:m:r:s:vc:ihj:M:p:f:P:", getopt_options,
                             &option_index)) != -1) {
                 switch (ch) {
                 case 'd':
@@ -667,7 +683,7 @@ int main(int argc, char *argv[])
                         uv->postprocess = optarg;
                         break;
                 case 'v':
-                        printf("%s\n", ULTRAGRID_VERSION);
+                        printf("%s\n", PACKAGE_STRING);
                         return EXIT_SUCCESS;
                 case 'c':
                         uv->requested_compression = TRUE;
@@ -692,6 +708,9 @@ int main(int argc, char *argv[])
 		case 'h':
 			usage();
 			return 0;
+                case 'P':
+                        uv->port_number = atoi(optarg);
+                        break;
                 case '?':
                         break;
                 default:
@@ -717,7 +736,7 @@ int main(int argc, char *argv[])
                 }
         }
 
-        uv->audio = audio_cfg_init (network_device, audio_send, audio_recv, jack_cfg);
+        uv->audio = audio_cfg_init (network_device, uv->port_number + 2, audio_send, audio_recv, jack_cfg);
         if(!uv->audio)
                 goto cleanup;
 
@@ -726,7 +745,7 @@ int main(int argc, char *argv[])
         if(audio_does_receive_sdi(uv->audio))
                 display_flags |= DISPLAY_FLAG_ENABLE_AUDIO;
 
-        printf("%s\n", ULTRAGRID_VERSION);
+        printf("%s\n", PACKAGE_STRING);
         printf("Display device: %s\n", uv->requested_display);
         printf("Capture device: %s\n", uv->requested_capture);
         printf("MTU           : %d\n", uv->requested_mtu);
@@ -859,7 +878,7 @@ int main(int argc, char *argv[])
 
         } else {
                 if ((uv->network_devices =
-                     initialize_network(network_device, uv->participants)) == NULL) {
+                     initialize_network(network_device, uv->port_number, uv->participants)) == NULL) {
                         printf("Unable to open network\n");
                         exit_status = EXIT_FAIL_NETWORK;
                         goto cleanup;
@@ -921,6 +940,8 @@ int main(int argc, char *argv[])
         if(audio_does_receive_sdi(uv->audio)) {
                 audio_register_get_callback(uv->audio, (struct audio_frame * (*)(void *)) display_get_audio_frame, uv->display_device);
                 audio_register_put_callback(uv->audio, (void (*)(void *, struct audio_frame *)) display_put_audio_frame, uv->display_device);
+                audio_register_reconfigure_callback(uv->audio, (int (*)(void *, int, int, 
+                                                        int)) display_reconfigure_audio, uv->display_device);
         }
 
         if (strcmp("none", uv->requested_display) != 0)

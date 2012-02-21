@@ -1,17 +1,30 @@
-#version 130
-
-#extension GL_EXT_gpu_shader4 : enable
-
-#define lerp mix
-
-in vec4 TEX0;
 uniform sampler2D image;
 uniform float imageWidth;
-out vec4 color;
+
+#if GL_legacy
+#define TEXCOORD gl_TexCoord[0]
+#else
+#define TEXCOORD TEX0
+#define texture2D texture
+#endif
+
+#if GL_legacy
+#define colorOut gl_FragColor
+#else
+out vec4 colorOut;
+#endif
+
+#if ! GL_legacy
+in vec4 TEX0;
+#endif
+
 
 void main()
 {
-        color.rgba  = texture(image, TEX0.xy).grba; // store Y0UVY1 ro rgba
-        if(TEX0.x * imageWidth / 2.0f - floor(TEX0.x * imageWidth / 2.0f) > 0.5f) // 'odd' pixel
+	vec4 color;
+        color.rgba  = texture2D(image, TEXCOORD.xy).grba; // store Y0UVY1 ro rgba
+        if(TEXCOORD.x * imageWidth / 2.0 - floor(TEXCOORD.x * imageWidth / 2.0) > 0.5) // 'odd' pixel
                 color.r = color.a; // use Y1 instead of Y0
+	colorOut = color;
 }
+
