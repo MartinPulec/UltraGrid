@@ -586,8 +586,17 @@ void gl_reconfigure_screen(struct state_gl *s)
                                 s->tile->width, s->tile->height, 0,
                                 GL_RGBA, GL_UNSIGNED_BYTE,
                                 NULL);
-        } else if (s->frame->color_spec == RGBA) {
         } else if (s->frame->color_spec == RGB) {
+                glBindTexture(GL_TEXTURE_2D,s->texture_display1);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
+                                s->tile->width, s->tile->height, 0,
+                                GL_RGB, GL_UNSIGNED_BYTE,
+                                NULL);
+                glBindTexture(GL_TEXTURE_2D,s->texture_display2);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
+                                s->tile->width, s->tile->height, 0,
+                                GL_RGB, GL_UNSIGNED_BYTE,
+                                NULL);
         } else if (s->frame->color_spec == DXT5) {
         }
         gl_check_error();
@@ -622,6 +631,7 @@ void glut_idle_callback(void)
                 vc_deinterlace((unsigned char *) s->buffers[s->image_display],
                                 vc_get_linesize(s->tile->width, s->frame->color_spec),
                                 s->tile->height);
+float bottom;
 
         switch(s->frame->color_spec) {
                 case DXT1:
@@ -644,10 +654,40 @@ void glut_idle_callback(void)
                                         s->buffers[s->image_display]);
                         break;
                 case RGB:
+        glBindTexture(GL_TEXTURE_2D, s->texture_display1);
                         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                                         s->tile->width, s->tile->height,
                                         GL_RGB, GL_UNSIGNED_BYTE,
-                                        s->buffers[s->image_display]);
+                                        s->buffers[0]);
+        glBindTexture(GL_TEXTURE_2D, s->texture_display2);
+                        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                                        s->tile->width, s->tile->height,
+                                        GL_RGB, GL_UNSIGNED_BYTE,
+                                        s->buffers[1]);
+    bottom = 1.0f - (gl->dxt_height - gl->tile->height) / (float) gl->dxt_height * 2;
+    glBegin(GL_QUADS);
+      /* Front Face */
+      /* Bottom Left Of The Texture and Quad */
+      glTexCoord2f( 0.0f, bottom ); glVertex2f( -1.0f, -1/s->aspect);
+      /* Bottom Right Of The Texture and Quad */
+      glTexCoord2f( 0.5f, bottom ); glVertex2f(  0.0f, -1/s->aspect);
+      /* Top Right Of The Texture and Quad */
+      glTexCoord2f( 0.5f, 0.0f ); glVertex2f(  0.0f,  1/s->aspect);
+      /* Top Left Of The Texture and Quad */
+      glTexCoord2f( 0.0f, 0.0f ); glVertex2f( -1.0f,  1/s->aspect);
+    glEnd( );
+        glBindTexture(GL_TEXTURE_2D, s->texture_display2);
+    glBegin(GL_QUADS);
+      /* Front Face */
+      /* Bottom Left Of The Texture and Quad */
+      glTexCoord2f( 0.5f, bottom ); glVertex2f(0.0f, -1/s->aspect);
+      /* Bottom Right Of The Texture and Quad */
+      glTexCoord2f( 1.0f, bottom ); glVertex2f(  1.0f, -1/s->aspect);
+      /* Top Right Of The Texture and Quad */
+      glTexCoord2f( 1.0f, 0.0f ); glVertex2f(  1.0f,  1/s->aspect);
+      /* Top Left Of The Texture and Quad */
+      glTexCoord2f( 0.5f, 0.0f ); glVertex2f( 0.0f,  1/s->aspect);
+    glEnd( );
                         break;
                 case DXT5:                        
                         glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
@@ -990,6 +1030,7 @@ int display_gl_get_property(void *state, int property, void *val, size_t *len)
 {
         UNUSED(state);
         codec_t codecs[] = {UYVY, RGBA, RGB };
+        //codec_t codecs[] = { RGB };
         enum interlacing_t supported_il_modes[] = {PROGRESSIVE, INTERLACED_MERGED, SEGMENTED_FRAME};
                 
         switch (property) {
