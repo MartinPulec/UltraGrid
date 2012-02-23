@@ -246,6 +246,9 @@ JACK_PLAY_LIB_OBJ = @JACK_PLAY_OBJ@ \
 # -------------------------------------------------------------------------------------------------
 all: $(TARGET) modules ag-plugins configure-messages
 
+client: all
+	$(CXX) src/client-gui/*.cpp src/client-gui/src/*.cpp `wx-config --libs` `wx-config --cxxflags` -o bin/client
+
 modules: @LIB_TARGETS@
 
 $(TARGET): $(OBJS) src/main.o 
