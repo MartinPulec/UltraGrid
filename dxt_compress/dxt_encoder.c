@@ -85,15 +85,12 @@ struct dxt_encoder
     enum dxt_format format;
 
     // Texture id
-    GLuint texture_id;
+    GLuint texture_id[3];
 
-    // Compressed texture
-    GLuint texture_compressed_id;
-    
     GLuint texture_yuv422;
     
     // Framebuffer
-    GLuint fbo_id;
+    GLuint fbo_id[3];
   
     // Program and shader handles
     GLuint program_compress;
@@ -124,6 +121,7 @@ struct dxt_encoder
 #ifdef RTDXT_DEBUG
     GLuint queries[4];
 #endif
+    long int frames;
 };
 
 int dxt_prepare_yuv422_shader(struct dxt_encoder *encoder);
@@ -221,6 +219,7 @@ struct dxt_encoder*
 dxt_encoder_create(enum dxt_type type, int width, int height, enum dxt_format format, int legacy)
 {
     struct dxt_encoder* encoder = (struct dxt_encoder*)malloc(sizeof(struct dxt_encoder));
+    int i;
 
     if ( encoder == NULL )
         return NULL;
@@ -229,28 +228,31 @@ dxt_encoder_create(enum dxt_type type, int width, int height, enum dxt_format fo
     encoder->height = height;
     encoder->format = format;
     encoder->legacy = legacy;
+    encoder->frames = 0;
 
     //glEnable(GL_TEXTURE_2D);
 #ifdef HAVE_GPUPERFAPI
     GPA_EnableAllCounters();
 #endif
 
-    glGenFramebuffers(1, &encoder->fbo_id);
-    glBindFramebuffer(GL_FRAMEBUFFER, encoder->fbo_id);
-    
+    glGenFramebuffers(3, encoder->fbo_id);
     GLuint fbo_tex;
-    glGenTextures(1, &fbo_tex); 
-    glBindTexture(GL_TEXTURE_2D, fbo_tex); 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    if ( encoder->type == DXT_TYPE_DXT5_YCOCG )
-        glTexImage2D(GL_TEXTURE_2D, 0 , GL_RGBA32UI_EXT, (encoder->width + 3) / 4 * 4, encoder->height / 4, 0, GL_RGBA_INTEGER_EXT, GL_INT, 0); 
-    else
-        glTexImage2D(GL_TEXTURE_2D, 0 , GL_RGBA16UI_EXT, (encoder->width + 3) / 4 * 4, encoder->height /  4, 0, GL_RGBA_INTEGER_EXT, GL_INT, 0); 
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, fbo_tex, 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    for (i = 0; i < 3; ++i) {
+            glBindFramebuffer(GL_FRAMEBUFFER, encoder->fbo_id[i]);
+            glGenTextures(1, &fbo_tex); 
+            glBindTexture(GL_TEXTURE_2D, fbo_tex); 
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); 
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); 
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            if ( encoder->type == DXT_TYPE_DXT5_YCOCG )
+                glTexImage2D(GL_TEXTURE_2D, 0 , GL_RGBA32UI_EXT, (encoder->width + 3) / 4 * 4, encoder->height / 4, 0, GL_RGBA_INTEGER_EXT, GL_INT, 0); 
+            else
+                glTexImage2D(GL_TEXTURE_2D, 0 , GL_RGBA16UI_EXT, (encoder->width + 3) / 4 * 4, encoder->height /  4, 0, GL_RGBA_INTEGER_EXT, GL_INT, 0); 
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, fbo_tex, 0);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
     
     // Create program [display] and its shader
     encoder->program_compress = glCreateProgram();
@@ -309,16 +311,18 @@ dxt_encoder_create(enum dxt_type type, int width, int height, enum dxt_format fo
         printf("Link Log: %s\n", log);
     
 
-    glGenTextures(1, &encoder->texture_id);
-    glBindTexture(GL_TEXTURE_2D, encoder->texture_id);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    if(format == DXT_FORMAT_RGB) {
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, encoder->width, encoder->height, 0, GL_RGB, GL_BYTE, NULL);
-    } else {
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, encoder->width, encoder->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glGenTextures(3, encoder->texture_id);
+    for(i = 0; i < 3; ++i) {
+            glBindTexture(GL_TEXTURE_2D, encoder->texture_id[i]);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            if(format == DXT_FORMAT_RGB) {
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, encoder->width, encoder->height, 0, GL_RGB, GL_BYTE, NULL);
+            } else {
+                    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, encoder->width, encoder->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+            }
     }
     
     //glActiveTexture(GL_TEXTURE0);
@@ -328,7 +332,7 @@ dxt_encoder_create(enum dxt_type type, int width, int height, enum dxt_format fo
                 return NULL;
     }
 
-    glBindTexture(GL_TEXTURE_2D, encoder->texture_id);
+    glBindTexture(GL_TEXTURE_2D, encoder->texture_id[0]);
     //glClear(GL_COLOR_BUFFER_BIT);
  
     glViewport(0, 0, (encoder->width + 3) / 4, encoder->height / 4);
@@ -383,8 +387,6 @@ dxt_encoder_create(enum dxt_type type, int width, int height, enum dxt_format fo
 #endif
     }
 
-    // Render to framebuffer
-    glBindFramebuffer(GL_FRAMEBUFFER, encoder->fbo_id);
 
 #ifdef HAVE_GPUPERFAPI
     GPA_BeginSession( &encoder->sessionID );
@@ -436,55 +438,12 @@ dxt_encoder_compress(struct dxt_encoder* encoder, DXT_IMAGE_TYPE* image, unsigne
     GPA_BeginPass();
     GPA_BeginSample(0);
 #endif
+    glBindTexture(GL_TEXTURE_2D, encoder->texture_id[encoder->frames % 3]);
+    // Render to framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, encoder->fbo_id[encoder->frames % 3]);
+
     switch(encoder->format) {
             case DXT_FORMAT_YUV422:
-                        glBindFramebuffer(GL_FRAMEBUFFER, encoder->fbo444_id);
-                        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, encoder->texture_id, 0);
-                        glBindTexture(GL_TEXTURE_2D, encoder->texture_yuv422);
-                        
-                        glPushAttrib(GL_VIEWPORT_BIT);
-                        glViewport( 0, 0, encoder->width, encoder->height);
-                
-                        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, encoder->width / 2, encoder->height,  GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, image);
-                        glUseProgram(encoder->yuv422_to_444_program);
-#ifdef RTDXT_DEBUG
-    glEndQuery(GL_TIME_ELAPSED_EXT);
-    glBeginQuery(GL_TIME_ELAPSED_EXT, encoder->queries[1]);
-#endif
-#ifdef HAVE_GPUPERFAPI
-    GPA_EndSample();
-    GPA_BeginSample(1);
-#endif
-                        
-                        if(encoder->legacy) {
-                            glBegin(GL_QUADS);
-                            glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0);
-                            glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0);
-                            glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0);
-                            glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
-                            glEnd();
-                        } else {
-#if ! defined HAVE_MACOSX || OS_VERSION_MAJOR >= 11
-                            // Compress
-                            glBindVertexArray(encoder->g_vao_422);
-                            //glDrawElements(GL_TRIANGLE_STRIP, sizeof(m_quad.indices) / sizeof(m_quad.indices[0]), GL_UNSIGNED_SHORT, BUFFER_OFFSET(0));
-                            glDrawArrays(GL_TRIANGLES, 0, 6);
-                            glBindVertexArray(0);
-#endif
-                        }
-                        
-                        glPopAttrib();
-                        /* there is some problem with restoring viewport state (Mac OS Lion, OpenGL 3.2) */
-                        glViewport( 0, 0, (encoder->width + 3) / 4, encoder->height / 4);
-                        
-                        //glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
-                        
-                        glUseProgram(encoder->program_compress);
-                        glBindFramebuffer(GL_FRAMEBUFFER, encoder->fbo_id);
-                        glBindTexture(GL_TEXTURE_2D, encoder->texture_id);
-                
-                        //gl_check_error();
-                        break;
                 case DXT_FORMAT_YUV:
                 case DXT_FORMAT_RGBA:
                         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, encoder->width, encoder->height, GL_RGBA, DXT_IMAGE_GL_TYPE, image);
@@ -543,11 +502,14 @@ dxt_encoder_compress(struct dxt_encoder* encoder, DXT_IMAGE_TYPE* image, unsigne
 
 
     // Read back
-    glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
-    if ( encoder->type == DXT_TYPE_DXT5_YCOCG )
-        glReadPixels(0, 0, (encoder->width + 3) / 4, encoder->height / 4, GL_RGBA_INTEGER_EXT, GL_UNSIGNED_INT, image_compressed);
-    else
-        glReadPixels(0, 0, (encoder->width + 3) / 4, encoder->height / 4 , GL_RGBA_INTEGER_EXT, GL_UNSIGNED_SHORT, image_compressed);
+    if(encoder->frames >= 2) {
+            glBindFramebuffer(GL_FRAMEBUFFER, encoder->fbo_id[(encoder->frames - 2)% 3]);
+            glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
+            if ( encoder->type == DXT_TYPE_DXT5_YCOCG )
+                glReadPixels(0, 0, (encoder->width + 3) / 4, encoder->height / 4, GL_RGBA_INTEGER_EXT, GL_UNSIGNED_INT, image_compressed);
+            else
+                glReadPixels(0, 0, (encoder->width + 3) / 4, encoder->height / 4 , GL_RGBA_INTEGER_EXT, GL_UNSIGNED_SHORT, image_compressed);
+    }
         
 #ifdef RTDXT_DEBUG_HOST
     glFinish();
@@ -576,6 +538,8 @@ dxt_encoder_compress(struct dxt_encoder* encoder, DXT_IMAGE_TYPE* image, unsigne
     GPA_EndSample();
     GPA_EndPass();
 #endif
+
+    encoder->frames += 1;
     
     return 0;
 }
