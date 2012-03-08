@@ -47,8 +47,6 @@ struct coded_data;
 struct display;
 struct state_decoder;
 struct video_frame;
-enum codec_t;
-struct tile;
 
 /* 
  * External interface: 

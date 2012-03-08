@@ -97,7 +97,8 @@ int
 tx_send_base(struct tx *tx, struct tile *tile, struct rtp *rtp_session,
                 uint32_t ts, int send_m, unsigned long int total_packets,
                 codec_t color_spec, double input_fps,
-                enum interlacing_t interlacing, unsigned int substream);
+                enum interlacing_t interlacing, unsigned int substream,
+                unsigned int frame);
 
 struct tx {
         uint32_t magic;
@@ -172,27 +173,28 @@ tx_send(struct tx *tx, struct video_frame *frame, struct rtp *rtp_session)
                         last = TRUE;
                 packets_sent += tx_send_base(tx, vf_get_tile(frame, i), rtp_session, ts, last, packets_sent,
                                 frame->color_spec, frame->fps, frame->interlacing,
-                                i);
+                                i, frame->frames);
         }
 }
 
 
 void
-tx_send_tile(struct tx *tx, struct video_frame *frame, int pos, struct rtp *rtp_session)
+tx_send_tile(struct tx *tx, struct video_frame *frame, int pos, struct rtp *rtp_session, unsigned int frame_count)
 {
         struct tile *tile;
         
         tile = vf_get_tile(frame, pos);
         uint32_t ts = 0;
         ts = get_local_mediatime();
-        tx_send_base(tx, tile, rtp_session, ts, TRUE, 0 /* packets sent */, frame->color_spec, frame->fps, frame->interlacing, pos);
+        tx_send_base(tx, tile, rtp_session, ts, TRUE, 0 /* packets sent */, frame->color_spec, frame->fps, frame->interlacing, pos, frame_count);
 }
 
 int
 tx_send_base(struct tx *tx, struct tile *tile, struct rtp *rtp_session,
                 uint32_t ts, int send_m, unsigned long int total_packets,
                 codec_t color_spec, double input_fps,
-                enum interlacing_t interlacing, unsigned int substream)
+                enum interlacing_t interlacing, unsigned int substream,
+                unsigned int frame_count)
 {
         int m, data_len;
         video_payload_hdr_t payload_hdr;
@@ -249,6 +251,7 @@ tx_send_base(struct tx *tx, struct tile *tile, struct rtp *rtp_session,
         payload_hdr.vres = htons(tile->height);
         payload_hdr.fourcc = htonl(get_fourcc(color_spec));
         payload_hdr.length = htonl(tile->data_len);
+        payload_hdr.frame = htonl(frame_count);
         tmp = substream << 22;
         tmp |= tx->buffer;
         payload_hdr.substream_bufnum = htonl(tmp);

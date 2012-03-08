@@ -56,7 +56,16 @@
  *
  */
 
+#ifndef _VIDEO_CAPTURE_H_
+#define _VIDEO_CAPTURE_H_
+
 typedef uint32_t	vidcap_id_t;
+
+#define VIDCAP_PAUSE (1<<0)
+#define VIDCAP_PLAY (1<<1)
+#define VIDCAP_FPS (1<<2)
+#define VIDCAP_POS (1<<3)
+#define VIDCAP_PLAYONE (1<<4)
 
 struct audio_frame;
 
@@ -100,6 +109,9 @@ struct vidcap		*vidcap_init(vidcap_id_t id, char *fmt, unsigned int flags);
 void			 vidcap_done(struct vidcap *state);
 void			 vidcap_finish(struct vidcap *state);
 struct video_frame	*vidcap_grab(struct vidcap *state, struct audio_frame **audio);
+void                     vidcap_command(struct vidcap *state, int command, void *data);
 
 #define VIDCAP_FLAG_ENABLE_AUDIO (1<<1)
+
+#endif /* _VIDEO_CAPTURE_H_ */
 

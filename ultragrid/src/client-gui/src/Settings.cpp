@@ -17,11 +17,11 @@ Settings::~Settings()
     //dtor
 }
 
-std::string Settings::GetValue(std::string key)
+std::string Settings::GetValue(std::string key, std::string defVal)
 {
     map<string, string>::iterator it = settings.find(key);
     if (it == settings.end())
-        return string();
+        return defVal;
     else
         return (*it).second;
 }

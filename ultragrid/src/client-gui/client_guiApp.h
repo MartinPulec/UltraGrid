@@ -16,6 +16,7 @@ class client_guiApp : public wxApp
 {
     public:
         virtual bool OnInit();
+        virtual int OnExit();
 };
 
 #endif // CLIENT_GUIAPP_H

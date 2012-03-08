@@ -76,6 +76,7 @@
 #include "ihdtv/ihdtv.h"
 #include "compat/platform_semaphore.h"
 #include "audio/audio.h"
+#include "rtsp/streaming_server.h"
 
 #define EXIT_FAIL_USAGE		1
 #define EXIT_FAIL_UI   		2
@@ -113,6 +114,8 @@ struct state_uv {
         int use_ihdtv_protocol;
 
         struct state_audio *audio;
+
+        int comm_fd;
 };
 
 long packet_rate = 13600;
@@ -162,6 +165,7 @@ void _exit_uv(int status) {
                         audio_finish(uv_state->audio);
         }
         wait_to_finish = FALSE;
+        close(uv_state->comm_fd);
 }
 
 void (*exit_uv)(int status) = _exit_uv;
@@ -333,7 +337,7 @@ static struct rtp **initialize_network(char *addrs, int port_base, struct pdb *p
 	{
                 if (port == PORT_AUDIO)
                         port += 2;
-		devices[index] = rtp_init(addr, port, port, ttl, rtcp_bw, 
+		devices[index] = rtp_init(addr, port - 100, port, ttl, rtcp_bw, 
                                 FALSE, rtp_recv_callback, 
                                 (void *)participants);
 		if (devices[index] != NULL) {
@@ -567,7 +571,7 @@ static void *sender_thread(void *arg)
                                                tile_y_count);
                                 for (i = 0; i < tile_y_count; ++i) {
                                         tx_send_tile(uv->tx, splitted_frames, i,
-                                                        uv->network_devices[i]);
+                                                        uv->network_devices[i], tx_frame->frames);
                                 }
                         }
                 }
@@ -581,6 +585,12 @@ static void *sender_thread(void *arg)
 
 int main(int argc, char *argv[])
 {
+        uv_argc = argc;
+        uv_argv = argv;
+
+        if (argc == 1) {
+                return main_sp();
+        }
 
 #if defined HAVE_SCHED_SETSCHEDULER && defined USE_RT
         struct sched_param sp;
@@ -594,6 +604,7 @@ int main(int argc, char *argv[])
         char *jack_cfg = NULL;
         char *requested_fec = NULL;
         char *save_ptr = NULL;
+        sigset_t mask;
         
         struct state_uv *uv;
         int ch;
@@ -602,16 +613,9 @@ int main(int argc, char *argv[])
         unsigned vidcap_flags = 0,
                  display_flags = 0;
 
-        if (argc == 1) {
-                usage();
-                return EXIT_FAIL_USAGE;
-        }
-
-        uv_argc = argc;
-        uv_argv = argv;
-
         static struct option getopt_options[] = {
                 {"display", required_argument, 0, 'd'},
+                {"communication", required_argument, 0, 'C'},
                 {"capture", required_argument, 0, 't'},
                 {"mtu", required_argument, 0, 'm'},
                 {"mode", required_argument, 0, 'M'},
@@ -652,7 +656,7 @@ int main(int argc, char *argv[])
         perf_record(UVP_INIT, 0);
 
         while ((ch =
-                getopt_long(argc, argv, "d:t:m:r:s:vc:ihj:M:p:f:P:", getopt_options,
+                getopt_long(argc, argv, "d:t:m:r:s:vc:ihj:M:p:f:P:C:", getopt_options,
                             &option_index)) != -1) {
                 switch (ch) {
                 case 'd':
@@ -711,6 +715,9 @@ int main(int argc, char *argv[])
                 case 'P':
                         uv->port_number = atoi(optarg);
                         break;
+                case 'C':
+                        uv->comm_fd = atoi(optarg);
+                        break;
                 case '?':
                         break;
                 default:
@@ -722,6 +729,13 @@ int main(int argc, char *argv[])
         argc -= optind;
         argv += optind;
 
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGINT);
+        sigaddset(&mask, SIGTERM);
+        sigaddset(&mask, SIGQUIT);
+        sigaddset(&mask, SIGHUP);
+        sigaddset(&mask, SIGABRT);
+        sigprocmask(SIG_BLOCK, &mask, NULL);
 
         if (uv->use_ihdtv_protocol) {
                 if ((argc != 0) && (argc != 1) && (argc != 2)) {
@@ -785,13 +799,6 @@ int main(int argc, char *argv[])
 
         printf("Display initialized-%s\n", uv->requested_display);
 
-#ifndef WIN32
-        signal(SIGINT, signal_handler);
-        signal(SIGTERM, signal_handler);
-        signal(SIGQUIT, signal_handler);
-        signal(SIGHUP, signal_handler);
-        signal(SIGABRT, signal_handler);
-#endif
 
 #ifdef USE_RT
 #ifdef HAVE_SCHED_SETSCHEDULER
@@ -944,9 +951,45 @@ int main(int argc, char *argv[])
                                                         int)) display_reconfigure_audio, uv->display_device);
         }
 
-        if (strcmp("none", uv->requested_display) != 0)
-                display_run(uv->display_device);
+        sigprocmask(SIG_UNBLOCK, &mask, NULL);
+#ifndef WIN32
+        signal(SIGINT, signal_handler);
+        signal(SIGTERM, signal_handler);
+        signal(SIGQUIT, signal_handler);
+        signal(SIGHUP, signal_handler);
+        signal(SIGABRT, signal_handler);
+#endif
 
+        /* FlashNET loop */
+        while(!should_exit) {
+                char buff[1024];
+                ssize_t ret;
+                int len;
+                ret = read(uv->comm_fd, (void *) &len, sizeof(int));
+                if(ret != -1) {
+                        ret = read(uv->comm_fd, buff, len);
+                        buff[len] = '\0';
+                        fprintf(stderr, "main: command %s\n", buff);
+                        if(ret != -1) {
+                                if(strncmp(buff, "PAUSE", strlen("PAUSE")) == 0) {
+                                        vidcap_command(uv->capture_device, VIDCAP_PAUSE, NULL);
+                                } else
+                                /* note PLAY is prefix of PLAYONE, so this must be first */
+                                if(strncmp(buff, "PLAYONE", strlen("PLAYONE")) == 0) {
+                                        vidcap_command(uv->capture_device, VIDCAP_PLAYONE, NULL);
+                                } else if(strncmp(buff, "PLAY", strlen("PLAY")) == 0) {
+                                        vidcap_command(uv->capture_device, VIDCAP_PLAY, NULL);
+                                } else if(strncmp(buff, "FPS", strlen("FPS")) == 0) {
+                                        float fps = atof(buff + strlen("FPS") + 1);
+                                        vidcap_command(uv->capture_device, VIDCAP_FPS, (void *) &fps);
+                                } else if(strncmp(buff, "SETPOS", strlen("SETOPS")) == 0) {
+                                        int pos = atoi(buff + strlen("SETPOS") + 1);
+                                        vidcap_command(uv->capture_device, VIDCAP_POS, (void *) &pos);
+                                }
+                        }
+                }
+        }
+        
         if (strcmp("none", uv->requested_display) != 0)
                 pthread_join(receiver_thread_id, NULL);
 

@@ -63,6 +63,7 @@
 #include "video_display.h"
 
 #include "audio/audio.h"
+#include "rtp/rtp.h"
 
 /* The coded representation of a single frame */
 struct coded_data {

@@ -65,6 +65,7 @@
 #include "video_display/gl.h"
 #include "video_display/quicktime.h"
 #include "video_display/sage.h"
+#include "video_display/wxgl.h"
 #include "lib_common.h"
 
 extern char **uv_argv;
@@ -258,6 +259,23 @@ static display_table_t display_device_table[] = {
          NULL
          },
 #endif                          /* HAVE_MACOSX */
+        {
+         0,
+         NULL,
+         MK_STATIC(display_wxgl_probe),
+         MK_STATIC(display_wxgl_init),
+         MK_STATIC(display_wxgl_run),
+         MK_STATIC(display_wxgl_done),
+         MK_STATIC(display_wxgl_finish),
+         MK_STATIC(display_wxgl_getf),
+         MK_STATIC(display_wxgl_putf),
+         MK_STATIC(display_wxgl_reconfigure),
+         MK_STATIC(display_wxgl_get_property),
+         MK_STATIC(display_wxgl_get_audio_frame),
+         MK_STATIC(display_wxgl_put_audio_frame),
+         MK_STATIC(display_wxgl_reconfigure_audio),
+         NULL
+         },
         {
          0,
          NULL,

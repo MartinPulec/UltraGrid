@@ -3,21 +3,21 @@ RANLIB        = ranlib
 CC            = @CC@
 CXX	      = @CXX@
 LINKER	      = @LINKER@
-CFLAGS        = -fPIC @DEFS@ @CFLAGS@ @X_CFLAGS@ -DPATH_PREFIX=@prefix@ -DLIB_DIR=@libdir@
+CFLAGS        = -fPIC @DEFS@ @CFLAGS@ @X_CFLAGS@ -DPATH_PREFIX=@prefix@ -DLIB_DIR=@libdir@ -I/usr/include/OpenEXR
 CPPFLAGS      = @CPPFLAGS@
-CXXFLAGS      = -fPIC @CXXFLAGS@ -DPATH_PREFIX=@prefix@ -DLIB_DIR=@libdir@
+CXXFLAGS      = -fPIC @CXXFLAGS@ -DPATH_PREFIX=@prefix@ -DLIB_DIR=@libdir@ -I/usr/include/OpenEXR
 NVCCFLAGS     = @NVCCFLAGS@ -Xcompiler -fPIC
 LDFLAGS      =  @LDFLAGS@
 LIBS         += @LIBS@ @JACK_TRANS_LIB@ @MATHLIBS@ @COREAUDIO_LIB@ \
-		@X_PRE_LIBS@ @X_LIBS@ @X_EXTRA_LIBS@ -lm -pthread
+		@X_PRE_LIBS@ @X_LIBS@ @X_EXTRA_LIBS@ -lm -pthread -lGLEW -lIlmImf
 INC           = -I.. -Isrc -Itest @DVS_INC@ @DELTACAST_INC@ @FASTDXT_INC@ @QUICKTIME_INC@ @DECKLINK_INC@ @PORTAUDIO_INC@ \
                 @GL_INC@ @SAGE_INC@ @QUAD_INC@ @JACK_TRANS_INC@ @JPEG_INC@ @COREAUDIO_INC@ @SPEEX_INC@
 DECKLINK_PATH = @DECKLINK_PATH@
-TARGET        = bin/uv
 PERF          = bin/uv_perf
 BUNDLE        = uv.app
 DXT_GLSL_CFLAGS = @DXT_GLSL_CFLAGS@
 NVCC	      = @NVCC@
+PATH	      = @PATH@
 
 PREFIX = @prefix@
 prefix = $(PREFIX)
@@ -73,6 +73,8 @@ OBJS	      = @OBJS@ \
 		src/video_codec.o \
 		src/video_capture.o \
 		src/video_capture/dpx.o \
+		src/video_capture/exr.o \
+		src/video_capture/tiff.o \
 		src/video_capture/null.o \
 		src/video_capture/aggregate.o \
 		src/video_compress.o \
@@ -81,10 +83,13 @@ OBJS	      = @OBJS@ \
 		src/video_display.o \
 		src/video_display/aggregate.o \
 		src/video_display/null.o \
+		src/video_display/wxgl.o \
 		src/vo_postprocess.o \
 		src/vo_postprocess/3d-interlaced.o \
 		src/vo_postprocess/double-framerate.o \
 		src/vo_postprocess/split.o \
+	        src/client-gui/src/GLView.o \
+	     	src/client-gui/src/ClientDataIntPair.o \
 		@X_OBJ@ 
 
 SDL_LIB_OBJ  = \
@@ -243,20 +248,45 @@ JACK_PLAY_LIB_OBJ = @JACK_PLAY_OBJ@ \
 		   src/utils/ring_buffer.o \
 		   src/audio/utils.o
 
-# -------------------------------------------------------------------------------------------------
-all: $(TARGET) modules ag-plugins configure-messages
+CLIENT_OBJ = src/client-gui/client_guiApp.o \
+	     src/client-gui/client_guiMain.o \
+	     src/client-gui/ServerSelectionDialog.o \
+	     src/client-gui/VideoSelection.o \
+	     src/client-gui/src/Settings.o \
+	     src/client-gui/src/sp_client.o \
+	     src/client-gui/src/UGReceiver.o \
+	     src/client-gui/src/AsyncMsgHandler.o \
+	     src/client-gui/src/UltraGridManager.o \
+	     src/client-gui/src/VideoEntry.o \
+	     src/client-gui/src/ProgressSlider.o \
+	     src/client-gui/CompressionSetting.o
 
-client: all
-	$(CXX) src/client-gui/*.cpp src/client-gui/src/*.cpp `wx-config --libs` `wx-config --cxxflags` -o bin/client
+SERVER_OBJ = src/rtsp/sp_server.o \
+	     src/rtsp/streaming_server.o \
+	     src/rtsp/streaming_server_handlers.o
+
+SERVER_GUI_OBJ = src/serv-gui/serv_guiApp.o \
+		 src/serv-gui/serv_guiMain.o
+
+# -------------------------------------------------------------------------------------------------
+all: client server server-gui modules ag-plugins configure-messages
+
+client: $(OBJS) $(CLIENT_OBJ)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(OBJS) $(LIBS) -DHAVE_CONFIG_H $(INC) $(CLIENT_OBJ) `wx-config --libs` `wx-config --gl-libs` `wx-config --cxxflags` -o bin/client
+
+server: $(SERVER_OBJ) $(OBJS) src/main.o 
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -DHAVE_CONFIG_H $(INC) $(SERVER_OBJ) $(OBJS) $(LIBS) `wx-config --libs` `wx-config --gl-libs` src/main.o -o bin/server
+
+server-gui: $(SERVER_GUI_OBJ)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -DHAVE_CONFIG_H $(INC) $(SERVER_GUI_OBJ) `wx-config --libs` `wx-config --gl-libs` `wx-config --cxxflags` -o bin/server-gui
 
 modules: @LIB_TARGETS@
 
-$(TARGET): $(OBJS) src/main.o 
-	@if [ ! -d bin ]; then mkdir bin; fi
-	$(LINKER) $(CFLAGS) $(LDFLAGS) $(OBJS) src/main.o $(LIBS) -o $(TARGET)
-
 .c.o:
-	$(CC) $(CFLAGS) $(INC) -c $< -o $@
+	$(CC) $(CFLAGS) $(INC) -c $< `wx-config --cflags` -o $@
+
+.cpp.o:
+	$(CXX) $(CXXFLAGS) $(INC) -c $< `wx-config --cxxflags` -o $@
 	
 # Set suffix for CUDA files
 .SUFFIXES: .cu
@@ -460,6 +490,9 @@ clean:
 	-rm -rf $(BUNDLE)/Contents/MacOS/$(TARGET)
 	-rm -rf $(PERF) src/uv_perf.o
 	-rm -rf @LIB_OBJS@ @LIB_TARGETS@
+	-rm -rf bin/client $(CLIENT_OBJ)
+	-rm -rf bin/server $(SERVER_OBJ)
+	-rm -rf bin/server-gui $(SERVER_GUI_OBJ)
 
 distclean: clean
 	-rm -f Makefile config.status config.cache config.log src/config.h tags
@@ -477,6 +510,12 @@ bundle: all
 	mkdir -p $(BUNDLE)/Contents/MacOS
 	cp $(TARGET) $(BUNDLE)/Contents/MacOS/
 	echo -n "UltraGrid" > $(BUNDLE)/Contents/PkgInfo
+	cp bin/client client.app/Contents/MacOS
+	#for n in `otool -L client.app/Contents/MacOS/client |grep -E '/(usr|opt)/local/lib' |cut -f 1 -d\ `; do cp $$n client.app/Contents/Frameworks; install_name_tool -change $$n @executable_path/../Frameworks/`basename $$n` client.app/Contents/MacOS/client; done
+	dylibbundler -od -b -x client.app/Contents/MacOS/client -d client.app/Contents/libs/
+	rm -rf client.app/Contents/libs/*2.9.3*
+	for n in client.app/Contents/libs/*; do for m in `otool -L $$n | grep 2.9.3 | cut -f 1 -d \ `; do install_name_tool -change $$m $${m/2.9.3.0.0/2.9} $$n; done; done
+
 
 perf: src/tv.o src/crypto/random.o
 	$(CC) $(CFLAGS) -DPERF src/uv_perf.c src/crypto/random.o src/tv.o -o $(PERF)
@@ -585,6 +624,7 @@ install: all
 
 uninstall:
 	$(RM) $(DESTDIR)/$(bindir)/uv
+	$(RM) $(DESTDIR)/$(bindir)/client
 	if [ -n "@LIB_TARGETS@" ]; then for n in @LIB_TARGETS@; do $(RM) $(DESTDIR)/$(libdir)/ultragrid/`basename $$n`; done; fi
 	$(RM) $(DESTDIR)/$(uv_datadir)/ultragrid-bugreport-collect.sh
 	

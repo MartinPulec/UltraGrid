@@ -703,6 +703,7 @@ int decode_frame(struct coded_data *cdata, void *decode_data)
         uint16_t last_rtp_seq = 0;
         struct linked_list *pckt_list = ll_create();
         uint32_t total_packets_sent = 0u;
+        uint32_t frame_seq;
 
         perf_record(UVP_DECODEFRAME, frame);
 
@@ -774,7 +775,7 @@ packet_restored:
                 color_spec = get_codec_from_fcc(ntohl(hdr->fourcc));
                 data_pos = ntohl(hdr->offset);
                 tmp = ntohl(hdr->substream_bufnum);
-
+                frame_seq = ntohl(hdr->frame);
 
                 substream = tmp >> 22;
 
@@ -819,6 +820,8 @@ packet_restored:
                 if(!frame) {
                         return FALSE;
                 }
+
+                frame->frames = frame_seq;
                 
                 if(!decoder->postprocess) {
                         if (!decoder->merged_fb) {

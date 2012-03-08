@@ -20,6 +20,8 @@ AC_C_CHAR_UNSIGNED
 
 AC_CHECK_HEADERS(stropts.h sys/filio.h sys/wait.h)
 
+AC_SUBST(PATH)
+
 # -------------------------------------------------------------------------------------------------
 POST_COMPILE_MSG=""
 AC_SUBST(LIBS)
@@ -63,6 +65,7 @@ if expr "$host_os" : ".*darwin.*" > /dev/null; then
 	LDFLAGS+=" -m32 -mmacosx-version-min=10.5"
 	X_CFLAGS+="-I/usr/X11R6/include"
         OBJS+=" src/utils/autorelease_pool.o"
+	PATH="/usr/local/bin:$PATH"
 else
         system=Linux
 	LINKER=$CC

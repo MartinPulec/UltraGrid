@@ -922,3 +922,99 @@
 	<string.h>
 	<stdlib.h>
 
+1329910268 source:/home/martin/Projects/ultragrid/ultragrid/src/client-gui/ServerSelectionDialog.cpp
+	"ServerSelectionDialog.h"
+	<wx/button.h>
+	<wx/string.h>
+	<wx/intl.h>
+
+1329907461 /home/martin/Projects/ultragrid/ultragrid/src/client-gui/ServerSelectionDialog.h
+	<wx/dialog.h>
+	<wx/sizer.h>
+	<wx/stattext.h>
+	<wx/textctrl.h>
+
+1329917885 source:/home/martin/Projects/ultragrid/ultragrid/src/client-gui/src/Settings.cpp
+	"../include/Settings.h"
+	<fstream>
+	<string.h>
+	<stdlib.h>
+
+1329911944 /home/martin/Projects/ultragrid/ultragrid/src/client-gui/include/Settings.h
+	<map>
+	<string>
+
+1329903505 source:/home/martin/Projects/ultragrid/ultragrid/src/client-gui/src/UltraGridManager.cpp
+	"../include/UltraGridManager.h"
+	<stdexcept>
+	<iostream>
+	<assert.h>
+	"../client_guiMain.h"
+
+1329903511 /home/martin/Projects/ultragrid/ultragrid/src/client-gui/include/UltraGridManager.h
+	<wx/process.h>
+	<wx/event.h>
+
+1330011297 /home/martin/Projects/ultragrid/ultragrid/src/client-gui/client_guiMain.h
+	"include/sp_client.h"
+	"include/UltraGridManager.h"
+	"include/Settings.h"
+	"include/UGReceiver.h"
+	"include/GLView.h"
+	<wx/sizer.h>
+	<wx/button.h>
+	<wx/menu.h>
+	<wx/statusbr.h>
+	<wx/frame.h>
+	<wx/listbox.h>
+
+1329987822 /home/martin/Projects/ultragrid/ultragrid/src/client-gui/include/sp_client.h
+	<string>
+
+1329996935 /home/martin/Projects/ultragrid/ultragrid/src/client-gui/include/UGReceiver.h
+
+1329986762 source:/home/martin/Projects/ultragrid/ultragrid/src/client-gui/client_guiApp.cpp
+	"client_guiApp.h"
+	<signal.h>
+	"client_guiMain.h"
+	<wx/image.h>
+
+1329985511 /home/martin/Projects/ultragrid/ultragrid/src/client-gui/client_guiApp.h
+	<wx/app.h>
+
+1313749218 /usr/include/wx-2.8/wx/glcanvas.h
+	"wx/defs.h"
+	"wx/msw/glcanvas.h"
+	"wx/x11/glcanvas.h"
+	"wx/gtk/glcanvas.h"
+	"wx/gtk1/glcanvas.h"
+	"wx/x11/glcanvas.h"
+	"wx/mac/glcanvas.h"
+	"wx/cocoa/glcanvas.h"
+	"wx/app.h"
+
+1313749219 /usr/include/wx-2.8/wx/gtk/glcanvas.h
+	"wx/scrolwin.h"
+	"wx/app.h"
+	<GL/gl.h>
+	<GL/glx.h>
+	<GL/glu.h>
+
+1313749218 /usr/include/wx-2.8/wx/scrolwin.h
+	"wx/panel.h"
+	"wx/gtk/scrolwin.h"
+	"wx/gtk1/scrolwin.h"
+
+1313749218 /usr/include/wx-2.8/wx/panel.h
+	"wx/generic/panelg.h"
+
+1313749217 /usr/include/wx-2.8/wx/generic/panelg.h
+	"wx/window.h"
+	"wx/containr.h"
+
+1313749219 /usr/include/wx-2.8/wx/gtk/scrolwin.h
+
+1330009876 /home/martin/Projects/ultragrid/ultragrid/src/client-gui/include/GLView.h
+	<wx/glcanvas.h>
+	<wx/frame.h>
+

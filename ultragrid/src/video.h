@@ -109,6 +109,8 @@ struct video_frame
         struct tile         *tiles;
         
         unsigned int         tile_count;
+
+        unsigned  int        frames;
 };
 
 struct tile {

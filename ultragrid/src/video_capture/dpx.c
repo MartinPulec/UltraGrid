@@ -69,6 +69,7 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <semaphore.h>
+#include "video_capture.h"
 
 #define BUFFER_LEN 10
 
@@ -179,7 +180,7 @@ typedef struct _television_header
 typedef void (*lut_func_t)(int *lut, char *out_data, char *in_data, int size);
 
 struct vidcap_dpx_state {
-        struct video_frame *frame;
+        volatile struct video_frame *frame;
         struct tile        *tile;
         pthread_mutex_t lock;
         
@@ -187,6 +188,9 @@ struct vidcap_dpx_state {
         pthread_cond_t processing_cv;
         volatile int reader_waiting;
         volatile int processing_waiting;
+
+        volatile int should_pause;
+        pthread_cond_t pause_cv;
         
         unsigned int        loop:1;
         volatile unsigned int        finished:1;
@@ -213,6 +217,10 @@ struct vidcap_dpx_state {
         struct timeval      prev_time, cur_time;
         
         unsigned            big_endian:1;
+
+        unsigned int        should_jump:1;
+        unsigned int        grab_waiting:1;
+        unsigned int        playone:1;
         
         struct file_information file_information;
         struct _image_information image_information;
@@ -354,19 +362,26 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         pthread_mutex_init(&s->lock, NULL);
         pthread_cond_init(&s->processing_cv, NULL);
         pthread_cond_init(&s->reader_cv, NULL);
+        pthread_cond_init(&s->pause_cv, NULL);
         s->processing_waiting = FALSE;
         s->reader_waiting = FALSE;
+        s->should_pause = TRUE;
+        s->should_jump = FALSE;
+        s->grab_waiting = FALSE;
         
         s->buffer_processed_start = s->buffer_processed_end = 0;
         s->buffer_read_start = s->buffer_read_end = 0;
+        s->index = 0;
         
         s->should_exit_thread = FALSE;
         s->finished = FALSE;
         
         s->frame = vf_alloc(1);
         s->frame->fps = 30.0;
+        s->frame->frames = -1;
         s->gamma = 1.0;
         s->loop = FALSE;
+        s->playone = FALSE;
         
         item = strtok_r(fmt, ":", &save_ptr);
         while(item) {
@@ -464,12 +479,20 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
 void
 vidcap_dpx_finish(void *state)
 {
-        UNUSED(state);
+	struct vidcap_dpx_state *s = (struct vidcap_dpx_state *) state;
+        pthread_mutex_lock(&s->lock);
+        s->should_pause = FALSE;
+        pthread_cond_signal(&s->pause_cv);
+
+        s->should_exit_thread = TRUE;
+        s->finished = TRUE;
+        pthread_mutex_unlock(&s->lock);
 }
 
 void
 vidcap_dpx_done(void *state)
 {
+        return;
 	struct vidcap_dpx_state *s = (struct vidcap_dpx_state *) state;
         int i;
 	assert(s != NULL);
@@ -505,7 +528,7 @@ static void * reading_thread(void *args)
                         pthread_mutex_unlock(&s->lock);
                         goto after_while;
                 }
-                while(s->buffer_read_start == ((s->buffer_read_end + 1) % BUFFER_LEN)) { /* full */
+                while(s->finished || s->should_jump || s->buffer_read_start == ((s->buffer_read_end + 1) % BUFFER_LEN)) { /* full */
                         s->reader_waiting = TRUE;
                         pthread_cond_wait(&s->reader_cv, &s->lock);
                         s->reader_waiting = FALSE;
@@ -540,7 +563,6 @@ static void * reading_thread(void *args)
                                 s->index = 0;
                         } else {
                                 s->finished = TRUE;
-                                goto after_while;
                         }
                 }
         }
@@ -562,7 +584,7 @@ static void * processing_thread(void *args)
                         pthread_mutex_unlock(&s->lock);
                         break;
                 }
-                while(s->buffer_processed_start == ((s->buffer_processed_end + 1) % BUFFER_LEN)) { /* full */
+                while(s->should_jump || s->buffer_processed_start == ((s->buffer_processed_end + 1) % BUFFER_LEN)) { /* full */
                         s->processing_waiting = TRUE;
                         pthread_cond_wait(&s->processing_cv, &s->lock);
                         s->processing_waiting = FALSE;
@@ -610,9 +632,17 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
 {
 	struct vidcap_dpx_state 	*s = (struct vidcap_dpx_state *) state;
         
+        pthread_mutex_lock(&s->lock);
+        while((s->should_pause || s->should_jump) && !s->playone) {
+                s->grab_waiting = TRUE;
+                pthread_cond_wait(&s->pause_cv, &s->lock);
+                s->grab_waiting = FALSE;
+        }
+        s->playone = FALSE;
+        pthread_mutex_unlock(&s->lock);
+        
         if(s->finished && s->buffer_processed_start == s->buffer_processed_end &&
                         s->buffer_read_start == s->buffer_read_end) {
-                exit_uv(0);
                 return NULL;
         }
         
@@ -622,10 +652,15 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
         if(s->prev_time.tv_sec == 0 && s->prev_time.tv_usec == 0) { /* first run */
                 gettimeofday(&s->prev_time, NULL);
         }
+
         gettimeofday(&s->cur_time, NULL);
-        while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->frame->fps)
+        if(s->frame->fps == 0) /* it would make following loop infinite */
+                return NULL;
+        while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->frame->fps) {
                 gettimeofday(&s->cur_time, NULL);
-        tv_add_usec(&s->prev_time, 1000000.0 / s->frame->fps);
+        }
+        s->prev_time = s->cur_time;
+        //tv_add_usec(&s->prev_time, 1000000.0 / s->frame->fps);
         
         s->tile->data = s->buffer_processed[s->buffer_processed_start];
         s->buffer_processed[s->buffer_processed_start] = s->buffer_send;
@@ -638,6 +673,7 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
         pthread_mutex_unlock(&s->lock);
 
         s->frames++;
+        s->frame->frames++;
         gettimeofday(&s->t, NULL);
         double seconds = tv_diff(s->t, s->t0);    
         if (seconds >= 5) {
@@ -650,5 +686,56 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
         *audio = NULL;
 
 	return s->frame;
+}
+
+void vidcap_dpx_command(struct vidcap *state, int command, void *data)
+{
+	struct vidcap_dpx_state 	*s = (struct vidcap_dpx_state *) state;
+
+
+        if(command == VIDCAP_PAUSE) {
+                fprintf(stderr, "[DPX] PAUSE\n");
+                pthread_mutex_lock(&s->lock);
+                s->should_pause = TRUE;
+                pthread_mutex_unlock(&s->lock);
+        } else if(command == VIDCAP_PLAY) {
+                fprintf(stderr, "[DPX] PLAY\n");
+                pthread_mutex_lock(&s->lock);
+                s->should_pause = FALSE;
+                pthread_cond_signal(&s->pause_cv);
+                pthread_mutex_unlock(&s->lock);
+        } else if(command == VIDCAP_PLAYONE) {
+                fprintf(stderr, "[DPX] PLAYONE\n");
+                pthread_mutex_lock(&s->lock);
+                s->playone = TRUE;
+                pthread_cond_signal(&s->pause_cv);
+                pthread_mutex_unlock(&s->lock);
+        } else if(command == VIDCAP_FPS) {
+                fprintf(stderr, "[DPX] FPS\n");
+                pthread_mutex_lock(&s->lock);
+                s->frame->fps = *(float *) data;
+                pthread_mutex_unlock(&s->lock);
+        } else if(command == VIDCAP_POS) {
+                pthread_mutex_lock(&s->lock);
+                s->should_jump = TRUE;
+                pthread_mutex_unlock(&s->lock);
+                while(!s->reader_waiting || !s->processing_waiting || !s->grab_waiting)
+                        ;
+
+                pthread_mutex_lock(&s->lock);
+                s->finished = FALSE;
+                s->buffer_processed_start = s->buffer_processed_end = 0;
+                s->buffer_read_start = s->buffer_read_end = 0;
+                s->index = *(int *) data;
+                fprintf(stderr, "[DPX] New position: %d\n", s->index);
+                s->frame->frames = s->index - 1;
+                pthread_cond_signal(&s->reader_cv);
+                pthread_cond_signal(&s->processing_cv);
+                if(!s->should_pause)
+                        pthread_cond_signal(&s->pause_cv);
+
+                s->should_jump = FALSE;
+                pthread_mutex_unlock(&s->lock);
+        }
 }
 

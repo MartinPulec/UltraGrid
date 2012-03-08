@@ -9,7 +9,7 @@ class Settings
     public:
         Settings();
         virtual ~Settings();
-        std::string GetValue(std::string key);
+        std::string GetValue(std::string key, std::string defVal = "");
         void SetValue(std::string key, std::string value);
     protected:
     private:

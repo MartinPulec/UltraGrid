@@ -56,6 +56,8 @@
 #include "video_codec.h"
 #include "video_capture.h"
 #include "video_capture/dpx.h"
+#include "video_capture/exr.h"
+#include "video_capture/tiff.h"
 #include "video_capture/dvs.h"
 #include "video_capture/quicktime.h"
 #include "video_capture/testcard.h"
@@ -98,6 +100,8 @@ struct vidcap_device_api {
         const char              *func_done_str;
         struct video_frame    *(*func_grab) (void *state, struct audio_frame **audio);
         const char              *func_grab_str;
+        void                   (*func_command) (void *state, int command, void *data);
+        const char              *func_command_str;
 
         void                    *handle;
 };
@@ -112,6 +116,7 @@ struct vidcap_device_api vidcap_device_table[] = {
          MK_STATIC(vidcap_aggregate_finish),
          MK_STATIC(vidcap_aggregate_done),
          MK_STATIC(vidcap_aggregate_grab),
+         MK_STATIC(NULL),
          NULL
         },
         {
@@ -122,6 +127,29 @@ struct vidcap_device_api vidcap_device_table[] = {
          MK_STATIC(vidcap_dpx_finish),
          MK_STATIC(vidcap_dpx_done),
          MK_STATIC(vidcap_dpx_grab),
+         MK_STATIC(vidcap_dpx_command),
+         NULL
+        },
+        {
+         0,
+         NULL,
+         MK_STATIC(vidcap_exr_probe),
+         MK_STATIC(vidcap_exr_init),
+         MK_STATIC(vidcap_exr_finish),
+         MK_STATIC(vidcap_exr_done),
+         MK_STATIC(vidcap_exr_grab),
+         MK_STATIC(vidcap_exr_command),
+         NULL
+        },
+        {
+         0,
+         NULL,
+         MK_STATIC(vidcap_tiff_probe),
+         MK_STATIC(vidcap_tiff_init),
+         MK_STATIC(vidcap_tiff_finish),
+         MK_STATIC(vidcap_tiff_done),
+         MK_STATIC(vidcap_tiff_grab),
+         MK_STATIC(vidcap_tiff_command),
          NULL
         },
 #if defined HAVE_DVS || defined BUILD_LIBRARIES
@@ -134,6 +162,7 @@ struct vidcap_device_api vidcap_device_table[] = {
          MK_NAME(vidcap_dvs_finish),
          MK_NAME(vidcap_dvs_done),
          MK_NAME(vidcap_dvs_grab),
+         MK_STATIC(NULL),
          NULL
         },
 #endif                          /* HAVE_DVS */
@@ -147,6 +176,7 @@ struct vidcap_device_api vidcap_device_table[] = {
          MK_NAME(vidcap_decklink_finish),
          MK_NAME(vidcap_decklink_done),
          MK_NAME(vidcap_decklink_grab),
+         MK_STATIC(NULL),
          NULL
         },
 #endif                          /* HAVE_DECKLINK */
@@ -160,6 +190,7 @@ struct vidcap_device_api vidcap_device_table[] = {
          MK_NAME(vidcap_deltacast_finish),
          MK_NAME(vidcap_deltacast_done),
          MK_NAME(vidcap_deltacast_grab),
+         MK_STATIC(NULL),
          NULL
         },
 #endif                          /* HAVE_DELTACAST */
@@ -173,6 +204,7 @@ struct vidcap_device_api vidcap_device_table[] = {
          MK_NAME(vidcap_quad_finish),
          MK_NAME(vidcap_quad_done),
          MK_NAME(vidcap_quad_grab),
+         MK_STATIC(NULL),
          NULL
         },
 #endif                          /* HAVE_QUAD */
@@ -186,6 +218,7 @@ struct vidcap_device_api vidcap_device_table[] = {
          MK_NAME(vidcap_quicktime_finish),
          MK_NAME(vidcap_quicktime_done),
          MK_NAME(vidcap_quicktime_grab),
+         MK_STATIC(NULL),
          NULL
         },
 #endif                          /* HAVE_MACOSX */
@@ -198,6 +231,7 @@ struct vidcap_device_api vidcap_device_table[] = {
          MK_NAME(vidcap_testcard_finish),
          MK_NAME(vidcap_testcard_done),
          MK_NAME(vidcap_testcard_grab),
+         MK_STATIC(NULL),
          NULL
         },
 #if defined HAVE_SDL || defined BUILD_LIBRARIES
@@ -210,6 +244,7 @@ struct vidcap_device_api vidcap_device_table[] = {
          MK_NAME(vidcap_testcard2_finish),
          MK_NAME(vidcap_testcard2_done),
          MK_NAME(vidcap_testcard2_grab),
+         MK_STATIC(NULL),
          NULL
         },
 #endif /* HAVE_SDL */
@@ -221,6 +256,7 @@ struct vidcap_device_api vidcap_device_table[] = {
          MK_STATIC(vidcap_null_finish),
          MK_STATIC(vidcap_null_done),
          MK_STATIC(vidcap_null_grab),
+         MK_STATIC(NULL),
          NULL
         }
 };
@@ -374,3 +410,9 @@ struct video_frame *vidcap_grab(struct vidcap *state, struct audio_frame **audio
         assert(state->magic == VIDCAP_MAGIC);
         return vidcap_device_table[state->index].func_grab(state->state, audio);
 }
+
+void vidcap_command(struct vidcap *state, int command, void *data)
+{
+        return vidcap_device_table[state->index].func_command(state->state, command, data);
+}
+

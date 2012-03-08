@@ -1,4 +1,3 @@
-#include "../include/sp_client.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -11,15 +10,33 @@
 #include <sstream>
 #include <errno.h>
 #include <fcntl.h>
+#include <iostream>
 
-sp_client::sp_client()
+#include "../include/sp_client.h"
+#include "../include/AsyncMsgHandler.h"
+
+static std::string valid_commands_str[] = {
+    std::string("TEARDOWN")
+};
+
+
+
+sp_client::sp_client() :
+    valid_commands(valid_commands_str, valid_commands_str + sizeof(valid_commands_str) / sizeof(std::string)),
+    fd(-1),
+    msgHandler(0ul)
 {
-    this->fd = -1;
+    buffer_len = 1024*1024;
+    buffer = new char[buffer_len];
 }
 
 sp_client::~sp_client()
 {
+    if(this->fd != -1) {
+        disconnect();
+    }
 
+    delete [] buffer;
 }
 
 //do a nonblocking connect
@@ -87,10 +104,8 @@ done:
     return 0;
 }
 
-void sp_client::connect_to(std::string host, uint16_t port)
+void sp_client::connect_to(std::string host, int port)
 {
-    buffer_len = 1024*1024;
-    buffer = new char[buffer_len];
     struct addrinfo hints, *res, *res0;
     int err;
 
@@ -102,7 +117,7 @@ void sp_client::connect_to(std::string host, uint16_t port)
     err = getaddrinfo(host.c_str(), port_str, &hints, &res0);
 
     if(err) {
-        throw std::runtime_error(std::string("getaddrinfo: ") + gai_strerror(err));
+        throw std::runtime_error(std::string("getaddrinfo: ") + gai_strerror(err) + " (" + host + ")");
     }
 
     this->fd = -1;
@@ -136,54 +151,219 @@ void sp_client::connect_to(std::string host, uint16_t port)
     }
 
     freeaddrinfo(res0);
+    setAsyncNotify();
+}
+
+void sp_client::setAsyncNotify()
+{
+        if(fcntl(this->fd, F_SETFL, fcntl(this->fd, F_GETFL) | O_ASYNC) == -1)
+            perror("");
+        fcntl(this->fd, F_SETOWN, getpid());
+}
+
+void sp_client::unsetAsyncNotify()
+{
+        if(fcntl(this->fd, F_SETFL, fcntl(this->fd, F_GETFL) & ~O_ASYNC) == -1)
+            perror("");
 }
 
 void sp_client::disconnect()
 {
     if(this->fd != -1) {
         close(this->fd);
+        this->fd = -1;
     }
 }
 
 void sp_client::send(struct message *message, struct response *response)
 {
     int rc;
-    char *ptr;
-    write(this->fd, message->msg, message->len);
-    rc = recv(this->fd, this->buffer, this->buffer_len, 0);
-    if(rc == -1)
-        throw std::runtime_error(std::string("Timeout"));
 
-    ptr = this->buffer;
+    unsetAsyncNotify();
+
+    char *buffer = (char *) malloc(message->len + 1);
+    strncpy(buffer, message->msg, message->len);
+    buffer[message->len] = '\0';
+
+    write(this->fd, buffer, message->len + 1);
+    free(buffer);
+
+    rc = recv(this->fd, this->buffer, this->buffer_len, 0);
+    if(rc == -1) {
+        throw std::runtime_error(std::string("Timeout"));
+    }
+
+    int i = 0;
+
+    while(i < rc) {
+        if(this->buffer[i] == '\0')
+            break;
+
+        ++i;
+        if(i == rc) {
+            int ret = recv(this->fd, this->buffer + rc, this->buffer_len - rc, 0);
+            if (ret > 0) {
+                rc += ret;
+            } else if (ret == 0) {
+                throw std::runtime_error(std::string("Connection closed"));
+            } else {
+                throw std::runtime_error(std::string("Timeout"));
+            }
+        }
+    }
+
+    /* i is from now index of '\0' */
+
+    const char *ptr = strstr(this->buffer, "Content-Length:");
+    if(!ptr) {
+        ProcessResponse(this->buffer, i + 1, response);
+    } else {
+        ptr += sizeof("Content-Length:");
+        int body_len = atoi(ptr);
+        while(*ptr != '\r' && ptr < this->buffer + rc)
+            ++ptr;
+        ptr += 4; /* \r\n\r\n */
+        int header_len = ptr - this->buffer;
+        int total_len = header_len + body_len;
+        while(rc < total_len) {
+            rc += recv(this->fd, this->buffer + rc, this->buffer_len - rc, 0);
+        }
+        ProcessResponse(this->buffer, total_len, response);
+    }
+
+    // TODO: doresit zacatek dalsiho packetu
+
+
+    setAsyncNotify();
+}
+
+void sp_client::ProcessResponse(char *data, int len, struct response *response)
+{
+    char *ptr;
+    ptr = data;
     response->code = atoi(ptr);
 
-    while(!isspace(*ptr) && ptr < this->buffer + rc)
+    while(!isspace(*ptr) && ptr < this->buffer + len)
         ++ptr;
-    while(isspace(*ptr) && ptr < this->buffer + rc)
+    while(isspace(*ptr) && ptr < this->buffer + len)
         ++ptr;
     response->msg = ptr;
-    while((*ptr != '\n' && *ptr != '\r') && ptr < this->buffer + rc)
+    while((*ptr != '\n' && *ptr != '\r') && ptr < this->buffer + len)
         ++ptr;
     response->msg_len = ptr - response->msg;
 
-    while((*ptr == '\n' || *ptr == '\r') && ptr < this->buffer + rc)
+    while((*ptr == '\n' || *ptr == '\r') && ptr < this->buffer + len)
         ++ptr;
     if(strncasecmp("Content-Length:", ptr, strlen("Content-Length:")) != 0)
         response->body_len = 0;
     else {
         ptr += sizeof("Content-Length:");
         response->body_len = atoi(ptr);
-        while(*ptr != '\r' && ptr < this->buffer + rc)
+        while(*ptr != '\r' && ptr < this->buffer + len)
             ++ptr;
         ptr += 4; /* \r\n\r\n */
-        response->body = ptr;
-        if(response->body + response->body_len != this->buffer + rc) {
-            std::string msg;
-            std::stringstream str;
 
-            str << "Immature end of packet: " << rc << " B (expected " << response->body + response->body_len - this->buffer << " B)";
-            msg = str.str();
-            throw std::runtime_error(msg);
+        response->body = ptr;
+    }
+}
+
+void sp_client::ProcessIncomingData()
+{
+    int rc;
+
+    rc = recv(this->fd, this->buffer, this->buffer_len, 0);
+
+    if(rc == -1)
+        throw std::runtime_error(std::string("Timeout"));
+
+    if(rc == 0) { /* disconected... we dont need to process this, just skip */
+    }
+
+    ProcessBuffer(this->buffer, rc);
+}
+
+void sp_client::ProcessBuffer(char *data, int len)
+{
+    struct response response;
+    int rc = len;
+    char *ptr;
+    std::string command;
+    int start, pos;
+
+
+    ptr = this->buffer;
+
+    for(start = 0; start < rc; ++start) {
+            if(!isspace(this->buffer[start])) {
+                    break;
+            }
+    }
+
+    for(pos = start; pos < rc; ++pos) {
+            if(isspace(this->buffer[pos])) {
+                    break;
+            }
+    }
+
+    if(start == rc)
+    {
+        response.code = 451;
+        response.msg = "Parameter Not Understood";
+        response.msg_len = strlen(response.msg);
+        response.body_len = 0;
+
+        SendResponse(&response);
+
+        return;
+    }
+
+    command.assign(this->buffer + start, pos - start);
+
+    std::cerr << "Command: " << command << " received." << std::endl;
+
+    if(valid_commands.find(command) == valid_commands.end()) {
+        response.code = 451;
+        response.msg = "Parameter Not Understood";
+        response.msg_len = strlen(response.msg);
+        response.body_len = 0;
+        SendResponse(&response);
+    } else if(command == std::string("TEARDOWN")) {
+        response.code = 200;
+        response.msg = "OK";
+        response.msg_len = strlen(response.msg);
+        response.body_len = 0;
+        if(msgHandler) {
+            SendResponse(&response);
+            msgHandler->DoDisconnect();
         }
     }
+
+}
+
+void sp_client::SendResponse(struct response *response)
+{
+    const int hdr_size = 1000;
+    char buff[hdr_size];
+    int len;
+
+    len = snprintf(buff, hdr_size, "%u %s\r\n", (unsigned int) response->code, response->msg);
+    if(response->body_len > 0) {
+            len += snprintf(buff + len, hdr_size - len, "Content-Length: %u\r\n", (unsigned int) response->body_len);
+    }
+    len += snprintf(buff + len, hdr_size - len, "\r\n");
+
+    write(fd, buff, len);
+
+    if(response->body_len)
+        write(fd, response->body, response->body_len);
+}
+
+void sp_client::SetMsgHandler(AsyncMsgHandler *msgHandler)
+{
+    this->msgHandler = msgHandler;
+}
+
+bool sp_client::isConnected()
+{
+    return this->fd != -1;
 }

@@ -85,6 +85,7 @@ typedef struct {
                             bits 13 - 16 FPSd
                             bit 17 Fd
                             bit 18 Fi */
+        uint32_t frame;
 
 } __attribute__((__packed__)) video_payload_hdr_t;
 

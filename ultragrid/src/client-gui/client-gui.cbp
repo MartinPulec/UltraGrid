@@ -39,16 +39,28 @@
 		</Linker>
 		<Unit filename="ServerSelectionDialog.cpp" />
 		<Unit filename="ServerSelectionDialog.h" />
+		<Unit filename="VideoSelection.cpp" />
+		<Unit filename="VideoSelection.h" />
 		<Unit filename="client_guiApp.cpp" />
 		<Unit filename="client_guiApp.h" />
 		<Unit filename="client_guiMain.cpp" />
 		<Unit filename="client_guiMain.h" />
+		<Unit filename="include/AsyncMsgHandler.h" />
+		<Unit filename="include/GLView.h" />
+		<Unit filename="include/ProgressSlider.h" />
 		<Unit filename="include/Settings.h" />
 		<Unit filename="include/UltraGridManager.h" />
+		<Unit filename="include/VideoEntry.h" />
 		<Unit filename="include/sp_client.h" />
+		<Unit filename="src/AsyncMsgHandler.cpp" />
+		<Unit filename="src/GLView.cpp" />
+		<Unit filename="src/ProgressSlider.cpp" />
 		<Unit filename="src/Settings.cpp" />
 		<Unit filename="src/UltraGridManager.cpp" />
+		<Unit filename="src/VideoEntry.cpp" />
 		<Unit filename="src/sp_client.cpp" />
+		<Unit filename="wxsmith/CompressionSetting.wxs" />
+		<Unit filename="wxsmith/ServerSelectionDialog.wxs" />
 		<Unit filename="wxsmith/client_guiframe.wxs" />
 		<Extensions>
 			<code_completion />
@@ -60,6 +72,7 @@
 				<resources>
 					<wxFrame wxs="wxsmith/client_guiframe.wxs" src="client_guiMain.cpp" hdr="client_guiMain.h" name="client_guiFrame" language="CPP" />
 					<wxDialog wxs="wxsmith/ServerSelectionDialog.wxs" src="ServerSelectionDialog.cpp" hdr="ServerSelectionDialog.h" name="ServerSelectionDialog" language="CPP" />
+					<wxDialog wxs="wxsmith/VideoSelection.wxs" src="VideoSelection.cpp" hdr="VideoSelection.h" name="VideoSelection" language="CPP" />
 				</resources>
 			</wxsmith>
 		</Extensions>
