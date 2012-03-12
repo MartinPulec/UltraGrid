@@ -256,10 +256,10 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 	     src/client-gui/src/sp_client.o \
 	     src/client-gui/src/UGReceiver.o \
 	     src/client-gui/src/AsyncMsgHandler.o \
-	     src/client-gui/src/UltraGridManager.o \
 	     src/client-gui/src/VideoEntry.o \
 	     src/client-gui/src/ProgressSlider.o \
 	     src/client-gui/CompressionSetting.o \
+	     src/client-gui/src/ClientManager.o \
 	     src/client-gui/src/CustomGridBagSizer.o
 
 SERVER_OBJ = src/rtsp/sp_server.o \

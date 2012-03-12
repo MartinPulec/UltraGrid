@@ -57,6 +57,7 @@ const long client_guiFrame::ID_TEXTCTRL1 = wxNewId();
 const long client_guiFrame::ID_BUTTON3 = wxNewId();
 const long client_guiFrame::ID_FR_LABEL = wxNewId();
 const long client_guiFrame::ID_FR = wxNewId();
+const long client_guiFrame::ID_ToggleLoop = wxNewId();
 const long client_guiFrame::ID_SLIDER1 = wxNewId();
 const long client_guiFrame::PlayButton = wxNewId();
 const long client_guiFrame::ID_BUTTON1 = wxNewId();
@@ -77,10 +78,11 @@ BEGIN_EVENT_TABLE(client_guiFrame,wxFrame)
     EVT_COMMAND  (wxID_ANY, wxEVT_SCROLLED, client_guiFrame::Scrolled)
     EVT_MOTION(client_guiFrame::MouseMotion)
     EVT_KEY_DOWN(client_guiFrame::KeyDown)
+
+    EVT_TOGGLEBUTTON(ID_ToggleLoop, client_guiFrame::OnButton1Click3)
 END_EVENT_TABLE()
 
 client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
-    UG(this),
     msgHandler(this)
 {
     //(*Initialize(client_guiFrame)
@@ -104,8 +106,8 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     	0, 0 };
     gl = new GLView(this, ID_GLCANVAS1, wxDefaultPosition, wxSize(487,234), 0, _T("ID_GLCANVAS1"), GLCanvasAttributes_1);
     FlexGridSizer1->Add(gl, 1, wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    FlexGridSizer2 = new wxFlexGridSizer(2, 8, 0, 0);
-    FlexGridSizer2->AddGrowableCol(5);
+    FlexGridSizer2 = new wxFlexGridSizer(2, 9, 0, 0);
+    FlexGridSizer2->AddGrowableCol(6);
     Select = new wxButton(this, ID_BUTTON2, _("Select video"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_BUTTON2"));
     FlexGridSizer2->Add(Select, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     fps = new wxTextCtrl(this, ID_TEXTCTRL1, _("FPS"), wxDefaultPosition, wxSize(45,25), 0, wxDefaultValidator, _T("ID_TEXTCTRL1"));
@@ -117,6 +119,8 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     FrameCount = new wxSpinCtrl(this, ID_FR, _T("0"), wxDefaultPosition, wxSize(67,25), 0, 0, 2592000, 0, _T("ID_FR"));
     FrameCount->SetValue(_T("0"));
     FlexGridSizer2->Add(FrameCount, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    ToggleLoop = new wxToggleButton(this, ID_ToggleLoop, _("Loop"), wxDefaultPosition, wxSize(47,27), 0, wxDefaultValidator, _T("ID_ToggleLoop"));
+    FlexGridSizer2->Add(ToggleLoop, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     Slider1 = new ProgressSlider(this, ID_SLIDER1, 0, 0, 100, wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_SLIDER1"));
     Slider1->SetMinSize(wxSize(100,-1));
     FlexGridSizer2->Add(Slider1, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -157,6 +161,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Connect(ID_TEXTCTRL1,wxEVT_COMMAND_TEXT_UPDATED,(wxObjectEventFunction)&client_guiFrame::OnTextCtrl1Text);
     Connect(ID_BUTTON3,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnButton1Click2);
     Connect(ID_FR,wxEVT_COMMAND_SPINCTRL_UPDATED,(wxObjectEventFunction)&client_guiFrame::OnFrameCountChange);
+    Connect(ID_ToggleLoop,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnButton1Click3);
     Connect(PlayButton,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnStopBtnClick);
     Connect(ID_BUTTON1,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnPauseClick);
     Connect(idMenuQuit,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnQuit);
@@ -189,7 +194,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
 
     selectVideo = new VideoSelection(this, &settings);
 
-    stream_connection.SetMsgHandler(&msgHandler);
+    connection.SetMsgHandler(&msgHandler);
 
     this->SetSize(600, 400);
     ChangeState(sInit);
@@ -281,7 +286,6 @@ void client_guiFrame::PlaySelection()
     wxString item;
     wxString hostname;
     wxString path;
-    wxCharBuffer buf;
 
     /*if(UG.StopRunning()) { // stopped
         return;
@@ -307,90 +311,22 @@ void client_guiFrame::PlaySelection()
 
         //this->playList.pop_back();
 
-        this->stream_connection.connect_to(std::string(hostname.mb_str()), 5100);
+        this->connection.connect_to(std::string(hostname.mb_str()), 5100);
 
-        wxString msgstr;
-        struct message msg;
-        struct response resp;
+        this->connection.set_parameter(wxT("format"), video_format);
 
-        msgstr = L"";
-        msgstr << wxT("SET_PARAMETER format ") << video_format;
-        buf = msgstr.mb_str();
-        msg.msg = buf.data();
-        msg.len = msgstr.Len();
 
-        this->stream_connection.send(&msg, &resp);
+        this->connection.set_parameter(wxT("compression"), wxString(settings.GetValue(std::string("compression"), std::string("none")).c_str(), wxConvUTF8) << wxT(" ") +
+                wxString(settings.GetValue(std::string("jpeg_qual"), std::string("80")).c_str(), wxConvUTF8));
 
-        if(resp.code != 200) {
-            wxString msg;
-            msg << wxT("Unable to set video format: ") << resp.code << L" " << wxString::FromUTF8((resp.msg));
-            throw std::runtime_error(std::string(msg.mb_str()));
-        }
 
-        msgstr = L"";
-        msgstr << wxT("SET_PARAMETER compression ") << wxString(settings.GetValue(std::string("compression"), std::string("none")).c_str(), wxConvUTF8) << wxT(" ") <<
-                wxString(settings.GetValue(std::string("jpeg_qual"), std::string("80")).c_str(), wxConvUTF8);
-        buf = msgstr.mb_str();
-        msg.msg = buf.data();
-        msg.len = msgstr.Len();
-
-        this->stream_connection.send(&msg, &resp);
-
-        if(resp.code != 200) {
-            wxString msg;
-            msg << wxT("Unable to set compression: ") << resp.code << L" " << wxString::FromUTF8((resp.msg));
-            throw std::runtime_error(std::string(msg.mb_str()));
-        }
-
-        msgstr = L"";
-        msgstr << wxT("SETUP /") << path;
-        buf = msgstr.mb_str();
-        msg.msg = buf.data();
-        msg.len = msgstr.Len();
-
-        // TODO: handle TMOUT
-        this->stream_connection.send(&msg, &resp);
-
-        if(resp.code != 201) {
-            wxString msg;
-            msg << resp.code << L" " << wxString::FromUTF8((resp.msg));
-            wxMessageBox(msg, _("Error connecting to server"));
-            return;
-        }
-
-        msgstr = L"";
-        msgstr << wxT("SET_PARAMETER fps ") << wxString::Format(wxT("%2.2f"),fps);
-        std::cerr << std::string(msgstr.mb_str());
-        buf = msgstr.mb_str();
-        msg.msg = buf.data();
-        msg.len = msgstr.Len();
-
-        this->stream_connection.send(&msg, &resp);
-
-        if(resp.code != 200) {
-            wxString msg;
-            msg << wxT("Unable to set fps: ") << resp.code << L" " << wxString::FromUTF8((resp.msg));
-            throw std::runtime_error(std::string(msg.mb_str()));
-        }
+        this->connection.setup(wxT("/") + path);
+        this->connection.set_parameter(wxT("fps"), wxString::Format(wxT("%2.2f"),fps));
 
 
         gl->Receive(true);
 
-        msgstr = L"";
-        msgstr << wxT("PLAY");
-        buf = msgstr.mb_str();
-        msg.msg = buf.data();
-        msg.len = msgstr.Len();
-
-        // TODO: handle TMOUT
-        this->stream_connection.send(&msg, &resp);
-
-        if(resp.code != 200) {
-            wxString msg;
-            msg << resp.code << L" " << wxString::FromUTF8((resp.msg));
-            wxMessageBox(msg, _("Error downloading media file"));
-            return;
-        }
+        connection.play();
 
         //UG.newWindow();
         StatusBar1->PushStatusText(item);
@@ -400,68 +336,26 @@ void client_guiFrame::PlaySelection()
     } catch (std::exception &e) {
         wxString msg = wxString::FromUTF8(e.what());
         wxMessageBox(msg, _("Error downloading media file"));
-        this->stream_connection.disconnect();
+        this->connection.disconnect();
     }
 }
 
 void client_guiFrame::Stop()
 {
-    {
-        wxString msgstr;
-        struct message msg;
-        struct response resp;
-
-        msg.msg = "TEARDOWN";
-        msg.len = strlen(msg.msg);
-
-        // TODO: handle TMOUT
-        this->stream_connection.send(&msg, &resp);
-
-        if(resp.code != 200) {
-            wxString msg;
-            msg << resp.code << L" " << wxString::FromUTF8((resp.msg));
-            wxMessageBox(msg, _("Error stopping media"));
-            return;
-        }
-
-        StatusBar1->PushStatusText(wxT("stopped"));
+    try {
+        connection.teardown();
+    } catch (std::exception &e) {
+        wxMessageBox(wxString::FromUTF8(e.what()), _("Error downloading media file"));
     }
-    this->stream_connection.disconnect();
+
+    StatusBar1->PushStatusText(wxT("stopped"));
+    this->connection.disconnect();
     ChangeState(sInit);
     DoUpdateCounters(0);
     //Refresh();
     gl->LoadSplashScreen();
     gl->Receive(false);
     total_frames = 0;
-}
-
-void client_guiFrame::NotifyWindowClosed()
-{
-    wxString msgstr;
-    struct message msg;
-    struct response resp;
-
-    try {
-        msgstr << wxT("TEARDOWN");
-        wxCharBuffer buf = msgstr.mb_str();
-        msg.msg = buf.data();
-        msg.len = msgstr.Len();
-
-        // TODO: handle TMOUT
-        this->stream_connection.send(&msg, &resp);
-
-        if(resp.code != 200) {
-            wxString msg;
-            msg << resp.code << L" " << wxString::FromUTF8((resp.msg));
-            wxMessageBox(msg, _("Error closing connection"));
-            return;
-        }
-
-        this->stream_connection.disconnect();
-    } catch (std::exception &e) {
-        wxString msg = wxString::FromUTF8(e.what());
-        wxMessageBox(msg, _("Error downloading media file"));
-    }
 }
 
 void client_guiFrame::Resize(wxCommandEvent& event)
@@ -491,14 +385,14 @@ void client_guiFrame::OnSelectClick(wxCommandEvent& event)
 
 void client_guiFrame::DataReceived()
 {
-    stream_connection.ProcessIncomingData();
+    connection.ProcessIncomingData();
 }
 
 void client_guiFrame::DoDisconnect()
 {
     StatusBar1->PushStatusText(wxT("interrupted by server"));
     ChangeState(sInit);
-    stream_connection.disconnect();
+    connection.disconnect();
 }
 
 void client_guiFrame::OnTextCtrl1Text(wxCommandEvent& event)
@@ -510,7 +404,7 @@ void client_guiFrame::DoUpdateCounters(int val)
     if(!this->playList.IsEmpty()) {
         Slider1->SetValue((double)  val / (this->total_frames - 1) * 100.0);
 
-        if(Slider1->GetValue() == 100) {
+        if(Slider1->GetValue() == 100 && ToggleLoop->GetValue() == false) {
             DoPause();
         }
 
@@ -529,31 +423,19 @@ void client_guiFrame::UpdateTimer(wxCommandEvent&)
 
 void client_guiFrame::JumpToFrame(int frame)
 {
-    wxString msgstr;
-    char msgbuf[40];
-    struct message msg;
-    struct response resp;
+    try {
+        if(frame < 0 || frame >= this->total_frames)
+            return;
 
-    if(frame < 0 || frame >= this->total_frames)
-        return;
-
-    if(state == sPlaying) {
-        snprintf(msgbuf, 40, "PLAY %d", frame);
-    } else if (state == sReady) {
-        snprintf(msgbuf, 40, "PAUSE %d", frame);
-    } else {
-        return;
-    }
-
-    msg.msg = msgbuf;
-    msg.len = strlen(msg.msg);
-
-    this->stream_connection.send(&msg, &resp);
-
-    if(resp.code != 200) {
-        wxString msg;
-        msg << resp.code << L" " << wxString::FromUTF8((resp.msg));
-        wxMessageBox(msg, _("Error setting position"));
+        if(state == sPlaying) {
+            connection.play(wxString::Format("%d", frame));
+        } else if (state == sReady) {
+            connection.pause(wxString::Format("%d", frame));
+        } else {
+            return;
+        }
+    } catch (std::exception &e) {
+        wxMessageBox(wxString::FromUTF8(e.what()), _("Error downloading media file"));
     }
 }
 
@@ -584,50 +466,22 @@ void client_guiFrame::DoPause()
         return;
 
     try {
-        wxString msgstr;
-        struct message msg;
-        struct response resp;
-
-        msg.msg = "PAUSE";
-        msg.len = strlen(msg.msg);
-
-        // TODO: handle TMOUT
-        this->stream_connection.send(&msg, &resp);
-
-        if(resp.code != 200) {
-            wxString msg;
-            msg << resp.code << L" " << wxString::FromUTF8((resp.msg));
-            wxMessageBox(msg, _("Error pausing media"));
-        } else {
-            ChangeState(sReady);
-        }
+        connection.pause();
+        ChangeState(sReady);
     } catch (std::exception &e) {
         wxString msg = wxString::FromUTF8(e.what());
-        wxMessageBox(msg, _("Error downloading media file"));
+        wxMessageBox(msg, _("Error pausing media"));
     }
 }
 
 void client_guiFrame::Resume()
 {
-    wxString msgstr;
-    struct message msg;
-    struct response resp;
-
-    msg.msg = "PLAY";
-    msg.len = strlen(msg.msg);
-
     try {
         // TODO: handle TMOUT
-        this->stream_connection.send(&msg, &resp);
+        connection.play();
 
-        if(resp.code != 200) {
-            wxString msg;
-            msg << resp.code << L" " << wxString::FromUTF8((resp.msg));
-            wxMessageBox(msg, _("Error resuming media"));
-        } else {
-            ChangeState(sPlaying);
-            Pause->SetLabel(wxT("Pause"));
-        }
+        ChangeState(sPlaying);
+        Pause->SetLabel(wxT("Pause"));
     } catch (std::exception &e) {
         wxString msg = wxString::FromUTF8(e.what());
         wxMessageBox(msg, _("Error downloading media file"));
@@ -656,7 +510,7 @@ void client_guiFrame::OnButton1Click2(wxCommandEvent& event)
     struct message msg;
     struct response resp;
 
-    if(!this->stream_connection.isConnected())
+    if(!this->connection.isConnected())
         return;
 
     try {
@@ -665,22 +519,10 @@ void client_guiFrame::OnButton1Click2(wxCommandEvent& event)
              /* error! */
         }
 
-
-        msgstr << wxT("SET_PARAMETER fps ") << wxString::Format(wxT("%2.2f"),fps);
-        wxCharBuffer buf = msgstr.mb_str();
-        msg.msg = buf.data();
-        msg.len = msgstr.Len();
-
-        this->stream_connection.send(&msg, &resp);
-
-        if(resp.code != 200) {
-            wxString msg;
-            msg << wxT("Unable to set fps: ") << resp.code << L" " << wxString::FromUTF8((resp.msg));
-            throw std::runtime_error(std::string(msg.mb_str()));
-        }
+        connection.set_parameter(wxT("fps"), wxString::Format(wxT("%2.2f"),fps));
     } catch (std::exception &e) {
         wxString msg = wxString::FromUTF8(e.what());
-        wxMessageBox(msg, _("Error setting fps"));
+        wxMessageBox(msg, _("Error to set fps"));
     }
 }
 
@@ -783,3 +625,27 @@ void client_guiFrame::KeyDown(wxKeyEvent& evt)
     }
 }
 
+
+void client_guiFrame::OnButton1Click3(wxCommandEvent& event)
+{
+    wxString val;
+    if(ToggleLoop->GetValue() == true) {
+        val = wxT("ON");
+    } else {
+        val = wxT("OFF");
+    }
+
+    wxString msgstr;
+    struct message msg;
+    struct response resp;
+
+    if(!connection.isConnected())
+        return;
+
+    try {
+        connection.set_parameter(wxT("loop"), val);
+    } catch (std::exception &e) {
+        ToggleLoop->SetValue(!ToggleLoop->GetValue());
+        wxMessageBox(wxString::FromUTF8(e.what()), _("Error setting loop"));
+    }
+}

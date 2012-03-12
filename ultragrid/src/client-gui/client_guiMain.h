@@ -10,7 +10,6 @@
 #ifndef CLIENT_GUIMAIN_H
 #define CLIENT_GUIMAIN_H
 
-#include "include/sp_client.h"
 #include "include/UltraGridManager.h"
 #include "include/Settings.h"
 #include "include/UGReceiver.h"
@@ -20,6 +19,7 @@
 #include "VideoSelection.h"
 #include "include/ProgressSlider.h"
 #include "include/CustomGridBagSizer.h"
+#include "include/ClientManager.h"
 
 //(*Headers(client_guiFrame)
 #include <wx/glcanvas.h>
@@ -34,7 +34,7 @@
 #include <wx/textctrl.h>
 //*)
 
-#include <wx/accel.h>
+#include <wx/tglbtn.h>
 
 enum playerState {
     sInit,
@@ -69,6 +69,7 @@ class client_guiFrame: public wxFrame
         void OnGLCanvas1Paint(wxPaintEvent& event);
         void OnFrameCountChange(wxSpinEvent& event);
         void OnStopBtnClick(wxCommandEvent& event);
+        void OnButton1Click3(wxCommandEvent& event);
         //*)
         void Resize(wxCommandEvent&);
         void UpdateTimer(wxCommandEvent&);
@@ -82,7 +83,6 @@ class client_guiFrame: public wxFrame
         void Stop();
         void DoPause();
         void Resume();
-        void NotifyWindowClosed();
         void JumpToFrame(int frame);
         void DoUpdateCounters(int val);
 
@@ -97,6 +97,7 @@ class client_guiFrame: public wxFrame
         static const long ID_BUTTON3;
         static const long ID_FR_LABEL;
         static const long ID_FR;
+        static const long ID_ToggleLoop;
         static const long ID_SLIDER1;
         static const long PlayButton;
         static const long ID_BUTTON1;
@@ -109,6 +110,7 @@ class client_guiFrame: public wxFrame
 
         //(*Declarations(client_guiFrame)
         wxFlexGridSizer* FlexGridSizer2;
+        wxToggleButton* ToggleLoop;
         wxStaticText* FrameCountLabel;
         wxStatusBar* StatusBar1;
         wxButton* Select;
@@ -123,8 +125,7 @@ class client_guiFrame: public wxFrame
         wxSpinCtrl* FrameCount;
         //*)
 
-        sp_client stream_connection;
-        UltraGridManager UG;
+        ClientManager connection;
         ArrayOfVideoEntries playList;
         Settings settings;
 

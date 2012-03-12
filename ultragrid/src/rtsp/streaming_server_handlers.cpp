@@ -278,6 +278,14 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                         else if(strcmp(video_format, "TIFF") == 0) {
                                 this->video_format = "tiff";
                         }
+                } else if(strcmp(item, "loop") == 0) {
+                        char *onOrOff = strtok_r(NULL, " ", &save_ptr);
+                        char buff[20];
+                        snprintf(buff, 20, "LOOP %s", onOrOff);
+
+                        int len = strlen(buff);
+                        write(comm_fd, &len, sizeof(len));
+                        write(comm_fd, buff, len);
                 } else {
                         response.code = 451;
                         response.message = "Parameter Not Understood";

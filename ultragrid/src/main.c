@@ -985,6 +985,13 @@ int main(int argc, char *argv[])
                                 } else if(strncmp(buff, "SETPOS", strlen("SETOPS")) == 0) {
                                         int pos = atoi(buff + strlen("SETPOS") + 1);
                                         vidcap_command(uv->capture_device, VIDCAP_POS, (void *) &pos);
+                                } else if(strncmp(buff, "LOOP", strlen("LOOP")) == 0) {
+                                        int val;
+                                        if(strcmp(buff + strlen("LOOP") + 1, "ON") == 0)
+                                                val = TRUE;
+                                        else
+                                                val = FALSE;
+                                        vidcap_command(uv->capture_device, VIDCAP_LOOP, (void *) &val);
                                 }
                         }
                 }

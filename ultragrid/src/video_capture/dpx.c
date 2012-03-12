@@ -559,11 +559,7 @@ static void * reading_thread(void *args)
                 pthread_mutex_unlock(&s->lock);
                 
                 if( s->index == s->glob.gl_pathc) {
-                        if(s->loop) {
-                                s->index = 0;
-                        } else {
-                                s->finished = TRUE;
-                        }
+                        s->finished = TRUE;
                 }
         }
 after_while:
@@ -639,12 +635,21 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
                 s->grab_waiting = FALSE;
         }
         s->playone = FALSE;
-        pthread_mutex_unlock(&s->lock);
         
         if(s->finished && s->buffer_processed_start == s->buffer_processed_end &&
                         s->buffer_read_start == s->buffer_read_end) {
-                return NULL;
+                if(s->loop) {
+                        s->index = 0;
+                        s->frame->frames = 0;
+                        s->finished = FALSE;
+                        pthread_cond_signal(&s->reader_cv);
+                } else  {
+                        pthread_mutex_unlock(&s->lock);
+                        return NULL;
+                }
         }
+
+        pthread_mutex_unlock(&s->lock);
         
         while(s->buffer_processed_start == s->buffer_processed_end && !should_exit && !s->finished)
                 ;
@@ -735,6 +740,11 @@ void vidcap_dpx_command(struct vidcap *state, int command, void *data)
                         pthread_cond_signal(&s->pause_cv);
 
                 s->should_jump = FALSE;
+                pthread_mutex_unlock(&s->lock);
+        } else if(command == VIDCAP_LOOP) {
+                fprintf(stderr, "[DPX] LOOP %d\n", *(int *) data);
+                pthread_mutex_lock(&s->lock);
+                s->loop = *(int *) data;
                 pthread_mutex_unlock(&s->lock);
         }
 }
