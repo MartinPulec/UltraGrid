@@ -22,6 +22,8 @@
 #include <wx/intl.h>
 //*)
 
+wxCommandEvent defaultCommandEvent;
+
 //helper functions
 enum wxbuildinfoformat {
     short_f, long_f };
@@ -53,6 +55,8 @@ const long client_guiFrame::ID_GLCANVAS1 = wxNewId();
 const long client_guiFrame::ID_BUTTON2 = wxNewId();
 const long client_guiFrame::ID_TEXTCTRL1 = wxNewId();
 const long client_guiFrame::ID_BUTTON3 = wxNewId();
+const long client_guiFrame::ID_FR_LABEL = wxNewId();
+const long client_guiFrame::ID_FR = wxNewId();
 const long client_guiFrame::ID_SLIDER1 = wxNewId();
 const long client_guiFrame::PlayButton = wxNewId();
 const long client_guiFrame::ID_BUTTON1 = wxNewId();
@@ -68,7 +72,11 @@ BEGIN_EVENT_TABLE(client_guiFrame,wxFrame)
     //*)
     EVT_COMMAND  (wxID_ANY, wxEVT_RECONF, client_guiFrame::Resize)
     EVT_COMMAND  (wxID_ANY, wxEVT_UPDATE_TIMER, client_guiFrame::UpdateTimer)
+    EVT_COMMAND  (wxID_ANY, wxEVT_TOGGLE_FULLSCREEN, client_guiFrame::ToggleFullscreen)
+    EVT_COMMAND  (wxID_ANY, wxEVT_TOGGLE_PAUSE, client_guiFrame::TogglePause)
     EVT_COMMAND  (wxID_ANY, wxEVT_SCROLLED, client_guiFrame::Scrolled)
+    EVT_MOTION(client_guiFrame::MouseMotion)
+    EVT_KEY_DOWN(client_guiFrame::KeyDown)
 END_EVENT_TABLE()
 
 client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
@@ -78,16 +86,14 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     //(*Initialize(client_guiFrame)
     wxMenuItem* MenuItem2;
     wxMenuItem* MenuItem1;
-    wxFlexGridSizer* FlexGridSizer1;
-    wxFlexGridSizer* FlexGridSizer2;
     wxMenu* Menu1;
     wxMenu* Menu3;
     wxMenuItem* MenuItem3;
     wxMenuBar* MenuBar1;
     wxMenu* Menu2;
 
-    Create(parent, wxID_ANY, _("FlashNET Player"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE, _T("wxID_ANY"));
-    FlexGridSizer1 = new wxFlexGridSizer(1, 1, 0, 0);
+    Create(parent, wxID_ANY, _("FlashNET Player"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE|wxWANTS_CHARS, _T("wxID_ANY"));
+    FlexGridSizer1 = new CustomGridBagSizer(2, 1, 0, 0);
     FlexGridSizer1->AddGrowableCol(0);
     FlexGridSizer1->AddGrowableRow(0);
     int GLCanvasAttributes_1[] = {
@@ -97,21 +103,26 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     	WX_GL_STENCIL_SIZE,    0,
     	0, 0 };
     gl = new GLView(this, ID_GLCANVAS1, wxDefaultPosition, wxSize(487,234), 0, _T("ID_GLCANVAS1"), GLCanvasAttributes_1);
-    FlexGridSizer1->Add(gl, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    FlexGridSizer2 = new wxFlexGridSizer(2, 6, 0, 0);
-    FlexGridSizer2->AddGrowableCol(3);
+    FlexGridSizer1->Add(gl, 1, wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    FlexGridSizer2 = new wxFlexGridSizer(2, 8, 0, 0);
+    FlexGridSizer2->AddGrowableCol(5);
     Select = new wxButton(this, ID_BUTTON2, _("Select video"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_BUTTON2"));
     FlexGridSizer2->Add(Select, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     fps = new wxTextCtrl(this, ID_TEXTCTRL1, _("FPS"), wxDefaultPosition, wxSize(45,25), 0, wxDefaultValidator, _T("ID_TEXTCTRL1"));
     FlexGridSizer2->Add(fps, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FPSOk = new wxButton(this, ID_BUTTON3, _("OK"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_BUTTON3"));
     FlexGridSizer2->Add(FPSOk, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    FrameCountLabel = new wxStaticText(this, ID_FR_LABEL, _("FR"), wxDefaultPosition, wxDefaultSize, 0, _T("ID_FR_LABEL"));
+    FlexGridSizer2->Add(FrameCountLabel, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    FrameCount = new wxSpinCtrl(this, ID_FR, _T("0"), wxDefaultPosition, wxSize(67,25), 0, 0, 2592000, 0, _T("ID_FR"));
+    FrameCount->SetValue(_T("0"));
+    FlexGridSizer2->Add(FrameCount, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     Slider1 = new ProgressSlider(this, ID_SLIDER1, 0, 0, 100, wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_SLIDER1"));
     Slider1->SetMinSize(wxSize(100,-1));
     FlexGridSizer2->Add(Slider1, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    Play = new wxButton(this, PlayButton, _("Start stream"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("PlayButton"));
-    Play->SetMaxSize(wxSize(-1,-1));
-    FlexGridSizer2->Add(Play, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    StopBtn = new wxButton(this, PlayButton, _("Stop"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("PlayButton"));
+    StopBtn->SetMaxSize(wxSize(-1,-1));
+    FlexGridSizer2->Add(StopBtn, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     Pause = new wxButton(this, ID_BUTTON1, _("Pause"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_BUTTON1"));
     FlexGridSizer2->Add(Pause, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FlexGridSizer1->Add(FlexGridSizer2, 1, wxALL|wxEXPAND|wxFIXED_MINSIZE|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -145,14 +156,15 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Connect(ID_BUTTON2,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnSelectClick);
     Connect(ID_TEXTCTRL1,wxEVT_COMMAND_TEXT_UPDATED,(wxObjectEventFunction)&client_guiFrame::OnTextCtrl1Text);
     Connect(ID_BUTTON3,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnButton1Click2);
-    Connect(PlayButton,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnPlayClick);
+    Connect(ID_FR,wxEVT_COMMAND_SPINCTRL_UPDATED,(wxObjectEventFunction)&client_guiFrame::OnFrameCountChange);
+    Connect(PlayButton,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnStopBtnClick);
     Connect(ID_BUTTON1,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnPauseClick);
     Connect(idMenuQuit,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnQuit);
     Connect(idMenuAbout,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnAbout);
     //*)
     Connect(idServerSetting,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnServerSetting);
     Connect(idCompressionSetting,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnCompressSetting);
-
+    gl->Connect(wxEVT_PAINT,(wxObjectEventFunction)&GLView::OnPaint,0,gl);
     /*int GLCanvasAttributes_1[] = {
     	WX_GL_RGBA,
     	WX_GL_DOUBLEBUFFER,
@@ -181,6 +193,11 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
 
     this->SetSize(600, 400);
     ChangeState(sInit);
+/*
+    wxAcceleratorEntry entries[14];
+    entries[0].Set(wxACCEL_NORMAL, (int) WXK_SPACE, PlayButton);
+    wxAcceleratorTable accel(1, entries);
+    SetAcceleratorTable(accel);*/
 }
 
 client_guiFrame::~client_guiFrame()
@@ -248,12 +265,12 @@ void client_guiFrame::OnButton1Click(wxCommandEvent& event)
 
 }
 
-void client_guiFrame::OnPlayClick(wxCommandEvent& event)
+void client_guiFrame::OnStopBtnClick(wxCommandEvent& event)
 {
     if(state == sInit) {
-        PlaySelection();
+        // nothing
     } else if(state == sReady) {
-        Resume();
+        Stop();
     } else {
         Stop();
     }
@@ -271,7 +288,8 @@ void client_guiFrame::PlaySelection()
     }*/
 
     if(this->playList.empty()) {
-        wxMessageBox(_("No video selected"), _("Unable to play"));
+        StatusBar1->PushStatusText(wxT("No video selected!"));
+        //wxMessageBox(_("No video selected"), _("Unable to play"));
         return;
     }
 
@@ -356,6 +374,8 @@ void client_guiFrame::PlaySelection()
         }
 
 
+        gl->Receive(true);
+
         msgstr = L"";
         msgstr << wxT("PLAY");
         buf = msgstr.mb_str();
@@ -375,6 +395,7 @@ void client_guiFrame::PlaySelection()
         //UG.newWindow();
         StatusBar1->PushStatusText(item);
         ChangeState(sPlaying);
+        total_frames = this->playList[0].total_frames;
 
     } catch (std::exception &e) {
         wxString msg = wxString::FromUTF8(e.what());
@@ -407,6 +428,11 @@ void client_guiFrame::Stop()
     }
     this->stream_connection.disconnect();
     ChangeState(sInit);
+    DoUpdateCounters(0);
+    //Refresh();
+    gl->LoadSplashScreen();
+    gl->Receive(false);
+    total_frames = 0;
 }
 
 void client_guiFrame::NotifyWindowClosed()
@@ -479,31 +505,42 @@ void client_guiFrame::OnTextCtrl1Text(wxCommandEvent& event)
 {
 }
 
-void client_guiFrame::UpdateTimer(wxCommandEvent&)
+void client_guiFrame::DoUpdateCounters(int val)
 {
-    if(!this->playList.IsEmpty())
-        Slider1->SetValue((double) gl->GetFrameSeq() / (this->playList[0].total_frames - 1) * 100.0);
+    if(!this->playList.IsEmpty()) {
+        Slider1->SetValue((double)  val / (this->total_frames - 1) * 100.0);
 
-    if(Slider1->GetValue() == 100) {
-        DoPause();
+        if(Slider1->GetValue() == 100) {
+            DoPause();
+        }
+
+        FrameCount->SetValue(val);
+    } else {
+        Slider1->SetValue(0);
+        FrameCount->SetValue(0);
     }
 }
 
-void client_guiFrame::Scrolled(wxCommandEvent&)
+void client_guiFrame::UpdateTimer(wxCommandEvent&)
 {
-    if(this->playList.IsEmpty())
-        return;
-    int new_pos = round((double) Slider1->GetValue() / 100.0 * (this->playList[0].total_frames - 1));
+    if(state != sInit)
+        DoUpdateCounters(gl->GetFrameSeq());
+}
 
+void client_guiFrame::JumpToFrame(int frame)
+{
     wxString msgstr;
     char msgbuf[40];
     struct message msg;
     struct response resp;
 
+    if(frame < 0 || frame >= this->total_frames)
+        return;
+
     if(state == sPlaying) {
-        snprintf(msgbuf, 40, "PLAY %d", new_pos);
+        snprintf(msgbuf, 40, "PLAY %d", frame);
     } else if (state == sReady) {
-        snprintf(msgbuf, 40, "PAUSE %d", new_pos);
+        snprintf(msgbuf, 40, "PAUSE %d", frame);
     } else {
         return;
     }
@@ -520,9 +557,21 @@ void client_guiFrame::Scrolled(wxCommandEvent&)
     }
 }
 
+void client_guiFrame::Scrolled(wxCommandEvent&)
+{
+    if(this->playList.IsEmpty())
+        return;
+    int new_pos = round((double) Slider1->GetValue() / 100.0 * (this->total_frames - 1));
+
+    JumpToFrame(new_pos);
+}
+
 void client_guiFrame::OnPauseClick(wxCommandEvent& event)
 {
-    if(state == sPlaying) {
+    //assert(event.GetExtraLong() != MOUSE_CLICKED_MAGIC);
+    if(state == sInit && event.GetExtraLong() != MOUSE_CLICKED_MAGIC) {
+        PlaySelection();
+    } else if(state == sPlaying) {
         DoPause();
     } else if(state == sReady) {
         Resume();
@@ -531,6 +580,9 @@ void client_guiFrame::OnPauseClick(wxCommandEvent& event)
 
 void client_guiFrame::DoPause()
 {
+    if(state != sPlaying)
+        return;
+
     try {
         wxString msgstr;
         struct message msg;
@@ -587,15 +639,12 @@ void client_guiFrame::ChangeState(enum playerState newState)
     state = newState;
     switch(newState) {
         case sInit:
-            Play->SetLabel(wxT("Start stream"));
             Pause->SetLabel(wxT("Play"));
             break;
         case sReady:
-            Play->SetLabel(wxT("Stop stream"));
             Pause->SetLabel(wxT("Play"));
             break;
         case sPlaying:
-            Play->SetLabel(wxT("Stop stream"));
             Pause->SetLabel(wxT("Pause"));
             break;
     }
@@ -638,3 +687,99 @@ void client_guiFrame::OnButton1Click2(wxCommandEvent& event)
 void client_guiFrame::OnGLCanvas1Paint(wxPaintEvent& event)
 {
 }
+
+void client_guiFrame::ToggleFullscreen(wxCommandEvent& evt = defaultCommandEvent)
+{
+    wxWindow *saved;
+    if(IsFullScreen()) {
+        //wxGBSpan span(1,1);
+        //assert(FlexGridSizer1->SetItemSpan((size_t) 0, span));
+
+        //FlexGridSizer1->Detach((size_t) 1);
+        //FlexGridSizer1->RecalcSizes();
+        FlexGridSizer2->Show(true);
+        ShowFullScreen(false, wxFULLSCREEN_ALL);
+    } else {
+        //wxGBSpan span(2,2);
+        //FlexGridSizer2->Show(false);
+        //FlexGridSizer1->SetItemSpan((size_t) 1, span);
+        //wxGBPosition pos;
+        //pos = FlexGridSizer1->GetItemPosition((size_t) 1);
+        //span = FlexGridSizer1->GetItemSpan((size_t) 1);
+        //std::cerr << span.GetColspan() << span.GetRowspan() << std::endl;
+        //FlexGridSizer1->Detach((size_t) 1);
+        /*span = wxGBSpan(0,0);
+        FlexGridSizer1->SetItemSpan((size_t) 2, span);*/
+        FlexGridSizer2->Show(false);
+        ShowFullScreen(true, wxFULLSCREEN_ALL);
+    }
+}
+
+void client_guiFrame::TogglePause(wxCommandEvent& evt)
+{
+    OnPauseClick(evt);
+}
+
+void client_guiFrame::MouseMotion(wxMouseEvent& evt)
+{
+    if(IsFullScreen()  && !FlexGridSizer1->IsShown(FlexGridSizer2) && evt.GetY() > (GetSize().y - 5)) {
+        //std::cerr << "." << evt.GetY();
+        FlexGridSizer2->Show(true);
+        FlexGridSizer1->Layout();
+        this->Fit();
+    } else if(IsFullScreen() && FlexGridSizer1->IsShown(FlexGridSizer2)  && evt.GetY() < (GetSize().y - 20)) {
+        //std::cerr << "!" << evt.GetY();
+        FlexGridSizer2->Show(false);
+        FlexGridSizer1->Layout();
+        this->Fit();
+    }
+}
+
+void client_guiFrame::OnFrameCountChange(wxSpinEvent& event)
+{
+    JumpToFrame(event.GetPosition());
+}
+
+void client_guiFrame::KeyDown(wxKeyEvent& evt)
+{
+    switch(evt.GetUnicodeKey()) {
+        case WXK_LEFT:
+        case WXK_RIGHT:
+        case WXK_UP:
+        case WXK_DOWN:
+        case WXK_SPACE:
+             if(state == sPlaying) {
+                DoPause();
+             } else if(state == sReady) {
+                Resume();
+             }
+            break;
+        case WXK_ESCAPE:
+            if(IsFullScreen()) {
+                ToggleFullscreen();
+            }
+            break;
+        case 'F':
+            ToggleFullscreen();
+            break;
+        case '\r':
+            if(evt.GetModifiers() == wxMOD_ALT) {
+                ToggleFullscreen();
+            }
+            break;
+        case 'K':
+            if(state == sPlaying)
+                DoPause();
+            break;
+        case 'J':
+            JumpToFrame(gl->GetFrameSeq() - 1);
+            break;
+        case 'L':
+            JumpToFrame(gl->GetFrameSeq() + 1);
+            break;
+
+        default:
+            std::cerr << evt.GetUnicodeKey() << " " << (int) '\r' << std::endl;
+    }
+}
+

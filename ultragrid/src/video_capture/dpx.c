@@ -323,7 +323,7 @@ static void apply_lut_8b(int *lut, char *out_data, char *in_data, int size)
                 r = lut[(val >> 16) & 0xff];
                 g = lut[(val >> 8) & 0xff];
                 b = lut[(val >> 0) & 0xff];
-                *out++ = r << 16 | g << 8 | b << 0;
+                *out++ = 0xff << 24 | r << 16 | g << 8 | b << 0;
         }
 }
 

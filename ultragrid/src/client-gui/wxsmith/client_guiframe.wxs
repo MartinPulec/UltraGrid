@@ -3,9 +3,10 @@
 	<object class="wxFrame" name="client_guiFrame">
 		<title>FlashNET Player</title>
 		<id_arg>0</id_arg>
-		<object class="wxFlexGridSizer" variable="FlexGridSizer1" member="no">
+		<style>wxDEFAULT_FRAME_STYLE|wxWANTS_CHARS</style>
+		<object class="wxFlexGridSizer" subclass="CustomGridBagSizer" variable="FlexGridSizer1" member="yes">
 			<cols>1</cols>
-			<rows>1</rows>
+			<rows>2</rows>
 			<growablecols>0</growablecols>
 			<growablerows>0</growablerows>
 			<object class="sizeritem">
@@ -17,15 +18,15 @@
 					<size>487,234</size>
 					<handler function="OnGLCanvas1Paint" entry="EVT_PAINT" />
 				</object>
-				<flag>wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+				<flag>wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
 				<border>5</border>
 				<option>1</option>
 			</object>
 			<object class="sizeritem">
-				<object class="wxFlexGridSizer" variable="FlexGridSizer2" member="no">
-					<cols>6</cols>
+				<object class="wxFlexGridSizer" variable="FlexGridSizer2" member="yes">
+					<cols>8</cols>
 					<rows>2</rows>
-					<growablecols>3</growablecols>
+					<growablecols>5</growablecols>
 					<object class="sizeritem">
 						<object class="wxButton" name="ID_BUTTON2" variable="Select" member="yes">
 							<label>Select video</label>
@@ -56,6 +57,25 @@
 						<option>1</option>
 					</object>
 					<object class="sizeritem">
+						<object class="wxStaticText" name="ID_FR_LABEL" variable="FrameCountLabel" member="yes">
+							<label>FR</label>
+						</object>
+						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+						<border>5</border>
+						<option>1</option>
+					</object>
+					<object class="sizeritem">
+						<object class="wxSpinCtrl" name="ID_FR" variable="FrameCount" member="yes">
+							<value>0</value>
+							<max>2592000</max>
+							<size>67,25</size>
+							<handler function="OnFrameCountChange" entry="EVT_SPINCTRL" />
+						</object>
+						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+						<border>5</border>
+						<option>1</option>
+					</object>
+					<object class="sizeritem">
 						<object class="wxSlider" name="ID_SLIDER1" subclass="ProgressSlider" variable="Slider1" member="yes">
 							<minsize>100,-1</minsize>
 						</object>
@@ -64,10 +84,10 @@
 						<option>1</option>
 					</object>
 					<object class="sizeritem">
-						<object class="wxButton" name="PlayButton" variable="Play" member="yes">
-							<label>Start stream</label>
+						<object class="wxButton" name="PlayButton" variable="StopBtn" member="yes">
+							<label>Stop</label>
 							<maxsize>-1,-1</maxsize>
-							<handler function="OnPlayClick" entry="EVT_BUTTON" />
+							<handler function="OnStopBtnClick" entry="EVT_BUTTON" />
 						</object>
 						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
 						<border>5</border>

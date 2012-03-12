@@ -28,7 +28,7 @@ VideoSelection::VideoSelection(wxWindow* parent, Settings *s, wxWindowID id,cons
 	wxBoxSizer* BoxSizer1;
 	wxStdDialogButtonSizer* StdDialogButtonSizer1;
 
-	Create(parent, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE, _T("wxID_ANY"));
+	Create(parent, wxID_ANY, _("Select video"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE, _T("wxID_ANY"));
 	FlexGridSizer1 = new wxFlexGridSizer(0, 1, 0, 0);
 	ListBox1 = new wxListBox(this, ID_LISTBOX1, wxDefaultPosition, wxSize(527,174), 0, 0, 0, wxDefaultValidator, _T("ID_LISTBOX1"));
 	FlexGridSizer1->Add(ListBox1, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);

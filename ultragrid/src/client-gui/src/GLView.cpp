@@ -1,5 +1,6 @@
 #include <wx/sizer.h>
 #include <wx/dcclient.h>
+#include <iostream>
 
 #include "../include/GLView.h"
 
@@ -22,6 +23,37 @@ extern "C" {
 #endif /* HAVE_MACOSX */
 
 #define STRINGIFY(A) #A
+
+#include "cesnet-logo-2.c"
+
+
+DEFINE_EVENT_TYPE(wxEVT_RECONF)
+DEFINE_EVENT_TYPE(wxEVT_PUTF)
+DEFINE_EVENT_TYPE(wxEVT_UPDATE_TIMER)
+DEFINE_EVENT_TYPE(wxEVT_TOGGLE_FULLSCREEN)
+DEFINE_EVENT_TYPE(wxEVT_TOGGLE_PAUSE)
+
+BEGIN_EVENT_TABLE(GLView, wxGLCanvas)
+  EVT_PAINT(GLView::OnPaint)
+  EVT_WINDOW_CREATE(GLView::PostInit)
+
+  EVT_COMMAND  (wxID_ANY, wxEVT_RECONF, GLView::Reconf)
+  EVT_COMMAND  (wxID_ANY, wxEVT_PUTF, GLView::Putf)
+
+  EVT_SIZE(GLView::Resized)
+
+  EVT_LEFT_DCLICK(GLView::DClick)
+  EVT_LEFT_DOWN(GLView::Click)
+  EVT_MOTION(GLView::MouseMotion)
+  EVT_KEY_DOWN(GLView::KeyDown)
+END_EVENT_TABLE()
+
+GLView::GLView(wxFrame *p, wxWindowID id, const wxPoint &pos, const wxSize &size, long style, const wxString &name, int *attribList) :
+    wxGLCanvas(p, id, attribList, pos, size, style, name),
+    parent(p),
+    init(false)
+{
+}
 
 // source code for a shader unit (xsedmik)
 static const char * yuv422_to_rgb_fp = STRINGIFY(
@@ -97,31 +129,12 @@ void main()
 );
 
 
-
-DEFINE_EVENT_TYPE(wxEVT_RECONF)
-DEFINE_EVENT_TYPE(wxEVT_PUTF)
-DEFINE_EVENT_TYPE(wxEVT_UPDATE_TIMER)
-
-BEGIN_EVENT_TABLE(GLView, wxGLCanvas)
-  EVT_COMMAND  (wxID_ANY, wxEVT_RECONF, GLView::Reconf)
-  EVT_COMMAND  (wxID_ANY, wxEVT_PUTF, GLView::Putf)
-  EVT_WINDOW_CREATE(GLView::PostInit)
-  EVT_SIZE(GLView::Resized)
-END_EVENT_TABLE()
-
-GLView::GLView(wxFrame *p, wxWindowID id, const wxPoint &pos, const wxSize &size, long style, const wxString &name, int *attribList) :
-    wxGLCanvas(p, id, pos, size, style, name, attribList),
-    parent(p),
-    init(false)
-{
-}
-
 void GLView::PostInit(wxWindowCreateEvent&)
 {
     context = new wxGLContext(this);
     wxGLCanvas::SetCurrent(*context);
-    SetCurrent();
-    //wxPaintDC(this);
+    //SetCurrent();
+    wxPaintDC(this);
 
     glewInit();
 
@@ -146,6 +159,8 @@ void GLView::PostInit(wxWindowCreateEvent&)
     dxt_arb_init();
     dxt5_arb_init();
     init = true;
+
+    LoadSplashScreen();
 }
 
 void GLView::glsl_arb_init()
@@ -273,9 +288,9 @@ void GLView::reconfigure(int width, int height, int codec)
 {
     wxCommandEvent event(wxEVT_RECONF, GetId());
 
-    this->width = width;
-    this->height = height;
-    this->codec = codec;
+    this->width = data_width = width;
+    this->height = data_height = height;
+    this->codec = data_codec = codec;
     this->dxt_height = (height + 3) / 4 * 4;
     this->aspect = (double) width / height;
     // we deffer the event (this method is called from "wrong" thread
@@ -285,6 +300,7 @@ void GLView::reconfigure(int width, int height, int codec)
 
 void GLView::Reconf(wxCommandEvent& event)
 {
+    this->data = NULL;
     //PostInit();
     wxGLCanvas::SetCurrent(*context);
     //this->SetSize(wxSize(width, height));
@@ -391,28 +407,53 @@ void GLView::resize()
 
 	glLoadIdentity( );
 
+#if 0
     glClear(GL_COLOR_BUFFER_BIT);
+
+
     float bottom = 1.0f - (dxt_height - height) / (float) dxt_height * 2;
 
-        //gl_check_error();
-        glBegin(GL_QUADS);
-          /* Front Face */
-          /* Bottom Left Of The Texture and Quad */
-          glTexCoord2f( 0.0f, bottom ); glVertex2f( -1.0f, -1/aspect);
-          /* Bottom Right Of The Texture and Quad */
-          glTexCoord2f( 1.0f, bottom ); glVertex2f(  1.0f, -1/aspect);
-          /* Top Right Of The Texture and Quad */
-          glTexCoord2f( 1.0f, 0.0f ); glVertex2f(  1.0f,  1/aspect);
-          /* Top Left Of The Texture and Quad */
-          glTexCoord2f( 0.0f, 0.0f ); glVertex2f( -1.0f,  1/aspect);
-        glEnd( );
+    //gl_check_error();
+    glBegin(GL_QUADS);
+      /* Front Face */
+      /* Bottom Left Of The Texture and Quad */
+      glTexCoord2f( 0.0f, bottom ); glVertex2f( -1.0f, -1/aspect);
+      /* Bottom Right Of The Texture and Quad */
+      glTexCoord2f( 1.0f, bottom ); glVertex2f(  1.0f, -1/aspect);
+      /* Top Right Of The Texture and Quad */
+      glTexCoord2f( 1.0f, 0.0f ); glVertex2f(  1.0f,  1/aspect);
+      /* Top Left Of The Texture and Quad */
+      glTexCoord2f( 0.0f, 0.0f ); glVertex2f( -1.0f,  1/aspect);
+    glEnd( );
+#endif
 
-        SwapBuffers();
+    Refresh();
+    //SwapBuffers();
+}
+
+void GLView::LoadSplashScreen()
+{
+    wxCommandEvent unused;
+    this->width = cesnet_logo.width;
+    this->height = cesnet_logo.height;
+    this->codec = RGBA;
+    this->dxt_height = (height + 3) / 4 * 4;
+    this->aspect = (double) cesnet_logo.width / cesnet_logo.height;
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+    Reconf(unused);
+    this->data = (char *) cesnet_logo.pixel_data;
+    Render();
 }
 
 
 void GLView::putframe(char *data, unsigned int frames)
 {
+    if(!receive)
+        return;
     this->data = data;
     this->frames = frames;
     wxCommandEvent event(wxEVT_PUTF, GetId());
@@ -429,7 +470,27 @@ unsigned int GLView::GetFrameSeq()
 
 void GLView::Putf(wxCommandEvent&)
 {
+    if(!receive)
+        return;
+
+    if(data_width != width || data_height != height || data_codec != codec) {
+        width = data_width;
+        height = data_height;
+        codec = data_codec;
+        this->dxt_height = (height + 3) / 4 * 4;
+        this->aspect = (double) width / height;
+
+        wxCommandEvent unused;
+        Reconf(unused);
+    }
+
+    Render();
+}
+
+void GLView::Render()
+{
         wxGLCanvas::SetCurrent(*context);
+
         switch(codec) {
         case DXT1:
             glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
@@ -553,16 +614,56 @@ void GLView::gl_bind_texture()
 
 void GLView::dxt_bind_texture()
 {
-        static int i=0;
+    static int i=0;
 
-        //TODO: does OpenGL use different stuff here?
-        glActiveTexture(GL_TEXTURE0);
-        i=glGetUniformLocationARB(PHandle,"yuvtex");
-        glUniform1iARB(i,0);
-        glBindTexture(GL_TEXTURE_2D,texture_display);
+    //TODO: does OpenGL use different stuff here?
+    glActiveTexture(GL_TEXTURE0);
+    i=glGetUniformLocationARB(PHandle,"yuvtex");
+    glUniform1iARB(i,0);
+    glBindTexture(GL_TEXTURE_2D,texture_display);
 	glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
 			width, height,
 			GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
 			(width * height/16)*8,
 			data);
+}
+
+void GLView::DClick(wxMouseEvent& evt)
+{
+    wxCommandEvent evt_pause(wxEVT_TOGGLE_PAUSE, GetId());
+    evt_pause.SetExtraLong(MOUSE_CLICKED_MAGIC);
+    wxPostEvent(parent, evt_pause);
+
+    wxCommandEvent event_fullscreen(wxEVT_TOGGLE_FULLSCREEN, GetId());
+    wxPostEvent(parent, event_fullscreen);
+}
+
+void GLView::Click(wxMouseEvent& evt)
+{
+    SetFocus();
+    wxCommandEvent evt_pause(wxEVT_TOGGLE_PAUSE, GetId());
+    evt_pause.SetExtraLong(MOUSE_CLICKED_MAGIC);
+    wxPostEvent(parent, evt_pause);
+}
+
+void GLView::MouseMotion(wxMouseEvent& evt)
+{
+    wxPostEvent(parent, evt);
+}
+
+void GLView::OnPaint( wxPaintEvent& WXUNUSED(event) )
+{
+    if(this->init) {
+        Render();
+    }
+}
+
+void GLView::Receive(bool val)
+{
+    receive = val;
+}
+
+void GLView::KeyDown(wxKeyEvent& evt)
+{
+    wxPostEvent(parent, evt);
 }

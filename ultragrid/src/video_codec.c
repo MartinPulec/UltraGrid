@@ -571,7 +571,7 @@ vc_copylineDPX10toRGBA(unsigned char *dst, unsigned char *src, int dst_len, int 
                 g = 0xff & (val >> 14);
                 b = 0xff & (val >> 4);
                 
-                *out++ = (r << rshift) | (g << gshift) | (b << bshift);
+                *out++ = 0xFF << 24  | ((r << rshift) | (g << gshift) | (b << bshift));
                 ++in;
                 dst_len -= 4;
         }

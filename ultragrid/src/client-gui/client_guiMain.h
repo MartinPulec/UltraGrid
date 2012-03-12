@@ -19,17 +19,22 @@
 #include "include/VideoEntry.h"
 #include "VideoSelection.h"
 #include "include/ProgressSlider.h"
+#include "include/CustomGridBagSizer.h"
 
 //(*Headers(client_guiFrame)
 #include <wx/glcanvas.h>
+#include <wx/spinctrl.h>
 #include <wx/sizer.h>
 #include <wx/button.h>
 #include <wx/menu.h>
 #include <wx/slider.h>
 #include <wx/statusbr.h>
 #include <wx/frame.h>
+#include <wx/stattext.h>
 #include <wx/textctrl.h>
 //*)
+
+#include <wx/accel.h>
 
 enum playerState {
     sInit,
@@ -56,23 +61,32 @@ class client_guiFrame: public wxFrame
         void On3Box1Select(wxCommandEvent& event);
         void OnListBox1Select1(wxCommandEvent& event);
         void OnButton1Click(wxCommandEvent& event);
-        void OnPlayClick(wxCommandEvent& event);
         void OnButton1Click1(wxCommandEvent& event);
         void OnSelectClick(wxCommandEvent& event);
         void OnTextCtrl1Text(wxCommandEvent& event);
         void OnPauseClick(wxCommandEvent& event);
         void OnButton1Click2(wxCommandEvent& event);
         void OnGLCanvas1Paint(wxPaintEvent& event);
+        void OnFrameCountChange(wxSpinEvent& event);
+        void OnStopBtnClick(wxCommandEvent& event);
         //*)
         void Resize(wxCommandEvent&);
         void UpdateTimer(wxCommandEvent&);
         void Scrolled(wxCommandEvent&);
+        void ToggleFullscreen(wxCommandEvent&);
+        void TogglePause(wxCommandEvent&);
+        void MouseMotion(wxMouseEvent& evt);
+        void KeyDown(wxKeyEvent& evt);
 
         void PlaySelection();
         void Stop();
         void DoPause();
         void Resume();
         void NotifyWindowClosed();
+        void JumpToFrame(int frame);
+        void DoUpdateCounters(int val);
+
+        int FilterEvent(wxEvent& event);
 
         void ChangeState(enum playerState);
 
@@ -81,6 +95,8 @@ class client_guiFrame: public wxFrame
         static const long ID_BUTTON2;
         static const long ID_TEXTCTRL1;
         static const long ID_BUTTON3;
+        static const long ID_FR_LABEL;
+        static const long ID_FR;
         static const long ID_SLIDER1;
         static const long PlayButton;
         static const long ID_BUTTON1;
@@ -92,15 +108,19 @@ class client_guiFrame: public wxFrame
         //*)
 
         //(*Declarations(client_guiFrame)
+        wxFlexGridSizer* FlexGridSizer2;
+        wxStaticText* FrameCountLabel;
         wxStatusBar* StatusBar1;
         wxButton* Select;
         wxButton* FPSOk;
         wxTextCtrl* fps;
         GLView* gl;
         ProgressSlider* Slider1;
+        wxButton* StopBtn;
         wxMenuItem* MenuItem4;
+        CustomGridBagSizer* FlexGridSizer1;
         wxButton* Pause;
-        wxButton* Play;
+        wxSpinCtrl* FrameCount;
         //*)
 
         sp_client stream_connection;
