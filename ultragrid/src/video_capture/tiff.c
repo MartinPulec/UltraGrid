@@ -372,7 +372,7 @@ vidcap_tiff_grab(void *state, struct audio_frame **audio)
         }
         s->playone = FALSE;
 
-        if(s->finished && s->buffer_processed_start == s->buffer_processed_end &&
+        if(s->finished &&
                         s->buffer_read_start == s->buffer_read_end) {
                 if(s->loop) {
                         s->index = 0;

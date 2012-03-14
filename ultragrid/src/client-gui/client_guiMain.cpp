@@ -76,8 +76,10 @@ BEGIN_EVENT_TABLE(client_guiFrame,wxFrame)
     EVT_COMMAND  (wxID_ANY, wxEVT_TOGGLE_FULLSCREEN, client_guiFrame::ToggleFullscreen)
     EVT_COMMAND  (wxID_ANY, wxEVT_TOGGLE_PAUSE, client_guiFrame::TogglePause)
     EVT_COMMAND  (wxID_ANY, wxEVT_SCROLLED, client_guiFrame::Scrolled)
-    EVT_MOTION(client_guiFrame::MouseMotion)
+    EVT_MOTION(client_guiFrame::Mouse)
+    EVT_LEFT_UP(client_guiFrame::Mouse)
     EVT_KEY_DOWN(client_guiFrame::KeyDown)
+    EVT_MOUSEWHEEL(client_guiFrame::Wheel)
 
     EVT_TOGGLEBUTTON(ID_ToggleLoop, client_guiFrame::OnButton1Click3)
 END_EVENT_TABLE()
@@ -312,9 +314,7 @@ void client_guiFrame::PlaySelection()
         //this->playList.pop_back();
 
         this->connection.connect_to(std::string(hostname.mb_str()), 5100);
-
         this->connection.set_parameter(wxT("format"), video_format);
-
 
         this->connection.set_parameter(wxT("compression"), wxString(settings.GetValue(std::string("compression"), std::string("none")).c_str(), wxConvUTF8) << wxT(" ") +
                 wxString(settings.GetValue(std::string("jpeg_qual"), std::string("80")).c_str(), wxConvUTF8));
@@ -322,6 +322,7 @@ void client_guiFrame::PlaySelection()
 
         this->connection.setup(wxT("/") + path);
         this->connection.set_parameter(wxT("fps"), wxString::Format(wxT("%2.2f"),fps));
+        connection.set_parameter(wxT("loop"), ToggleLoop->GetValue() ? wxT("ON") : wxT("OFF"));
 
 
         gl->Receive(true);
@@ -562,40 +563,46 @@ void client_guiFrame::TogglePause(wxCommandEvent& evt)
     OnPauseClick(evt);
 }
 
-void client_guiFrame::MouseMotion(wxMouseEvent& evt)
+void client_guiFrame::Mouse(wxMouseEvent& evt)
 {
-    if(IsFullScreen()  && !FlexGridSizer1->IsShown(FlexGridSizer2) && evt.GetY() > (GetSize().y - 5)) {
-        //std::cerr << "." << evt.GetY();
-        FlexGridSizer2->Show(true);
-        FlexGridSizer1->Layout();
-        this->Fit();
-    } else if(IsFullScreen() && FlexGridSizer1->IsShown(FlexGridSizer2)  && evt.GetY() < (GetSize().y - 20)) {
-        //std::cerr << "!" << evt.GetY();
-        FlexGridSizer2->Show(false);
-        FlexGridSizer1->Layout();
-        this->Fit();
+    if(evt.GetEventObject() == gl) {
+        if(evt.LeftUp()) {
+            dragging = false;
+        } else if(evt.Dragging()) {
+            if(state != sInit) {
+                wxPoint position = evt.GetPosition();
+                if(dragging) {
+                    gl->GoPixels(lastDragPosition.x - position.x, lastDragPosition.y - position.y);
+                }
+                lastDragPosition = position;
+                dragging = true;
+            }
+        } else { /* motion */
+            if(IsFullScreen()  && !FlexGridSizer1->IsShown(FlexGridSizer2) && evt.GetY() > (GetSize().y - 5)) {
+                //std::cerr << "." << evt.GetY();
+                FlexGridSizer2->Show(true);
+                FlexGridSizer1->Layout();
+                this->Fit();
+            } else if(IsFullScreen() && FlexGridSizer1->IsShown(FlexGridSizer2)  && evt.GetY() < (GetSize().y - 20)) {
+                //std::cerr << "!" << evt.GetY();
+                FlexGridSizer2->Show(false);
+                FlexGridSizer1->Layout();
+                this->Fit();
+            }
+        }
     }
 }
 
 void client_guiFrame::OnFrameCountChange(wxSpinEvent& event)
 {
-    JumpToFrame(event.GetPosition());
+    if(state != sInit) {
+        JumpToFrame(event.GetPosition());
+    }
 }
 
 void client_guiFrame::KeyDown(wxKeyEvent& evt)
 {
-    switch(evt.GetUnicodeKey()) {
-        case WXK_LEFT:
-        case WXK_RIGHT:
-        case WXK_UP:
-        case WXK_DOWN:
-        case WXK_SPACE:
-             if(state == sPlaying) {
-                DoPause();
-             } else if(state == sReady) {
-                Resume();
-             }
-            break;
+    switch(evt.GetKeyCode()) {
         case WXK_ESCAPE:
             if(IsFullScreen()) {
                 ToggleFullscreen();
@@ -609,19 +616,76 @@ void client_guiFrame::KeyDown(wxKeyEvent& evt)
                 ToggleFullscreen();
             }
             break;
-        case 'K':
-            if(state == sPlaying)
-                DoPause();
-            break;
-        case 'J':
-            JumpToFrame(gl->GetFrameSeq() - 1);
-            break;
-        case 'L':
-            JumpToFrame(gl->GetFrameSeq() + 1);
-            break;
+    }
 
-        default:
-            std::cerr << evt.GetUnicodeKey() << " " << (int) '\r' << std::endl;
+    if(state != sInit) {
+        switch(evt.GetKeyCode()) {
+            case WXK_SPACE:
+                 if(state == sPlaying) {
+                    DoPause();
+                 } else if(state == sReady) {
+                    Resume();
+                 }
+                break;
+            case 'K':
+                if(state == sPlaying)
+                    DoPause();
+                break;
+            case 'J':
+                JumpToFrame(gl->GetFrameSeq() - 1);
+                break;
+            case 'L':
+                JumpToFrame(gl->GetFrameSeq() + 1);
+                break;
+            case 'C':
+                gl->ToggleLightness();
+                if(state == sReady)
+                    gl->Render();
+                break;
+            case 'R':
+            case 'G':
+            case 'B':
+                if(LastColorModifiingKey == evt.GetUnicodeKey() && LastColorModifiingModifiers == evt.GetModifiers()) {
+                    gl->DefaultLightness();
+                    LastColorModifiingModifiers = LastColorModifiingKey = 0;
+                } else {
+                    if(evt.GetModifiers() == wxMOD_CONTROL) {
+                        gl->HideChannel(evt.GetUnicodeKey());
+                    } else {
+                        gl->ShowOnlyChannel(evt.GetUnicodeKey());
+                    }
+                    std::cerr <<"Y";
+                    LastColorModifiingKey = evt.GetUnicodeKey();
+                    LastColorModifiingModifiers = evt.GetModifiers();
+                }
+                if(state == sReady)
+                    gl->Render();
+
+                break;
+            case 'P':
+                ToggleLoop->SetValue(!ToggleLoop->GetValue());
+                break;
+            case '+':
+                gl->Zoom(1/0.8);
+                break;
+            case '-':
+                gl->Zoom(0.8);
+                break;
+            case WXK_LEFT:
+                gl->Go(-0.03, 0);
+                break;
+            case WXK_UP:
+                gl->Go(0, -0.03);
+                break;
+            case WXK_RIGHT:
+                gl->Go(0.03, 0);
+                break;
+            case WXK_DOWN:
+                gl->Go(0, 0.03);
+                break;
+            default:
+                std::cerr << "Unknown key: " << evt.GetUnicodeKey() << std::endl;
+        }
     }
 }
 
@@ -647,5 +711,17 @@ void client_guiFrame::OnButton1Click3(wxCommandEvent& event)
     } catch (std::exception &e) {
         ToggleLoop->SetValue(!ToggleLoop->GetValue());
         wxMessageBox(wxString::FromUTF8(e.what()), _("Error setting loop"));
+    }
+}
+
+void client_guiFrame::Wheel(wxMouseEvent& evt)
+{
+    if(evt.GetEventObject() == gl) {
+        if(state != sInit) {
+            if(evt.GetWheelRotation() > 0)
+                gl->Zoom(0.8);
+            else
+                gl->Zoom(1/0.8);
+        }
     }
 }

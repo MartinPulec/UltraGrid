@@ -44,15 +44,25 @@ BEGIN_EVENT_TABLE(GLView, wxGLCanvas)
 
   EVT_LEFT_DCLICK(GLView::DClick)
   EVT_LEFT_DOWN(GLView::Click)
-  EVT_MOTION(GLView::MouseMotion)
+  EVT_MOTION(GLView::Mouse)
+  EVT_LEFT_UP(GLView::Mouse)
   EVT_KEY_DOWN(GLView::KeyDown)
+
+  EVT_MOUSEWHEEL(GLView::Wheel)
 END_EVENT_TABLE()
+
+const int lightness_count = 3;
+const int channel_count = 3;
+
+extern "C" void gl_check_error(void);
 
 GLView::GLView(wxFrame *p, wxWindowID id, const wxPoint &pos, const wxSize &size, long style, const wxString &name, int *attribList) :
     wxGLCanvas(p, id, attribList, pos, size, style, name),
     parent(p),
     init(false)
 {
+    vpXMultiplier = vpYMultiplier = 1.0;
+    xoffset = yoffset = 0.0;
 }
 
 // source code for a shader unit (xsedmik)
@@ -78,6 +88,88 @@ void main() {
         gl_TexCoord[0] = gl_MultiTexCoord0;
         gl_Position = ftransform();
 });
+
+const char * filter_luma = STRINGIFY(
+        uniform sampler2D image;
+
+        void main(void) {
+        vec4 col = texture2D(image, gl_TexCoord[0].st);
+
+        // ITU-T BT.709
+        float luma = col.r * 0.2126 + col.g * 0.7152 + col.b * 0.0722;
+
+        gl_FragColor=vec4(luma, luma, luma, 1.0);
+}
+);
+
+const char * filter_mono = STRINGIFY(
+        uniform sampler2D image;
+
+        void main(void) {
+        vec4 col = texture2D(image, gl_TexCoord[0].st);
+
+        // ITU-T BT.709
+        float luma = col.r * 0.2126 + col.g * 0.7152 + col.b * 0.0722;
+        float mono = step(0.5, luma);
+
+        gl_FragColor=vec4(mono, mono, mono, 1.0);
+}
+);
+
+const char * filter_red = STRINGIFY(
+        uniform sampler2D image;
+
+        void main(void) {
+        vec4 col = texture2D(image, gl_TexCoord[0].st);
+        gl_FragColor=vec4(col.r, 0.0, 0.0, 1.0);
+}
+);
+
+const char * filter_green = STRINGIFY(
+        uniform sampler2D image;
+
+        void main(void) {
+        vec4 col = texture2D(image, gl_TexCoord[0].st);
+        gl_FragColor=vec4(0.0, col.g, 0.0, 1.0);
+}
+);
+
+const char * filter_blue = STRINGIFY(
+        uniform sampler2D image;
+
+        void main(void) {
+        vec4 col = texture2D(image, gl_TexCoord[0].st);
+        gl_FragColor=vec4(0.0, 0.0, col.b, 1.0);
+}
+);
+
+const char * filter_hide_red = STRINGIFY(
+        uniform sampler2D image;
+
+        void main(void) {
+        vec4 col = texture2D(image, gl_TexCoord[0].st);
+        gl_FragColor=vec4(0.0, col.g, col.b, 1.0);
+}
+);
+
+const char * filter_hide_green = STRINGIFY(
+        uniform sampler2D image;
+
+        void main(void) {
+        vec4 col = texture2D(image, gl_TexCoord[0].st);
+        gl_FragColor=vec4(col.r, 0.0, col.b, 1.0);
+}
+);
+
+const char * filter_hide_blue = STRINGIFY(
+        uniform sampler2D image;
+
+        void main(void) {
+        vec4 col = texture2D(image, gl_TexCoord[0].st);
+        gl_FragColor=vec4(col.r, col.g, 0.0, 1.0);
+}
+);
+
 
 /* DXT YUV (FastDXT) related */
 static const char * frag = STRINGIFY(
@@ -155,12 +247,75 @@ void GLView::PostInit(wxWindowCreateEvent&)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+    glGenTextures(1, &texture_final);
+    glBindTexture(GL_TEXTURE_2D, texture_final);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
     glsl_arb_init();
     dxt_arb_init();
     dxt5_arb_init();
+    prepare_filters();
+
+    CurrentFilterIdx = 0;
+    CurrentFilter = Filters[CurrentFilterIdx];
+
     init = true;
 
     LoadSplashScreen();
+}
+
+void GLView::prepare_filters()
+{
+    for(int i = 0; i < sizeof(filters) / sizeof(const char *); ++i) {
+        if(filters[i] == 0) {
+            Filters[i] = 0;
+            continue;
+        }
+
+        char 		*log;
+        const GLchar	*VProgram, *FProgram;
+        GLuint     VSHandle, FSHandle;
+
+        FProgram = (const GLchar *) filters[i];
+        VProgram = (const GLchar *) vert;
+        /* Set up program objects. */
+        this->Filters[i] =glCreateProgram();
+        VSHandle=glCreateShader(GL_VERTEX_SHADER);
+        FSHandle=glCreateShader(GL_FRAGMENT_SHADER);
+
+        /* Compile Shader */
+        glShaderSource(FSHandle,1, &FProgram,NULL);
+        glCompileShader(FSHandle);
+
+        /* Print compile log */
+        log=(char*)calloc(32768,sizeof(char));
+        glGetShaderInfoLog(FSHandle,32768,NULL,log);
+        printf("Compile Log: %s\n", log);
+
+        glShaderSource(VSHandle,1, &VProgram,NULL);
+        glCompileShader(VSHandle);
+        memset(log, 0, 32768);
+        glGetShaderInfoLog(VSHandle,32768,NULL,log);
+        printf("Compile Log: %s\n", log);
+
+        /* Attach and link our program */
+        glAttachShader(Filters[i], FSHandle);
+        glAttachShader(Filters[i], VSHandle);
+        glLinkProgram(Filters[i]);
+
+        /* Print link log. */
+        memset(log, 0, 32768);
+        glGetProgramInfoLog(Filters[i], 32768, NULL, log);
+        printf("Link Log: %s\n", log);
+        free(log);
+
+        glUseProgram(Filters[i]);
+        glUniform1iARB(glGetUniformLocationARB(PHandle,"image"),0);
+        glUseProgram(Filters[i]);
+    }
 }
 
 void GLView::glsl_arb_init()
@@ -272,7 +427,7 @@ void GLView::dxt5_arb_init()
 
         /* Print link log. */
         log=(char*)calloc(32768, sizeof(char));
-        glGetShaderInfoLog(PHandle_dxt5, 32768, NULL, log);
+        glGetProgramInfoLog(PHandle_dxt5, 32768, NULL, log);
         printf("Link Log: %s\n", log);
         free(log);
 }
@@ -287,6 +442,8 @@ GLView::~GLView()
 void GLView::reconfigure(int width, int height, int codec)
 {
     wxCommandEvent event(wxEVT_RECONF, GetId());
+
+    ResetDefaults();
 
     this->width = data_width = width;
     this->height = data_height = height;
@@ -370,6 +527,14 @@ void GLView::Reconf(wxCommandEvent& event)
         NULL);
     }
 
+    glBindTexture(GL_TEXTURE_2D,texture_final);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                        width, height, 0,
+                        GL_RGBA, GL_UNSIGNED_BYTE,
+                        NULL);
+
+    glGenFramebuffersEXT(1, &fbo_display_id);
+
     resize();
 
     //wxPostEvent(parent, event);
@@ -388,20 +553,19 @@ void GLView::resize()
 	glLoadIdentity( );
 
 	double screen_ratio;
-	double x = 1.0,
-	   y = 1.0;
+	scaleX = scaleY = 1.0;
 
 	// debug_msg("Resized to: %dx%d\n", width, height);
 
 	screen_ratio = (double) GetSize().x / GetSize().y;
 	if(screen_ratio > aspect) {
-	    x = (double) GetSize().y * aspect / GetSize().x;
+	    scaleX = (double) GetSize().y * aspect / GetSize().x;
 	} else {
-	    y = (double) GetSize().x/ (GetSize().y * aspect);
+	    scaleY = (double) GetSize().x/ (GetSize().y * aspect);
 	}
-	glScalef(x, y, 1);
+	glScalef(scaleX  * vpXMultiplier, scaleY  * vpYMultiplier, 1);
 
-	glOrtho(-1,1,-1/aspect,1/aspect,10,-10);
+	glOrtho(-1 + xoffset, 1 + xoffset,-1/aspect - yoffset, 1/aspect - yoffset,10,-10);
 
 	glMatrixMode( GL_MODELVIEW );
 
@@ -444,6 +608,9 @@ void GLView::LoadSplashScreen()
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glClearColor( 0.0f, 0.0f, 0.0f, 1.0f );
+
+    ResetDefaults();
+
     Reconf(unused);
     this->data = (char *) cesnet_logo.pixel_data;
     Render();
@@ -543,9 +710,45 @@ void GLView::Render()
         /* Reflect that we may have taller texture than reasonable data
          * if we use DXT and source height was not divisible by 4
          * In normal case, there would be 1.0 */
-        bottom = 1.0f - (dxt_height - height) / (float) dxt_height * 2;
+        if(codec == DXT1 || codec == DXT5 || codec == DXT1_YUV) {
+            bottom = 1.0f - (dxt_height - height) / (float) dxt_height * 2;
+        } else {
+            bottom = 1.0f;
+        }
 
-        //gl_check_error();
+
+        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_display_id);
+        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_final, 0);
+
+        glMatrixMode( GL_PROJECTION );
+        glPushMatrix();
+        glLoadIdentity( );
+        glOrtho(-1,1,-1/aspect,1/aspect,10,-10);
+        glMatrixMode( GL_MODELVIEW );
+        glPushMatrix();
+        glLoadIdentity( );
+        glPushAttrib(GL_VIEWPORT_BIT);
+        glViewport( 0, 0, width, height);
+
+        glBegin(GL_QUADS);
+        glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0/aspect);
+        glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0/aspect);
+        glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0/aspect);
+        glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0/aspect);
+        glEnd( );
+
+        glPopAttrib();
+        glMatrixMode( GL_PROJECTION );
+        glPopMatrix();
+        glMatrixMode( GL_MODELVIEW );
+        glPopMatrix();
+
+
+        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+        glBindTexture(GL_TEXTURE_2D, texture_final);
+
+        glUseProgram(CurrentFilter);
+
         glBegin(GL_QUADS);
           /* Front Face */
           /* Bottom Left Of The Texture and Quad */
@@ -557,6 +760,9 @@ void GLView::Render()
           /* Top Left Of The Texture and Quad */
           glTexCoord2f( 0.0f, 0.0f ); glVertex2f( -1.0f,  1/aspect);
         glEnd( );
+
+        glUseProgram(0);
+
 
         SwapBuffers();
 
@@ -574,12 +780,12 @@ void GLView::gl_bind_texture()
 
         glMatrixMode( GL_PROJECTION );
         glPushMatrix();
-	glLoadIdentity( );
-	glOrtho(-1,1,-1/aspect,1/aspect,10,-10);
+        glLoadIdentity( );
+        glOrtho(-1,1,-1/aspect,1/aspect,10,-10);
 
-	glMatrixMode( GL_MODELVIEW );
+        glMatrixMode( GL_MODELVIEW );
         glPushMatrix();
-	glLoadIdentity( );
+        glLoadIdentity( );
 
         glPushAttrib(GL_VIEWPORT_BIT);
 
@@ -599,8 +805,6 @@ void GLView::gl_bind_texture()
         glEnd();
 
         glPopAttrib();
-
-
         glMatrixMode( GL_PROJECTION );
         glPopMatrix();
         glMatrixMode( GL_MODELVIEW );
@@ -630,9 +834,9 @@ void GLView::dxt_bind_texture()
 
 void GLView::DClick(wxMouseEvent& evt)
 {
-    wxCommandEvent evt_pause(wxEVT_TOGGLE_PAUSE, GetId());
+    /*wxCommandEvent evt_pause(wxEVT_TOGGLE_PAUSE, GetId());
     evt_pause.SetExtraLong(MOUSE_CLICKED_MAGIC);
-    wxPostEvent(parent, evt_pause);
+    wxPostEvent(parent, evt_pause);*/
 
     wxCommandEvent event_fullscreen(wxEVT_TOGGLE_FULLSCREEN, GetId());
     wxPostEvent(parent, event_fullscreen);
@@ -640,13 +844,15 @@ void GLView::DClick(wxMouseEvent& evt)
 
 void GLView::Click(wxMouseEvent& evt)
 {
-    SetFocus();
+    /*SetFocus();
     wxCommandEvent evt_pause(wxEVT_TOGGLE_PAUSE, GetId());
     evt_pause.SetExtraLong(MOUSE_CLICKED_MAGIC);
     wxPostEvent(parent, evt_pause);
+    */
+    evt.Skip(); // DOC: The handler of this event should normally call event.Skip() to allow the default processing to take place as otherwise the window under mouse wouldn't get the focus.
 }
 
-void GLView::MouseMotion(wxMouseEvent& evt)
+void GLView::Mouse(wxMouseEvent& evt)
 {
     wxPostEvent(parent, evt);
 }
@@ -666,4 +872,105 @@ void GLView::Receive(bool val)
 void GLView::KeyDown(wxKeyEvent& evt)
 {
     wxPostEvent(parent, evt);
+}
+
+void GLView::ToggleLightness()
+{
+    if(CurrentFilterIdx >= lightness_count)
+        CurrentFilterIdx = 0;
+    else
+        CurrentFilterIdx = (CurrentFilterIdx + 1) % lightness_count;
+    CurrentFilter = Filters[CurrentFilterIdx];
+}
+
+void GLView::DefaultLightness()
+{
+    CurrentFilterIdx = 0;
+    CurrentFilter = Filters[CurrentFilterIdx];
+}
+
+void GLView::ShowOnlyChannel(int val)
+{
+    switch(val) {
+        case 'R':
+            CurrentFilterIdx = lightness_count + 0;
+            break;
+        case 'G':
+            CurrentFilterIdx = lightness_count + 1;
+            break;
+        case 'B':
+            CurrentFilterIdx = lightness_count + 2;
+            break;
+    }
+    CurrentFilter = Filters[CurrentFilterIdx];
+}
+
+void GLView::HideChannel(int val)
+{
+    switch(val) {
+        case 'R':
+            CurrentFilterIdx = lightness_count + channel_count + 0;
+            break;
+        case 'G':
+            CurrentFilterIdx = lightness_count + channel_count + 1;
+            break;
+        case 'B':
+            CurrentFilterIdx = lightness_count + channel_count + 2;
+            break;
+    }
+    CurrentFilter = Filters[CurrentFilterIdx];
+}
+
+void GLView::Zoom(double ratio)
+{
+    vpXMultiplier *= ratio;
+    vpYMultiplier *= ratio;
+    Recompute();
+    resize();
+}
+
+void GLView::Go(double x, double y)
+{
+    xoffset += x;
+    yoffset += y;
+    Recompute();
+    resize();
+}
+
+void GLView::ResetDefaults()
+{
+    xoffset = yoffset = 0;
+    vpXMultiplier = vpYMultiplier = 1.0;
+}
+
+void GLView::Recompute()
+{
+    if(vpXMultiplier < 1.0 || vpYMultiplier < 1.0) {
+        vpXMultiplier = vpYMultiplier = 1.0;
+    }
+
+    if(xoffset < - (vpXMultiplier - 1) / vpXMultiplier)
+        xoffset = - (vpXMultiplier - 1) /vpXMultiplier;
+
+    if(xoffset > + (vpXMultiplier - 1) / vpXMultiplier)
+        xoffset = + (vpXMultiplier - 1) / vpXMultiplier;
+
+    if(yoffset < - (vpYMultiplier - 1) / vpYMultiplier / aspect)
+        yoffset = - (vpYMultiplier - 1) /vpYMultiplier / aspect;
+
+    if(yoffset > (vpYMultiplier - 1) / vpYMultiplier / aspect)
+        yoffset = (vpYMultiplier - 1) /vpYMultiplier / aspect;
+}
+
+void GLView::Wheel(wxMouseEvent& evt)
+{
+    wxPostEvent(parent, evt);
+}
+
+void GLView::GoPixels(int xdelta, int ydelta)
+{
+    xoffset += (double) xdelta / GetSize().x / vpXMultiplier;
+    yoffset += (double) ydelta / GetSize().y / vpYMultiplier;
+    Recompute();
+    resize();
 }

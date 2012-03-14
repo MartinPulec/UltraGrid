@@ -19,6 +19,13 @@ END_DECLARE_EVENT_TYPES()
 
 class wxFlexGridSizer;
 
+extern const char *filter_mono, *filter_luma;
+extern const char *filter_red, *filter_green, *filter_blue;
+extern const char *filter_hide_red, *filter_hide_green, *filter_hide_blue;
+static const char *filters[] = {0, filter_mono, filter_luma,
+                                filter_red, filter_green, filter_blue,
+                                filter_hide_red, filter_hide_green, filter_hide_blue};
+
 class GLView : public wxGLCanvas
 {
     public:
@@ -35,6 +42,17 @@ class GLView : public wxGLCanvas
         void Receive(bool);
         void KeyDown(wxKeyEvent& evt);
 
+        void ToggleLightness();
+        void DefaultLightness();
+
+        void ShowOnlyChannel(int val);
+        void HideChannel(int val);
+
+        void Zoom(double ratio);
+
+        void Go(double x, double y);
+        void GoPixels(int x, int y);
+
     protected:
         DECLARE_EVENT_TABLE()
 
@@ -44,7 +62,11 @@ class GLView : public wxGLCanvas
         void Resized(wxSizeEvent& evt);
         void DClick(wxMouseEvent& evt);
         void Click(wxMouseEvent& evt);
-        void MouseMotion(wxMouseEvent&);
+        void Wheel(wxMouseEvent& evt);
+        void Mouse(wxMouseEvent&);
+
+        void ResetDefaults();
+        void Recompute();
 
         void resize();
 
@@ -59,18 +81,32 @@ class GLView : public wxGLCanvas
         char *data;
         unsigned int frames;
 
+        double scaleX, scaleY;
+
         GLuint     VSHandle,FSHandle,PHandle;
         /* TODO: make same shaders process YUVs for DXT as for
         * uncompressed data */
-        GLuint VSHandle_dxt,FSHandle_dxt,PHandle_dxt;
+        GLuint VSHandle_dxt, FSHandle_dxt, PHandle_dxt;
         GLuint FSHandle_dxt5, PHandle_dxt5;
+
+        GLuint Filters[sizeof(filters)/sizeof(const char *)];
+        GLuint CurrentFilter;
+        GLuint CurrentFilterIdx;
 
         // Framebuffer
         GLuint fbo_id;
+        GLuint fbo_display_id;
+
         GLuint		texture_display;
         GLuint		texture_uyvy;
+        GLuint		texture_final;
+
+        double vpXMultiplier, vpYMultiplier;
+        double xoffset, yoffset;
 
         bool init;
+
+        void prepare_filters();
 
         void glsl_arb_init();
         void dxt_arb_init();

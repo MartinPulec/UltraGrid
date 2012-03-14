@@ -10,7 +10,6 @@
 #ifndef CLIENT_GUIMAIN_H
 #define CLIENT_GUIMAIN_H
 
-#include "include/UltraGridManager.h"
 #include "include/Settings.h"
 #include "include/UGReceiver.h"
 #include "include/GLView.h"
@@ -76,8 +75,9 @@ class client_guiFrame: public wxFrame
         void Scrolled(wxCommandEvent&);
         void ToggleFullscreen(wxCommandEvent&);
         void TogglePause(wxCommandEvent&);
-        void MouseMotion(wxMouseEvent& evt);
+        void Mouse(wxMouseEvent& evt);
         void KeyDown(wxKeyEvent& evt);
+        void Wheel(wxMouseEvent& evt);
 
         void PlaySelection();
         void Stop();
@@ -134,6 +134,11 @@ class client_guiFrame: public wxFrame
         AsyncMsgHandler msgHandler;
 
         long int total_frames;
+        int LastColorModifiingKey;
+        int LastColorModifiingModifiers;
+
+        bool dragging;
+        wxPoint lastDragPosition;
 
         enum playerState state;
 
