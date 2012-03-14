@@ -262,9 +262,9 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 	     src/client-gui/src/ClientManager.o \
 	     src/client-gui/src/CustomGridBagSizer.o
 
-SERVER_OBJ = src/rtsp/sp_server.o \
-	     src/rtsp/streaming_server.o \
-	     src/rtsp/streaming_server_handlers.o
+SERVER_OBJ = src/server/sp_server.o \
+	     src/server/streaming_server.o \
+	     src/server/streaming_server_handlers.o
 
 SERVER_GUI_OBJ = src/serv-gui/serv_guiApp.o \
 		 src/serv-gui/serv_guiMain.o
