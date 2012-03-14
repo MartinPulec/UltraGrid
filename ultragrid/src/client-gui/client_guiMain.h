@@ -69,6 +69,7 @@ class client_guiFrame: public wxFrame
         void OnFrameCountChange(wxSpinEvent& event);
         void OnStopBtnClick(wxCommandEvent& event);
         void OnButton1Click3(wxCommandEvent& event);
+        void OnForwardFastClick(wxCommandEvent& event);
         //*)
         void Resize(wxCommandEvent&);
         void UpdateTimer(wxCommandEvent&);
@@ -99,6 +100,8 @@ class client_guiFrame: public wxFrame
         static const long ID_FR;
         static const long ID_ToggleLoop;
         static const long ID_SLIDER1;
+        static const long ID_BB;
+        static const long ID_FF;
         static const long PlayButton;
         static const long ID_BUTTON1;
         static const long idMenuQuit;
@@ -110,6 +113,7 @@ class client_guiFrame: public wxFrame
 
         //(*Declarations(client_guiFrame)
         wxFlexGridSizer* FlexGridSizer2;
+        wxButton* ForwardFast;
         wxToggleButton* ToggleLoop;
         wxStaticText* FrameCountLabel;
         wxStatusBar* StatusBar1;
@@ -118,6 +122,7 @@ class client_guiFrame: public wxFrame
         wxTextCtrl* fps;
         GLView* gl;
         ProgressSlider* Slider1;
+        wxButton* BackwardFast;
         wxButton* StopBtn;
         wxMenuItem* MenuItem4;
         CustomGridBagSizer* FlexGridSizer1;
@@ -136,6 +141,7 @@ class client_guiFrame: public wxFrame
         long int total_frames;
         int LastColorModifiingKey;
         int LastColorModifiingModifiers;
+        double speed;
 
         bool dragging;
         wxPoint lastDragPosition;

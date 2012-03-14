@@ -59,6 +59,8 @@ const long client_guiFrame::ID_FR_LABEL = wxNewId();
 const long client_guiFrame::ID_FR = wxNewId();
 const long client_guiFrame::ID_ToggleLoop = wxNewId();
 const long client_guiFrame::ID_SLIDER1 = wxNewId();
+const long client_guiFrame::ID_BB = wxNewId();
+const long client_guiFrame::ID_FF = wxNewId();
 const long client_guiFrame::PlayButton = wxNewId();
 const long client_guiFrame::ID_BUTTON1 = wxNewId();
 const long client_guiFrame::idMenuQuit = wxNewId();
@@ -108,7 +110,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     	0, 0 };
     gl = new GLView(this, ID_GLCANVAS1, wxDefaultPosition, wxSize(487,234), 0, _T("ID_GLCANVAS1"), GLCanvasAttributes_1);
     FlexGridSizer1->Add(gl, 1, wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    FlexGridSizer2 = new wxFlexGridSizer(2, 9, 0, 0);
+    FlexGridSizer2 = new wxFlexGridSizer(2, 11, 0, 0);
     FlexGridSizer2->AddGrowableCol(6);
     Select = new wxButton(this, ID_BUTTON2, _("Select video"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_BUTTON2"));
     FlexGridSizer2->Add(Select, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -126,6 +128,10 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Slider1 = new ProgressSlider(this, ID_SLIDER1, 0, 0, 100, wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_SLIDER1"));
     Slider1->SetMinSize(wxSize(100,-1));
     FlexGridSizer2->Add(Slider1, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    BackwardFast = new wxButton(this, ID_BB, _("<<"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_BB"));
+    FlexGridSizer2->Add(BackwardFast, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    ForwardFast = new wxButton(this, ID_FF, _(">>"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_FF"));
+    FlexGridSizer2->Add(ForwardFast, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     StopBtn = new wxButton(this, PlayButton, _("Stop"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("PlayButton"));
     StopBtn->SetMaxSize(wxSize(-1,-1));
     FlexGridSizer2->Add(StopBtn, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -164,6 +170,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Connect(ID_BUTTON3,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnButton1Click2);
     Connect(ID_FR,wxEVT_COMMAND_SPINCTRL_UPDATED,(wxObjectEventFunction)&client_guiFrame::OnFrameCountChange);
     Connect(ID_ToggleLoop,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnButton1Click3);
+    Connect(ID_FF,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnForwardFastClick);
     Connect(PlayButton,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnStopBtnClick);
     Connect(ID_BUTTON1,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnPauseClick);
     Connect(idMenuQuit,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnQuit);
@@ -205,6 +212,8 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     entries[0].Set(wxACCEL_NORMAL, (int) WXK_SPACE, PlayButton);
     wxAcceleratorTable accel(1, entries);
     SetAcceleratorTable(accel);*/
+
+    speed = 1.0;
 }
 
 client_guiFrame::~client_guiFrame()
@@ -723,5 +732,16 @@ void client_guiFrame::Wheel(wxMouseEvent& evt)
             else
                 gl->Zoom(1/0.8);
         }
+    }
+}
+
+void client_guiFrame::OnForwardFastClick(wxCommandEvent& event)
+{
+    try {
+        speed *= 2;
+        connection.set_parameter(wxT("speed"), wxString::Format(wxT("%2.2f"), speed));
+    } catch (std::exception &e) {
+        speed /= 2;
+        wxMessageBox(wxString::FromUTF8(e.what()), _("Error setting speed"));
     }
 }

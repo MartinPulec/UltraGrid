@@ -286,6 +286,14 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                         int len = strlen(buff);
                         write(comm_fd, &len, sizeof(len));
                         write(comm_fd, buff, len);
+                } else if(strcmp(item, "speed") == 0) {
+                        char *ratio = strtok_r(NULL, " ", &save_ptr);
+                        char buff[20];
+                        snprintf(buff, 20, "SPEED %s", ratio);
+
+                        int len = strlen(buff);
+                        write(comm_fd, &len, sizeof(len));
+                        write(comm_fd, buff, len);
                 } else {
                         response.code = 451;
                         response.message = "Parameter Not Understood";

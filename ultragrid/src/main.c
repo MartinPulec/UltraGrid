@@ -76,7 +76,7 @@
 #include "ihdtv/ihdtv.h"
 #include "compat/platform_semaphore.h"
 #include "audio/audio.h"
-#include "rtsp/streaming_server.h"
+#include "server/streaming_server.h"
 
 #define EXIT_FAIL_USAGE		1
 #define EXIT_FAIL_UI   		2
@@ -992,6 +992,9 @@ int main(int argc, char *argv[])
                                         else
                                                 val = FALSE;
                                         vidcap_command(uv->capture_device, VIDCAP_LOOP, (void *) &val);
+                                } else if(strncmp(buff, "SPEED", strlen("SPEED")) == 0) {
+                                        float pos = atof(buff + strlen("SPEED") + 1);
+                                        vidcap_command(uv->capture_device, VIDCAP_SPEED, (void *) &pos);
                                 }
                         }
                 }

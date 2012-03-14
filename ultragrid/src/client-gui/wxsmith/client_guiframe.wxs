@@ -24,7 +24,7 @@
 			</object>
 			<object class="sizeritem">
 				<object class="wxFlexGridSizer" variable="FlexGridSizer2" member="yes">
-					<cols>9</cols>
+					<cols>11</cols>
 					<rows>2</rows>
 					<growablecols>6</growablecols>
 					<object class="sizeritem">
@@ -90,6 +90,25 @@
 							<minsize>100,-1</minsize>
 						</object>
 						<flag>wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+						<border>5</border>
+						<option>1</option>
+					</object>
+					<object class="sizeritem">
+						<object class="wxButton" name="ID_BB" variable="BackwardFast" member="yes">
+							<label>&lt;&lt;</label>
+							<size>27,27</size>
+						</object>
+						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+						<border>5</border>
+						<option>1</option>
+					</object>
+					<object class="sizeritem">
+						<object class="wxButton" name="ID_FF" variable="ForwardFast" member="yes">
+							<label>&gt;&gt;</label>
+							<size>27,27</size>
+							<handler function="OnForwardFastClick" entry="EVT_BUTTON" />
+						</object>
+						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
 						<border>5</border>
 						<option>1</option>
 					</object>

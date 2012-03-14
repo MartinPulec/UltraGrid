@@ -61,12 +61,14 @@
 
 typedef uint32_t	vidcap_id_t;
 
-#define VIDCAP_PAUSE (1<<0)
-#define VIDCAP_PLAY (1<<1)
-#define VIDCAP_FPS (1<<2)
-#define VIDCAP_POS (1<<3)
-#define VIDCAP_PLAYONE (1<<4)
-#define VIDCAP_LOOP (1<<5)
+/*                                 arg type */
+#define VIDCAP_PAUSE    (1<<0)      /* NULL */
+#define VIDCAP_PLAY     (1<<1)      /* NULL */
+#define VIDCAP_FPS      (1<<2)      /* float */
+#define VIDCAP_POS      (1<<3)      /* int */
+#define VIDCAP_PLAYONE  (1<<4)      /* int */
+#define VIDCAP_LOOP     (1<<5)      /* int (0/1) */
+#define VIDCAP_SPEED    (1<<6)      /* float */
 
 struct audio_frame;
 
