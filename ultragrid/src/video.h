@@ -110,7 +110,7 @@ struct video_frame
         
         unsigned int         tile_count;
 
-        unsigned  int        frames;
+        int        frames;
 };
 
 struct tile {

@@ -993,8 +993,8 @@ int main(int argc, char *argv[])
                                                 val = FALSE;
                                         vidcap_command(uv->capture_device, VIDCAP_LOOP, (void *) &val);
                                 } else if(strncmp(buff, "SPEED", strlen("SPEED")) == 0) {
-                                        float pos = atof(buff + strlen("SPEED") + 1);
-                                        vidcap_command(uv->capture_device, VIDCAP_SPEED, (void *) &pos);
+                                        float speed = atof(buff + strlen("SPEED") + 1);
+                                        vidcap_command(uv->capture_device, VIDCAP_SPEED, (void *) &speed);
                                 }
                         }
                 }

@@ -60,6 +60,9 @@ const long client_guiFrame::ID_FR = wxNewId();
 const long client_guiFrame::ID_ToggleLoop = wxNewId();
 const long client_guiFrame::ID_SLIDER1 = wxNewId();
 const long client_guiFrame::ID_BB = wxNewId();
+const long client_guiFrame::ID_BS = wxNewId();
+const long client_guiFrame::ID_SPEED_STR = wxNewId();
+const long client_guiFrame::ID_FS = wxNewId();
 const long client_guiFrame::ID_FF = wxNewId();
 const long client_guiFrame::PlayButton = wxNewId();
 const long client_guiFrame::ID_BUTTON1 = wxNewId();
@@ -110,33 +113,39 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     	0, 0 };
     gl = new GLView(this, ID_GLCANVAS1, wxDefaultPosition, wxSize(487,234), 0, _T("ID_GLCANVAS1"), GLCanvasAttributes_1);
     FlexGridSizer1->Add(gl, 1, wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    FlexGridSizer2 = new wxFlexGridSizer(2, 11, 0, 0);
+    FlexGridSizer2 = new wxFlexGridSizer(2, 14, 0, 0);
     FlexGridSizer2->AddGrowableCol(6);
     Select = new wxButton(this, ID_BUTTON2, _("Select video"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_BUTTON2"));
     FlexGridSizer2->Add(Select, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     fps = new wxTextCtrl(this, ID_TEXTCTRL1, _("FPS"), wxDefaultPosition, wxSize(45,25), 0, wxDefaultValidator, _T("ID_TEXTCTRL1"));
-    FlexGridSizer2->Add(fps, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    FlexGridSizer2->Add(fps, 1, wxTOP|wxBOTTOM|wxLEFT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FPSOk = new wxButton(this, ID_BUTTON3, _("OK"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_BUTTON3"));
-    FlexGridSizer2->Add(FPSOk, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    FlexGridSizer2->Add(FPSOk, 1, wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FrameCountLabel = new wxStaticText(this, ID_FR_LABEL, _("FR"), wxDefaultPosition, wxDefaultSize, 0, _T("ID_FR_LABEL"));
-    FlexGridSizer2->Add(FrameCountLabel, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    FlexGridSizer2->Add(FrameCountLabel, 1, wxTOP|wxBOTTOM|wxLEFT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FrameCount = new wxSpinCtrl(this, ID_FR, _T("0"), wxDefaultPosition, wxSize(67,25), 0, 0, 2592000, 0, _T("ID_FR"));
     FrameCount->SetValue(_T("0"));
-    FlexGridSizer2->Add(FrameCount, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    FlexGridSizer2->Add(FrameCount, 1, wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     ToggleLoop = new wxToggleButton(this, ID_ToggleLoop, _("Loop"), wxDefaultPosition, wxSize(47,27), 0, wxDefaultValidator, _T("ID_ToggleLoop"));
     FlexGridSizer2->Add(ToggleLoop, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     Slider1 = new ProgressSlider(this, ID_SLIDER1, 0, 0, 100, wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_SLIDER1"));
     Slider1->SetMinSize(wxSize(100,-1));
     FlexGridSizer2->Add(Slider1, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     BackwardFast = new wxButton(this, ID_BB, _("<<"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_BB"));
-    FlexGridSizer2->Add(BackwardFast, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    FlexGridSizer2->Add(BackwardFast, 1, wxTOP|wxBOTTOM|wxLEFT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    BackwardSlow = new wxButton(this, ID_BS, _("<"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_BS"));
+    FlexGridSizer2->Add(BackwardSlow, 1, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    SpeedStr = new wxStaticText(this, ID_SPEED_STR, _("SPD"), wxDefaultPosition, wxSize(35,15), 0, _T("ID_SPEED_STR"));
+    FlexGridSizer2->Add(SpeedStr, 1, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    ForwardSlow = new wxButton(this, ID_FS, _(">"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_FS"));
+    FlexGridSizer2->Add(ForwardSlow, 1, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     ForwardFast = new wxButton(this, ID_FF, _(">>"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_FF"));
-    FlexGridSizer2->Add(ForwardFast, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    StopBtn = new wxButton(this, PlayButton, _("Stop"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("PlayButton"));
+    FlexGridSizer2->Add(ForwardFast, 1, wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    StopBtn = new wxButton(this, PlayButton, _("Stop"), wxDefaultPosition, wxSize(60,27), 0, wxDefaultValidator, _T("PlayButton"));
     StopBtn->SetMaxSize(wxSize(-1,-1));
-    FlexGridSizer2->Add(StopBtn, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    Pause = new wxButton(this, ID_BUTTON1, _("Pause"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_BUTTON1"));
-    FlexGridSizer2->Add(Pause, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    FlexGridSizer2->Add(StopBtn, 1, wxTOP|wxBOTTOM|wxLEFT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    Pause = new wxButton(this, ID_BUTTON1, _("Pause"), wxDefaultPosition, wxSize(60,27), 0, wxDefaultValidator, _T("ID_BUTTON1"));
+    FlexGridSizer2->Add(Pause, 1, wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FlexGridSizer1->Add(FlexGridSizer2, 1, wxALL|wxEXPAND|wxFIXED_MINSIZE|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     SetSizer(FlexGridSizer1);
     MenuBar1 = new wxMenuBar();
@@ -170,6 +179,9 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Connect(ID_BUTTON3,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnButton1Click2);
     Connect(ID_FR,wxEVT_COMMAND_SPINCTRL_UPDATED,(wxObjectEventFunction)&client_guiFrame::OnFrameCountChange);
     Connect(ID_ToggleLoop,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnButton1Click3);
+    Connect(ID_BB,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnBackwardFastClick);
+    Connect(ID_BS,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnBackwardSlowClick);
+    Connect(ID_FS,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnForwardSlowClick);
     Connect(ID_FF,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnForwardFastClick);
     Connect(PlayButton,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnStopBtnClick);
     Connect(ID_BUTTON1,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnPauseClick);
@@ -214,6 +226,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     SetAcceleratorTable(accel);*/
 
     speed = 1.0;
+    SpeedStr->SetLabel(wxString::FromDouble(speed, 2));
 }
 
 client_guiFrame::~client_guiFrame()
@@ -330,9 +343,9 @@ void client_guiFrame::PlaySelection()
 
 
         this->connection.setup(wxT("/") + path);
-        this->connection.set_parameter(wxT("fps"), wxString::Format(wxT("%2.2f"),fps));
+        this->connection.set_parameter(wxT("fps"), wxString::FromCDouble(fps, 2));
         connection.set_parameter(wxT("loop"), ToggleLoop->GetValue() ? wxT("ON") : wxT("OFF"));
-
+        connection.set_parameter(wxT("speed"), wxString::FromCDouble(speed, 2));
 
         gl->Receive(true);
 
@@ -414,7 +427,8 @@ void client_guiFrame::DoUpdateCounters(int val)
     if(!this->playList.IsEmpty()) {
         Slider1->SetValue((double)  val / (this->total_frames - 1) * 100.0);
 
-        if(Slider1->GetValue() == 100 && ToggleLoop->GetValue() == false) {
+        if((speed > 0.0 && Slider1->GetValue() == 100 && ToggleLoop->GetValue() == false) ||
+           (speed < 0.0 && Slider1->GetValue() == 0 && ToggleLoop->GetValue() == false)) {
             DoPause();
         }
 
@@ -504,6 +518,7 @@ void client_guiFrame::ChangeState(enum playerState newState)
     switch(newState) {
         case sInit:
             Pause->SetLabel(wxT("Play"));
+            ResetToDefaultValues();
             break;
         case sReady:
             Pause->SetLabel(wxT("Play"));
@@ -735,13 +750,47 @@ void client_guiFrame::Wheel(wxMouseEvent& evt)
     }
 }
 
-void client_guiFrame::OnForwardFastClick(wxCommandEvent& event)
+void client_guiFrame::ChangeSpeed(double ratio)
 {
     try {
-        speed *= 2;
-        connection.set_parameter(wxT("speed"), wxString::Format(wxT("%2.2f"), speed));
+        if(speed * ratio < 0.0) {
+            speed = 1.0 * ratio / fabs(ratio);
+
+        } else {
+            speed *= fabs(ratio);
+        }
+
+        if(connection.isConnected()) {
+           connection.set_parameter(wxT("speed"), wxString::FromCDouble(speed, 2));
+        }
     } catch (std::exception &e) {
-        speed /= 2;
+        speed /= ratio;
         wxMessageBox(wxString::FromUTF8(e.what()), _("Error setting speed"));
     }
+    SpeedStr->SetLabel(wxString::FromDouble(speed, 2));
+}
+
+void client_guiFrame::OnForwardFastClick(wxCommandEvent& event)
+{
+    ChangeSpeed(2.0);
+}
+
+void client_guiFrame::OnForwardSlowClick(wxCommandEvent& event)
+{
+    ChangeSpeed(1.0/2.0);
+}
+
+void client_guiFrame::OnBackwardSlowClick(wxCommandEvent& event)
+{
+    ChangeSpeed(-1.0/2.0);
+}
+
+void client_guiFrame::OnBackwardFastClick(wxCommandEvent& event)
+{
+    ChangeSpeed(-2.0);
+}
+
+void client_guiFrame::ResetToDefaultValues()
+{
+    ChangeSpeed(1.0);
 }

@@ -74,6 +74,9 @@
 
 #define BUFFER_LEN 10
 
+#define SIGN(x) (x / fabs(x))
+#define ROUND_FROM_ZERO(x) (ceil(fabs(x)) * SIGN(x))
+
 typedef struct file_information
 {
     uint32_t   magic_num;        /* magic number 0x53445058 (SDPX) or 0x58504453 (XPDS) */
@@ -546,7 +549,7 @@ static void * reading_thread(void *args)
                 pthread_mutex_unlock(&s->lock);
                                         
                 char *filename = s->glob.gl_pathv[s->index];
-                s->index += ceil(s->speed);
+                s->index += ROUND_FROM_ZERO(s->speed);
                 int fd = open(filename, O_RDONLY);
                 ssize_t bytes_read = 0;
                 unsigned int file_offset = to_native_order(s, s->file_information.offset);
@@ -563,8 +566,11 @@ static void * reading_thread(void *args)
                 if(s->processing_waiting)
                         pthread_cond_signal(&s->processing_cv);
                 pthread_mutex_unlock(&s->lock);
+        fprintf(stderr, "- %d\n", s->index);
                 
-                if( s->index >= s->glob.gl_pathc) {
+                if( (s->speed > 0.0 && s->index >= s->glob.gl_pathc) ||
+                                s->index < 0) {
+        fprintf(stderr, "FINISH\n", s->index);
                         s->finished = TRUE;
                 }
         }
@@ -645,8 +651,12 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
         if(s->finished && s->buffer_processed_start == s->buffer_processed_end &&
                         s->buffer_read_start == s->buffer_read_end) {
                 if(s->loop) {
-                        s->index = 0;
-                        s->frame->frames = 0;
+                        if(s->speed > 0.0) {
+                                s->index = s->frame->frames = 0;
+                        } else {
+                                s->index = s->frame->frames = s->glob.gl_pathc - 1;
+                        }
+
                         s->finished = FALSE;
                         pthread_cond_signal(&s->reader_cv);
                 } else  {
@@ -667,7 +677,7 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
         gettimeofday(&s->cur_time, NULL);
         if(s->frame->fps == 0) /* it would make following loop infinite */
                 return NULL;
-        while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->frame->fps) {
+        while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->frame->fps / (fabs(s->speed) < 1.0 ? fabs(s->speed) : 1.0)) {
                 gettimeofday(&s->cur_time, NULL);
         }
         s->prev_time = s->cur_time;
@@ -685,9 +695,12 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
 
         s->frames++;
 
-        s->frame->frames += s->speed;
-        if( s->frame->frames >= s->glob.gl_pathc) {
+        s->frame->frames += ROUND_FROM_ZERO(s->speed);
+        if( s->frame->frames >= (int) s->glob.gl_pathc) {
                 s->frame->frames = s->glob.gl_pathc - 1;
+        }
+        if( s->frame->frames < 0) {
+                s->frame->frames = 0;
         }
         fprintf(stderr, "%d\n", s->frame->frames);
 
@@ -733,10 +746,22 @@ static void play_after_flush(struct vidcap *state)
         s->should_jump = FALSE;
 }
 
-void vidcap_dpx_command(struct vidcap *state, int command, void *data)
+static void clamp_indices(struct vidcap *state)
 {
 	struct vidcap_dpx_state 	*s = (struct vidcap_dpx_state *) state;
 
+        if(s->index < 0) {
+                s->index = 0;
+        } else if(s->index >= s->glob.gl_pathc) {
+                s->index = s->glob.gl_pathc - 1;
+        }
+
+}
+
+
+void vidcap_dpx_command(struct vidcap *state, int command, void *data)
+{
+	struct vidcap_dpx_state 	*s = (struct vidcap_dpx_state *) state;
 
         if(command == VIDCAP_PAUSE) {
                 fprintf(stderr, "[DPX] PAUSE\n");
@@ -746,6 +771,7 @@ void vidcap_dpx_command(struct vidcap *state, int command, void *data)
         } else if(command == VIDCAP_PLAY) {
                 fprintf(stderr, "[DPX] PLAY\n");
                 pthread_mutex_lock(&s->lock);
+                clamp_indices(s);
                 s->should_pause = FALSE;
                 pthread_cond_signal(&s->pause_cv);
                 pthread_mutex_unlock(&s->lock);
@@ -765,7 +791,7 @@ void vidcap_dpx_command(struct vidcap *state, int command, void *data)
                 flush_pipeline(s);
                 s->index = *(int *) data;
                 fprintf(stderr, "[DPX] New position: %d\n", s->index);
-                s->frame->frames = s->index - s->speed;
+                s->frame->frames = s->index - ROUND_FROM_ZERO(s->speed);
                 play_after_flush(s);
                 pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_LOOP) {
@@ -777,7 +803,8 @@ void vidcap_dpx_command(struct vidcap *state, int command, void *data)
                 fprintf(stderr, "[DPX] SPEED %f\n", *(float *) data);
                 pthread_mutex_lock(&s->lock);
                 flush_pipeline(s);
-                s->frame->frames  = s->index;
+                clamp_indices(s);
+                s->frame->frames  = s->index - ROUND_FROM_ZERO(s->speed);
                 s->speed = *(float *) data;
                 play_after_flush(s);
                 pthread_mutex_unlock(&s->lock);

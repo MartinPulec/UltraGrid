@@ -70,6 +70,9 @@ class client_guiFrame: public wxFrame
         void OnStopBtnClick(wxCommandEvent& event);
         void OnButton1Click3(wxCommandEvent& event);
         void OnForwardFastClick(wxCommandEvent& event);
+        void OnForwardSlowClick(wxCommandEvent& event);
+        void OnBackwardSlowClick(wxCommandEvent& event);
+        void OnBackwardFastClick(wxCommandEvent& event);
         //*)
         void Resize(wxCommandEvent&);
         void UpdateTimer(wxCommandEvent&);
@@ -86,10 +89,12 @@ class client_guiFrame: public wxFrame
         void Resume();
         void JumpToFrame(int frame);
         void DoUpdateCounters(int val);
+        void ChangeSpeed(double ratio);
 
         int FilterEvent(wxEvent& event);
 
         void ChangeState(enum playerState);
+        void ResetToDefaultValues();
 
         //(*Identifiers(client_guiFrame)
         static const long ID_GLCANVAS1;
@@ -101,6 +106,9 @@ class client_guiFrame: public wxFrame
         static const long ID_ToggleLoop;
         static const long ID_SLIDER1;
         static const long ID_BB;
+        static const long ID_BS;
+        static const long ID_SPEED_STR;
+        static const long ID_FS;
         static const long ID_FF;
         static const long PlayButton;
         static const long ID_BUTTON1;
@@ -112,6 +120,7 @@ class client_guiFrame: public wxFrame
         //*)
 
         //(*Declarations(client_guiFrame)
+        wxButton* ForwardSlow;
         wxFlexGridSizer* FlexGridSizer2;
         wxButton* ForwardFast;
         wxToggleButton* ToggleLoop;
@@ -120,6 +129,8 @@ class client_guiFrame: public wxFrame
         wxButton* Select;
         wxButton* FPSOk;
         wxTextCtrl* fps;
+        wxStaticText* SpeedStr;
+        wxButton* BackwardSlow;
         GLView* gl;
         ProgressSlider* Slider1;
         wxButton* BackwardFast;
