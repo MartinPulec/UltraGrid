@@ -53,6 +53,8 @@ class GLView : public wxGLCanvas
         void Go(double x, double y);
         void GoPixels(int x, int y);
 
+        void ResetDefaults();
+
     protected:
         DECLARE_EVENT_TABLE()
 
@@ -65,7 +67,6 @@ class GLView : public wxGLCanvas
         void Wheel(wxMouseEvent& evt);
         void Mouse(wxMouseEvent&);
 
-        void ResetDefaults();
         void Recompute();
 
         void resize();

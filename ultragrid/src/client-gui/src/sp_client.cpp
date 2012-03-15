@@ -276,7 +276,8 @@ void sp_client::ProcessIncomingData()
     if(rc == -1)
         throw std::runtime_error(std::string("Timeout"));
 
-    if(rc == 0) { /* disconected... we dont need to process this, just skip */
+    if(rc == 0) {
+        msgHandler->DoDisconnect();
     }
 
     ProcessBuffer(this->buffer, rc);

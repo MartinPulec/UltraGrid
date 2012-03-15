@@ -792,5 +792,6 @@ void client_guiFrame::OnBackwardFastClick(wxCommandEvent& event)
 
 void client_guiFrame::ResetToDefaultValues()
 {
+    gl->ResetDefaults();
     ChangeSpeed(1.0);
 }

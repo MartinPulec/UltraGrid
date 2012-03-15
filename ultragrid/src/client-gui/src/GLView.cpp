@@ -941,6 +941,9 @@ void GLView::ResetDefaults()
 {
     xoffset = yoffset = 0;
     vpXMultiplier = vpYMultiplier = 1.0;
+
+    CurrentFilterIdx = 0;
+    CurrentFilter = Filters[CurrentFilterIdx];
 }
 
 void GLView::Recompute()
