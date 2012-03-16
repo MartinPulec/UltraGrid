@@ -2,14 +2,14 @@ AR            = ar
 RANLIB        = ranlib
 CC            = @CC@
 CXX	      = @CXX@
-LINKER	      = @LINKER@
-CFLAGS        = -fPIC @DEFS@ @CFLAGS@ @X_CFLAGS@ -DPATH_PREFIX=@prefix@ -DLIB_DIR=@libdir@ -I/usr/include/OpenEXR
+LINKER	      = ld
+CFLAGS        = -fPIC @DEFS@ @CFLAGS@ @X_CFLAGS@ -DPATH_PREFIX=@prefix@ -DLIB_DIR=@libdir@ @OPENEXR_INC@
 CPPFLAGS      = @CPPFLAGS@
 CXXFLAGS      = -fPIC @CXXFLAGS@ -DPATH_PREFIX=@prefix@ -DLIB_DIR=@libdir@ -I/usr/include/OpenEXR
 NVCCFLAGS     = @NVCCFLAGS@ -Xcompiler -fPIC
 LDFLAGS      =  @LDFLAGS@
 LIBS         += @LIBS@ @JACK_TRANS_LIB@ @MATHLIBS@ @COREAUDIO_LIB@ \
-		@X_PRE_LIBS@ @X_LIBS@ @X_EXTRA_LIBS@ -lm -pthread -lGLEW -lIlmImf
+		@X_PRE_LIBS@ @X_LIBS@ @X_EXTRA_LIBS@ -lm -pthread -ltiff
 INC           = -I.. -Isrc -Itest @DVS_INC@ @DELTACAST_INC@ @FASTDXT_INC@ @QUICKTIME_INC@ @DECKLINK_INC@ @PORTAUDIO_INC@ \
                 @GL_INC@ @SAGE_INC@ @QUAD_INC@ @JACK_TRANS_INC@ @JPEG_INC@ @COREAUDIO_INC@ @SPEEX_INC@
 DECKLINK_PATH = @DECKLINK_PATH@
@@ -17,7 +17,8 @@ PERF          = bin/uv_perf
 BUNDLE        = uv.app
 DXT_GLSL_CFLAGS = @DXT_GLSL_CFLAGS@
 NVCC	      = @NVCC@
-PATH	      = @PATH@
+# we need this mainly for wx-config
+PATH	      = /opt/local/bin:@PATH@
 
 PREFIX = @prefix@
 prefix = $(PREFIX)
@@ -73,7 +74,7 @@ OBJS	      = @OBJS@ \
 		src/video_codec.o \
 		src/video_capture.o \
 		src/video_capture/dpx.o \
-		src/video_capture/exr.o \
+		@OPENEXR_OBJ@ \
 		src/video_capture/tiff.o \
 		src/video_capture/null.o \
 		src/video_capture/aggregate.o \
@@ -509,13 +510,14 @@ release:
 
 bundle: all
 	mkdir -p $(BUNDLE)/Contents/MacOS
-	cp $(TARGET) $(BUNDLE)/Contents/MacOS/
+	#cp $(TARGET) $(BUNDLE)/Contents/MacOS/
 	echo -n "UltraGrid" > $(BUNDLE)/Contents/PkgInfo
 	cp bin/client client.app/Contents/MacOS
 	#for n in `otool -L client.app/Contents/MacOS/client |grep -E '/(usr|opt)/local/lib' |cut -f 1 -d\ `; do cp $$n client.app/Contents/Frameworks; install_name_tool -change $$n @executable_path/../Frameworks/`basename $$n` client.app/Contents/MacOS/client; done
 	dylibbundler -od -b -x client.app/Contents/MacOS/client -d client.app/Contents/libs/
+	for n in client.app/Contents/libs/*2.9.3*; do cp $$n $${n/2.9.3.0.0/2.9}; done
 	rm -rf client.app/Contents/libs/*2.9.3*
-	for n in client.app/Contents/libs/*; do for m in `otool -L $$n | grep 2.9.3 | cut -f 1 -d \ `; do install_name_tool -change $$m $${m/2.9.3.0.0/2.9} $$n; done; done
+	for n in client.app/Contents/MacOS/client client.app/Contents/libs/*; do for m in `otool -L $$n | grep 2.9.3 | cut -f 1 -d \ `; do install_name_tool -change $$m $${m/2.9.3.0.0/2.9} $$n; done; done
 
 
 perf: src/tv.o src/crypto/random.o

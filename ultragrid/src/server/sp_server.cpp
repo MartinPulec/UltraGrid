@@ -87,7 +87,7 @@ sp_serv::sp_serv(uint16_t port, sp_state_change_t sp_state_change_callback, sp_r
         this->udata = udata;
 
 
-        if ((this->socket_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0)) == -1) {
+        if ((this->socket_fd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
                 perror("socket()");
                 throw std::runtime_error("socket");
         }
@@ -241,7 +241,7 @@ void sp_serv::recv(struct timeval *timeout)
 
                                                 if(this->buffer[i] == '\0') {
 #ifdef DEBUG
-                                                        std::cerr << "Message (" << (*it).first << "): ";
+                                                        std::cerr << "Message (" << (*it).first << "): " << std::endl;
                                                         std::cerr.write(this->buffer + first, i - first);
 #endif
                                                         if(parse_message(&(*it).second,

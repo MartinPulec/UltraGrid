@@ -226,7 +226,6 @@ void GLView::PostInit(wxWindowCreateEvent&)
     context = new wxGLContext(this);
     wxGLCanvas::SetCurrent(*context);
     //SetCurrent();
-    wxPaintDC(this);
 
     glewInit();
 
@@ -534,6 +533,7 @@ void GLView::Reconf(wxCommandEvent& event)
                         NULL);
 
     glGenFramebuffersEXT(1, &fbo_display_id);
+    glBindTexture(GL_TEXTURE_2D, 0);
 
     resize();
 
@@ -571,9 +571,9 @@ void GLView::resize()
 
 	glLoadIdentity( );
 
-#if 0
     glClear(GL_COLOR_BUFFER_BIT);
 
+#if 0
 
     float bottom = 1.0f - (dxt_height - height) / (float) dxt_height * 2;
 
@@ -656,9 +656,12 @@ void GLView::Putf(wxCommandEvent&)
 
 void GLView::Render()
 {
-        wxGLCanvas::SetCurrent(*context);
+    if (!data)
+        return;
 
-        switch(codec) {
+    wxGLCanvas::SetCurrent(*context);
+
+    switch(codec) {
         case DXT1:
             glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                             (width + 3) / 4 * 4, dxt_height,
@@ -716,38 +719,41 @@ void GLView::Render()
             bottom = 1.0f;
         }
 
+        if(CurrentFilter) {
 
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_display_id);
-        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_final, 0);
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_display_id);
+            glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_final, 0);
 
-        glMatrixMode( GL_PROJECTION );
-        glPushMatrix();
-        glLoadIdentity( );
-        glOrtho(-1,1,-1/aspect,1/aspect,10,-10);
-        glMatrixMode( GL_MODELVIEW );
-        glPushMatrix();
-        glLoadIdentity( );
-        glPushAttrib(GL_VIEWPORT_BIT);
-        glViewport( 0, 0, width, height);
+            glMatrixMode( GL_PROJECTION );
+            glPushMatrix();
+            glLoadIdentity( );
+            glOrtho(-1,1,-1/aspect,1/aspect,10,-10);
+            glMatrixMode( GL_MODELVIEW );
+            glPushMatrix();
+            glLoadIdentity( );
+            glPushAttrib(GL_VIEWPORT_BIT);
+            glViewport( 0, 0, width, height);
 
-        glBegin(GL_QUADS);
-        glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0/aspect);
-        glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0/aspect);
-        glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0/aspect);
-        glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0/aspect);
-        glEnd( );
+            glBegin(GL_QUADS);
+            glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0/aspect);
+            glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0/aspect);
+            glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0/aspect);
+            glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0/aspect);
+            glEnd( );
 
-        glPopAttrib();
-        glMatrixMode( GL_PROJECTION );
-        glPopMatrix();
-        glMatrixMode( GL_MODELVIEW );
-        glPopMatrix();
+            glPopAttrib();
+            glMatrixMode( GL_PROJECTION );
+            glPopMatrix();
+            glMatrixMode( GL_MODELVIEW );
+            glPopMatrix();
 
 
-        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
-        glBindTexture(GL_TEXTURE_2D, texture_final);
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+            glBindTexture(GL_TEXTURE_2D, texture_final);
 
-        glUseProgram(CurrentFilter);
+            glUseProgram(CurrentFilter);
+        } else {
+        }
 
         glBegin(GL_QUADS);
           /* Front Face */
@@ -860,6 +866,7 @@ void GLView::Mouse(wxMouseEvent& evt)
 void GLView::OnPaint( wxPaintEvent& WXUNUSED(event) )
 {
     if(this->init) {
+        wxPaintDC(this);
         Render();
     }
 }

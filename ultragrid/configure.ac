@@ -59,15 +59,18 @@ if expr "$host_os" : ".*darwin.*" > /dev/null; then
         system=MacOSX
 	AC_DEFINE([HAVE_MACOSX], [1], [This is Mac X OS])
 	LINKER=$CXX
-	CFLAGS+=" -arch i386 -I/opt/local/include"
+	CFLAGS+=" -arch i386 -I/opt/local/include -mmacosx-version-min=10.5"
 	CPPFLAGS+=" -m32 -I/opt/local/include"
-	CXXFLAGS+=" -m32 -I/opt/local/include"
-	LDFLAGS+=" -m32 -mmacosx-version-min=10.5"
+	CXXFLAGS+=" -m32 -I/opt/local/include -mmacosx-version-min=10.5"
+	LDFLAGS+=" -m32 -mmacosx-version-min=10.5 -no_compact_linkedit"
 	X_CFLAGS+="-I/usr/X11R6/include"
         OBJS+=" src/utils/autorelease_pool.o"
+	LIBS+=" /opt/local/lib/libGLEW.a"
 	PATH="/usr/local/bin:$PATH"
+	LDFLAGS+=" -headerpad_max_install_names -headerpad"
 else
         system=Linux
+	LIBS+=" -lGLEW"
 	LINKER=$CC
 fi
 
@@ -1390,6 +1393,47 @@ AC_SUBST(COREAUDIO_INC)
 AC_SUBST(COREAUDIO_LIB)
 AC_SUBST(COREAUDIO_OBJ)
 
+# -------------------------------------------------------------------------------------------------
+# OpenEXR
+openexr=no
+OPENEXR_PATH=
+OPENEXR_INC=
+OPENEXR_OBJ=
+
+case $host_os in
+	*darwin*)
+		OPENEXR_PATH=/opt/local/
+		;;
+	*)
+		OPENEXR_PATH=/usr/
+		;;
+esac
+
+AC_ARG_WITH(openexr,
+	[  --with-openexr=DIR    specify location of OpenEXR],
+	[OPENEXR_INC=$withval/include/OpenEXR
+	 OPENEXR_LIB=$withval/lib],
+	[OPENEXR_INC=${OPENEXR_PATH}/include/OpenEXR
+	 OPENEXR_LIB=${OPENEXR_PATH}/lib])
+
+SAVED_LIBS=$LIBS
+LIBS+=" -L$OPENEXR_LIB"
+AC_CHECK_LIB(IlmImf, ImfOpenInputFile)
+
+if test "$ac_cv_lib_IlmImf_ImfOpenInputFile" = yes
+then
+	openexr=yes
+        AC_DEFINE([HAVE_OPENEXR], [1], [Build with OpenEXR support])
+	OPENEXR_OBJ="src/video_capture/exr.o"
+	OPENEXR_INC="-I$OPENEXR_INC"
+else
+	LIBS=$SAVED_LIBS
+	OPENEXR_INC=
+	OPENEXR_OBJ=
+fi
+
+AC_SUBST(OPENEXR_INC)
+AC_SUBST(OPENEXR_OBJ)
 
 # -------------------------------------------------------------------------------------------------
 # We need to add libraries then
@@ -1452,5 +1496,7 @@ Configuration summary:
   FastDXT ..................... $fastdxt
   Realtime DXT (OpenGL) ....... $rtdxt
   JPEG ........................ $jpeg
+  
+  OpenEXR ..................... $openexr
 ])
 

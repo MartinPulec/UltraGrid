@@ -111,7 +111,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     	WX_GL_DEPTH_SIZE,      16,
     	WX_GL_STENCIL_SIZE,    0,
     	0, 0 };
-    gl = new GLView(this, ID_GLCANVAS1, wxDefaultPosition, wxSize(487,234), 0, _T("ID_GLCANVAS1"), GLCanvasAttributes_1);
+    gl = new GLView(this, ID_GLCANVAS1, wxDefaultPosition, wxSize(767,391), 0, _T("ID_GLCANVAS1"), GLCanvasAttributes_1);
     FlexGridSizer1->Add(gl, 1, wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FlexGridSizer2 = new wxFlexGridSizer(2, 14, 0, 0);
     FlexGridSizer2->AddGrowableCol(6);
@@ -119,14 +119,14 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     FlexGridSizer2->Add(Select, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     fps = new wxTextCtrl(this, ID_TEXTCTRL1, _("FPS"), wxDefaultPosition, wxSize(45,25), 0, wxDefaultValidator, _T("ID_TEXTCTRL1"));
     FlexGridSizer2->Add(fps, 1, wxTOP|wxBOTTOM|wxLEFT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    FPSOk = new wxButton(this, ID_BUTTON3, _("OK"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_BUTTON3"));
+    FPSOk = new wxButton(this, ID_BUTTON3, _("OK"), wxDefaultPosition, wxSize(36,27), 0, wxDefaultValidator, _T("ID_BUTTON3"));
     FlexGridSizer2->Add(FPSOk, 1, wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FrameCountLabel = new wxStaticText(this, ID_FR_LABEL, _("FR"), wxDefaultPosition, wxDefaultSize, 0, _T("ID_FR_LABEL"));
     FlexGridSizer2->Add(FrameCountLabel, 1, wxTOP|wxBOTTOM|wxLEFT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FrameCount = new wxSpinCtrl(this, ID_FR, _T("0"), wxDefaultPosition, wxSize(67,25), 0, 0, 2592000, 0, _T("ID_FR"));
     FrameCount->SetValue(_T("0"));
     FlexGridSizer2->Add(FrameCount, 1, wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    ToggleLoop = new wxToggleButton(this, ID_ToggleLoop, _("Loop"), wxDefaultPosition, wxSize(47,27), 0, wxDefaultValidator, _T("ID_ToggleLoop"));
+    ToggleLoop = new wxToggleButton(this, ID_ToggleLoop, _("Loop"), wxDefaultPosition, wxSize(60,-1), 0, wxDefaultValidator, _T("ID_ToggleLoop"));
     FlexGridSizer2->Add(ToggleLoop, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     Slider1 = new ProgressSlider(this, ID_SLIDER1, 0, 0, 100, wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_SLIDER1"));
     Slider1->SetMinSize(wxSize(100,-1));
@@ -217,7 +217,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
 
     connection.SetMsgHandler(&msgHandler);
 
-    this->SetSize(600, 400);
+    //this->SetSize(600, 400);
     ChangeState(sInit);
 /*
     wxAcceleratorEntry entries[14];
@@ -564,7 +564,10 @@ void client_guiFrame::ToggleFullscreen(wxCommandEvent& evt = defaultCommandEvent
 
         //FlexGridSizer1->Detach((size_t) 1);
         //FlexGridSizer1->RecalcSizes();
+#ifndef __WXMAC__
         FlexGridSizer2->Show(true);
+#endif
+        StatusBar1->Show(true);
         ShowFullScreen(false, wxFULLSCREEN_ALL);
     } else {
         //wxGBSpan span(2,2);
@@ -577,7 +580,10 @@ void client_guiFrame::ToggleFullscreen(wxCommandEvent& evt = defaultCommandEvent
         //FlexGridSizer1->Detach((size_t) 1);
         /*span = wxGBSpan(0,0);
         FlexGridSizer1->SetItemSpan((size_t) 2, span);*/
+#ifndef __WXMAC__
         FlexGridSizer2->Show(false);
+#endif
+        StatusBar1->Show(false);
         ShowFullScreen(true, wxFULLSCREEN_ALL);
     }
 }
@@ -589,6 +595,7 @@ void client_guiFrame::TogglePause(wxCommandEvent& evt)
 
 void client_guiFrame::Mouse(wxMouseEvent& evt)
 {
+
     if(evt.GetEventObject() == gl) {
         if(evt.LeftUp()) {
             dragging = false;
@@ -602,17 +609,19 @@ void client_guiFrame::Mouse(wxMouseEvent& evt)
                 dragging = true;
             }
         } else { /* motion */
-            if(IsFullScreen()  && !FlexGridSizer1->IsShown(FlexGridSizer2) && evt.GetY() > (GetSize().y - 5)) {
+#ifndef __WXMAC__
+            if(IsFullScreen()  && !FlexGridSizer1->IsShown(FlexGridSizer2) && evt.GetY() > (gl->GetSize().y - 5)) {
                 //std::cerr << "." << evt.GetY();
                 FlexGridSizer2->Show(true);
                 FlexGridSizer1->Layout();
                 this->Fit();
-            } else if(IsFullScreen() && FlexGridSizer1->IsShown(FlexGridSizer2)  && evt.GetY() < (GetSize().y - 20)) {
+            } else if(IsFullScreen() && FlexGridSizer1->IsShown(FlexGridSizer2)  && evt.GetY() < (gl->GetSize().y - 20)) {
                 //std::cerr << "!" << evt.GetY();
                 FlexGridSizer2->Show(false);
                 FlexGridSizer1->Layout();
                 this->Fit();
             }
+#endif
         }
     }
 }
@@ -742,10 +751,7 @@ void client_guiFrame::Wheel(wxMouseEvent& evt)
 {
     if(evt.GetEventObject() == gl) {
         if(state != sInit) {
-            if(evt.GetWheelRotation() > 0)
-                gl->Zoom(0.8);
-            else
-                gl->Zoom(1/0.8);
+            gl->Zoom(1.0 + evt.GetWheelRotation() / 100.0);
         }
     }
 }

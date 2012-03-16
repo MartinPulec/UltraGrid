@@ -6,7 +6,7 @@
 
 #include "../include/ClientDataIntPair.h"
 
-#define MOUSE_CLICKED_MAGIC 0x1b3ff6789
+#define MOUSE_CLICKED_MAGIC 0x1b3ff678
 
 BEGIN_DECLARE_EVENT_TYPES()
 DECLARE_EVENT_TYPE(wxEVT_RECONF, -1)

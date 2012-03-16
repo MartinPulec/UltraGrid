@@ -15,7 +15,7 @@
 					<mMinAlpha>68719476736</mMinAlpha>
 					<mDepthSize>16</mDepthSize>
 					<mMinAccumAlpha>-18367625209839616</mMinAccumAlpha>
-					<size>487,234</size>
+					<size>767,391</size>
 					<handler function="OnGLCanvas1Paint" entry="EVT_PAINT" />
 				</object>
 				<flag>wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
@@ -49,7 +49,7 @@
 					<object class="sizeritem">
 						<object class="wxButton" name="ID_BUTTON3" variable="FPSOk" member="yes">
 							<label>OK</label>
-							<size>27,27</size>
+							<size>36,27</size>
 							<handler function="OnButton1Click2" entry="EVT_BUTTON" />
 						</object>
 						<flag>wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
@@ -78,7 +78,7 @@
 					<object class="sizeritem">
 						<object class="wxButton" name="ID_ToggleLoop" subclass="wxToggleButton" variable="ToggleLoop" member="yes">
 							<label>Loop</label>
-							<size>47,27</size>
+							<size>60,-1</size>
 							<handler function="OnButton1Click3" entry="EVT_BUTTON" />
 						</object>
 						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>

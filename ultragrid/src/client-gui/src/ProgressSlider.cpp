@@ -6,7 +6,7 @@ DEFINE_EVENT_TYPE(wxEVT_SCROLLED)
 BEGIN_EVENT_TABLE(ProgressSlider,wxSlider)
     //(*EventTable(client_guiFrame)
     //*)
-    EVT_COMMAND_SCROLL_CHANGED(wxID_ANY, ProgressSlider::SliderMoved)
+    EVT_SCROLL_THUMBRELEASE(ProgressSlider::SliderMoved)
 END_EVENT_TABLE()
 
 

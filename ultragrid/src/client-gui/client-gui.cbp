@@ -50,7 +50,6 @@
 		<Unit filename="include/GLView.h" />
 		<Unit filename="include/ProgressSlider.h" />
 		<Unit filename="include/Settings.h" />
-		<Unit filename="include/UltraGridManager.h" />
 		<Unit filename="include/VideoEntry.h" />
 		<Unit filename="include/sp_client.h" />
 		<Unit filename="src/AsyncMsgHandler.cpp" />
@@ -58,7 +57,6 @@
 		<Unit filename="src/GLView.cpp" />
 		<Unit filename="src/ProgressSlider.cpp" />
 		<Unit filename="src/Settings.cpp" />
-		<Unit filename="src/UltraGridManager.cpp" />
 		<Unit filename="src/VideoEntry.cpp" />
 		<Unit filename="src/sp_client.cpp" />
 		<Unit filename="wxsmith/CompressionSetting.wxs" />

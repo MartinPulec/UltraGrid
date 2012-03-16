@@ -273,8 +273,10 @@ void sp_client::ProcessIncomingData()
 
     rc = recv(this->fd, this->buffer, this->buffer_len, 0);
 
-    if(rc == -1)
-        throw std::runtime_error(std::string("Timeout"));
+    if(rc == -1) {
+        std::cerr << "Timeout" << std::endl;
+	return;
+    }
 
     if(rc == 0) {
         msgHandler->DoDisconnect();

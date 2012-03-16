@@ -130,6 +130,7 @@ struct vidcap_device_api vidcap_device_table[] = {
          MK_STATIC(vidcap_dpx_command),
          NULL
         },
+#ifdef HAVE_OPENEXR
         {
          0,
          NULL,
@@ -141,6 +142,7 @@ struct vidcap_device_api vidcap_device_table[] = {
          MK_STATIC(vidcap_exr_command),
          NULL
         },
+#endif
         {
          0,
          NULL,
