@@ -30,9 +30,7 @@
 #include "gpujpeg_huffman_cpu_encoder.h"
 #include "gpujpeg_util.h"
 
-#ifdef _DEBUG
 #define inline
-#endif
 
 /** Huffman encoder structure */
 struct gpujpeg_huffman_cpu_encoder

@@ -904,7 +904,8 @@ packet_restored:
                                          */
                                         if((prints % 100) == 0) {
                                                 fprintf(stderr, "WARNING!! Discarding input data as frame buffer is too small.\n"
-                                                                "Well this should not happened. Expect troubles pretty soon.\n");
+                                                                "Well this should not happened. Expect troubles pretty soon (buff size %d).\n",
+                                                                tile->data_len);
                                         }
                                         prints++;
                                         len = 0;

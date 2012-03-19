@@ -68,6 +68,8 @@ if expr "$host_os" : ".*darwin.*" > /dev/null; then
 	LIBS+=" /opt/local/lib/libGLEW.a"
 	PATH="/usr/local/bin:$PATH"
 	LDFLAGS+=" -headerpad_max_install_names -headerpad"
+        MACOSX_DEPLOYMENT_TARGET=10.5
+        AC_SUBST(MACOSX_DEPLOYMENT_TARGET)
 else
         system=Linux
 	LIBS+=" -lGLEW"

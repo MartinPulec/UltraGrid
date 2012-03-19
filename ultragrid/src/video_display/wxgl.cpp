@@ -131,7 +131,8 @@ display_type_t *display_wxgl_probe(void)
 int display_wxgl_get_property(void *state, int property, void *val, size_t *len)
 {
         struct state_wxgl *s = (struct state_wxgl *)state;
-        codec_t codecs[] = {UYVY, RGBA, RGB, DXT1, DXT1_YUV, DXT5};
+        codec_t codecs[] = {RGBA, RGB, DXT1, DXT1_YUV, DXT5};
+        // UYVY - currently not needed. perhaps also broken with GLView
 
         switch (property) {
                 case DISPLAY_PROPERTY_CODECS:
@@ -173,9 +174,15 @@ int display_wxgl_reconfigure(void *state, struct video_desc desc)
 {
         struct state_wxgl *s = (struct state_wxgl *)state;
         assert(s->magic == MAGIC_WXGL);
+        int dxt_height = (desc.height + 3) / 4 * 4;
 
         free(s->tile->data);
-        s->tile->data_len = desc.height * vc_get_linesize(desc.width, desc.color_spec);
+
+        if(desc.color_spec == DXT1 || desc.color_spec == DXT5 || desc.color_spec == DXT1_YUV)
+            s->tile->data_len = dxt_height;
+        else
+            s->tile->data_len = desc.height;
+        s->tile->data_len *= vc_get_linesize(desc.width, desc.color_spec);
         s->tile->data = (char *) malloc(s->tile->data_len);
         s->parent->reconfigure(desc.width, desc.height, (int) desc.color_spec);
 

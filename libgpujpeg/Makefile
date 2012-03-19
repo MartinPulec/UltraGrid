@@ -63,12 +63,12 @@ LINK := g++ -fPIC
 NVCC := $(CUDA_INSTALL_PATH)/bin/nvcc -Xcompiler -fPIC
 
 # Common flags
-COMMONFLAGS += -I. -I$(CUDA_INSTALL_PATH)/include -O2
+COMMONFLAGS += -I. -I$(CUDA_INSTALL_PATH)/include -O0 -g
 
 # Ultragrid changes
 ARCH := $(shell uname -s)
 ifeq ($(ARCH),Darwin)
-    COMMONFLAGS += -m32
+    COMMONFLAGS += -m32  -Xcompiler -mmacosx-version-min=10.5
 endif
 
 # C flags
