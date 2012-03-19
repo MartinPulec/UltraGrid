@@ -128,9 +128,9 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                                                 char dpx_arg[MAX_PATH_LEN + 1];
                                                 snprintf(dpx_arg, MAX_PATH_LEN, "%s:files=%s/*", video_format.c_str(), path.c_str(), fps);
                                                 if(compression.empty()) {
-                                                        execlp(uv_argv[0], uv_argv[0], "-t", dpx_arg, "-m", "9000", "-C", fd_str, receiver.c_str(), (void *) 0);
+                                                        execlp(uv_argv[0], uv_argv[0], "-t", dpx_arg, "-m", "1500", "-C", fd_str, receiver.c_str(), (void *) 0);
                                                 } else {
-                                                        execlp(uv_argv[0], uv_argv[0], "-t", dpx_arg, "-m", "9000", "-C", fd_str, "-c", compression.c_str(), receiver.c_str(), (void *) 0);
+                                                        execlp(uv_argv[0], uv_argv[0], "-t", dpx_arg, "-m", "1500", "-C", fd_str, "-c", compression.c_str(), receiver.c_str(), (void *) 0);
                                                 }
                                         } else { /* parent */
                                                 if(pid == -1) { /* cannot fork */

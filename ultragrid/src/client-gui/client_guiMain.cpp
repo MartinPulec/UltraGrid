@@ -751,7 +751,9 @@ void client_guiFrame::Wheel(wxMouseEvent& evt)
 {
     if(evt.GetEventObject() == gl) {
         if(state != sInit) {
-            gl->Zoom(1.0 + evt.GetWheelRotation() / 100.0);
+            double ratio = evt.GetWheelRotation() / 200.0;
+            ratio = ratio > 0? ratio : -1.0/ratio;
+            gl->Zoom(ratio);
         }
     }
 }
