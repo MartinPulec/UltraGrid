@@ -512,6 +512,7 @@ bundle: all
 	mkdir -p $(BUNDLE)/Contents/MacOS
 	#cp $(TARGET) $(BUNDLE)/Contents/MacOS/
 	echo -n "UltraGrid" > $(BUNDLE)/Contents/PkgInfo
+	mkdir -p client.app/Contents/MacOS
 	cp bin/client client.app/Contents/MacOS
 	#for n in `otool -L client.app/Contents/MacOS/client |grep -E '/(usr|opt)/local/lib' |cut -f 1 -d\ `; do cp $$n client.app/Contents/Frameworks; install_name_tool -change $$n @executable_path/../Frameworks/`basename $$n` client.app/Contents/MacOS/client; done
 	dylibbundler -od -b -x client.app/Contents/MacOS/client -d client.app/Contents/libs/
