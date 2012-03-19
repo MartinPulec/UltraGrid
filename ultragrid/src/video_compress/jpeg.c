@@ -309,6 +309,9 @@ struct video_frame * jpeg_compress(void *arg, struct video_frame * tx)
                 memcpy(out_tile->data, compressed, size);
         }
         
+
+        s->out->frames = tx->frames;
+
         return s->out;
 }
 

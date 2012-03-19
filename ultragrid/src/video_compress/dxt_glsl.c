@@ -310,6 +310,8 @@ struct video_frame * dxt_glsl_compress(void *arg, struct video_frame * tx)
                                 (unsigned char *) out_tile->data);
         }
         
+        s->out->frames = tx->frames;
+
         return s->out;
 }
 

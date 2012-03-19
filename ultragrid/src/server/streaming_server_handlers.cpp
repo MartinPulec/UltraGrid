@@ -55,6 +55,9 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include <sys/types.h>          /* See NOTES */
+#include <sys/socket.h>
+
 
 #define PATH_PREFIX "/"
 #define MAX_PATH_LEN 4096
@@ -108,7 +111,7 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
 
                                 char fd_str[6];
                                 int fd[2];
-                                if( pipe(fd) != 0) {
+                                if( socketpair(AF_UNIX, SOCK_STREAM, 0, fd) != 0) {
                                         perror("");
                                         response.code = 500;
                                         response.message = "Internal Server Error";

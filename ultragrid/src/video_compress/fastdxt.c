@@ -329,6 +329,8 @@ struct video_frame * fastdxt_compress(void *args, struct video_frame *tx)
         
         pthread_mutex_unlock(&(compress->lock));
 
+        compress->frame->frames = tx->frames;
+
         return compress->frame;
 }
 

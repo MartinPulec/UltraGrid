@@ -8,7 +8,7 @@
 		<Cursor position="258" topLine="0" />
 	</File>
 	<File name="VideoSelection.cpp" open="1" top="0" tabpos="7">
-		<Cursor position="4142" topLine="81" />
+		<Cursor position="4142" topLine="77" />
 	</File>
 	<File name="VideoSelection.h" open="1" top="0" tabpos="8">
 		<Cursor position="893" topLine="0" />
@@ -17,10 +17,10 @@
 		<Cursor position="1089" topLine="0" />
 	</File>
 	<File name="client_guiMain.cpp" open="1" top="0" tabpos="2">
-		<Cursor position="16313" topLine="371" />
+		<Cursor position="27731" topLine="757" />
 	</File>
 	<File name="client_guiMain.h" open="1" top="0" tabpos="3">
-		<Cursor position="3039" topLine="75" />
+		<Cursor position="4962" topLine="114" />
 	</File>
 	<File name="include/AsyncMsgHandler.h" open="1" top="0" tabpos="13">
 		<Cursor position="0" topLine="0" />
@@ -29,7 +29,7 @@
 		<Cursor position="216" topLine="10" />
 	</File>
 	<File name="include/ProgressSlider.h" open="1" top="0" tabpos="15">
-		<Cursor position="645" topLine="0" />
+		<Cursor position="215" topLine="0" />
 	</File>
 	<File name="include/Settings.h" open="0" top="0" tabpos="9">
 		<Cursor position="419" topLine="0" />
@@ -46,16 +46,16 @@
 	<File name="src/ClientManager.cpp" open="1" top="0" tabpos="17">
 		<Cursor position="1413" topLine="45" />
 	</File>
-	<File name="src/GLView.cpp" open="1" top="1" tabpos="6">
-		<Cursor position="16949" topLine="570" />
+	<File name="src/GLView.cpp" open="1" top="0" tabpos="6">
+		<Cursor position="26491" topLine="894" />
 	</File>
 	<File name="src/ProgressSlider.cpp" open="1" top="0" tabpos="16">
-		<Cursor position="842" topLine="0" />
+		<Cursor position="728" topLine="0" />
 	</File>
 	<File name="src/Settings.cpp" open="1" top="0" tabpos="11">
 		<Cursor position="327" topLine="0" />
 	</File>
-	<File name="src/sp_client.cpp" open="1" top="0" tabpos="9">
-		<Cursor position="14" topLine="93" />
+	<File name="src/sp_client.cpp" open="1" top="1" tabpos="9">
+		<Cursor position="3818" topLine="104" />
 	</File>
 </CodeBlocks_layout_file>

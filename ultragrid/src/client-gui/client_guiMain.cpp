@@ -59,11 +59,11 @@ const long client_guiFrame::ID_FR_LABEL = wxNewId();
 const long client_guiFrame::ID_FR = wxNewId();
 const long client_guiFrame::ID_ToggleLoop = wxNewId();
 const long client_guiFrame::ID_SLIDER1 = wxNewId();
-const long client_guiFrame::ID_BB = wxNewId();
-const long client_guiFrame::ID_BS = wxNewId();
+const long client_guiFrame::ID_Backward = wxNewId();
 const long client_guiFrame::ID_SPEED_STR = wxNewId();
-const long client_guiFrame::ID_FS = wxNewId();
-const long client_guiFrame::ID_FF = wxNewId();
+const long client_guiFrame::ID_Forward = wxNewId();
+const long client_guiFrame::ID_Slower = wxNewId();
+const long client_guiFrame::ID_Quicker = wxNewId();
 const long client_guiFrame::PlayButton = wxNewId();
 const long client_guiFrame::ID_BUTTON1 = wxNewId();
 const long client_guiFrame::idMenuQuit = wxNewId();
@@ -131,16 +131,16 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Slider1 = new ProgressSlider(this, ID_SLIDER1, 0, 0, 100, wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_SLIDER1"));
     Slider1->SetMinSize(wxSize(100,-1));
     FlexGridSizer2->Add(Slider1, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    BackwardFast = new wxButton(this, ID_BB, _("<<"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_BB"));
-    FlexGridSizer2->Add(BackwardFast, 1, wxTOP|wxBOTTOM|wxLEFT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    BackwardSlow = new wxButton(this, ID_BS, _("<"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_BS"));
-    FlexGridSizer2->Add(BackwardSlow, 1, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    SpeedStr = new wxStaticText(this, ID_SPEED_STR, _("SPD"), wxDefaultPosition, wxSize(35,15), 0, _T("ID_SPEED_STR"));
+    Backward = new wxButton(this, ID_Backward, _("<"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_Backward"));
+    FlexGridSizer2->Add(Backward, 1, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    SpeedStr = new wxStaticText(this, ID_SPEED_STR, _("SPD"), wxDefaultPosition, wxSize(41,15), 0, _T("ID_SPEED_STR"));
     FlexGridSizer2->Add(SpeedStr, 1, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    ForwardSlow = new wxButton(this, ID_FS, _(">"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_FS"));
-    FlexGridSizer2->Add(ForwardSlow, 1, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    ForwardFast = new wxButton(this, ID_FF, _(">>"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_FF"));
-    FlexGridSizer2->Add(ForwardFast, 1, wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    Forward = new wxButton(this, ID_Forward, _(">"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_Forward"));
+    FlexGridSizer2->Add(Forward, 1, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    Slower = new wxButton(this, ID_Slower, _("V"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_Slower"));
+    FlexGridSizer2->Add(Slower, 1, wxTOP|wxBOTTOM|wxLEFT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    Quicker = new wxButton(this, ID_Quicker, _("A"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_Quicker"));
+    FlexGridSizer2->Add(Quicker, 1, wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     StopBtn = new wxButton(this, PlayButton, _("Stop"), wxDefaultPosition, wxSize(60,27), 0, wxDefaultValidator, _T("PlayButton"));
     StopBtn->SetMaxSize(wxSize(-1,-1));
     FlexGridSizer2->Add(StopBtn, 1, wxTOP|wxBOTTOM|wxLEFT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -179,10 +179,10 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Connect(ID_BUTTON3,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnButton1Click2);
     Connect(ID_FR,wxEVT_COMMAND_SPINCTRL_UPDATED,(wxObjectEventFunction)&client_guiFrame::OnFrameCountChange);
     Connect(ID_ToggleLoop,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnButton1Click3);
-    Connect(ID_BB,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnBackwardFastClick);
-    Connect(ID_BS,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnBackwardSlowClick);
-    Connect(ID_FS,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnForwardSlowClick);
-    Connect(ID_FF,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnForwardFastClick);
+    Connect(ID_Backward,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnBackwardSlowClick);
+    Connect(ID_Forward,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnForwardSlowClick);
+    Connect(ID_Slower,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnBackwardFastClick);
+    Connect(ID_Quicker,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnForwardFastClick);
     Connect(PlayButton,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnStopBtnClick);
     Connect(ID_BUTTON1,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnPauseClick);
     Connect(idMenuQuit,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnQuit);
@@ -414,8 +414,8 @@ void client_guiFrame::DataReceived()
 void client_guiFrame::DoDisconnect()
 {
     StatusBar1->PushStatusText(wxT("interrupted by server"));
-    ChangeState(sInit);
     connection.disconnect();
+    ChangeState(sInit);
 }
 
 void client_guiFrame::OnTextCtrl1Text(wxCommandEvent& event)
@@ -759,12 +759,7 @@ void client_guiFrame::Wheel(wxMouseEvent& evt)
 void client_guiFrame::ChangeSpeed(double ratio)
 {
     try {
-        if(speed * ratio < 0.0) {
-            speed = 1.0 * ratio / fabs(ratio);
-
-        } else {
-            speed *= fabs(ratio);
-        }
+        speed *= ratio;
 
         if(connection.isConnected()) {
            connection.set_parameter(wxT("speed"), wxString::FromCDouble(speed, 2));
@@ -776,6 +771,21 @@ void client_guiFrame::ChangeSpeed(double ratio)
     SpeedStr->SetLabel(wxString::FromDouble(speed, 2));
 }
 
+void client_guiFrame::ChangeDirection(int direction)
+{
+    try {
+        if(connection.isConnected()) {
+           connection.set_parameter(wxT("speed"), wxString::FromCDouble(1.0 * direction, 2));
+        }
+        speed = 1.0 * direction;
+    } catch (std::exception &e) {
+        wxMessageBox(wxString::FromUTF8(e.what()), _("Error setting speed"));
+    }
+
+    SpeedStr->SetLabel(wxString::FromDouble(speed, 2));
+}
+
+
 void client_guiFrame::OnForwardFastClick(wxCommandEvent& event)
 {
     ChangeSpeed(2.0);
@@ -783,21 +793,22 @@ void client_guiFrame::OnForwardFastClick(wxCommandEvent& event)
 
 void client_guiFrame::OnForwardSlowClick(wxCommandEvent& event)
 {
-    ChangeSpeed(1.0/2.0);
+    ChangeDirection(1);
 }
 
 void client_guiFrame::OnBackwardSlowClick(wxCommandEvent& event)
 {
-    ChangeSpeed(-1.0/2.0);
+    ChangeDirection(-1);
 }
 
 void client_guiFrame::OnBackwardFastClick(wxCommandEvent& event)
 {
-    ChangeSpeed(-2.0);
+    ChangeSpeed(0.5);
 }
 
 void client_guiFrame::ResetToDefaultValues()
 {
     gl->ResetDefaults();
     ChangeSpeed(1.0);
+    ChangeDirection(1);
 }

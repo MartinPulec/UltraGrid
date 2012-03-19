@@ -89,6 +89,7 @@ class client_guiFrame: public wxFrame
         void Resume();
         void JumpToFrame(int frame);
         void DoUpdateCounters(int val);
+        void ChangeDirection(int direction);
         void ChangeSpeed(double ratio);
 
         int FilterEvent(wxEvent& event);
@@ -105,11 +106,11 @@ class client_guiFrame: public wxFrame
         static const long ID_FR;
         static const long ID_ToggleLoop;
         static const long ID_SLIDER1;
-        static const long ID_BB;
-        static const long ID_BS;
+        static const long ID_Backward;
         static const long ID_SPEED_STR;
-        static const long ID_FS;
-        static const long ID_FF;
+        static const long ID_Forward;
+        static const long ID_Slower;
+        static const long ID_Quicker;
         static const long PlayButton;
         static const long ID_BUTTON1;
         static const long idMenuQuit;
@@ -120,9 +121,9 @@ class client_guiFrame: public wxFrame
         //*)
 
         //(*Declarations(client_guiFrame)
-        wxButton* ForwardSlow;
+        wxButton* Backward;
         wxFlexGridSizer* FlexGridSizer2;
-        wxButton* ForwardFast;
+        wxButton* Slower;
         wxToggleButton* ToggleLoop;
         wxStaticText* FrameCountLabel;
         wxStatusBar* StatusBar1;
@@ -130,12 +131,12 @@ class client_guiFrame: public wxFrame
         wxButton* FPSOk;
         wxTextCtrl* fps;
         wxStaticText* SpeedStr;
-        wxButton* BackwardSlow;
+        wxButton* Forward;
         GLView* gl;
         ProgressSlider* Slider1;
-        wxButton* BackwardFast;
         wxButton* StopBtn;
         wxMenuItem* MenuItem4;
+        wxButton* Quicker;
         CustomGridBagSizer* FlexGridSizer1;
         wxButton* Pause;
         wxSpinCtrl* FrameCount;

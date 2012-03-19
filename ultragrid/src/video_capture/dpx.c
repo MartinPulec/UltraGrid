@@ -181,7 +181,7 @@ typedef struct _television_header
     uint8_t  reserved[76];        /* reserved for future use (padding) */
 } Television_Header;
 
-typedef void (*lut_func_t)(int *lut, char *out_data, char *in_data, int size);
+typedef void (*lut_func_t)(unsigned int *lut, char *out_data, char *in_data, int size);
 
 struct vidcap_dpx_state {
         volatile struct video_frame *frame;
@@ -214,7 +214,7 @@ struct vidcap_dpx_state {
         glob_t              glob;
         int                 index;
         
-        int                *lut;
+        unsigned int                *lut;
         lut_func_t          lut_func;
         float               gamma;
         
@@ -223,7 +223,7 @@ struct vidcap_dpx_state {
         unsigned            big_endian:1;
 
         unsigned int        should_jump:1;
-        unsigned int        grab_waiting:1;
+        volatile unsigned int        grab_waiting:1;
         unsigned int        playone:1;
 
         float               speed;
@@ -263,7 +263,6 @@ static void create_lut(struct vidcap_dpx_state *s)
 {
         int x;
         int max_val;
-        float gamma;
         
         max_val = 1<<s->image_information.image_element[0].bit_size;
         //if(s->image_information.image_element[0].transfer == 0)
@@ -285,8 +284,8 @@ static void apply_lut_10b(int *lut, char *out_data, char *in_data, int size)
 {
         int x;
         int elems = size / 4;
-        register unsigned int *in = in_data;
-        register unsigned int *out = out_data;
+        register unsigned int *in = (unsigned int *) in_data;
+        register unsigned int *out = (unsigned int *) out_data;
         register int r,g,b;
         
         for(x = 0; x < elems; ++x) {
@@ -302,8 +301,8 @@ static void apply_lut_10b_be(int *lut, char *out_data, char *in_data, int size)
 {
         int x;
         int elems = size / 4;
-        register unsigned int *in = in_data;
-        register unsigned int *out = out_data;
+        register unsigned int *in = (unsigned int *) in_data;
+        register unsigned int *out = (unsigned int *) out_data;
         register int r,g,b;
         
         for(x = 0; x < elems; ++x) {
@@ -320,8 +319,8 @@ static void apply_lut_8b(int *lut, char *out_data, char *in_data, int size)
 {
         int x;
         int elems = size / 4;
-        register unsigned int *in = in_data;
-        register unsigned int *out = out_data;
+        register unsigned int *in = (unsigned int *) in_data;
+        register unsigned int *out = (unsigned int *) out_data;
         register int r,g,b;
         
         for(x = 0; x < elems; ++x) {
@@ -350,6 +349,8 @@ vidcap_dpx_probe(void)
 void *
 vidcap_dpx_init(char *fmt, unsigned int flags)
 {
+        UNUSED(flags);
+
 	struct vidcap_dpx_state *s;
         char *item;
         char *glob_pattern;
@@ -566,11 +567,9 @@ static void * reading_thread(void *args)
                 if(s->processing_waiting)
                         pthread_cond_signal(&s->processing_cv);
                 pthread_mutex_unlock(&s->lock);
-        fprintf(stderr, "- %d\n", s->index);
                 
-                if( (s->speed > 0.0 && s->index >= s->glob.gl_pathc) ||
+                if( (s->speed > 0.0 && s->index >= (int) s->glob.gl_pathc) ||
                                 s->index < 0) {
-        fprintf(stderr, "FINISH\n", s->index);
                         s->finished = TRUE;
                 }
         }
@@ -702,7 +701,6 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
         if( s->frame->frames < 0) {
                 s->frame->frames = 0;
         }
-        fprintf(stderr, "%d\n", s->frame->frames);
 
         gettimeofday(&s->t, NULL);
         double seconds = tv_diff(s->t, s->t0);    
@@ -718,10 +716,8 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
 	return s->frame;
 }
 
-static void flush_pipeline(struct vidcap *state)
+static void flush_pipeline(struct vidcap_dpx_state *s)
 {
-	struct vidcap_dpx_state 	*s = (struct vidcap_dpx_state *) state;
-
         s->should_jump = TRUE;
         pthread_mutex_unlock(&s->lock);
         while(!s->reader_waiting || !s->processing_waiting || !s->grab_waiting)
@@ -734,10 +730,8 @@ static void flush_pipeline(struct vidcap *state)
 
 }
 
-static void play_after_flush(struct vidcap *state)
+static void play_after_flush(struct vidcap_dpx_state *s)
 {
-	struct vidcap_dpx_state 	*s = (struct vidcap_dpx_state *) state;
-
         pthread_cond_signal(&s->reader_cv);
         pthread_cond_signal(&s->processing_cv);
         if(!s->should_pause)
@@ -746,13 +740,11 @@ static void play_after_flush(struct vidcap *state)
         s->should_jump = FALSE;
 }
 
-static void clamp_indices(struct vidcap *state)
+static void clamp_indices(struct vidcap_dpx_state *s)
 {
-	struct vidcap_dpx_state 	*s = (struct vidcap_dpx_state *) state;
-
         if(s->index < 0) {
                 s->index = 0;
-        } else if(s->index >= s->glob.gl_pathc) {
+        } else if(s->index >= (int) s->glob.gl_pathc) {
                 s->index = s->glob.gl_pathc - 1;
         }
 

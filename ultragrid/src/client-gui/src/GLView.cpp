@@ -661,6 +661,8 @@ void GLView::Render()
 
     wxGLCanvas::SetCurrent(*context);
 
+    glBindTexture(GL_TEXTURE_2D, texture_display);
+
     switch(codec) {
         case DXT1:
             glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
@@ -676,7 +678,6 @@ void GLView::Render()
             gl_bind_texture();
             break;
         case RGBA:
-            glBindTexture(GL_TEXTURE_2D, texture_display);
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                             width, height,
                             GL_RGBA, GL_UNSIGNED_BYTE,
@@ -689,6 +690,7 @@ void GLView::Render()
                             data);
             break;
         case DXT5:
+            glUseProgram(PHandle_dxt5);
             glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                             (width + 3) / 4 * 4, dxt_height,
                             GL_COMPRESSED_RGBA_S3TC_DXT5_EXT,
@@ -910,6 +912,8 @@ void GLView::ShowOnlyChannel(int val)
             break;
     }
     CurrentFilter = Filters[CurrentFilterIdx];
+
+    Render();
 }
 
 void GLView::HideChannel(int val)
@@ -926,6 +930,8 @@ void GLView::HideChannel(int val)
             break;
     }
     CurrentFilter = Filters[CurrentFilterIdx];
+
+    Render();
 }
 
 void GLView::Zoom(double ratio)

@@ -141,6 +141,7 @@ void sp_client::connect_to(std::string host, int port)
         if(conn_nonb(* (struct sockaddr_in *) res->ai_addr, this->fd, 5)) {
             this->fd = -1;
             what = std::string("connect failed: ") + strerror(errno);
+            continue;
         }
 
         break; /* okay we got one */
