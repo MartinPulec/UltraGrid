@@ -29,7 +29,8 @@
 					<growablecols>6</growablecols>
 					<object class="sizeritem">
 						<object class="wxButton" name="ID_BUTTON2" variable="Select" member="yes">
-							<label>Select video</label>
+							<label>⏏</label>
+							<size>60,27</size>
 							<handler function="OnSelectClick" entry="EVT_BUTTON" />
 						</object>
 						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
@@ -95,7 +96,7 @@
 					</object>
 					<object class="sizeritem">
 						<object class="wxButton" name="ID_Backward" variable="Backward" member="yes">
-							<label>&lt;</label>
+							<label>◀</label>
 							<size>27,27</size>
 							<handler function="OnBackwardSlowClick" entry="EVT_BUTTON" />
 						</object>
@@ -114,7 +115,7 @@
 					</object>
 					<object class="sizeritem">
 						<object class="wxButton" name="ID_Forward" variable="Forward" member="yes">
-							<label>&gt;</label>
+							<label>▶</label>
 							<size>27,27</size>
 							<handler function="OnForwardSlowClick" entry="EVT_BUTTON" />
 						</object>
@@ -124,7 +125,7 @@
 					</object>
 					<object class="sizeritem">
 						<object class="wxButton" name="ID_Slower" variable="Slower" member="yes">
-							<label>V</label>
+							<label>▼</label>
 							<size>27,27</size>
 							<handler function="OnBackwardFastClick" entry="EVT_BUTTON" />
 						</object>
@@ -134,7 +135,7 @@
 					</object>
 					<object class="sizeritem">
 						<object class="wxButton" name="ID_Quicker" variable="Quicker" member="yes">
-							<label>A</label>
+							<label>▲</label>
 							<size>27,27</size>
 							<handler function="OnForwardFastClick" entry="EVT_BUTTON" />
 						</object>
@@ -144,7 +145,7 @@
 					</object>
 					<object class="sizeritem">
 						<object class="wxButton" name="PlayButton" variable="StopBtn" member="yes">
-							<label>Stop</label>
+							<label>◼</label>
 							<size>60,27</size>
 							<maxsize>-1,-1</maxsize>
 							<handler function="OnStopBtnClick" entry="EVT_BUTTON" />
@@ -155,7 +156,7 @@
 					</object>
 					<object class="sizeritem">
 						<object class="wxButton" name="ID_BUTTON1" variable="Pause" member="yes">
-							<label>Pause</label>
+							<label>▶</label>
 							<size>60,27</size>
 							<handler function="OnPauseClick" entry="EVT_BUTTON" />
 						</object>

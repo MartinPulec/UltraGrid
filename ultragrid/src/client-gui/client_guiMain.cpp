@@ -115,7 +115,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     FlexGridSizer1->Add(gl, 1, wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FlexGridSizer2 = new wxFlexGridSizer(2, 14, 0, 0);
     FlexGridSizer2->AddGrowableCol(6);
-    Select = new wxButton(this, ID_BUTTON2, _("Select video"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_BUTTON2"));
+    Select = new wxButton(this, ID_BUTTON2, _("⏏"), wxDefaultPosition, wxSize(60,27), 0, wxDefaultValidator, _T("ID_BUTTON2"));
     FlexGridSizer2->Add(Select, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     fps = new wxTextCtrl(this, ID_TEXTCTRL1, _("FPS"), wxDefaultPosition, wxSize(45,25), 0, wxDefaultValidator, _T("ID_TEXTCTRL1"));
     FlexGridSizer2->Add(fps, 1, wxTOP|wxBOTTOM|wxLEFT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -131,20 +131,20 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Slider1 = new ProgressSlider(this, ID_SLIDER1, 0, 0, 100, wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_SLIDER1"));
     Slider1->SetMinSize(wxSize(100,-1));
     FlexGridSizer2->Add(Slider1, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    Backward = new wxButton(this, ID_Backward, _("<"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_Backward"));
+    Backward = new wxButton(this, ID_Backward, _("◀"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_Backward"));
     FlexGridSizer2->Add(Backward, 1, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     SpeedStr = new wxStaticText(this, ID_SPEED_STR, _("SPD"), wxDefaultPosition, wxSize(41,15), 0, _T("ID_SPEED_STR"));
     FlexGridSizer2->Add(SpeedStr, 1, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    Forward = new wxButton(this, ID_Forward, _(">"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_Forward"));
+    Forward = new wxButton(this, ID_Forward, _("▶"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_Forward"));
     FlexGridSizer2->Add(Forward, 1, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    Slower = new wxButton(this, ID_Slower, _("V"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_Slower"));
+    Slower = new wxButton(this, ID_Slower, _("▼"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_Slower"));
     FlexGridSizer2->Add(Slower, 1, wxTOP|wxBOTTOM|wxLEFT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    Quicker = new wxButton(this, ID_Quicker, _("A"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_Quicker"));
+    Quicker = new wxButton(this, ID_Quicker, _("▲"), wxDefaultPosition, wxSize(27,27), 0, wxDefaultValidator, _T("ID_Quicker"));
     FlexGridSizer2->Add(Quicker, 1, wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    StopBtn = new wxButton(this, PlayButton, _("Stop"), wxDefaultPosition, wxSize(60,27), 0, wxDefaultValidator, _T("PlayButton"));
+    StopBtn = new wxButton(this, PlayButton, _("◼"), wxDefaultPosition, wxSize(60,27), 0, wxDefaultValidator, _T("PlayButton"));
     StopBtn->SetMaxSize(wxSize(-1,-1));
     FlexGridSizer2->Add(StopBtn, 1, wxTOP|wxBOTTOM|wxLEFT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    Pause = new wxButton(this, ID_BUTTON1, _("Pause"), wxDefaultPosition, wxSize(60,27), 0, wxDefaultValidator, _T("ID_BUTTON1"));
+    Pause = new wxButton(this, ID_BUTTON1, _("▶"), wxDefaultPosition, wxSize(60,27), 0, wxDefaultValidator, _T("ID_BUTTON1"));
     FlexGridSizer2->Add(Pause, 1, wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FlexGridSizer1->Add(FlexGridSizer2, 1, wxALL|wxEXPAND|wxFIXED_MINSIZE|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     SetSizer(FlexGridSizer1);
@@ -311,6 +311,8 @@ void client_guiFrame::PlaySelection()
     wxString hostname;
     wxString path;
 
+    wxString failedPart;
+
     /*if(UG.StopRunning()) { // stopped
         return;
     }*/
@@ -335,20 +337,25 @@ void client_guiFrame::PlaySelection()
 
         //this->playList.pop_back();
 
+        failedPart = wxT("connect");
         this->connection.connect_to(std::string(hostname.mb_str()), 5100);
+        failedPart = wxT("format setting");
         this->connection.set_parameter(wxT("format"), video_format);
-
+        failedPart = wxT("compression setting");
         this->connection.set_parameter(wxT("compression"), wxString(settings.GetValue(std::string("compression"), std::string("none")).c_str(), wxConvUTF8) << wxT(" ") +
                 wxString(settings.GetValue(std::string("jpeg_qual"), std::string("80")).c_str(), wxConvUTF8));
 
-
+        failedPart = wxT("setup");
         this->connection.setup(wxT("/") + path);
+        failedPart = wxT("setting FPS");
         this->connection.set_parameter(wxT("fps"), wxString::FromCDouble(fps, 2));
+        failedPart = wxT("setting loop");
         connection.set_parameter(wxT("loop"), ToggleLoop->GetValue() ? wxT("ON") : wxT("OFF"));
+        failedPart = wxT("setting speed");
         connection.set_parameter(wxT("speed"), wxString::FromCDouble(speed, 2));
 
         gl->Receive(true);
-
+        failedPart = wxT("playing");
         connection.play();
 
         //UG.newWindow();
@@ -358,7 +365,7 @@ void client_guiFrame::PlaySelection()
 
     } catch (std::exception &e) {
         wxString msg = wxString::FromUTF8(e.what());
-        wxMessageBox(msg, _("Error downloading media file"));
+        wxMessageBox(msg + wxT("(") + failedPart + wxT(")"), _("Playback error"));
         this->connection.disconnect();
     }
 }
@@ -368,7 +375,7 @@ void client_guiFrame::Stop()
     try {
         connection.teardown();
     } catch (std::exception &e) {
-        wxMessageBox(wxString::FromUTF8(e.what()), _("Error downloading media file"));
+        wxMessageBox(wxString::FromUTF8(e.what()), _("Error stopping media"));
     }
 
     StatusBar1->PushStatusText(wxT("stopped"));
@@ -505,7 +512,6 @@ void client_guiFrame::Resume()
         connection.play();
 
         ChangeState(sPlaying);
-        Pause->SetLabel(wxT("Pause"));
     } catch (std::exception &e) {
         wxString msg = wxString::FromUTF8(e.what());
         wxMessageBox(msg, _("Error downloading media file"));
@@ -517,14 +523,14 @@ void client_guiFrame::ChangeState(enum playerState newState)
     state = newState;
     switch(newState) {
         case sInit:
-            Pause->SetLabel(wxT("Play"));
+            Pause->SetLabel(wxT("▶"));
             ResetToDefaultValues();
             break;
         case sReady:
-            Pause->SetLabel(wxT("Play"));
+            Pause->SetLabel(wxT("▶"));
             break;
         case sPlaying:
-            Pause->SetLabel(wxT("Pause"));
+            Pause->SetLabel(wxT("❚❚"));
             break;
     }
 }
