@@ -936,8 +936,8 @@ void GLView::HideChannel(int val)
 
 void GLView::Zoom(double ratio)
 {
-    vpXMultiplier *= ratio;
-    vpYMultiplier *= ratio;
+    vpXMultiplier *= (1 + ratio);
+    vpYMultiplier *= (1 + ratio);
     Recompute();
     resize();
 }
