@@ -311,10 +311,10 @@ static void * reading_thread(void *args)
                                               s->tile->width);
                         ImfInputReadPixels(file, s->min_y + y, s->min_y + y);
                         for(x = 0; x < s->tile->width; ++x) {
-                                line[0] = s->scanline[x].r >> 4;
-                                line[1] = s->scanline[x].g >> 4;
-                                line[2] = s->scanline[x].b >> 4;
-                                line[3] = s->scanline[x].a >> 4;
+                                line[0] = ImfHalfToFloat(s->scanline[x].r) * 255.0;
+                                line[1] = ImfHalfToFloat(s->scanline[x].g) * 255.0;
+                                line[2] = ImfHalfToFloat(s->scanline[x].b) * 255.0;
+                                line[3] = ImfHalfToFloat(s->scanline[x].a) * 255.0;
                                 line += 4;
                         }
                 }
