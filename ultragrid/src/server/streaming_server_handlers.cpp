@@ -105,7 +105,8 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                         if(stat(path_buff, &sb) == -1) {
                                 response.code = 503;
                                 response.message = "Service Unavailable";
-                                response.body_len = 0;
+                                response.body = "Directory not found";
+                                response.body_len = strlen(response.body);
                         } else {
                                 path = std::string(path_buff);
 
@@ -280,6 +281,9 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                         }
                         else if(strcmp(video_format, "TIFF") == 0) {
                                 this->video_format = "tiff";
+                        }
+                        else if(strcmp(video_format, "EXR") == 0) {
+                                this->video_format = "exr";
                         }
                 } else if(strcmp(item, "loop") == 0) {
                         char *onOrOff = strtok_r(NULL, " ", &save_ptr);

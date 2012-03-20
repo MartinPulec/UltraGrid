@@ -651,6 +651,7 @@ int main(int argc, char *argv[])
         uv->tx = NULL;
         uv->network_devices = NULL;
         uv->port_number = PORT_BASE;
+	uv->comm_fd = 0;
 
         perf_init();
         perf_record(UVP_INIT, 0);
@@ -965,9 +966,15 @@ int main(int argc, char *argv[])
                 char buff[1024];
                 ssize_t ret;
                 int len;
-                ret = read(uv->comm_fd, (void *) &len, sizeof(int));
+		if(uv->comm_fd != 0) {
+			ret = read(uv->comm_fd, (void *) &len, sizeof(int));
+		} else {
+			len = 1024;
+			ret = 0;
+		}
                 if(ret != -1) {
                         ret = read(uv->comm_fd, buff, len);
+			len = ret;
                         buff[len] = '\0';
                         fprintf(stderr, "main: command %s\n", buff);
                         if(ret != -1) {

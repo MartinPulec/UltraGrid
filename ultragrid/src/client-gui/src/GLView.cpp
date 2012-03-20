@@ -63,6 +63,12 @@ GLView::GLView(wxFrame *p, wxWindowID id, const wxPoint &pos, const wxSize &size
 {
     vpXMultiplier = vpYMultiplier = 1.0;
     xoffset = yoffset = 0.0;
+
+#ifdef DEBUG_SENDER
+    receive = true;
+#else
+    receive = false;
+#endif
 }
 
 // source code for a shader unit (xsedmik)
@@ -876,6 +882,9 @@ void GLView::OnPaint( wxPaintEvent& WXUNUSED(event) )
 void GLView::Receive(bool val)
 {
     receive = val;
+#ifdef DEBUG_SENDER
+    receive = true;
+#endif
 }
 
 void GLView::KeyDown(wxKeyEvent& evt)
