@@ -91,7 +91,8 @@ OBJS	      = @OBJS@ \
 		src/vo_postprocess/split.o \
 	        src/client-gui/src/GLView.o \
 	     	src/client-gui/src/ClientDataIntPair.o \
-		@X_OBJ@ 
+		@X_OBJ@ \
+		src/utils/thread_pool.o
 
 SDL_LIB_OBJ  = \
 		src/audio/utils.o \

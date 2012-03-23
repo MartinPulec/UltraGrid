@@ -70,16 +70,42 @@
 #include <sys/time.h>
 #include <semaphore.h>
 #include "video_capture.h"
+#include "utils/thread_pool.h"
 #include <ImfCRgbaFile.h>
 
 
+#define SIGN(x) (x / fabs(x))
+#define ROUND_FROM_ZERO(x) (ceil(fabs(x)) * SIGN(x))
 
-#define BUFFER_LEN 10
+#define BUFFER_LEN 30
+#define THREADS 6
 
+void * job_process(void *input);
+
+
+static int intcmp (const void *p1, const void *p2)
+{
+        return *(const int *) p2 -  *(const int *) p1;
+}
+
+
+struct job {
+        int frame_id;
+        char *filename;
+        char *out_data;
+
+        ImfRgba *scanline;
+        int used:1;
+
+        int slot;
+
+        struct vidcap_exr_state *state;
+};
 
 struct vidcap_exr_state {
         struct video_frame *frame;
         struct tile        *tile;
+
         pthread_mutex_t lock;
         
         pthread_cond_t reader_cv;
@@ -87,13 +113,16 @@ struct vidcap_exr_state {
 
         volatile int should_pause;
         pthread_cond_t pause_cv;
-        
+
         unsigned int        loop:1;
-        volatile unsigned int        finished:1;
+        volatile unsigned int        finished;
         volatile unsigned int        should_exit_thread:1;
+
+        struct  job         jobs[THREADS];
         
         char               *buffer_read[BUFFER_LEN];
-        volatile int        buffer_read_start, buffer_read_end;
+        int                 buffer_consumed[BUFFER_LEN];
+        volatile int        buffer_read_start, buffer_read_end, working_read_end;
         
         char               *buffer_send;
         
@@ -114,17 +143,27 @@ struct vidcap_exr_state {
         unsigned int        playone:1;
 
         int                 min_x, min_y, max_x, max_y;
-        ImfRgba            *scanline;
+
+        double              speed;
+
+        struct thread_pool *pool;
 };
 
 
+static int setpos(struct vidcap_exr_state *s, int i);
 static void * reading_thread(void *args);
 static void usage(void);
-static void create_lut(struct vidcap_dpx_state *s);
-static void apply_lut_8b(int *lut, char *out, char *in, int size);
-static void apply_lut_10b(int *lut, char *out, char *in, int size);
-static void apply_lut_10b_be(int *lut, char *out, char *in, int size);
-static uint32_t to_native_order(struct vidcap_dpx_state *s, uint32_t num);
+
+static int clamp_to_range(int value);
+
+static int clamp_to_range(int value)
+{
+        if(value < 0)
+                return 0;
+        if(value > 255)
+                return 255;
+        return value;
+}
 
 static void usage()
 {
@@ -149,6 +188,7 @@ vidcap_exr_probe(void)
 void *
 vidcap_exr_init(char *fmt, unsigned int flags)
 {
+        UNUSED(flags);
 	struct vidcap_exr_state *s;
         char *item;
         char *glob_pattern;
@@ -163,20 +203,21 @@ vidcap_exr_init(char *fmt, unsigned int flags)
                 usage();
                 return NULL;
         }
-        
+
         pthread_mutex_init(&s->lock, NULL);
         pthread_cond_init(&s->reader_cv, NULL);
         pthread_cond_init(&s->pause_cv, NULL);
-        s->reader_waiting = FALSE;
+        s->reader_waiting = 0;
         s->should_pause = FALSE;
         s->should_jump = FALSE;
         s->grab_waiting = FALSE;
         
-        s->buffer_read_start = s->buffer_read_end = 0;
+        s->buffer_read_start = s->buffer_read_end = s->working_read_end = 0;
         s->index = 0;
+        s->speed = 1.0;
         
         s->should_exit_thread = FALSE;
-        s->finished = FALSE;
+        s->finished = 0;
         
         s->frame = vf_alloc(1);
         s->frame->fps = 30.0;
@@ -219,7 +260,6 @@ vidcap_exr_init(char *fmt, unsigned int flags)
 
         s->tile->width = s->max_x - s->min_x + 1UL;
         s->tile->height = s->max_y - s->min_y + 1UL;
-        s->scanline = (ImfRgba *) malloc(s->tile->width * sizeof(ImfRgba));
 
         s->frame->color_spec = RGBA;
         s->tile->data_len = vc_get_linesize(s->tile->width, s->frame->color_spec) * s->tile->height;
@@ -227,12 +267,23 @@ vidcap_exr_init(char *fmt, unsigned int flags)
         
         for (i = 0; i < BUFFER_LEN; ++i) {
                 s->buffer_read[i] = (char *) malloc(s->tile->data_len);
+                s->buffer_consumed[i] = 0;
         }
         s->buffer_send = (char *) malloc(s->tile->data_len);
         
-        pthread_create(&s->reading_thread, NULL, reading_thread, s);
-        
+        for(i = 0; i < THREADS; ++i) {
+                s->jobs[i].scanline = (ImfRgba *) malloc(s->tile->width * sizeof(ImfRgba));
+                s->jobs[i].used = FALSE;
+                s->jobs[i].state = s;
+
+                s->jobs[i].out_data = (char *) malloc(s->tile->data_len);
+        }
+
         s->prev_time.tv_sec = s->prev_time.tv_usec = 0;
+
+        s->pool = thread_pool_init(THREADS, job_process);
+
+        pthread_create(&s->reading_thread, NULL, reading_thread, s);
 
 	return s;
 }
@@ -261,23 +312,40 @@ vidcap_exr_done(void *state)
         pthread_mutex_lock(&s->lock);
         s->should_exit_thread = TRUE;
         if(s->reader_waiting)
-                pthread_cond_signal(&s->reader_cv);
+                pthread_cond_broadcast(&s->reader_cv);
         pthread_mutex_unlock(&s->lock);
-        
-	pthread_join(s->reading_thread, NULL);
         
         vf_free(s->frame);
         for (i = 0; i < BUFFER_LEN; ++i) {
                 free(s->buffer_read[i]);
         }
         free(s->buffer_send);
+        thread_pool_destroy(s->pool);
         free(s);
         fprintf(stderr, "exr exited\n");
+}
+
+static int find_unused_slot(struct job * j, int count)
+{
+        int i;
+        for (i = 0; i < count; ++i) {
+                if(!j[i].used) {
+                        return i;
+                }
+        }
+
+        return -1;
 }
 
 static void * reading_thread(void *args)
 {
 	struct vidcap_exr_state        *s = (struct vidcap_exr_state *) args;
+        char *tmp_buffers[BUFFER_LEN];
+
+        memset(tmp_buffers, 0, BUFFER_LEN * sizeof(char *));
+
+        /* temporary buffer for computed data, 0 goes for buffer_read_end, etc. */
+        char *data_computed[THREADS];
 
         while(1) {
                 pthread_mutex_lock(&s->lock);
@@ -285,7 +353,14 @@ static void * reading_thread(void *args)
                         pthread_mutex_unlock(&s->lock);
                         goto after_while;
                 }
-                while(s->finished || s->should_jump || s->buffer_read_start == ((s->buffer_read_end + 1) % BUFFER_LEN)) { /* full */
+
+                
+                /*if((s->speed > 0.0 && my_index >= (int) s->glob.gl_pathc) ||
+                                my_index < 0) {
+                        ++s->finished;
+                }*/
+
+                while((s->finished || s->should_jump || s->buffer_read_start == ((s->working_read_end + 1) % BUFFER_LEN))) { /* full */
                         s->reader_waiting = TRUE;
                         pthread_cond_wait(&s->reader_cv, &s->lock);
                         s->reader_waiting = FALSE;
@@ -295,39 +370,56 @@ static void * reading_thread(void *args)
                         }
                 }
                 
+                // UNLOCK - UNLOCK - UNLOCK
                 pthread_mutex_unlock(&s->lock);
-                                        
 
-                char *filename = s->glob.gl_pathv[s->index++];
-                ImfInputFile *file = ImfOpenInputFile(filename);
+                int was_last = FALSE;
+                if( (s->speed > 0.0 && s->index >= (int) s->glob.gl_pathc) ||
+                                s->index < 0) {
+                        was_last = TRUE;
+                }
+                
+                if(thread_pool_get_overall_count(s->pool) < THREADS && !was_last) {
+                        int slot = find_unused_slot(s->jobs, THREADS);
+                        assert(slot >= 0);
 
+                        char *filename = s->glob.gl_pathv[s->index];
 
-                int y;
-                for (y = 0; y < s->tile->height; ++y) {
-                        int x;
-                        unsigned char *line = s->buffer_read[s->buffer_read_end] + (4 * y * s->tile->width);
+                        s->jobs[slot].frame_id = s->index;
+                        s->jobs[slot].filename = filename;
+                        //s->jobs[slot].out_data = s->buffer_read[s->buffer_read_end];
+                        s->jobs[slot].slot = s->working_read_end; //s->buffer_read_end;
 
-                        ImfInputSetFrameBuffer(file, s->scanline - s->min_x - s->tile->width * (s->min_y + y), 1,
-                                              s->tile->width);
-                        ImfInputReadPixels(file, s->min_y + y, s->min_y + y);
-                        for(x = 0; x < s->tile->width; ++x) {
-                                line[0] = ImfHalfToFloat(s->scanline[x].r) * 255.0;
-                                line[1] = ImfHalfToFloat(s->scanline[x].g) * 255.0;
-                                line[2] = ImfHalfToFloat(s->scanline[x].b) * 255.0;
-                                line[3] = ImfHalfToFloat(s->scanline[x].a) * 255.0;
-                                line += 4;
-                        }
+                        s->jobs[slot].used = TRUE;
+
+                        thread_pool_enqueue(s->pool, &s->jobs[slot]);
+
+                        s->index += ROUND_FROM_ZERO(s->speed);
+                        s->working_read_end = (s->working_read_end + 1) % BUFFER_LEN;
                 }
 
-                ImfCloseInputFile(file);
+                if(thread_pool_get_overall_count(s->pool) == THREADS || was_last) {
+                        struct job * res = thread_pool_pop(s->pool);
+                        res->used = FALSE;
 
+                        tmp_buffers[res->slot] = res->out_data;
+                        res->out_data = s->buffer_read[s->buffer_read_end];
+                }
+
+                // LOCK - LOCK - LOCK
                 pthread_mutex_lock(&s->lock);
-                s->buffer_read_end = (s->buffer_read_end + 1) % BUFFER_LEN; /* and we will read next one */
-                /*if(s->processing_waiting)
-                        pthread_cond_signal(&s->processing_cv);*/
+
+                while(tmp_buffers[s->buffer_read_end]) {
+                        s->buffer_read[s->buffer_read_end] = tmp_buffers[s->buffer_read_end];
+                        tmp_buffers[s->buffer_read_end] = NULL;
+
+                        s->buffer_read_end = (s->buffer_read_end + 1) % BUFFER_LEN; /* and we will read next one */
+                }
+
+
                 pthread_mutex_unlock(&s->lock);
                 
-                if( s->index == s->glob.gl_pathc) {
+                if(was_last && thread_pool_get_overall_count(s->pool) == 0) {
                         s->finished = TRUE;
                 }
         }
@@ -335,6 +427,7 @@ after_while:
         
         while(!s->should_exit_thread)
                 ;
+
 
         return NULL;
 }
@@ -344,6 +437,7 @@ vidcap_exr_grab(void *state, struct audio_frame **audio)
 {
 	struct vidcap_exr_state 	*s = (struct vidcap_exr_state *) state;
         
+        // LOCK - LOCK - LOCK - LOCK
         pthread_mutex_lock(&s->lock);
         while((s->should_pause || s->should_jump) && !s->playone) {
                 s->grab_waiting = TRUE;
@@ -355,19 +449,22 @@ vidcap_exr_grab(void *state, struct audio_frame **audio)
         if(s->finished && 
                         s->buffer_read_start == s->buffer_read_end) {
                 if(s->loop) {
-                        s->index = 0;
-                        s->frame->frames = 0;
                         s->finished = FALSE;
-                        pthread_cond_signal(&s->reader_cv);
+                        if(s->speed > 0.0) {
+                                setpos(s, 0);
+                        } else {
+                                setpos(s, s->glob.gl_pathc - 1);
+                        }
                 } else  {
                         pthread_mutex_unlock(&s->lock);
                         return NULL;
                 }
         }
 
+        // UNLOCK - UNLOCK - UNLOCK - UNLOCK
         pthread_mutex_unlock(&s->lock);
         
-        while(s->buffer_read_start == s->buffer_read_end && !should_exit && !s->finished)
+        while(s->buffer_read_start == s->buffer_read_end && !should_exit && !s->finished && !s->should_jump)
                 ;
 
         if(s->prev_time.tv_sec == 0 && s->prev_time.tv_usec == 0) { /* first run */
@@ -377,7 +474,7 @@ vidcap_exr_grab(void *state, struct audio_frame **audio)
         gettimeofday(&s->cur_time, NULL);
         if(s->frame->fps == 0) /* it would make following loop infinite */
                 return NULL;
-        while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->frame->fps) {
+        while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->frame->fps / (fabs(s->speed) < 1.0 ? fabs(s->speed) : 1.0)) {
                 gettimeofday(&s->cur_time, NULL);
         }
         s->prev_time = s->cur_time;
@@ -390,11 +487,19 @@ vidcap_exr_grab(void *state, struct audio_frame **audio)
         pthread_mutex_lock(&s->lock);
         s->buffer_read_start = (s->buffer_read_start + 1) % BUFFER_LEN;
         if(s->reader_waiting)
-                        pthread_cond_signal(&s->reader_cv);
+                        pthread_cond_broadcast(&s->reader_cv);
         pthread_mutex_unlock(&s->lock);
 
         s->frames++;
-        s->frame->frames++;
+        s->frame->frames += ROUND_FROM_ZERO(s->speed);
+        if( s->frame->frames >= (int) s->glob.gl_pathc) {
+                s->frame->frames = s->glob.gl_pathc - 1;
+        }
+        if( s->frame->frames < 0) {
+                s->frame->frames = 0;
+        }
+
+
         gettimeofday(&s->t, NULL);
         double seconds = tv_diff(s->t, s->t0);    
         if (seconds >= 5) {
@@ -407,6 +512,43 @@ vidcap_exr_grab(void *state, struct audio_frame **audio)
         *audio = NULL;
 
 	return s->frame;
+}
+
+static void flush_pipeline(struct vidcap_exr_state *s)
+{
+        s->should_jump = TRUE;
+        pthread_mutex_unlock(&s->lock);
+        while(!s->reader_waiting || !s->grab_waiting)
+                ;
+
+        pthread_mutex_lock(&s->lock);
+        thread_pool_flush(s->pool);
+        s->finished = FALSE;
+        s->buffer_read_start = s->buffer_read_end = s->working_read_end = 0;
+
+}
+
+static void play_after_flush(struct vidcap_exr_state *s)
+{
+        pthread_cond_broadcast(&s->reader_cv);
+        if(!s->should_pause)
+                pthread_cond_signal(&s->pause_cv);
+
+        s->should_jump = FALSE;
+}
+
+
+static int setpos(struct vidcap_exr_state *s, int i)
+{
+                pthread_mutex_lock(&s->lock);
+                flush_pipeline(s);
+
+                s->index = i;
+                fprintf(stderr, "New position: %d\n", s->index);
+                s->frame->frames = s->index - 1;
+
+                play_after_flush(s);
+                pthread_mutex_unlock(&s->lock);
 }
 
 void vidcap_exr_command(struct vidcap *state, int command, void *data)
@@ -433,28 +575,52 @@ void vidcap_exr_command(struct vidcap *state, int command, void *data)
                 s->frame->fps = *(float *) data;
                 pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_POS) {
-                pthread_mutex_lock(&s->lock);
-                s->should_jump = TRUE;
-                pthread_mutex_unlock(&s->lock);
-                while(!s->reader_waiting || !s->grab_waiting)
-                        ;
-
-                pthread_mutex_lock(&s->lock);
-                s->finished = FALSE;
-                s->buffer_read_start = s->buffer_read_end = 0;
-                s->index = *(int *) data;
-                fprintf(stderr, "New position: %d\n", s->index);
-                s->frame->frames = s->index - 1;
-                pthread_cond_signal(&s->reader_cv);
-                if(!s->should_pause)
-                        pthread_cond_signal(&s->pause_cv);
-
-                s->should_jump = FALSE;
-                pthread_mutex_unlock(&s->lock);
+                setpos(s, *(int *) data);
         } else if(command == VIDCAP_LOOP) {
                 pthread_mutex_lock(&s->lock);
                 s->loop = *(int *) data;
                 pthread_mutex_unlock(&s->lock);
+        } else if(command == VIDCAP_SPEED) {
+                printf(stderr, "[OpenEXR] SPEED %f\n", *(float *) data);
+                pthread_mutex_lock(&s->lock);
+                flush_pipeline(s);
+
+                s->frame->frames  = s->index;
+                s->speed = *(float *) data;
+
+                play_after_flush(s);
+                pthread_mutex_unlock(&s->lock);
+                /*pthread_mutex_lock(&s->lock);
+                s->loop = *(int *) data;
+                pthread_mutex_unlock(&s->lock);*/
         }
+}
+
+void * job_process(void *input)
+{
+        struct job * job = input;
+        ImfInputFile *file = ImfOpenInputFile(job->filename);
+
+
+        int y;
+        for (y = 0; y < (int) job->state->tile->height; ++y) {
+                int x;
+                unsigned char *line = (unsigned char *) job->out_data + (4 * y * job->state->tile->width);
+
+                ImfInputSetFrameBuffer(file, job->scanline - job->state->min_x - job->state->tile->width * (job->state->min_y + y), 1,
+                                      job->state->tile->width);
+                ImfInputReadPixels(file, job->state->min_y + y, job->state->min_y + y);
+                for(x = 0; x < (int) job->state->tile->width; ++x) {
+                        line[0] = clamp_to_range(round(ImfHalfToFloat(job->scanline[x].r) * 255.0));
+                        line[1] = clamp_to_range(round(ImfHalfToFloat(job->scanline[x].g) * 255.0));
+                        line[2] = clamp_to_range(round(ImfHalfToFloat(job->scanline[x].b) * 255.0));
+                        line[3] = clamp_to_range(round(ImfHalfToFloat(job->scanline[x].a) * 255.0));
+                        line += 4;
+                }
+        }
+
+        ImfCloseInputFile(file);
+
+        return input;
 }
 

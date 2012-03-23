@@ -64,12 +64,12 @@ CUFILES := \
     gpujpeg_huffman_gpu_decoder.cu
 
 # Compilers
-CC := gcc -fPIC
-LINK := g++ -fPIC
+CC := gcc -fPIC -O0 -g
+LINK := g++ -fPIC -O0 -g
 NVCC := $(CUDA_INSTALL_PATH)/bin/nvcc -Xcompiler -fPIC
 
 # Common flags
-COMMONFLAGS += -I. -I$(CUDA_INSTALL_PATH)/include -O2
+COMMONFLAGS += -I. -I$(CUDA_INSTALL_PATH)/include -O0 -g
 
 # Ultragrid changes
 ARCH := $(shell uname -s)

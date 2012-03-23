@@ -131,7 +131,11 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                                                 if(compression.empty()) {
                                                         execlp(uv_argv[0], uv_argv[0], "-t", dpx_arg, "-m", "1500", "-C", fd_str, receiver.c_str(), (void *) 0);
                                                 } else {
-                                                        execlp(uv_argv[0], uv_argv[0], "-t", dpx_arg, "-m", "1500", "-C", fd_str, "-c", compression.c_str(), receiver.c_str(), (void *) 0);
+                                                        if(strncmp(compression.c_str(), "JPEG", 4) == 0) {
+                                                                execlp(uv_argv[0], uv_argv[0], "-t", dpx_arg, "-m", "1500", "-C", fd_str, "-c", compression.c_str(), receiver.c_str(), "-f", "mult:2", (void *) 0);
+                                                        } else {
+                                                                execlp(uv_argv[0], uv_argv[0], "-t", dpx_arg, "-m", "1500", "-C", fd_str, "-c", compression.c_str(), receiver.c_str(), (void *) 0);
+                                                        }
                                                 }
                                         } else { /* parent */
                                                 if(pid == -1) { /* cannot fork */
