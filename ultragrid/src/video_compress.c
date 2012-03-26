@@ -55,7 +55,6 @@
 #include "video_codec.h"
 #include "video_compress.h"
 #include "video_compress/dxt_glsl.h"
-#include "video_compress/fastdxt.h"
 #include "video_compress/jpeg.h"
 #include "lib_common.h"
 
@@ -83,9 +82,6 @@ void init_compressions(void);
 
 
 struct compress_t compress_modules[] = {
-#if defined HAVE_FASTDXT || defined BUILD_LIBRARIES
-        {"FastDXT", "fastdxt", MK_NAME(fastdxt_init), MK_NAME(fastdxt_compress), MK_NAME(fastdxt_done), NULL },
-#endif
 #if defined HAVE_DXT_GLSL || defined BUILD_LIBRARIES
         {"RTDXT", "rtdxt", MK_NAME(dxt_glsl_compress_init), MK_NAME(dxt_glsl_compress), MK_NAME(dxt_glsl_compress_done), NULL},
 #endif
