@@ -10,7 +10,7 @@ NVCCFLAGS     = @NVCCFLAGS@ -Xcompiler -fPIC
 LDFLAGS      =  @LDFLAGS@
 LIBS         += @LIBS@ @JACK_TRANS_LIB@ @MATHLIBS@ @COREAUDIO_LIB@ \
 		@X_PRE_LIBS@ @X_LIBS@ @X_EXTRA_LIBS@ -lm -pthread -ltiff -L/opt/local/lib
-INC           = -I.. -Isrc -Itest @DVS_INC@ @DELTACAST_INC@ @FASTDXT_INC@ @QUICKTIME_INC@ @DECKLINK_INC@ @PORTAUDIO_INC@ \
+INC           = -I.. -Isrc -Itest @DVS_INC@ @DELTACAST_INC@ @QUICKTIME_INC@ @DECKLINK_INC@ @PORTAUDIO_INC@ \
                 @GL_INC@ @SAGE_INC@ @QUAD_INC@ @JACK_TRANS_INC@ @JPEG_INC@ @COREAUDIO_INC@ @SPEEX_INC@
 DECKLINK_PATH = @DECKLINK_PATH@
 PERF          = bin/uv_perf
@@ -204,10 +204,6 @@ SAGE_LIB_OBJ  = \
 		src/video.o \
 		src/video_codec.o \
 		@SAGE_OBJ@
-
-FASTDXT_LIB_OBJ = src/video.o \
-		src/video_codec.o \
-		@FASTDXT_OBJ@
 
 RTDXT_COMPRESS_LIB_OBJ = src/video.o \
 			 src/video_codec.o \
@@ -576,10 +572,6 @@ perf: src/tv.o src/crypto/random.o
 @SAGE_LIB_TARGET@: $(SAGE_LIB_OBJ)
 	mkdir -p lib/ultragrid
 	$(LINKER) $(LDFLAGS) -shared -Wl,-soname,display_sage.so.@video_display_abi_version@ $(SAGE_LIB_OBJ) @SAGE_LIB@ -o $@
-
-@FASTDXT_LIB_TARGET@: $(FASTDXT_LIB_OBJ)
-	mkdir -p lib/ultragrid
-	$(LINKER) $(LDFLAGS) -shared -Wl,-soname,vcompress_fastdxt.so.@video_compress_abi_version@ $(FASTDXT_LIB_OBJ) @FASTDXT_LIB@ -o $@
 
 @RTDXT_COMPRESS_LIB_TARGET@: $(RTDXT_COMPRESS_LIB_OBJ)
 	mkdir -p lib/ultragrid
