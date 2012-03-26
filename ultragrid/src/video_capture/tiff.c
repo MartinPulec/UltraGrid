@@ -75,10 +75,12 @@
 
 #define BUFFER_LEN 10
 
+typedef void (*lut_func_t)(double *lut, char *out_data, char *in_data, int size);
 
 struct vidcap_tiff_state {
         struct video_frame *frame;
         struct tile        *tile;
+
         pthread_mutex_t lock;
         
         pthread_cond_t reader_cv;
@@ -92,6 +94,7 @@ struct vidcap_tiff_state {
         volatile unsigned int        should_exit_thread:1;
         
         char               *buffer_read[BUFFER_LEN];
+        char               *tiff_buffer;
         volatile int        buffer_read_start, buffer_read_end;
         
         char               *buffer_send;
@@ -99,11 +102,10 @@ struct vidcap_tiff_state {
         pthread_t           reading_thread;
         int                 frames;
         struct timeval      t, t0;
-        
+
         glob_t              glob;
         int                 index;
-        
-        int                *lut;
+
         float               gamma;
         
         struct timeval      prev_time, cur_time;
@@ -111,16 +113,21 @@ struct vidcap_tiff_state {
         unsigned int        should_jump:1;
         unsigned int        grab_waiting:1;
         unsigned int        playone:1;
+
+        int                 tiff_color_depth;
 };
 
 
 static void * reading_thread(void *args);
 static void usage(void);
-static void create_lut(struct vidcap_dpx_state *s);
-static void apply_lut_8b(int *lut, char *out, char *in, int size);
-static void apply_lut_10b(int *lut, char *out, char *in, int size);
-static void apply_lut_10b_be(int *lut, char *out, char *in, int size);
-static uint32_t to_native_order(struct vidcap_dpx_state *s, uint32_t num);
+
+
+static void apply_lut_8b(double *lut, char *out, char *in, int size);
+static void apply_lut_16b(double *lut, char *out, char *in, int size);
+
+static inline void strip16_to_8(char * dest, const char * stripData, int stripLen);
+
+
 
 static void usage()
 {
@@ -145,6 +152,7 @@ vidcap_tiff_probe(void)
 void *
 vidcap_tiff_init(char *fmt, unsigned int flags)
 {
+        UNUSED(flags);
 	struct vidcap_tiff_state *s;
         char *item;
         char *glob_pattern;
@@ -180,6 +188,8 @@ vidcap_tiff_init(char *fmt, unsigned int flags)
         s->gamma = 1.0;
         s->loop = FALSE;
         s->playone = FALSE;
+
+        s->frame->colorspace = RGB_709_D65;
         
         item = strtok_r(fmt, ":", &save_ptr);
         while(item) {
@@ -191,6 +201,10 @@ vidcap_tiff_init(char *fmt, unsigned int flags)
                         s->gamma = atof(item + strlen("gamma="));
                 } else if(strncmp("loop", item, strlen("loop")) == 0) {
                         s->loop = TRUE;
+                } else if(strncmp("colorspace", item, strlen("colorspace")) == 0) {
+                        if (strcasecmp(item + strlen("colorspace"), "XYZ")) {
+                                s->frame->colorspace = XYZ;
+                        }
                 }
                 
                 item = strtok_r(NULL, ":", &save_ptr);
@@ -222,21 +236,36 @@ vidcap_tiff_init(char *fmt, unsigned int flags)
         s->tile->height = uval;
         uint16_t usval;
         TIFFGetField(tif, TIFFTAG_BITSPERSAMPLE, &usval);
-        fprintf(stderr, "%d %d ", s->tile->width, s->tile->height);
+        printf("[TIFF] Detected image size: %d %d\n", s->tile->width, s->tile->height);
         
         s->tile->data_len = s->tile->width * s->tile->height;
-        //s->tile->data_len *= 4;
-        //s->frame->color_spec = RGBA;
 
-        if(usval == 8) {
-                s->tile->data_len *= 3;
-                s->frame->color_spec = RGB;
-        } else if(usval == 10) {
-                s->tile->data_len *= 4;
-                s->frame->color_spec = DPX10;
+
+        s->tiff_color_depth = usval;
+
+        switch(s->tiff_color_depth) {
+                case 8:
+                        s->tile->data_len *= 3;
+                        s->frame->color_spec = RGB;
+                        break;
+                case 10:
+                        s->tile->data_len *= 4;
+                        s->frame->color_spec = DPX10;
+                        fprintf(stderr, "10-bits are not yet fully supported.\n");
+                        abort();
+                        break;
+                case 16:
+                        s->tile->data_len *= 6;
+                        s->frame->color_spec = RGB16;
+                        s->tiff_buffer = malloc(s->tile->width * s->tile->height * 6 * 16);
+                        break;
+
+                default:
+                        fprintf(stderr, "[TIFF] Unsupported color depth: %d\n", s->tiff_color_depth);
+                        abort();
+                        break;
         }
-        
-        
+
         for (i = 0; i < BUFFER_LEN; ++i) {
                 s->buffer_read[i] = malloc(s->tile->data_len);
         }
@@ -289,6 +318,64 @@ vidcap_tiff_done(void *state)
         fprintf(stderr, "TIFF exited\n");
 }
 
+static inline void strip16_to_8(char * dest, const char * stripData, int stripLen)
+{
+        int x;
+
+        register uint32_t part1, part2;
+        register uint16_t r, g, b;
+        register uint32_t out_data;
+        register uint16_t *in;
+        register uint8_t *out;
+
+        in = (uint32_t *) stripData;
+        out = (uint32_t *) dest;
+
+
+        for(x = 0; x < stripLen; x += 6) {
+                r = *in++;
+                g = *in++;
+                b = *in++;
+
+
+                *out++ = r >> 8;
+                *out++ = g >> 8;
+                *out++ = b >> 8;
+        }
+}
+
+static void apply_lut_8b(double *lut, char *out, char *in, int size)
+{
+        // TODO
+        fprintf(stderr, "%s:%d: Unimplemented", __FILE__, __LINE__);
+        abort();
+}
+
+static void apply_lut_16b(double *lut, char *out_data, char *in_data, int size)
+{
+        uint16_t x1, x2, x3;
+        uint16_t y1, y2, y3;
+        int i;
+
+        uint16_t *in = (uint16_t *) in_data;
+        uint16_t *out = (uint16_t *) out_data;
+
+
+        for (i = 0; i < size; i+= 6) {
+                x1 = *in++;
+                x2 = *in++;
+                x3 = *in++;
+
+                y1 = lut[0] * x1 + lut[1] * x2 + lut[2] * x3;
+                y2 = lut[3] * x1 + lut[4] * x2 + lut[5] * x3;
+                y3 = lut[6] * x1 + lut[7] * x2 + lut[8] * x3;
+
+                *out++ = y1;
+                *out++ = y2;
+                *out++ = y3;
+        }
+}
+
 static void * reading_thread(void *args)
 {
 	struct vidcap_tiff_state        *s = (struct vidcap_tiff_state *) args;
@@ -325,7 +412,7 @@ static void * reading_thread(void *args)
                 for(strip = 0u; strip < numberOfStrips; ++strip) {
                         if(TIFFReadEncodedStrip(tif, strip, dest, (tsize_t) - 1) == (tsize_t) -1)
                                 fprintf(stderr, "Failed to read a strip %.", filename);
-                                dest += offset;
+                        dest += offset;
                 }
 
                 /* TODO: figure out postprocessing of 10 b images */

@@ -71,6 +71,9 @@ const struct codec_info_t codec_info[] = {
         {DXT1_YUV, "DXT1 YUV", to_fourcc('D','X','T','Y'), 1, 0.5, FALSE, TRUE}, /* packet YCbCr inside DXT1 channels */
         {DXT5, "DXT5", to_fourcc('D','X','T','5'), 1, 1.0, FALSE, TRUE},/* DXT5 YCoCg */
         {RGB, "RGB", 0x32424752, 1, 3.0, TRUE, FALSE},
+
+        {RGB16, NULL, 0, 1, 6.0, TRUE, FALSE},
+
         {DPX10, "DPX10", to_fourcc('D','P','1','0'), 1, 4.0, TRUE, FALSE},
         {JPEG, "JPEG", to_fourcc('J','P','E','G'), 0, 0.0, FALSE, TRUE},
         {RAW, "raw", to_fourcc('r','a','w','s'), 0, 1.0, FALSE, TRUE}, /* raw SDI */
@@ -96,6 +99,18 @@ const struct line_decode_from_to line_decoders[] = {
         { DPX10, RGB, (decoder_t) vc_copylineDPX10toRGB},
         { 0, 0, NULL }
 };
+
+double matrix_identity[] = { 1.0, 0.0, 0.0,
+                             0.0, 1.0, 0.0,
+                             0.0, 0.0, 1.0 };
+
+double rgb_709_d65_to_xyz[] = { 0.412453, 0.357580, 0.180423,
+                             0.212671, 0.715160, 0.072169,
+                             0.019334, 0.119193, 0.950227 };
+
+double xyz_to_rgb_709_d65[] = { 3.240479, -1.537150, -0.498535,
+                             -0.969256, 1.875992, 0.041556,
+                             0.055648, -0.204043, 1.057311 };
 
 void show_codec_help(char *module)
 {

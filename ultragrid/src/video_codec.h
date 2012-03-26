@@ -51,6 +51,10 @@
 
 typedef  void (*decoder_t)(unsigned char *dst, unsigned char *src, int dst_len, int rshift, int gshift, int bshift);
 
+extern double matrix_identity[];
+extern double rgb_709_d65_to_xyz[];
+extern double xyz_to_rgb_709_d65[];
+
 struct codec_info_t {
         codec_t codec;
         const char *name;

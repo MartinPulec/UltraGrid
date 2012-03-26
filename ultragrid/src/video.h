@@ -47,7 +47,11 @@
 #ifndef __video_h
 
 #define __video_h
-#include "tile.h"
+
+enum color_space {
+        RGB_709_D65,
+        XYZ
+};
 
 typedef enum {
         RGBA,
@@ -61,6 +65,7 @@ typedef enum {
         DXT1_YUV,
         DXT5,
         RGB,
+        RGB16,
         DPX10,
         JPEG,
         RAW
@@ -79,8 +84,6 @@ enum interlacing_t {
 #define VIDEO_STEREO                    2u
 #define VIDEO_4K                        3u
 
-
-
 /* please note that tiles have also its own widths and heights */
 struct video_desc {
         /* in case of tiled video - width and height represent widht and height
@@ -94,13 +97,6 @@ struct video_desc {
         unsigned int         tile_count;
 };
 
-/* contains full information both about video and about tiles.
- */
-struct video_desc_ti {
-        struct video_desc desc;
-        struct tile_info ti;
-};
-
 struct video_frame 
 {
         codec_t              color_spec;
@@ -109,6 +105,7 @@ struct video_frame
         struct tile         *tiles;
         
         unsigned int         tile_count;
+        enum color_space     colorspace; 
 
         int        frames;
 };

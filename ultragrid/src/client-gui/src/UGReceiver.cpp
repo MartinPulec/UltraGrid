@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <sys/time.h>
 
 #include "../include/UGReceiver.h"
 #include "../client_guiMain.h"
