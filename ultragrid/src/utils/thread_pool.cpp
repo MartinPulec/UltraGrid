@@ -181,6 +181,10 @@ struct thread_pool {
                         if(occupied[i])
                                 wait_count++;
                 }
+
+                while(outgoing.size() > 0) {
+                        outgoing.pop();
+                }
                 pthread_mutex_unlock(&lock);
 
                 for (int i = 0; i < wait_count; ++i) {
