@@ -63,6 +63,8 @@
 #include "glx_common.h"
 #endif
 
+#include "gl_context.h"
+
 struct video_compress {
         struct dxt_encoder *encoder;
 
@@ -72,15 +74,17 @@ struct video_compress {
         unsigned int configured:1;
         unsigned int interlaced_input:1;
         codec_t color_spec;
+
+        storage_t           storage;
         
         int dxt_height;
-        void *gl_context;
+        struct gl_context *context;
         int legacy:1;
 };
 
-static int configure_with(struct video_compress *s, struct video_frame *frame);
+int dxt_configure_with(struct video_compress *s, struct video_frame *frame);
 
-static int configure_with(struct video_compress *s, struct video_frame *frame)
+int dxt_configure_with(struct video_compress *s, struct video_frame *frame)
 {
         unsigned int x;
         enum dxt_format format;
@@ -147,6 +151,8 @@ static int configure_with(struct video_compress *s, struct video_frame *frame)
         else
                 s->interlaced_input = FALSE;
 
+        s->storage = frame->tiles[0].storage;
+
         s->dxt_height = (s->out->tiles[0].height + 3) / 4 * 4;
 
         if(s->out->color_spec == DXT1) {
@@ -190,7 +196,7 @@ static int configure_with(struct video_compress *s, struct video_frame *frame)
         return TRUE;
 }
 
-void * dxt_glsl_compress_init(char * opts)
+void * dxt_glsl_compress_init(char * opts, struct gl_context *context)
 {
         struct video_compress *s;
         
@@ -198,41 +204,8 @@ void * dxt_glsl_compress_init(char * opts)
         s->out = NULL;
         s->decoded = NULL;
 
-#ifndef HAVE_MACOSX
-        x11_enter_thread();
-        printf("Trying OpenGL 3.1 first.\n");
-        s->gl_context = glx_init(MK_OPENGL_VERSION(3,1));
-        s->legacy = FALSE;
-        if(!s->gl_context) {
-                fprintf(stderr, "[RTDXT] OpenGL 3.1 profile failed to initialize, falling back to legacy profile.\n");
-                s->gl_context = glx_init(OPENGL_VERSION_UNSPECIFIED);
-                s->legacy = TRUE;
-        }
-        glx_validate(s->gl_context);
-#else
-        s->gl_context = NULL;
-        if(get_mac_kernel_version_major() >= 11) {
-                printf("[RTDXT] Mac 10.7 or latter detected. Trying OpenGL 3.2 Core profile first.\n");
-                s->gl_context = mac_gl_init(MAC_GL_PROFILE_3_2);
-                if(!s->gl_context) {
-                        fprintf(stderr, "[RTDXT] OpenGL 3.2 Core profile failed to initialize, falling back to legacy profile.\n");
-                } else {
-                        s->legacy = FALSE;
-                }
-        }
+        s->context = context;
 
-        if(!s->gl_context) {
-                s->gl_context = mac_gl_init(MAC_GL_PROFILE_LEGACY);
-                s->legacy = TRUE;
-        }
-#endif
-
-        if(!s->gl_context) {
-                fprintf(stderr, "[RTDXT] Error initializing GLX context");
-                exit_uv(128);
-                return NULL;
-        }
-        
         if(opts && strcmp(opts, "help") == 0) {
                 printf("DXT GLSL comperssion usage:\n");
                 printf("\t-c RTDXT:DXT1\n");
@@ -270,43 +243,52 @@ struct video_frame * dxt_glsl_compress(void *arg, struct video_frame * tx)
         
         if(!s->configured) {
                 int ret;
-                ret = configure_with(s, tx);
+                ret = dxt_configure_with(s, tx);
                 if(!ret)
                         return NULL;
         }
 
-        for (x = 0; x < tx->tile_count;  ++x) {
-                struct tile *in_tile = vf_get_tile(tx, x);
-                struct tile *out_tile = vf_get_tile(s->out, x);
-                
-                line1 = (unsigned char *) in_tile->data;
-                line2 = (unsigned char *) s->decoded;
-                
-                for (i = 0; i < (int) in_tile->height; ++i) {
-                        s->decoder(line2, line1, out_tile->linesize,
-                                        0, 8, 16);
-                        line1 += vc_get_linesize(in_tile->width, tx->color_spec);
-                        line2 += out_tile->linesize;
-                }
-                
-                /* if height % 4 != 0, copy last line to align */
-                if((unsigned int) s->dxt_height != out_tile->height) {
-                        int y;
-                        line1 = (unsigned char *) s->decoded + out_tile->linesize * (out_tile->height - 1);
-                        for (y = out_tile->height; y < s->dxt_height; ++y)
-                        {
-                                memcpy(line2, line1, out_tile->linesize);
+        if(s->storage == CPU_POINTER) {
+                for (x = 0; x < tx->tile_count;  ++x) {
+                        struct tile *in_tile = vf_get_tile(tx, x);
+                        struct tile *out_tile = vf_get_tile(s->out, x);
+                        
+                        line1 = (unsigned char *) in_tile->data;
+                        line2 = (unsigned char *) s->decoded;
+                        
+                        for (i = 0; i < (int) in_tile->height; ++i) {
+                                s->decoder(line2, line1, out_tile->linesize,
+                                                0, 8, 16);
+                                line1 += vc_get_linesize(in_tile->width, tx->color_spec);
                                 line2 += out_tile->linesize;
                         }
-                        line2 += out_tile->linesize;
+                        
+                        /* if height % 4 != 0, copy last line to align */
+                        if((unsigned int) s->dxt_height != out_tile->height) {
+                                int y;
+                                line1 = (unsigned char *) s->decoded + out_tile->linesize * (out_tile->height - 1);
+                                for (y = out_tile->height; y < s->dxt_height; ++y)
+                                {
+                                        memcpy(line2, line1, out_tile->linesize);
+                                        line2 += out_tile->linesize;
+                                }
+                                line2 += out_tile->linesize;
+                        }
+                        
+                        if(s->interlaced_input)
+                                vc_deinterlace((unsigned char *) s->decoded, out_tile->linesize,
+                                                s->dxt_height);
+                        
+                        dxt_encoder_compress(s->encoder,
+                                        (unsigned char *) s->decoded,
+                                        0,
+                                        (unsigned char *) out_tile->data);
                 }
-                
-                if(s->interlaced_input)
-                        vc_deinterlace((unsigned char *) s->decoded, out_tile->linesize,
-                                        s->dxt_height);
-                
+        } else {
+                struct tile *out_tile = vf_get_tile(s->out, 0);
                 dxt_encoder_compress(s->encoder,
-                                (unsigned char *) s->decoded,
+                                NULL,
+                                (unsigned char *) vf_get_tile(tx, 0)->texture,
                                 (unsigned char *) out_tile->data);
         }
         
@@ -318,8 +300,9 @@ struct video_frame * dxt_glsl_compress(void *arg, struct video_frame * tx)
 void dxt_glsl_compress_done(void *arg)
 {
         struct video_compress *s = (struct video_compress *) arg;
-        
-        dxt_encoder_destroy(s->encoder);
+
+        if(s->configured) 
+                dxt_encoder_destroy(s->encoder);
 
         if(s->out)
                 free(s->out->tiles[0].data);
@@ -327,10 +310,5 @@ void dxt_glsl_compress_done(void *arg)
 
         free(s->decoded);
 
-#ifdef HAVE_MACOSX
-        mac_gl_free(s->gl_context);
-#else
-        glx_free(s->gl_context);
-#endif
         free(s);
 }

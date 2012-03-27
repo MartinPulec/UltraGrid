@@ -48,6 +48,12 @@
 
 #define __video_h
 
+#ifdef _HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include <GL/glew.h>
+
 enum color_space {
         RGB_709_D65,
         XYZ
@@ -79,6 +85,30 @@ enum interlacing_t {
         SEGMENTED_FRAME = 4
 };
 
+typedef enum {
+        CPU_POINTER,
+        OPENGL_TEXTURE
+} storage_t;
+
+typedef union {
+        char *cpu_pointer;
+        GLuint texture;
+} data_ptr_t;
+
+enum lut_type {
+        LUT_NONE,
+        LUT_1D_TABLE,
+        LUT_3D_MATRIX
+};
+
+struct lut_list;
+
+struct lut_list {
+        enum lut_type type;
+        void *lut;
+        struct lut_list *next;
+};
+
 #define VIDEO_NORMAL                    0u
 #define VIDEO_DUAL                      1u
 #define VIDEO_STEREO                    2u
@@ -95,6 +125,8 @@ struct video_desc {
         double               fps;
         enum interlacing_t   interlacing;
         unsigned int         tile_count;
+
+        enum color_space     colorspace;
 };
 
 struct video_frame 
@@ -106,6 +138,7 @@ struct video_frame
         
         unsigned int         tile_count;
         enum color_space     colorspace; 
+        struct lut_list     *luts_to_apply;
 
         int        frames;
 };
@@ -114,10 +147,12 @@ struct tile {
         unsigned int         width;
         unsigned int         height;
         
+        storage_t           storage;
         char                *data; /* this is not beginning of the frame buffer actually but beginning of displayed data,
                                      * it is the case display is centered in larger window, 
                                      * i.e., data = pixmap start + x_start + y_start*linesize
                                      */
+        GLuint              texture;
         unsigned int         data_len; /* relative to data pos, not framebuffer size! */      
         unsigned int         linesize;
 };

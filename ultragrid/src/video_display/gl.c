@@ -54,6 +54,7 @@
 
 #include "host.h"
 
+#include <GL/glew.h>
 #define GL_GLEXT_PROTOTYPES 1
 
 #ifdef HAVE_MACOSX

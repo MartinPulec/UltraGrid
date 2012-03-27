@@ -54,15 +54,18 @@
 #include <string.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include "color_transform.h"
 #include "config.h"
 #include "config_unix.h"
 #include "config_win32.h"
 #include "debug.h"
+#include "gl_context.h"
 #include "perf.h"
 #include "rtp/decoders.h"
 #include "rtp/rtp.h"
 #include "rtp/rtp_callback.h"
 #include "rtp/pbuf.h"
+#include "tile.h"
 #include "video_codec.h"
 #include "video_capture.h"
 #include "video_display.h"
@@ -522,8 +525,10 @@ static void *receiver_thread(void *arg)
         return 0;
 }
 
+
 static void *sender_thread(void *arg)
 {
+        struct gl_context context;
         struct state_uv *uv = (struct state_uv *)arg;
 
         struct video_frame *tx_frame, *splitted_frames = NULL;
@@ -531,8 +536,21 @@ static void *sender_thread(void *arg)
         //struct video_frame *splitted_frames = NULL;
         int tile_y_count;
         
+
+        struct state_color_transform *color_transform = NULL;
+
+        color_transform = color_transform_init(&context);
+ 
         struct compress_state *compression; 
-        compression = compress_init(uv->compress_options);
+
+        init_gl_context(&context);
+
+        if(context.context == NULL) {
+                fprintf(stderr, "Error initializing GL context.\n");
+                abort();
+        }
+
+        compression = compress_init(uv->compress_options, &context);
         if(uv->requested_compression
                         && compression == NULL) {
                 fprintf(stderr, "Error initializing compression.\n");
@@ -551,12 +569,18 @@ static void *sender_thread(void *arg)
                 /* Capture and transmit video... */
                 tx_frame = vidcap_grab(uv->capture_device, &audio);
                 if (tx_frame != NULL) {
+                        struct video_frame *after_transform;
+
+                        after_transform = color_transform_transform(color_transform, tx_frame);
                         if(audio) {
                                 audio_sdi_send(uv->audio, audio);
                         }
                         //TODO: Unghetto this
                         if (uv->requested_compression) {
-                                tx_frame = compress_frame(compression, tx_frame);
+                                tx_frame = compress_frame(compression, after_transform);
+                        } else {
+                                fprintf(stderr, "Compression needed!\n");
+                                abort();
                         }
                         if(!tx_frame)
                                 continue;
@@ -579,6 +603,7 @@ static void *sender_thread(void *arg)
         vf_free(splitted_frames);
         
         compress_done(compression);
+        destroy_gl_context(&context);
 
         return NULL;
 }
@@ -919,7 +944,7 @@ int main(int argc, char *argv[])
                 }
                 /* following block only shows help (otherwise initialized in sender thread */
                 if(uv->requested_compression && strstr(uv->compress_options,"help") != NULL) {
-                        struct compress_state *compression = compress_init(uv->compress_options);
+                        struct compress_state *compression = compress_init(uv->compress_options, NULL);
                         compress_done(compression);
                         exit_status = EXIT_SUCCESS;
                         goto cleanup;

@@ -66,7 +66,7 @@ dxt_encoder_buffer_allocate(struct dxt_encoder* encoder, unsigned char** image_c
  * @return 0 if succeeds, otherwise nonzero
  */
 int
-dxt_encoder_compress(struct dxt_encoder* encoder, DXT_IMAGE_TYPE* image, unsigned char* image_compressed);
+dxt_encoder_compress(struct dxt_encoder* encoder, DXT_IMAGE_TYPE* image, int texture, unsigned char* image_compressed);
 
 /**
  * Free buffer for compressed image

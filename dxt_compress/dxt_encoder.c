@@ -406,8 +406,20 @@ dxt_encoder_buffer_allocate(struct dxt_encoder* encoder, unsigned char** image_c
 
 /** Documented at declaration */
 int
-dxt_encoder_compress(struct dxt_encoder* encoder, DXT_IMAGE_TYPE* image, unsigned char* image_compressed)
+dxt_encoder_compress(struct dxt_encoder* encoder, DXT_IMAGE_TYPE* image, int texture, unsigned char* image_compressed)
 {        
+    // Render to framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, encoder->fbo_id);
+    glUseProgram(encoder->program_compress);
+
+#ifdef HAVE_GPUPERFAPI
+    GPA_BeginSession( &encoder->sessionID );
+    GPA_GetPassCount( &encoder->numRequiredPasses );
+    encoder->currentWaitSessionID = 0;
+#endif
+#ifdef RTDXT_DEBUG
+    glGenQueries(4, encoder->queries);
+#endif
 #ifdef RTDXT_DEBUG
     glBeginQuery(GL_TIME_ELAPSED_EXT, encoder->queries[0]);
 #endif
@@ -420,62 +432,66 @@ dxt_encoder_compress(struct dxt_encoder* encoder, DXT_IMAGE_TYPE* image, unsigne
     GPA_BeginPass();
     GPA_BeginSample(0);
 #endif
-    switch(encoder->format) {
-            case DXT_FORMAT_YUV422:
-                        glBindFramebuffer(GL_FRAMEBUFFER, encoder->fbo444_id);
-                        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, encoder->texture_id, 0);
-                        glBindTexture(GL_TEXTURE_2D, encoder->texture_yuv422);
+    if(image) {
+            switch(encoder->format) {
+                    case DXT_FORMAT_YUV422:
+                                glBindFramebuffer(GL_FRAMEBUFFER, encoder->fbo444_id);
+                                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, encoder->texture_id, 0);
+                                glBindTexture(GL_TEXTURE_2D, encoder->texture_yuv422);
+                                
+                                glPushAttrib(GL_VIEWPORT_BIT);
+                                glViewport( 0, 0, encoder->width, encoder->height);
                         
-                        glPushAttrib(GL_VIEWPORT_BIT);
-                        glViewport( 0, 0, encoder->width, encoder->height);
-                
-                        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, encoder->width / 2, encoder->height,  GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, image);
-                        glUseProgram(encoder->yuv422_to_444_program);
+                                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, encoder->width / 2, encoder->height,  GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, image);
+                                glUseProgram(encoder->yuv422_to_444_program);
 #ifdef RTDXT_DEBUG
-    glEndQuery(GL_TIME_ELAPSED_EXT);
-    glBeginQuery(GL_TIME_ELAPSED_EXT, encoder->queries[1]);
+            glEndQuery(GL_TIME_ELAPSED_EXT);
+            glBeginQuery(GL_TIME_ELAPSED_EXT, encoder->queries[1]);
 #endif
 #ifdef HAVE_GPUPERFAPI
-    GPA_EndSample();
-    GPA_BeginSample(1);
+            GPA_EndSample();
+            GPA_BeginSample(1);
 #endif
-                        
-                        if(encoder->legacy) {
-                            glBegin(GL_QUADS);
-                            glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0);
-                            glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0);
-                            glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0);
-                            glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
-                            glEnd();
-                        } else {
+                                
+                                if(encoder->legacy) {
+                                    glBegin(GL_QUADS);
+                                    glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0);
+                                    glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0);
+                                    glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0);
+                                    glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
+                                    glEnd();
+                                } else {
 #if ! defined HAVE_MACOSX || OS_VERSION_MAJOR >= 11
-                            // Compress
-                            glBindVertexArray(encoder->g_vao_422);
-                            //glDrawElements(GL_TRIANGLE_STRIP, sizeof(m_quad.indices) / sizeof(m_quad.indices[0]), GL_UNSIGNED_SHORT, BUFFER_OFFSET(0));
-                            glDrawArrays(GL_TRIANGLES, 0, 6);
-                            glBindVertexArray(0);
+                                    // Compress
+                                    glBindVertexArray(encoder->g_vao_422);
+                                    //glDrawElements(GL_TRIANGLE_STRIP, sizeof(m_quad.indices) / sizeof(m_quad.indices[0]), GL_UNSIGNED_SHORT, BUFFER_OFFSET(0));
+                                    glDrawArrays(GL_TRIANGLES, 0, 6);
+                                    glBindVertexArray(0);
 #endif
-                        }
+                                }
+                                
+                                glPopAttrib();
+                                /* there is some problem with restoring viewport state (Mac OS Lion, OpenGL 3.2) */
+                                glViewport( 0, 0, (encoder->width + 3) / 4, encoder->height / 4);
+                                
+                                //glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+                                
+                                glUseProgram(encoder->program_compress);
+                                glBindFramebuffer(GL_FRAMEBUFFER, encoder->fbo_id);
+                                glBindTexture(GL_TEXTURE_2D, encoder->texture_id);
                         
-                        glPopAttrib();
-                        /* there is some problem with restoring viewport state (Mac OS Lion, OpenGL 3.2) */
-                        glViewport( 0, 0, (encoder->width + 3) / 4, encoder->height / 4);
-                        
-                        //glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
-                        
-                        glUseProgram(encoder->program_compress);
-                        glBindFramebuffer(GL_FRAMEBUFFER, encoder->fbo_id);
-                        glBindTexture(GL_TEXTURE_2D, encoder->texture_id);
-                
-                        //gl_check_error();
-                        break;
-                case DXT_FORMAT_YUV:
-                case DXT_FORMAT_RGBA:
-                        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, encoder->width, encoder->height, GL_RGBA, DXT_IMAGE_GL_TYPE, image);
-                        break;
-                case DXT_FORMAT_RGB:
-                        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, encoder->width, encoder->height, GL_RGB, GL_UNSIGNED_BYTE, image);
-                        break;
+                                //gl_check_error();
+                                break;
+                        case DXT_FORMAT_YUV:
+                        case DXT_FORMAT_RGBA:
+                                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, encoder->width, encoder->height, GL_RGBA, DXT_IMAGE_GL_TYPE, image);
+                                break;
+                        case DXT_FORMAT_RGB:
+                                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, encoder->width, encoder->height, GL_RGB, GL_UNSIGNED_BYTE, image);
+                                break;
+            }
+    } else {
+            glBindTexture(GL_TEXTURE_2D, texture);
     }
 #ifdef RTDXT_DEBUG
     glEndQuery(GL_TIME_ELAPSED_EXT);
@@ -492,7 +508,6 @@ dxt_encoder_compress(struct dxt_encoder* encoder, DXT_IMAGE_TYPE* image, unsigne
     GPA_BeginSample(2);
 #endif
     
-    glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT); 
     assert(GL_FRAMEBUFFER_COMPLETE == glCheckFramebufferStatus(GL_FRAMEBUFFER));
 
     if(encoder->legacy) {
@@ -527,11 +542,12 @@ dxt_encoder_compress(struct dxt_encoder* encoder, DXT_IMAGE_TYPE* image, unsigne
 
 
     // Read back
-    glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
-    if ( encoder->type == DXT_TYPE_DXT5_YCOCG )
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    if ( encoder->type == DXT_TYPE_DXT5_YCOCG ) {
         glReadPixels(0, 0, (encoder->width + 3) / 4, encoder->height / 4, GL_RGBA_INTEGER_EXT, GL_UNSIGNED_INT, image_compressed);
-    else
+    } else {
         glReadPixels(0, 0, (encoder->width + 3) / 4, encoder->height / 4 , GL_RGBA_INTEGER_EXT, GL_UNSIGNED_SHORT, image_compressed);
+    }
         
 #ifdef RTDXT_DEBUG_HOST
     glFinish();

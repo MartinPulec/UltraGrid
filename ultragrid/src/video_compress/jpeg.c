@@ -56,6 +56,7 @@
 #include "video_codec.h"
 #include <pthread.h>
 #include <stdlib.h>
+#include "gl_context.h"
 
 struct compress_jpeg_state {
         struct gpujpeg_encoder *encoder;
@@ -203,8 +204,9 @@ static int configure_with(struct compress_jpeg_state *s, struct video_frame *fra
         return TRUE;
 }
 
-void * jpeg_compress_init(char * opts)
+void * jpeg_compress_init(char * opts, struct gl_context *context)
 {
+        UNUSED(context);
         struct compress_jpeg_state *s;
         
         s = (struct compress_jpeg_state *) malloc(sizeof(struct compress_jpeg_state));

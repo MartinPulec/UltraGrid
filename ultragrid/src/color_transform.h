@@ -46,9 +46,19 @@
  */
 
 #include "video.h"
+#include "video_codec.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct gl_context;
+struct state_color_transform;
 
-void * jpeg_compress_init(char * opts, struct gl_context *);
-struct video_frame * jpeg_compress(void *args, struct video_frame * tx);
-void jpeg_compress_done(void *args);
+struct state_color_transform * color_transform_init(struct gl_context *context);
+struct video_frame * color_transform_transform(struct state_color_transform *s, struct video_frame * tx);
+void color_transform_done(struct state_color_transform *s);
+
+#ifdef __cplusplus
+}
+#endif

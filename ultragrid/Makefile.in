@@ -5,7 +5,7 @@ CXX	      = @CXX@
 LINKER	      = ld
 CFLAGS        = -fPIC @DEFS@ @CFLAGS@ @X_CFLAGS@ -DPATH_PREFIX=@prefix@ -DLIB_DIR=@libdir@ @OPENEXR_INC@
 CPPFLAGS      = @CPPFLAGS@
-CXXFLAGS      = -fPIC @CXXFLAGS@ -DPATH_PREFIX=@prefix@ -DLIB_DIR=@libdir@ -I/usr/include/OpenEXR
+CXXFLAGS      = -fPIC -DHAVE_CONFIG_H @CXXFLAGS@ -DPATH_PREFIX=@prefix@ -DLIB_DIR=@libdir@ -I/usr/include/OpenEXR
 NVCCFLAGS     = @NVCCFLAGS@ -Xcompiler -fPIC
 LDFLAGS      =  @LDFLAGS@
 LIBS         += @LIBS@ @JACK_TRANS_LIB@ @MATHLIBS@ @COREAUDIO_LIB@ \
@@ -92,7 +92,9 @@ OBJS	      = @OBJS@ \
 	        src/client-gui/src/GLView.o \
 	     	src/client-gui/src/ClientDataIntPair.o \
 		@X_OBJ@ \
-		src/utils/thread_pool.o
+		src/utils/thread_pool.o \
+		src/gl_context.o \
+		src/color_transform.o
 
 SDL_LIB_OBJ  = \
 		src/audio/utils.o \
