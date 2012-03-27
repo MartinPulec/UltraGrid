@@ -234,6 +234,8 @@ vidcap_exr_init(char *fmt, unsigned int flags)
                         s->frame->fps = atof(item + strlen("fps="));
                 } else if(strncmp("gamma=", item, strlen("gamma=")) == 0) {
                         s->gamma = atof(item + strlen("gamma="));
+                } else if(strncmp("colorspace=", item, strlen("colorspace=")) == 0) {
+                        // TODO!!!!!!
                 } else if(strncmp("loop", item, strlen("loop")) == 0) {
                         s->loop = TRUE;
                 }

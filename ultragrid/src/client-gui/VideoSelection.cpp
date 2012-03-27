@@ -8,6 +8,8 @@
 #include <wx/tokenzr.h>
 #include <wx/msgdlg.h>
 
+#include <stdexcept>
+
 #include "include/sp_client.h"
 
 //(*IdInit(VideoSelection)
@@ -114,6 +116,7 @@ void VideoSelection::Parse(char *body, int body_len)
         wxString fps = tkz_words.GetNextToken();
         wxString total_frames = tkz_words.GetNextToken();
         wxString format = tkz_words.GetNextToken();
+        wxString colorSpace = tkz_words.GetNextToken();
 
         VideoEntry newItem;
 
@@ -126,6 +129,7 @@ void VideoSelection::Parse(char *body, int body_len)
         total_frames.ToLong(&val_total_frames);
         newItem.total_frames = val_total_frames;
 
+        newItem.colorSpace = colorSpace;
         this->videos.Add(newItem);
     }
 

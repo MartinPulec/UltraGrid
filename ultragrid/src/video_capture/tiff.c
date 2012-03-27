@@ -201,12 +201,14 @@ vidcap_tiff_init(char *fmt, unsigned int flags)
                         s->gamma = atof(item + strlen("gamma="));
                 } else if(strncmp("loop", item, strlen("loop")) == 0) {
                         s->loop = TRUE;
-                } else if(strncmp("colorspace", item, strlen("colorspace")) == 0) {
-                        if (strcasecmp(item + strlen("colorspace"), "XYZ")) {
+                } else if(strncmp("colorspace=", item, strlen("colorspace=")) == 0) {
+                        if (strcasecmp(item + strlen("colorspace="), "XYZ") == 0) {
                                 s->frame->luts_to_apply = (struct lut_list*) malloc(sizeof(struct lut_list));
                                 s->frame->luts_to_apply->next = NULL;
                                 s->frame->luts_to_apply->type = LUT_3D_MATRIX;
                                 s->frame->luts_to_apply->lut = xyz_to_rgb_709_d65;
+                        } else if(strcasecmp(item + strlen("colorspace="), "RGB_709_D65") != 0) {
+                                fprintf(stderr, "WARNING!!!!! Unsupported color space: %s", item + strlen("colorspace="));
                         }
                 }
                 

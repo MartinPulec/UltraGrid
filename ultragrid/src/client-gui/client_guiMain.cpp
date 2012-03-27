@@ -340,7 +340,7 @@ void client_guiFrame::PlaySelection()
         failedPart = wxT("connect");
         this->connection.connect_to(std::string(hostname.mb_str()), 5100);
         failedPart = wxT("format setting");
-        this->connection.set_parameter(wxT("format"), video_format);
+        this->connection.set_parameter(wxT("format"), video_format + wxT(" ") + this->playList[0].colorSpace);
         failedPart = wxT("compression setting");
         this->connection.set_parameter(wxT("compression"), wxString(settings.GetValue(std::string("compression"), std::string("none")).c_str(), wxConvUTF8) << wxT(" ") +
                 wxString(settings.GetValue(std::string("jpeg_qual"), std::string("80")).c_str(), wxConvUTF8));
