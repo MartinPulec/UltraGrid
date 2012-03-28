@@ -471,6 +471,9 @@ vidcap_exr_grab(void *state, struct audio_frame **audio)
         while(s->buffer_read_start == s->buffer_read_end && !should_exit && !s->finished && !s->should_jump)
                 ;
 
+        if(s->should_jump)
+                return NULL;
+
         if(s->prev_time.tv_sec == 0 && s->prev_time.tv_usec == 0) { /* first run */
                 gettimeofday(&s->prev_time, NULL);
         }

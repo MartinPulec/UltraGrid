@@ -328,7 +328,7 @@ static void apply_lut_8b(int *lut, char *out_data, char *in_data, int size)
                 r = lut[(val >> 16) & 0xff];
                 g = lut[(val >> 8) & 0xff];
                 b = lut[(val >> 0) & 0xff];
-                *out++ = 0xff << 24 | r << 16 | g << 8 | b << 0 | 0x3;
+                *out++ = 0xff << 24 | r << 16 | g << 8 | b << 0;
         }
 }
 
@@ -668,8 +668,11 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
 
         pthread_mutex_unlock(&s->lock);
         
-        while(s->buffer_processed_start == s->buffer_processed_end && !should_exit && !s->finished)
+        while(s->buffer_processed_start == s->buffer_processed_end && !should_exit && !s->finished && !s->should_jump)
                 ;
+
+        if(s->should_jump)
+                return NULL;
 
         if(s->prev_time.tv_sec == 0 && s->prev_time.tv_usec == 0) { /* first run */
                 gettimeofday(&s->prev_time, NULL);

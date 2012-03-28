@@ -75,6 +75,10 @@
 
 #define BUFFER_LEN 10
 
+#define SIGN(x) (x / fabs(x))
+#define ROUND_FROM_ZERO(x) (ceil(fabs(x)) * SIGN(x))
+
+
 typedef void (*lut_func_t)(double *lut, char *out_data, char *in_data, int size);
 
 struct vidcap_tiff_state {
@@ -115,6 +119,8 @@ struct vidcap_tiff_state {
         unsigned int        playone:1;
 
         int                 tiff_color_depth;
+
+        double              speed;
 };
 
 
@@ -186,6 +192,7 @@ vidcap_tiff_init(char *fmt, unsigned int flags)
         s->frame->fps = 30.0;
         s->frame->frames = -1;
         s->gamma = 1.0;
+        s->speed = 1.0;
         s->loop = FALSE;
         s->playone = FALSE;
 
@@ -404,8 +411,10 @@ static void * reading_thread(void *args)
                 pthread_mutex_unlock(&s->lock);
                                         
 
-                char *filename = s->glob.gl_pathv[s->index++];
+                char *filename = s->glob.gl_pathv[s->index];
                 TIFF *tif = TIFFOpen(filename, "r");
+
+                s->index += ROUND_FROM_ZERO(s->speed);
 
                 tdata_t dest = s->buffer_read[s->buffer_read_end];
                 tstrip_t const numberOfStrips = TIFFNumberOfStrips(tif);
@@ -435,12 +444,9 @@ static void * reading_thread(void *args)
                         pthread_cond_signal(&s->processing_cv);*/
                 pthread_mutex_unlock(&s->lock);
                 
-                if( s->index == s->glob.gl_pathc) {
-                        if(s->loop) {
-                                s->index = 0;
-                        } else {
-                                s->finished = TRUE;
-                        }
+                if((s->speed > 0.0 && s->index >= (int) s->glob.gl_pathc) ||
+                                s->index < 0) {
+                        s->finished = TRUE;
                 }
         }
 after_while:
@@ -467,8 +473,12 @@ vidcap_tiff_grab(void *state, struct audio_frame **audio)
         if(s->finished &&
                         s->buffer_read_start == s->buffer_read_end) {
                 if(s->loop) {
-                        s->index = 0;
-                        s->frame->frames = 0;
+                        if(s->speed > 0.0) {
+                                s->index = s->frame->frames = 0;
+                        } else {
+                                s->index = s->frame->frames = s->glob.gl_pathc - 1;
+                        }
+
                         s->finished = FALSE;
                         pthread_cond_signal(&s->reader_cv);
                 } else  {
@@ -479,8 +489,11 @@ vidcap_tiff_grab(void *state, struct audio_frame **audio)
 
         pthread_mutex_unlock(&s->lock);
         
-        while(s->buffer_read_start == s->buffer_read_end && !should_exit && !s->finished)
+        while(s->buffer_read_start == s->buffer_read_end && !should_exit && !s->finished && !s->should_jump)
                 ;
+
+        if(s->should_jump)
+                return NULL;
 
         if(s->prev_time.tv_sec == 0 && s->prev_time.tv_usec == 0) { /* first run */
                 gettimeofday(&s->prev_time, NULL);
@@ -489,7 +502,7 @@ vidcap_tiff_grab(void *state, struct audio_frame **audio)
         gettimeofday(&s->cur_time, NULL);
         if(s->frame->fps == 0) /* it would make following loop infinite */
                 return NULL;
-        while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->frame->fps) {
+        while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->frame->fps / (fabs(s->speed) < 1.0 ? fabs(s->speed) : 1.0)) {
                 gettimeofday(&s->cur_time, NULL);
         }
         s->prev_time = s->cur_time;
@@ -506,7 +519,9 @@ vidcap_tiff_grab(void *state, struct audio_frame **audio)
         pthread_mutex_unlock(&s->lock);
 
         s->frames++;
-        s->frame->frames++;
+
+        s->frame->frames += ROUND_FROM_ZERO(s->speed);
+
         gettimeofday(&s->t, NULL);
         double seconds = tv_diff(s->t, s->t0);    
         if (seconds >= 5) {
@@ -520,6 +535,38 @@ vidcap_tiff_grab(void *state, struct audio_frame **audio)
 
 	return s->frame;
 }
+
+
+static void flush_pipeline(struct vidcap_tiff_state *s)
+{
+                s->should_jump = TRUE;
+                pthread_mutex_unlock(&s->lock);
+                while(!s->reader_waiting || !s->grab_waiting)
+                        ;
+
+                pthread_mutex_lock(&s->lock);
+                s->finished = FALSE;
+
+}
+
+static void play_after_flush(struct vidcap_tiff_state *s)
+{
+                pthread_cond_signal(&s->reader_cv);
+                if(!s->should_pause)
+                        pthread_cond_signal(&s->pause_cv);
+
+                s->should_jump = FALSE;
+}
+
+static void clamp_indices(struct vidcap_tiff_state *s)
+{
+        if(s->index < 0) {
+                s->index = 0;
+        } else if(s->index >= (int) s->glob.gl_pathc) {
+                s->index = s->glob.gl_pathc - 1;
+        }
+}
+
 
 void vidcap_tiff_command(struct vidcap *state, int command, void *data)
 {
@@ -546,26 +593,31 @@ void vidcap_tiff_command(struct vidcap *state, int command, void *data)
                 pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_POS) {
                 pthread_mutex_lock(&s->lock);
-                s->should_jump = TRUE;
-                pthread_mutex_unlock(&s->lock);
-                while(!s->reader_waiting || !s->grab_waiting)
-                        ;
 
-                pthread_mutex_lock(&s->lock);
-                s->finished = FALSE;
+                flush_pipeline(s);
+
                 s->buffer_read_start = s->buffer_read_end = 0;
                 s->index = *(int *) data;
                 fprintf(stderr, "New position: %d\n", s->index);
                 s->frame->frames = s->index - 1;
-                pthread_cond_signal(&s->reader_cv);
-                if(!s->should_pause)
-                        pthread_cond_signal(&s->pause_cv);
 
-                s->should_jump = FALSE;
+                play_after_flush(s);
+
                 pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_LOOP) {
                 pthread_mutex_lock(&s->lock);
                 s->loop = *(int *) data;
+                pthread_mutex_unlock(&s->lock);
+        } else if(command == VIDCAP_SPEED) {
+                fprintf(stderr, "[TIFF] SPEED %f\n", *(float *) data);
+                pthread_mutex_lock(&s->lock);
+                flush_pipeline(s);
+                
+                s->frame->frames  = s->index - ROUND_FROM_ZERO(s->speed);
+                clamp_indices(s);
+                s->speed = *(float *) data;
+
+                play_after_flush(s);
                 pthread_mutex_unlock(&s->lock);
         }
 }
