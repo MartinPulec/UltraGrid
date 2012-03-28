@@ -127,7 +127,11 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                                         pid = fork();
                                         if(pid == 0) { /* a child */
                                                 char dpx_arg[MAX_PATH_LEN + 1];
-                                                snprintf(dpx_arg, MAX_PATH_LEN, "%s:colorspace=%s:files=%s/*", video_format.c_str(), color_space.c_str(), path.c_str());
+                                                if(strcmp(color_space.c_str(), "file") == 0) {
+                                                        snprintf(dpx_arg, MAX_PATH_LEN, "%s:files=%s/*", video_format.c_str(), color_space.c_str(), path.c_str());
+                                                } else {
+                                                        snprintf(dpx_arg, MAX_PATH_LEN, "%s:colorspace=%s:files=%s/*", video_format.c_str(), color_space.c_str(), path.c_str());
+                                                }
                                                 if(compression.empty()) {
                                                         execlp(uv_argv[0], uv_argv[0], "-t", dpx_arg, "-m", "1500", "-C", fd_str, receiver.c_str(), (void *) 0);
                                                 } else {
