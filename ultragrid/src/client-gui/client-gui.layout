@@ -7,17 +7,17 @@
 	<File name="ServerSelectionDialog.h" open="0" top="0" tabpos="8">
 		<Cursor position="258" topLine="0" />
 	</File>
-	<File name="VideoSelection.cpp" open="1" top="0" tabpos="7">
-		<Cursor position="4353" topLine="99" />
+	<File name="VideoSelection.cpp" open="1" top="1" tabpos="7">
+		<Cursor position="3115" topLine="36" />
 	</File>
 	<File name="VideoSelection.h" open="1" top="0" tabpos="8">
 		<Cursor position="893" topLine="0" />
 	</File>
 	<File name="client_guiApp.cpp" open="1" top="0" tabpos="1">
-		<Cursor position="1089" topLine="0" />
+		<Cursor position="1089" topLine="3" />
 	</File>
-	<File name="client_guiMain.cpp" open="1" top="1" tabpos="2">
-		<Cursor position="15299" topLine="322" />
+	<File name="client_guiMain.cpp" open="1" top="0" tabpos="2">
+		<Cursor position="15299" topLine="289" />
 	</File>
 	<File name="client_guiMain.h" open="1" top="0" tabpos="3">
 		<Cursor position="4962" topLine="102" />
@@ -35,7 +35,7 @@
 		<Cursor position="419" topLine="0" />
 	</File>
 	<File name="include/VideoEntry.h" open="1" top="0" tabpos="14">
-		<Cursor position="355" topLine="0" />
+		<Cursor position="94" topLine="0" />
 	</File>
 	<File name="include/sp_client.h" open="1" top="0" tabpos="10">
 		<Cursor position="520" topLine="0" />
@@ -44,7 +44,7 @@
 		<Cursor position="39" topLine="0" />
 	</File>
 	<File name="src/ClientManager.cpp" open="1" top="0" tabpos="17">
-		<Cursor position="1367" topLine="53" />
+		<Cursor position="1367" topLine="12" />
 	</File>
 	<File name="src/GLView.cpp" open="1" top="0" tabpos="6">
 		<Cursor position="26596" topLine="887" />
@@ -59,6 +59,6 @@
 		<Cursor position="0" topLine="0" />
 	</File>
 	<File name="src/sp_client.cpp" open="1" top="0" tabpos="9">
-		<Cursor position="6379" topLine="212" />
+		<Cursor position="6379" topLine="196" />
 	</File>
 </CodeBlocks_layout_file>

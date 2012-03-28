@@ -229,6 +229,9 @@ static void configure(struct state_color_transform *s, struct video_frame *tx) {
                 case RGB16:
                         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tx->tiles[0].width, tx->tiles[0].height, 0, GL_RGB, GL_UNSIGNED_SHORT, NULL);
                         break;
+                case DPX10:
+                        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2, tx->tiles[0].width, tx->tiles[0].height, 0, GL_RGBA, GL_UNSIGNED_INT_10_10_10_2, NULL);
+                        break;
                 default:
                         fprintf(stderr, "%s:%d: Unsupported video codec %d.\n", __FILE__, __LINE__, tx->color_spec);
                         abort();
@@ -299,6 +302,10 @@ struct video_frame * color_transform_transform(struct state_color_transform *s, 
                         format = GL_RGB;
                         type = GL_UNSIGNED_SHORT;
                         break;
+                case DPX10:
+                        format = GL_RGBA;
+                        type = GL_UNSIGNED_INT_10_10_10_2;
+                        break;
                 default:
                         fprintf(stderr, "%s:%d: Unsupported video codec %d.\n", __FILE__, __LINE__, tx->color_spec);
                         abort();
@@ -363,6 +370,8 @@ struct video_frame * color_transform_transform(struct state_color_transform *s, 
         glUseProgram(0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glBindTexture(GL_TEXTURE_2D, 0);
+
+        s->out->frames = tx->frames;
 
         return s->out;
 }

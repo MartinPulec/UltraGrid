@@ -293,7 +293,7 @@ static void apply_lut_10b(int *lut, char *out_data, char *in_data, int size)
                 r = lut[val >> 22];
                 g = lut[(val >> 12) & 0x3ff];
                 b = lut[(val >> 2) & 0x3ff];
-                *out++ = r << 22 | g << 12 | b << 2;
+                *out++ = r << 22 | g << 12 | b << 2 | 0x3;
         }
 }
 
@@ -310,7 +310,7 @@ static void apply_lut_10b_be(int *lut, char *out_data, char *in_data, int size)
                 r = lut[val >> 22];
                 g = lut[(val >> 12) & 0x3ff];
                 b = lut[(val >> 2) & 0x3ff];
-                *out++ = r << 22 | g << 12 | b << 2;
+                *out++ = r << 22 | g << 12 | b << 2 | 0x3;
         }
 }
 
@@ -328,7 +328,7 @@ static void apply_lut_8b(int *lut, char *out_data, char *in_data, int size)
                 r = lut[(val >> 16) & 0xff];
                 g = lut[(val >> 8) & 0xff];
                 b = lut[(val >> 0) & 0xff];
-                *out++ = 0xff << 24 | r << 16 | g << 8 | b << 0;
+                *out++ = 0xff << 24 | r << 16 | g << 8 | b << 0 | 0x3;
         }
 }
 
