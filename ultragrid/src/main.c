@@ -666,8 +666,8 @@ int main(int argc, char *argv[])
         uv->display_device = NULL;
         uv->requested_display = "none";
         uv->requested_capture = "none";
-        uv->requested_compression = FALSE;
-        uv->compress_options = NULL;
+        uv->requested_compression = TRUE;
+        uv->compress_options = "none";
         uv->decoder_mode = NULL;
         uv->postprocess = NULL;
         uv->requested_mtu = 0;

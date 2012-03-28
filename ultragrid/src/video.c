@@ -65,6 +65,8 @@ struct video_frame * vf_alloc(int count)
                         calloc(1, sizeof(struct tile) * count);
         buf->tile_count = count;
 
+        buf->luts_to_apply = NULL;
+
         return buf;
 }
 

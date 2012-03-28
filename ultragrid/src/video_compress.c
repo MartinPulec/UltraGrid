@@ -56,6 +56,7 @@
 #include "video_compress.h"
 #include "video_compress/dxt_glsl.h"
 #include "video_compress/jpeg.h"
+#include "video_compress/none.h"
 #include "lib_common.h"
 
 /* *_str are symbol names inside library */
@@ -88,6 +89,7 @@ struct compress_t compress_modules[] = {
 #if defined HAVE_JPEG || defined  BUILD_LIBRARIES
         {"JPEG", "jpeg", MK_NAME(jpeg_compress_init), MK_NAME(jpeg_compress), MK_NAME(jpeg_compress_done), NULL},
 #endif
+        {"NONE", NULL, MK_STATIC(none_compress_init), MK_STATIC(none_compress), MK_STATIC(none_compress_done), NULL},
 };
 
 #define MAX_COMPRESS_MODULES (sizeof(compress_modules)/sizeof(struct compress_t))

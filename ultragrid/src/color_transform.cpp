@@ -240,14 +240,13 @@ static void configure(struct state_color_transform *s, struct video_frame *tx) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tx->tiles[0].width, tx->tiles[0].height,
-                        0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tx->tiles[0].width, tx->tiles[0].height,
+                        0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 
         s->out = vf_alloc(1);
         s->out->color_spec = RGBA;
         s->out->interlacing = tx->interlacing;
         s->out->fps = tx->fps;
-        s->out->colorspace = RGB_709_D65;
 
         s->tile = vf_get_tile(s->out, 0);
 

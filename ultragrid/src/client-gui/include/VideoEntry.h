@@ -4,11 +4,6 @@
 #include <wx/string.h>
 #include <wx/dynarray.h>
 
-enum colorSpace {
-    RGB_YCbCr_709_D65,
-    XYZ
-};
-
 struct VideoEntry
 {
     public:

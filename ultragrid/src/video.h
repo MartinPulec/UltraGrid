@@ -131,16 +131,23 @@ struct video_desc {
 
 struct video_frame 
 {
+        /* these variables are unset by vf_alloc */
         codec_t              color_spec;
         enum interlacing_t   interlacing;
         double               fps;
-        struct tile         *tiles;
-        
-        unsigned int         tile_count;
-        enum color_space     colorspace; 
+
+        /* number of frames (sequential number) */
+        int                  frames;
+
+        /* linked list of luts that should be applied in a color transform step */
         struct lut_list     *luts_to_apply;
 
-        int        frames;
+        /* private values - should not be modified */
+        /* set by vf_alloc */
+        struct tile         *tiles;
+        unsigned int         tile_count;
+        //enum color_space     colorspace; 
+
 };
 
 struct tile {
