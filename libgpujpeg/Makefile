@@ -76,7 +76,7 @@ COMMONFLAGS += -I. -I$(CUDA_INSTALL_PATH)/include -O2
 # Ultragrid changes
 ARCH := $(shell uname -s)
 ifeq ($(ARCH),Darwin)
-    COMMONFLAGS += -m32
+    COMMONFLAGS += -m32 -DHAVE_MACOSX
 endif
 
 # C flags

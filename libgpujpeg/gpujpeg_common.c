@@ -33,10 +33,13 @@
 #include <npp.h>
 #include <cuda_gl_interop.h>
 #include <math.h>
-#include <GL/glx.h>
 
 #ifdef GPUJPEG_USE_OPENGL
-    #include <GL/gl.h>
+#       ifdef HAVE_MACOSX
+#               include <OpenGL/GL.h>
+#       else
+#               include <GL/GL.h>
+#       endif
 #endif
 
 /** Documented at declaration */
@@ -765,57 +768,7 @@ gpujpeg_image_convert(const char* input, const char* output, struct gpujpeg_imag
 int
 gpujpeg_opengl_init()
 {
-#ifdef GPUJPEG_USE_OPENGL
-    // Open display
-    Display* glx_display = XOpenDisplay(0);
-    if ( glx_display == NULL ) {
-        fprintf(stderr, "[GPUJPEG] [Error] Failed to open X display!\n");
-        return -1;
-    }
-
-    // Choose visual
-    static int attributes[] = {
-        GLX_RGBA,
-        GLX_DOUBLEBUFFER,
-        GLX_RED_SIZE,   1,
-        GLX_GREEN_SIZE, 1,
-        GLX_BLUE_SIZE,  1,
-        None
-    };
-    XVisualInfo* visual = glXChooseVisual(glx_display, DefaultScreen(glx_display), attributes);
-    if ( visual == NULL ) {
-        fprintf(stderr, "[GPUJPEG] [Error] Failed to choose visual!\n");
-        return -1;
-    }
-
-    // Create OpenGL context
-    GLXContext glx_context = glXCreateContext(glx_display, visual, 0, GL_TRUE);
-    if ( glx_context == NULL ) {
-        fprintf(stderr, "[GPUJPEG] [Error] Failed to create OpenGL context!\n");
-        return -1;
-    }
-
-    // Create window
-    Colormap colormap = XCreateColormap(glx_display, RootWindow(glx_display, visual->screen), visual->visual, AllocNone);
-    XSetWindowAttributes swa;
-    swa.colormap = colormap;
-    swa.border_pixel = 0;
-    Window glx_window = XCreateWindow(
-        glx_display,
-        RootWindow(glx_display, visual->screen),
-        0, 0, 640, 480,
-        0, visual->depth, InputOutput, visual->visual,
-        CWBorderPixel | CWColormap | CWEventMask,
-        &swa
-    );
-    // Do not map window to display to keep it hidden
-    //XMapWindow(glx_display, glx_window);
-
-    glXMakeCurrent(glx_display, glx_window, glx_context);
-#else
-    GPUJPEG_EXIT_MISSING_OPENGL();
-#endif
-    return 0;
+    abort();
 }
 
 /** Documented at declaration */
