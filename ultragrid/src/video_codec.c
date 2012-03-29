@@ -72,7 +72,7 @@ const struct codec_info_t codec_info[] = {
         {DXT5, "DXT5", to_fourcc('D','X','T','5'), 1, 1.0, FALSE, TRUE},/* DXT5 YCoCg */
         {RGB, "RGB", 0x32424752, 1, 3.0, TRUE, FALSE},
 
-        {RGB16, NULL, 0, 1, 6.0, TRUE, FALSE},
+        {RGB16, "RGB16", to_fourcc('R','G','1','6'), 1, 6.0, TRUE, FALSE},
 
         {DPX10, "DPX10", to_fourcc('D','P','1','0'), 1, 4.0, TRUE, FALSE},
         {JPEG, "JPEG", to_fourcc('J','P','E','G'), 0, 0.0, FALSE, TRUE},

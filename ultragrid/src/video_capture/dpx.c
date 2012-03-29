@@ -412,7 +412,8 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         int ret = glob(glob_pattern, 0, NULL, &s->glob);
         if (ret)
         {
-                perror("Opening DPX files failed");
+                fprintf(stderr, "Opening DPX files failedi (%s)", glob_pattern);
+                perror("");
                 return NULL;
         }
         
