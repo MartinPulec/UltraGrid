@@ -339,12 +339,12 @@ struct video_frame * color_transform_transform(struct state_color_transform *s, 
 #if 0
         if(encoder->legacy) {
 #endif
-                glBegin(GL_QUADS);
+        glBegin(GL_QUADS);
                 glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0);
                 glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0);
                 glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0);
                 glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
-                glEnd();
+        glEnd();
 
 #if 0
         } else {

@@ -69,6 +69,12 @@ struct compress_jpeg_state {
         unsigned int interlaced_input:1;
         unsigned int rgb:1;
         codec_t color_spec;
+
+        storage_t storage;
+        struct gpujpeg_opengl_texture* texture;
+        struct gpujpeg_encoder_input encoder_input;
+
+        int device_id;
 };
 
 static int configure_with(struct compress_jpeg_state *s, struct video_frame *frame);
@@ -76,6 +82,8 @@ static int configure_with(struct compress_jpeg_state *s, struct video_frame *fra
 static int configure_with(struct compress_jpeg_state *s, struct video_frame *frame)
 {
         unsigned int x;
+
+        assert(frame->tiles[0].storage == OPENGL_TEXTURE);
         
         s->out = vf_alloc(frame->tile_count);
         
@@ -133,6 +141,8 @@ static int configure_with(struct compress_jpeg_state *s, struct video_frame *fra
                         return FALSE;
         }
 
+        s->storage = frame->tiles[0].storage;
+
         /* We will deinterlace the output frame */
         if(frame->interlacing == INTERLACED_MERGED)
                 s->interlaced_input = TRUE;
@@ -185,22 +195,31 @@ static int configure_with(struct compress_jpeg_state *s, struct video_frame *fra
                 param_image.color_space = GPUJPEG_YCBCR_BT709;
                 param_image.sampling_factor = GPUJPEG_4_2_2;
         }
+
         
-        s->encoder = gpujpeg_encoder_create(&s->encoder_param, &param_image);
+        if(s->storage == OPENGL_TEXTURE) {
+                s->texture = gpujpeg_opengl_texture_register(vf_get_tile(frame, 0)->texture, GPUJPEG_OPENGL_TEXTURE_READ);
+
+                gpujpeg_encoder_input_set_texture(&s->encoder_input, s->texture);
+        }
         
         for (x = 0; x < frame->tile_count; ++x) {
                         vf_get_tile(s->out, x)->data = (char *) malloc(s->out->tiles[0].width * s->out->tiles[0].height * 3);
                         vf_get_tile(s->out, x)->linesize = s->out->tiles[0].width * (param_image.color_space == GPUJPEG_RGB ? 3 : 2);
 
         }
+
+        s->encoder = gpujpeg_encoder_create(&s->encoder_param, &param_image);
         
         if(!s->encoder) {
-                fprintf(stderr, "[DXT GLSL] Failed to create encoder.\n");
+                fprintf(stderr, "[JPEG] Failed to create encoder.\n");
                 exit_uv(128);
                 return FALSE;
         }
         
         s->decoded = malloc(4 * s->out->tiles[0].width * s->out->tiles[0].height);
+
+
         return TRUE;
 }
 
@@ -213,6 +232,7 @@ void * jpeg_compress_init(char * opts, struct gl_context *context)
 
         s->out = NULL;
         s->decoded = NULL;
+        s->device_id = 0;
                 
         if(opts && strcmp(opts, "help") == 0) {
                 printf("JPEG comperssion usage:\n");
@@ -230,7 +250,8 @@ void * jpeg_compress_init(char * opts, struct gl_context *context)
                 tok = strtok_r(NULL, ":", &save_ptr);
                 if(tok) {
                         int ret;
-                        ret = gpujpeg_init_device(atoi(tok), TRUE);
+                        s->device_id = atoi(tok);
+                        ret = gpujpeg_init_device(s->device_id, GPUJPEG_OPENGL_INTEROPERABILITY);
 
                         if(ret != 0) {
                                 fprintf(stderr, "[JPEG] initializing CUDA device %d failed.\n", atoi(tok));
@@ -238,7 +259,7 @@ void * jpeg_compress_init(char * opts, struct gl_context *context)
                         }
                 } else {
                         printf("Initializing CUDA device 0...\n");
-                        int ret = gpujpeg_init_device(0, TRUE);
+                        int ret = gpujpeg_init_device(0, GPUJPEG_OPENGL_INTEROPERABILITY);
                         if(ret != 0) {
                                 fprintf(stderr, "[JPEG] initializing default CUDA device failed.\n");
                                 return NULL;
@@ -276,38 +297,52 @@ struct video_frame * jpeg_compress(void *arg, struct video_frame * tx)
                         return NULL;
         }
 
-        for (x = 0; x < tx->tile_count;  ++x) {
-                struct tile *in_tile = vf_get_tile(tx, x);
-                struct tile *out_tile = vf_get_tile(s->out, x);
-                
-                line1 = (unsigned char *) in_tile->data;
-                line2 = (unsigned char *) s->decoded;
-                
-                for (i = 0; i < (int) in_tile->height; ++i) {
-                        s->decoder(line2, line1, out_tile->linesize,
-                                        0, 8, 16);
-                        line1 += vc_get_linesize(in_tile->width, tx->color_spec);
-                        line2 += out_tile->linesize;
+        if(s->storage == CPU_POINTER) {
+                for (x = 0; x < tx->tile_count;  ++x) {
+                        struct tile *in_tile = vf_get_tile(tx, x);
+                        struct tile *out_tile = vf_get_tile(s->out, x);
+                        
+                        line1 = (unsigned char *) in_tile->data;
+                        line2 = (unsigned char *) s->decoded;
+                        
+                        for (i = 0; i < (int) in_tile->height; ++i) {
+                                s->decoder(line2, line1, out_tile->linesize,
+                                                0, 8, 16);
+                                line1 += vc_get_linesize(in_tile->width, tx->color_spec);
+                                line2 += out_tile->linesize;
+                        }
+                        
+                        line1 = (unsigned char *) out_tile->data + (in_tile->height - 1) * out_tile->linesize;
+                        for( ; i < (int) s->out->tiles[0].height; ++i) {
+                                memcpy(line2, line1, out_tile->linesize);
+                                line2 += out_tile->linesize;
+                        }
+                        
+                        if(s->interlaced_input)
+                                vc_deinterlace((unsigned char *) s->decoded, out_tile->linesize,
+                                                s->out->tiles[0].height);
+                        
+                        uint8_t *compressed;
+                        int size;
+                        int ret;
+                        ret = gpujpeg_encoder_encode(s->encoder, (unsigned char *) s->decoded, &compressed, &size);
+                        
+                        if(ret != 0)
+                                return NULL;
+                        
+                        out_tile->data_len = size;
+                        memcpy(out_tile->data, compressed, size);
                 }
-                
-                line1 = (unsigned char *) out_tile->data + (in_tile->height - 1) * out_tile->linesize;
-                for( ; i < s->out->tiles[0].height; ++i) {
-                        memcpy(line2, line1, out_tile->linesize);
-                        line2 += out_tile->linesize;
-                }
-                
-                if(s->interlaced_input)
-                        vc_deinterlace((unsigned char *) s->decoded, out_tile->linesize,
-                                        s->out->tiles[0].height);
-                
+        } else {
                 uint8_t *compressed;
                 int size;
                 int ret;
-                ret = gpujpeg_encoder_encode(s->encoder, (unsigned char *) s->decoded, &compressed, &size);
+
+                ret = gpujpeg_encoder_encode(s->encoder, &s->encoder_input, &compressed, &size);
                 
                 if(ret != 0)
                         return NULL;
-                
+                struct tile *out_tile = vf_get_tile(s->out, 0);
                 out_tile->data_len = size;
                 memcpy(out_tile->data, compressed, size);
         }
