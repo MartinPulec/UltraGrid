@@ -1,16 +1,15 @@
 /*
- * FILE:     transmit.c
- * AUTHOR:  Colin Perkins <csp@csperkins.org>
- *          Ladan Gharai
- *          Martin Benes     <martinbenesh@gmail.com>
- *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
- *          Petr Holub       <hopet@ics.muni.cz>
- *          Milos Liska      <xliska@fi.muni.cz>
- *          Jiri Matela      <matela@ics.muni.cz>
- *          Dalibor Matura   <255899@mail.muni.cz>
- *          Ian Wesley-Smith <iwsmith@cct.lsu.edu>
+ * FILE:   transmit.h
+ * AUTHOR: Colin Perkins <csp@isi.edu>
+ *         Martin Benes     <martinbenesh@gmail.com>
+ *         Lukas Hejtmanek  <xhejtman@ics.muni.cz>
+ *         Petr Holub       <hopet@ics.muni.cz>
+ *         Milos Liska      <xliska@fi.muni.cz>
+ *         Jiri Matela      <matela@ics.muni.cz>
+ *         Dalibor Matura   <255899@mail.muni.cz>
+ *         Ian Wesley-Smith <iwsmith@cct.lsu.edu>
  *
- * Copyright (c) 2001-2004 University of Southern California
+ * Copyright (c) 2001-2002 University of Southern California
  * Copyright (c) 2005-2010 CESNET z.s.p.o.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -50,34 +49,13 @@
  *
  */
 
-#include "transmit.h"
-#include "rtp_transmit.h"
-
+struct rtp_tx;
+struct video_frame;
 struct audio_frame;
-struct tx;
 
-struct tx *tx_init(unsigned mtu, char *fec)
-{
-        return rtp_tx_init(mtu, fec);
-}
-
-void tx_done(struct tx *tx_session)
-{
-        rtp_tx_done(tx_session);
-}
-
-void tx_send_tile(struct tx *tx_session, struct video_frame *frame, int pos, struct rtp *rtp_session, unsigned int tile_id)
-{
-        rtp_tx_send_tile(tx_session, frame, pos, rtp_session, tile_id);
-}
-
-void tx_send(struct tx *tx_session, struct video_frame *frame, struct rtp *rtp_session)
-{
-        rtp_tx_send(tx_session, frame, rtp_session);
-}
-
-void audio_tx_send(struct tx *tx_session, struct rtp *rtp_session, struct audio_frame *buffer)
-{
-        rtp_audio_tx_send(tx_session, rtp_session, buffer);
-}
+struct rtp_tx   *rtp_tx_init(unsigned mtu, char *fec);
+void		 rtp_tx_done(struct rtp_tx *tx_session);
+void		 rtp_tx_send_tile(struct rtp_tx *tx_session, struct video_frame *frame, int pos, struct rtp *rtp_session, unsigned int);
+void             rtp_tx_send(struct rtp_tx *tx_session, struct video_frame *frame, struct rtp *rtp_session);
+void             rtp_audio_tx_send(struct rtp_tx *tx_session, struct rtp *rtp_session, struct audio_frame *buffer);
 
