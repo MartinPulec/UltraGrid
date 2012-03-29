@@ -261,7 +261,8 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 	     src/client-gui/src/ProgressSlider.o \
 	     src/client-gui/CompressionSetting.o \
 	     src/client-gui/src/ClientManager.o \
-	     src/client-gui/src/CustomGridBagSizer.o
+	     src/client-gui/src/CustomGridBagSizer.o \
+	     src/client-gui/src/Utils.o \
 
 SERVER_OBJ = src/server/sp_server.o \
 	     src/server/streaming_server.o \

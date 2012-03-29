@@ -11,6 +11,7 @@
 #include "CompressionSetting.h"
 #include "ServerSelectionDialog.h"
 #include "include/ClientDataIntPair.h"
+#include "include/Utils.h"
 
 #include <wx/msgdlg.h>
 #include <string>
@@ -226,7 +227,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     SetAcceleratorTable(accel);*/
 
     speed = 1.0;
-    SpeedStr->SetLabel(wxString::FromDouble(speed, 2));
+    SpeedStr->SetLabel(Utils::FromCDouble(speed, 2));
 }
 
 client_guiFrame::~client_guiFrame()
@@ -339,6 +340,12 @@ void client_guiFrame::PlaySelection()
 
         failedPart = wxT("connect");
         this->connection.connect_to(std::string(hostname.mb_str()), 5100);
+
+        StatusBar1->PushStatusText(item);
+        ChangeState(sPlaying);
+        total_frames = this->playList[0].total_frames;
+
+
         failedPart = wxT("format setting");
         this->connection.set_parameter(wxT("format"), video_format + wxT(" ") + this->playList[0].colorSpace);
         failedPart = wxT("compression setting");
@@ -348,20 +355,16 @@ void client_guiFrame::PlaySelection()
         failedPart = wxT("setup");
         this->connection.setup(wxT("/") + path);
         failedPart = wxT("setting FPS");
-        this->connection.set_parameter(wxT("fps"), wxString::FromCDouble(fps, 2));
+        this->connection.set_parameter(wxT("fps"), Utils::FromCDouble(fps, 2));
         failedPart = wxT("setting loop");
         connection.set_parameter(wxT("loop"), ToggleLoop->GetValue() ? wxT("ON") : wxT("OFF"));
         failedPart = wxT("setting speed");
-        connection.set_parameter(wxT("speed"), wxString::FromCDouble(speed, 2));
+        connection.set_parameter(wxT("speed"), Utils::FromCDouble(speed, 2));
 
         gl->Receive(true);
         failedPart = wxT("playing");
-        connection.play();
 
-        //UG.newWindow();
-        StatusBar1->PushStatusText(item);
-        ChangeState(sPlaying);
-        total_frames = this->playList[0].total_frames;
+        connection.play();
 
     } catch (std::exception &e) {
         wxString msg = wxString::FromUTF8(e.what());
@@ -459,9 +462,9 @@ void client_guiFrame::JumpToFrame(int frame)
             return;
 
         if(state == sPlaying) {
-            connection.play(wxString::Format("%d", frame));
+            connection.play(wxString::Format(wxT("%d"), frame));
         } else if (state == sReady) {
-            connection.pause(wxString::Format("%d", frame));
+            connection.pause(wxString::Format(wxT("%d"), frame));
         } else {
             return;
         }
@@ -521,10 +524,11 @@ void client_guiFrame::Resume()
 void client_guiFrame::ChangeState(enum playerState newState)
 {
     state = newState;
+
     switch(newState) {
         case sInit:
-            Pause->SetLabel(wxT("▶"));
             ResetToDefaultValues();
+            Pause->SetLabel(wxT("▶"));
             break;
         case sReady:
             Pause->SetLabel(wxT("▶"));
@@ -772,27 +776,27 @@ void client_guiFrame::ChangeSpeed(double ratio)
         speed *= ratio;
 
         if(connection.isConnected()) {
-           connection.set_parameter(wxT("speed"), wxString::FromCDouble(speed, 2));
+           connection.set_parameter(wxT("speed"), Utils::FromCDouble(speed, 2));
         }
     } catch (std::exception &e) {
         speed /= ratio;
         wxMessageBox(wxString::FromUTF8(e.what()), _("Error setting speed"));
     }
-    SpeedStr->SetLabel(wxString::FromDouble(speed, 2));
+    SpeedStr->SetLabel(Utils::FromCDouble(speed, 2));
 }
 
 void client_guiFrame::ChangeDirection(int direction)
 {
     try {
         if(connection.isConnected()) {
-           connection.set_parameter(wxT("speed"), wxString::FromCDouble(1.0 * direction, 2));
+           connection.set_parameter(wxT("speed"), Utils::FromCDouble(1.0 * direction, 2));
         }
         speed = 1.0 * direction;
     } catch (std::exception &e) {
         wxMessageBox(wxString::FromUTF8(e.what()), _("Error setting speed"));
     }
 
-    SpeedStr->SetLabel(wxString::FromDouble(speed, 2));
+    SpeedStr->SetLabel(Utils::FromCDouble(speed, 2));
 }
 
 

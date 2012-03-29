@@ -97,6 +97,8 @@ class client_guiFrame: public wxFrame
         void ChangeState(enum playerState);
         void ResetToDefaultValues();
 
+        wxString FromCDouble(double value, int precision);
+
         //(*Identifiers(client_guiFrame)
         static const long ID_GLCANVAS1;
         static const long ID_BUTTON2;
