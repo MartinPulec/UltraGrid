@@ -7,6 +7,7 @@
 
 extern "C" {
 #include "config.h"
+#include "config_unix.h"
 #include "video.h"
 };
 
@@ -57,7 +58,11 @@ const int channel_count = 3;
 extern "C" void gl_check_error(void);
 
 GLView::GLView(wxFrame *p, wxWindowID id, const wxPoint &pos, const wxSize &size, long style, const wxString &name, int *attribList) :
+#if 0 //def HAVE_MACOSX
+    wxGLCanvas(p, id, pos, size, style, name, attribList),
+#else
     wxGLCanvas(p, id, attribList, pos, size, style, name),
+#endif
     parent(p),
     init(false)
 {

@@ -46,6 +46,7 @@
 #define glDeleteFramebuffers glDeleteFramebuffersEXT
 #define GL_FRAMEBUFFER_COMPLETE GL_FRAMEBUFFER_COMPLETE_EXT
 #define glCheckFramebufferStatus glCheckFramebufferStatusEXT
+#define GL_COLOR_ATTACHMENT0 GL_COLOR_ATTACHMENT0_EXT
 #endif
 
 #ifdef HAVE_GPUPERFAPI

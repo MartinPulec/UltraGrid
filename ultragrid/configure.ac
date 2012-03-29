@@ -59,16 +59,16 @@ if expr "$host_os" : ".*darwin.*" > /dev/null; then
         system=MacOSX
 	AC_DEFINE([HAVE_MACOSX], [1], [This is Mac X OS])
 	LINKER=$CXX
-	CFLAGS+=" -arch i386 -I/opt/local/include -mmacosx-version-min=10.5"
+	CFLAGS+=" -arch i386 -I/opt/local/include -mmacosx-version-min=10.6"
 	CPPFLAGS+=" -m32 -I/opt/local/include"
-	CXXFLAGS+=" -m32 -I/opt/local/include -mmacosx-version-min=10.5"
-	LDFLAGS+=" -m32 -mmacosx-version-min=10.5 -no_compact_linkedit"
+	CXXFLAGS+=" -m32 -I/opt/local/include -mmacosx-version-min=10.6"
+	LDFLAGS+=" -m32 -mmacosx-version-min=10.6 -no_compact_linkedit"
 	X_CFLAGS+="-I/usr/X11R6/include"
         OBJS+=" src/utils/autorelease_pool.o"
 	LIBS+=" /opt/local/lib/libGLEW.a"
 	PATH="/usr/local/bin:$PATH"
 	LDFLAGS+=" -headerpad_max_install_names -headerpad"
-        MACOSX_DEPLOYMENT_TARGET=10.5
+        MACOSX_DEPLOYMENT_TARGET=10.6
         AC_SUBST(MACOSX_DEPLOYMENT_TARGET)
 else
         system=Linux
