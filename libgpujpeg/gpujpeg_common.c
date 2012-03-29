@@ -33,6 +33,11 @@
 #include <npp.h>
 #include <cuda_gl_interop.h>
 #include <math.h>
+#include <GL/glx.h>
+
+#ifdef GPUJPEG_USE_OPENGL
+    #include <GL/gl.h>
+#endif
 
 /** Documented at declaration */
 struct gpujpeg_devices_info
@@ -152,6 +157,21 @@ gpujpeg_init_device(int device_id, int flags)
     }
     
     cudaSetDevice(device_id);
+    gpujpeg_cuda_check_error("Set CUDA device");
+
+    // Test by simple copying that the device is ready
+    uint8_t data[] = {8};
+    uint8_t* d_data = NULL;
+    cudaMalloc((void**)&d_data, 1);
+    cudaMemcpy(d_data, data, 1, cudaMemcpyHostToDevice);
+    cudaFree(d_data);
+    cudaError_t error = cudaGetLastError();
+    if ( cudaSuccess != error ) {
+        fprintf(stderr, "[GPUJPEG] [Error] Failed to initialize CUDA device.\n");
+        if ( flags & GPUJPEG_OPENGL_INTEROPERABILITY )
+            fprintf(stderr, "[GPUJPEG] [Info]  OpenGL interoperability is used, is OpenGL context available?\n");
+        return -1;
+    }
 
     return 0;
 }
@@ -636,7 +656,7 @@ gpujpeg_image_range_info(const char* filename, int width, int height, enum gpujp
     int image_size = 0;
     uint8_t* image = NULL;
     if ( gpujpeg_image_load_from_file(filename, &image, &image_size) != 0 ) {
-        fprintf(stderr, "Failed to load image [%s]!\n", filename);
+        fprintf(stderr, "[GPUJPEG] [Error] Failed to load image [%s]!\n", filename);
         return;
     }
 
@@ -701,7 +721,7 @@ gpujpeg_image_convert(const char* input, const char* output, struct gpujpeg_imag
     int image_size = gpujpeg_image_calculate_size(&param_image_from);
     uint8_t* image = NULL;
     if ( gpujpeg_image_load_from_file(input, &image, &image_size) != 0 ) {
-        fprintf(stderr, "Failed to load image [%s]!\n", input);
+        fprintf(stderr, "[GPUJPEG] [Error] Failed to load image [%s]!\n", input);
         return;
     }
 
@@ -734,9 +754,291 @@ gpujpeg_image_convert(const char* input, const char* output, struct gpujpeg_imag
     // Save preprocessor result
     assert(cudaMemcpy(coder.data_raw, coder.d_data_raw, coder.data_raw_size * sizeof(uint8_t), cudaMemcpyDeviceToHost) == cudaSuccess);
     if ( gpujpeg_image_save_to_file(output, coder.data_raw, coder.data_raw_size) != 0 ) {
-        fprintf(stderr, "Failed to save image [%s]!\n", output);
+        fprintf(stderr, "[GPUJPEG] [Error] Failed to save image [%s]!\n", output);
         return;
     }
     // Deinitialize decoder
     gpujpeg_coder_deinit(&coder);
+}
+
+/** Documented at declaration */
+int
+gpujpeg_opengl_init()
+{
+#ifdef GPUJPEG_USE_OPENGL
+    // Open display
+    Display* glx_display = XOpenDisplay(0);
+    if ( glx_display == NULL ) {
+        fprintf(stderr, "[GPUJPEG] [Error] Failed to open X display!\n");
+        return -1;
+    }
+
+    // Choose visual
+    static int attributes[] = {
+        GLX_RGBA,
+        GLX_DOUBLEBUFFER,
+        GLX_RED_SIZE,   1,
+        GLX_GREEN_SIZE, 1,
+        GLX_BLUE_SIZE,  1,
+        None
+    };
+    XVisualInfo* visual = glXChooseVisual(glx_display, DefaultScreen(glx_display), attributes);
+    if ( visual == NULL ) {
+        fprintf(stderr, "[GPUJPEG] [Error] Failed to choose visual!\n");
+        return -1;
+    }
+
+    // Create OpenGL context
+    GLXContext glx_context = glXCreateContext(glx_display, visual, 0, GL_TRUE);
+    if ( glx_context == NULL ) {
+        fprintf(stderr, "[GPUJPEG] [Error] Failed to create OpenGL context!\n");
+        return -1;
+    }
+
+    // Create window
+    Colormap colormap = XCreateColormap(glx_display, RootWindow(glx_display, visual->screen), visual->visual, AllocNone);
+    XSetWindowAttributes swa;
+    swa.colormap = colormap;
+    swa.border_pixel = 0;
+    Window glx_window = XCreateWindow(
+        glx_display,
+        RootWindow(glx_display, visual->screen),
+        0, 0, 640, 480,
+        0, visual->depth, InputOutput, visual->visual,
+        CWBorderPixel | CWColormap | CWEventMask,
+        &swa
+    );
+    // Do not map window to display to keep it hidden
+    //XMapWindow(glx_display, glx_window);
+
+    glXMakeCurrent(glx_display, glx_window, glx_context);
+#else
+    GPUJPEG_EXIT_MISSING_OPENGL();
+#endif
+    return 0;
+}
+
+/** Documented at declaration */
+int
+gpujpeg_opengl_texture_create(int width, int height, uint8_t* data)
+{
+    int texture_id = 0;
+
+#ifdef GPUJPEG_USE_OPENGL
+    glGenTextures(1, &texture_id);
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+#else
+    GPUJPEG_EXIT_MISSING_OPENGL();
+#endif
+
+    return texture_id;
+}
+
+/** Documented at declaration */
+int
+gpujpeg_opengl_texture_set_data(int texture_id, uint8_t* data)
+{
+#ifdef GPUJPEG_USE_OPENGL
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+
+    int width = 0;
+    int height = 0;
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
+    assert(width != 0 && height != 0);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+#else
+    GPUJPEG_EXIT_MISSING_OPENGL();
+#endif
+    return 0;
+}
+
+/** Documented at declaration */
+int
+gpujpeg_opengl_texture_get_data(int texture_id, uint8_t* data, int* data_size)
+{
+#ifdef GPUJPEG_USE_OPENGL
+    glBindTexture(GL_TEXTURE_2D, texture_id);
+
+    int width = 0;
+    int height = 0;
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
+    assert(width != 0 && height != 0);
+
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+    if ( data_size != NULL )
+        *data_size = width * height * 3;
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+#else
+    GPUJPEG_EXIT_MISSING_OPENGL();
+#endif
+    return 0;
+}
+
+/** Documented at declaration */
+void
+gpujpeg_opengl_texture_destroy(int texture_id)
+{
+#ifdef GPUJPEG_USE_OPENGL
+    glDeleteTextures(1, &texture_id);
+#else
+    GPUJPEG_EXIT_MISSING_OPENGL();
+#endif
+}
+
+/** Documented at declaration */
+struct gpujpeg_opengl_texture*
+gpujpeg_opengl_texture_register(int texture_id, enum gpujpeg_opengl_texture_type texture_type)
+{
+    struct gpujpeg_opengl_texture* texture = NULL;
+    cudaMallocHost((void**)&texture, sizeof(struct gpujpeg_opengl_texture));
+    assert(texture != NULL);
+
+    texture->texture_id = texture_id;
+    texture->texture_type = texture_type;
+    texture->texture_width = 0;
+    texture->texture_height = 0;
+    texture->texture_pbo_id = 0;
+    texture->texture_pbo_type = 0;
+    texture->texture_pbo_resource = 0;
+    texture->texture_callback_param = NULL;
+    texture->texture_callback_attach_opengl = NULL;
+    texture->texture_callback_detach_opengl = NULL;
+
+#ifdef GPUJPEG_USE_OPENGL
+    glBindTexture(GL_TEXTURE_2D, texture->texture_id);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &texture->texture_width);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &texture->texture_height);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    assert(texture->texture_width != 0 && texture->texture_height != 0);
+
+    // Select PBO type
+    if ( texture->texture_type == GPUJPEG_OPENGL_TEXTURE_READ ) {
+        texture->texture_pbo_type = GL_PIXEL_PACK_BUFFER;
+    } else if ( texture->texture_type == GPUJPEG_OPENGL_TEXTURE_WRITE ) {
+        texture->texture_pbo_type = GL_PIXEL_UNPACK_BUFFER;
+    } else {
+        assert(0);
+    }
+
+    // Create PBO
+    glGenBuffers(1, &texture->texture_pbo_id);
+    glBindBuffer(texture->texture_pbo_type, texture->texture_pbo_id);
+    glBufferData(texture->texture_pbo_type, texture->texture_width * texture->texture_height * 3 * sizeof(uint8_t), NULL, GL_DYNAMIC_DRAW);
+    glBindBuffer(texture->texture_pbo_type, 0);
+
+    // Create CUDA PBO Resource
+    cudaGraphicsGLRegisterBuffer(&texture->texture_pbo_resource, texture->texture_pbo_id, cudaGraphicsMapFlagsNone);
+    gpujpeg_cuda_check_error("Register OpenGL buffer");
+#else
+    GPUJPEG_EXIT_MISSING_OPENGL();
+#endif
+
+    return texture;
+}
+
+/** Documented at declaration */
+void
+gpujpeg_opengl_texture_unregister(struct gpujpeg_opengl_texture* texture)
+{
+#ifdef GPUJPEG_USE_OPENGL
+    if ( texture->texture_pbo_id != 0 ) {
+        glDeleteBuffers(1, &texture->texture_pbo_id);
+    }
+    if ( texture->texture_pbo_resource != NULL ) {
+        cudaGraphicsUnregisterResource(texture->texture_pbo_resource);
+    }
+#else
+    GPUJPEG_EXIT_MISSING_OPENGL();
+#endif
+
+    assert(texture != NULL);
+    cudaFreeHost(texture);
+}
+
+/** Documented at declaration */
+uint8_t*
+gpujpeg_opengl_texture_map(struct gpujpeg_opengl_texture* texture, int* data_size)
+{
+    assert(texture->texture_pbo_resource != NULL);
+    assert((texture->texture_callback_attach_opengl == NULL && texture->texture_callback_detach_opengl == NULL) ||
+           (texture->texture_callback_attach_opengl != NULL && texture->texture_callback_detach_opengl != NULL));
+
+    // Attach OpenGL context by callback
+    if ( texture->texture_callback_attach_opengl != NULL )
+        texture->texture_callback_attach_opengl(texture->texture_callback_param);
+
+    uint8_t* d_data = NULL;
+
+#ifdef GPUJPEG_USE_OPENGL
+    if ( texture->texture_type == GPUJPEG_OPENGL_TEXTURE_READ ) {
+        assert(texture->texture_pbo_type == GL_PIXEL_PACK_BUFFER);
+
+        glBindTexture(GL_TEXTURE_2D, texture->texture_id);
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, texture->texture_pbo_id);
+
+        glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+
+        glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
+#else
+    GPUJPEG_EXIT_MISSING_OPENGL();
+#endif
+
+    // Map pixel buffer object to cuda
+    cudaGraphicsMapResources(1, &texture->texture_pbo_resource, 0);
+    gpujpeg_cuda_check_error("Encoder map texture PBO resource");
+
+    // Get device data pointer to pixel buffer object data
+    size_t d_data_size;
+    cudaGraphicsResourceGetMappedPointer((void **)&d_data, &d_data_size, texture->texture_pbo_resource);
+    gpujpeg_cuda_check_error("Encoder get device pointer for texture PBO resource");
+    if ( data_size != NULL )
+        *data_size = d_data_size;
+
+    return d_data;
+}
+
+/** Documented at declaration */
+void
+gpujpeg_opengl_texture_unmap(struct gpujpeg_opengl_texture* texture)
+{
+    // Unmap pbo
+    cudaGraphicsUnmapResources(1, &texture->texture_pbo_resource, 0);
+    gpujpeg_cuda_check_error("Encoder unmap texture PBO resource");
+
+#ifdef GPUJPEG_USE_OPENGL
+    if ( texture->texture_type == GPUJPEG_OPENGL_TEXTURE_WRITE ) {
+        assert(texture->texture_pbo_type == GL_PIXEL_UNPACK_BUFFER);
+
+        glBindTexture(GL_TEXTURE_2D, texture->texture_id);
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, texture->texture_pbo_id);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture->texture_width, texture->texture_height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glFinish();
+    }
+#else
+    GPUJPEG_EXIT_MISSING_OPENGL();
+#endif
+
+    // Dettach OpenGL context by callback
+    if ( texture->texture_callback_detach_opengl != NULL )
+        texture->texture_callback_detach_opengl(texture->texture_callback_param);
 }
