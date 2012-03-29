@@ -159,8 +159,8 @@ static int clamp_to_range(int value)
 {
         if(value < 0)
                 return 0;
-        if(value > 255)
-                return 255;
+        if(value > 65535)
+                return 65535;
         return value;
 }
 
@@ -262,7 +262,7 @@ vidcap_exr_init(char *fmt, unsigned int flags)
         s->tile->width = s->max_x - s->min_x + 1UL;
         s->tile->height = s->max_y - s->min_y + 1UL;
 
-        s->frame->color_spec = RGBA;
+        s->frame->color_spec = RGB16;
         s->tile->data_len = vc_get_linesize(s->tile->width, s->frame->color_spec) * s->tile->height;
 
         
@@ -610,21 +610,20 @@ void * job_process(void *input)
         struct job * job = input;
         ImfInputFile *file = ImfOpenInputFile(job->filename);
 
-
         int y;
         for (y = 0; y < (int) job->state->tile->height; ++y) {
                 int x;
-                unsigned char *line = (unsigned char *) job->out_data + (4 * y * job->state->tile->width);
+                uint16_t *line = (uint16_t *) job->out_data + (3 * y * job->state->tile->width);
 
                 ImfInputSetFrameBuffer(file, job->scanline - job->state->min_x - job->state->tile->width * (job->state->min_y + y), 1,
                                       job->state->tile->width);
                 ImfInputReadPixels(file, job->state->min_y + y, job->state->min_y + y);
                 for(x = 0; x < (int) job->state->tile->width; ++x) {
-                        line[0] = clamp_to_range(round(ImfHalfToFloat(job->scanline[x].r) * 255.0));
-                        line[1] = clamp_to_range(round(ImfHalfToFloat(job->scanline[x].g) * 255.0));
-                        line[2] = clamp_to_range(round(ImfHalfToFloat(job->scanline[x].b) * 255.0));
-                        line[3] = clamp_to_range(round(ImfHalfToFloat(job->scanline[x].a) * 255.0));
-                        line += 4;
+                        line[0] = clamp_to_range(round(ImfHalfToFloat(job->scanline[x].r) * 65535.0));
+                        line[1] = clamp_to_range(round(ImfHalfToFloat(job->scanline[x].g) * 65535.0));
+                        line[2] = clamp_to_range(round(ImfHalfToFloat(job->scanline[x].b) * 65535.0));
+                        //line[3] = clamp_to_range(round(ImfHalfToFloat(job->scanline[x].a) * 65535.0));
+                        line += 3;
                 }
         }
 
