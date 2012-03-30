@@ -52,6 +52,14 @@
 struct rtp_tx;
 struct video_frame;
 struct audio_frame;
+struct rtp;
+struct pdb;
+
+struct rtp_state {
+        struct rtp_tx *tx;
+        struct rtp **devices;
+        struct pdb *pdb;
+};
 
 struct rtp_tx   *rtp_tx_init(unsigned mtu, char *fec);
 void		 rtp_tx_done(struct rtp_tx *tx_session);

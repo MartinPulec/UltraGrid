@@ -50,34 +50,57 @@
  *
  */
 
-#include "transmit.h"
 #include "rtp_transmit.h"
+#include "transmit.h"
 
 struct audio_frame;
-struct tx;
 
-struct tx *tx_init(unsigned mtu, char *fec)
+typedef struct {
+        void * (* init)(void *state);
+        void (* done)(void *state);
+        void (* send_tile)(void *state, int connection_nr, struct video_frame *frame, int pos, unsigned int tile_id);
+        void (* send)(void *state, int connection_nr, struct video_frame *frame);
+        void (* audio_tx_send)(void *state, struct audio_frame *buffer);
+} transmit_t;
+
+transmit_t available_transmit_devices[] = {
+        [RTP_TRANSMIT] = { rtp_tx_init, rtp_tx_done, rtp_tx_send_tile, rtp_tx_send, rtp_audio_tx_send }
+};
+
+struct tx {
+        void *state;
+        enum transmit_kind kind;
+};
+
+
+struct tx *tx_init(enum transmit_kind kind, void *state)
 {
-        return rtp_tx_init(mtu, fec);
+        struct tx * res;
+
+        res = (struct tx *) malloc(sizeof(struct tx));
+        res->kind = kind;
+        res->state = state;
+
+        return res;
 }
 
 void tx_done(struct tx *tx_session)
 {
-        rtp_tx_done(tx_session);
+        available_transmit_devices[tx_session->kind].done(tx_session->state);
 }
 
-void tx_send_tile(struct tx *tx_session, struct video_frame *frame, int pos, struct rtp *rtp_session, unsigned int tile_id)
+void tx_send_tile(struct tx *tx_session, int connection_nr, struct video_frame *frame, int tile_id, unsigned int total_frames)
 {
-        rtp_tx_send_tile(tx_session, frame, pos, rtp_session, tile_id);
+        available_transmit_devices[tx_session->kind].send_tile(tx_session->state, connection_nr, frame, tile_id, total_frames);
 }
 
-void tx_send(struct tx *tx_session, struct video_frame *frame, struct rtp *rtp_session)
+void tx_send(struct tx *tx_session, int connection_nr, struct video_frame *frame)
 {
-        rtp_tx_send(tx_session, frame, rtp_session);
+        available_transmit_devices[tx_session->kind].send(tx_session->state, connection_nr, frame);
 }
 
-void audio_tx_send(struct tx *tx_session, struct rtp *rtp_session, struct audio_frame *buffer)
+void audio_tx_send(struct tx *tx_session, struct audio_frame *buffer)
 {
-        rtp_audio_tx_send(tx_session, rtp_session, buffer);
+        available_transmit_devices[tx_session->kind].audio_tx_send(tx_session->state, buffer);
 }
 

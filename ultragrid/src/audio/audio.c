@@ -66,6 +66,7 @@
 #include "rtp/pbuf.h"
 #include "tv.h"
 #include "transmit.h"
+#include "rtp_transmit.h"
 #include "pdb.h"
 
 #include <stdio.h>
@@ -89,8 +90,6 @@ struct state_audio {
         struct state_audio_capture *audio_capture_device;
         struct state_audio_playback *audio_playback_device;
         
-        struct rtp *audio_network_device;
-        struct pdb *audio_participants;
         void *jack_connection;
         enum audio_transport_device sender;
         enum audio_transport_device receiver;
@@ -114,7 +113,7 @@ typedef void (*audio_device_help_t)(void);
 
 static void *audio_sender_thread(void *arg);
 static void *audio_receiver_thread(void *arg);
-static struct rtp *initialize_audio_network(char *addr, int port, struct pdb *participants);
+static struct rtp **initialize_audio_network(char *addr, int port, struct pdb *participants);
 
 /**
  * take care that addrs can also be comma-separated list of addresses !
@@ -143,22 +142,26 @@ struct state_audio * audio_cfg_init(char *addrs, int port, char *send_cfg, char 
         }
         
         s = calloc(1, sizeof(struct state_audio));
-        s->audio_participants = NULL;
         
-        s->tx_session = tx_init(1500, NULL);
+        struct rtp_state *rtp;
+        rtp = malloc(sizeof(struct rtp_state));
+
+        rtp->tx = tx_init(1500, NULL);
+        rtp->pdb = pdb_init();
         gettimeofday(&s->start_time, NULL);        
         
         tmp = strdup(addrs);
-        s->audio_participants = pdb_init();
         addr = strtok_r(tmp, ",", &unused);
-        if ((s->audio_network_device =
+        if ((rtp->devices =
              initialize_audio_network(addr, port,
-                                      s->audio_participants)) ==
+                                      rtp->pdb)) ==
             NULL) {
                 printf("Unable to open audio network\n");
                 goto error;
         }
         free(tmp);
+
+        s->tx_session = tx_init(RTP_TRANSMIT, rtp);
 
         if (send_cfg != NULL) {
                 char *device = strtok(send_cfg, ":");
@@ -230,8 +233,6 @@ struct state_audio * audio_cfg_init(char *addrs, int port, char *send_cfg, char 
 error:
         if(s->tx_session)
                 tx_done(s->tx_session);
-        if(s->audio_participants)
-                pdb_destroy(&s->audio_participants);
         free(s);
         exit_uv(1);
         return NULL;
@@ -259,16 +260,13 @@ void audio_done(struct state_audio *s)
                 audio_playback_done(s->audio_playback_device);
                 audio_capture_done(s->audio_capture_device);
                 tx_done(s->tx_session);
-                if(s->audio_network_device)
-                        rtp_done(s->audio_network_device);
-                if(s->audio_participants)
-                        pdb_destroy(&s->audio_participants);
                 free(s);
         }
 }
 
-static struct rtp *initialize_audio_network(char *addr, int port, struct pdb *participants)       // GiX
+static struct rtp **initialize_audio_network(char *addr, int port, struct pdb *participants)       // GiX
 {
+        struct rtp **ret = NULL;
         struct rtp *r;
         double rtcp_bw = 1024 * 512;    // FIXME:  something about 5% for rtcp is said in rfc
 
@@ -279,9 +277,12 @@ static struct rtp *initialize_audio_network(char *addr, int port, struct pdb *pa
                 rtp_set_option(r, RTP_OPT_WEAK_VALIDATION, TRUE);
                 rtp_set_sdes(r, rtp_my_ssrc(r), RTCP_SDES_TOOL,
                              PACKAGE_STRING, strlen(PACKAGE_VERSION));
+                
+                ret = malloc(1 * sizeof(struct rtp *));
+                ret = r;
         }
 
-        return r;
+        return ret;
 }
 
 static void *audio_receiver_thread(void *arg)
