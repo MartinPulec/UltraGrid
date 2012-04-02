@@ -553,8 +553,8 @@ gpujpeg_coder_init(struct gpujpeg_coder* coder)
 int
 gpujpeg_coder_deinit(struct gpujpeg_coder* coder)
 {
-    if ( coder->data_raw != NULL )
-        cudaFreeHost(coder->data_raw);
+    /*if ( coder->data_raw != NULL )
+        cudaFreeHost(coder->data_raw);*/
     if ( coder->d_data_raw != NULL )
         cudaFree(coder->d_data_raw);
     if ( coder->d_data != NULL )

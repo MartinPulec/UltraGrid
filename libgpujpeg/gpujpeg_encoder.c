@@ -97,20 +97,23 @@ gpujpeg_encoder_create(struct gpujpeg_parameters* param, struct gpujpeg_image_pa
         fprintf(stderr, "Failed to init preprocessor!");
         result = 0;
     }
+
+    gpujpeg_cuda_check_error("Encoder initializing preprocessor");
      
     // Allocate quantization tables in device memory
     for ( int comp_type = 0; comp_type < GPUJPEG_COMPONENT_TYPE_COUNT; comp_type++ ) {
         if ( cudaSuccess != cudaMalloc((void**)&encoder->table_quantization[comp_type].d_table, 64 * sizeof(uint16_t)) ) 
             result = 0;
+        gpujpeg_cuda_check_error("Encoder table allocation");
     }
     // Allocate huffman tables in device memory
     for ( int comp_type = 0; comp_type < GPUJPEG_COMPONENT_TYPE_COUNT; comp_type++ ) {
         for ( int huff_type = 0; huff_type < GPUJPEG_HUFFMAN_TYPE_COUNT; huff_type++ ) {
             if ( cudaSuccess != cudaMalloc((void**)&encoder->d_table_huffman[comp_type][huff_type], sizeof(struct gpujpeg_table_huffman_encoder)) )
                 result = 0;
+            gpujpeg_cuda_check_error("Encoder table allocation");
         }
     }
-    gpujpeg_cuda_check_error("Encoder table allocation");
     
     // Init quantization tables for encoder
     for ( int comp_type = 0; comp_type < GPUJPEG_COMPONENT_TYPE_COUNT; comp_type++ ) {

@@ -69,7 +69,7 @@
         if( cudaSuccess != err) { \
             fprintf(stderr, "[GPUJPEG] [Error] %s (line %i): %s: %s.\n", \
                 __FILE__, __LINE__, msg, cudaGetErrorString( err) ); \
-            exit(-1); \
+            abort(); \
         } \
     } \
     

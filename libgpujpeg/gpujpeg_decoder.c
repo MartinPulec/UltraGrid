@@ -391,10 +391,12 @@ gpujpeg_decoder_destroy(struct gpujpeg_decoder* decoder)
     for ( int comp_type = 0; comp_type < GPUJPEG_COMPONENT_TYPE_COUNT; comp_type++ ) {
         if ( decoder->table_quantization[comp_type].d_table != NULL )
             cudaFree(decoder->table_quantization[comp_type].d_table);
+            gpujpeg_cuda_check_error("Encoder destroying decoder");
     }
     
     if ( decoder->reader != NULL )
         gpujpeg_reader_destroy(decoder->reader);
+
     
     free(decoder);
     

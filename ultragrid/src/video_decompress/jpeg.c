@@ -13,19 +13,19 @@
  * Redistribution and use in source and binary forms, with or without
  * modification, is permitted provided that the following conditions
  * are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 
+ *
  * 3. All advertising materials mentioning features or use of this software
  *    must display the following acknowledgement:
- * 
+ *
  *      This product includes software developed by CESNET z.s.p.o.
- * 
+ *
  * 4. Neither the name of the CESNET nor the names of its contributors may be
  *    used to endorse or promote products derived from this software without
  *    specific prior written permission.
@@ -92,21 +92,21 @@ static int configure_with(struct state_decompress_jpeg *s, struct video_desc des
 void * jpeg_decompress_init(void)
 {
         struct state_decompress_jpeg *s;
-        
+
         s = (struct state_decompress_jpeg *) malloc(sizeof(struct state_decompress_jpeg));
         s->decoder = NULL;
 
         return s;
 }
 
-int jpeg_decompress_reconfigure(void *state, struct video_desc desc, 
+int jpeg_decompress_reconfigure(void *state, struct video_desc desc,
                 int rshift, int gshift, int bshift, int pitch, codec_t out_codec)
 {
         struct state_decompress_jpeg *s = (struct state_decompress_jpeg *) state;
         int ret;
-        
+
         assert(out_codec == RGB || out_codec == UYVY);
-        
+
         s->out_codec = out_codec;
         s->pitch = pitch;
         s->rshift = rshift;
@@ -131,24 +131,24 @@ void jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffer, uns
         int ret;
         struct gpujpeg_decoder_output decoder_output;
 
-        
+
         if(s->out_codec != RGB || (s->rshift == 0 && s->gshift == 8 && s->bshift == 16)) {
                 gpujpeg_decoder_output_set_default(&decoder_output);
                 decoder_output.type = GPUJPEG_DECODER_OUTPUT_CUSTOM_BUFFER;
                 decoder_output.data = dst;
                 //int data_decompressed_size = decoder_output.data_size;
-                    
+
                 ret = gpujpeg_decoder_decode(s->decoder, (uint8_t*) buffer, src_len, &decoder_output);
                 if (ret != 0) return;
         } else {
                 unsigned int i;
                 int linesize;
                 unsigned char *line_src, *line_dst;
-                
+
                 gpujpeg_decoder_output_set_default(&decoder_output);
                 decoder_output.type = GPUJPEG_DECODER_OUTPUT_INTERNAL_BUFFER;
                 //int data_decompressed_size = decoder_output.data_size;
-                    
+
                 ret = gpujpeg_decoder_decode(s->decoder, (uint8_t*) buffer, src_len, &decoder_output);
 
                 if (ret != 0) return;
@@ -157,7 +157,7 @@ void jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffer, uns
                 } else {
                         linesize = s->desc.width * 2;
                 }
-                
+
                 line_dst = dst;
                 line_src = decoder_output.data;
                 for(i = 0u; i < s->desc.height; i++) {
@@ -167,10 +167,10 @@ void jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffer, uns
                         } else {
                                 memcpy(line_dst, line_src, linesize);
                         }
-                                
+
                         line_dst += s->pitch;
                         line_src += linesize;
-                        
+
                 }
         }
 }
