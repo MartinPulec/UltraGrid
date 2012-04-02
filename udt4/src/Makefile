@@ -11,7 +11,7 @@ endif
 CCFLAGS = -fPIC -Wall -Wextra -D$(os) -finline-functions -O3 -fno-strict-aliasing #-msse3
 
 ifeq ($(arch), IA32)
-   CCFLAGS += -DIA32
+   CCFLAGS += -DIA32 -m32
 endif
 
 ifeq ($(arch), POWERPC)
