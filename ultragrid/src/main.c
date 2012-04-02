@@ -17,25 +17,25 @@
  * Redistribution and use in source and binary forms, with or without
  * modification, is permitted provided that the following conditions
  * are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 
+ *
  * 3. All advertising materials mentioning features or use of this software
  *    must display the following acknowledgement:
- * 
+ *
  *      This product includes software developed by the University of Southern
  *      California Information Sciences Institute. This product also includes
  *      software developed by CESNET z.s.p.o.
- * 
+ *
  * 4. Neither the name of the University nor of the Institute may be used
  *    to endorse or promote products derived from this software without
  *    specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE AUTHORS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESSED OR IMPLIED WARRANTIES, INCLUDING,
  * BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
@@ -80,6 +80,7 @@
 #include "compat/platform_semaphore.h"
 #include "audio/audio.h"
 #include "server/streaming_server.h"
+#include "udt_transmit.h"
 
 #define EXIT_FAIL_USAGE		1
 #define EXIT_FAIL_UI   		2
@@ -93,30 +94,38 @@
 #define PORT_BASE               5004
 #define PORT_AUDIO              5006
 
+#define USE_UDT 1
+
 struct state_uv {
-        int port_number;
+#ifndef USE_UDT
         struct rtp **network_devices;
+
+        struct pdb *participants;
+        struct tx *tx;
+#else
+        struct udt_transmit *udt_transmit;
+#endif
+        int port_number;
         unsigned int connections_count;
-        
+
         struct vidcap *capture_device;
         struct timeval start_time, curr_time;
-        struct pdb *participants;
-        
+
         char *decoder_mode;
         char *postprocess;
-        
+
         uint32_t ts;
-        struct tx *tx;
         struct display *display_device;
         char *compress_options;
         int requested_compression;
         const char *requested_display;
         const char *requested_capture;
         unsigned requested_mtu;
-        
+
         int use_ihdtv_protocol;
 
         struct state_audio *audio;
+
 
         int comm_fd;
 };
@@ -233,7 +242,7 @@ struct display *initialize_video_display(const char *requested_display,
         display_type_t *dt;
         display_id_t id = 0;
         int i;
-        
+
         if(!strcmp(requested_display, "none"))
                  id = display_get_null_device_id();
 
@@ -286,7 +295,7 @@ struct vidcap *initialize_video_capture(const char *requested_capture,
         struct vidcap_type *vt;
         vidcap_id_t id = 0;
         int i;
-        
+
         if(!strcmp(requested_capture, "none"))
                 id = vidcap_get_null_device_id();
 
@@ -331,20 +340,20 @@ static struct rtp **initialize_network(char *addrs, int port_base, struct pdb *p
 	free(tmp);
 	tmp = strdup(addrs);
 
-	devices = (struct rtp **) 
+	devices = (struct rtp **)
 		malloc((required_connections + 1) * sizeof(struct rtp *));
 
-	for(index = 0, addr = strtok_r(addrs, ",", &saveptr); 
+	for(index = 0, addr = strtok_r(addrs, ",", &saveptr);
 		index < required_connections;
 		++index, addr = strtok_r(NULL, ",", &saveptr), port += 2)
 	{
                 if (port == PORT_AUDIO)
                         port += 2;
-		devices[index] = rtp_init(addr, port - 100, port, ttl, rtcp_bw, 
-                                FALSE, rtp_recv_callback, 
+		devices[index] = rtp_init(addr, port - 100, port, ttl, rtcp_bw,
+                                FALSE, rtp_recv_callback,
                                 (void *)participants);
 		if (devices[index] != NULL) {
-			rtp_set_option(devices[index], RTP_OPT_WEAK_VALIDATION, 
+			rtp_set_option(devices[index], RTP_OPT_WEAK_VALIDATION,
 				TRUE);
 			rtp_set_sdes(devices[index], rtp_my_ssrc(devices[index]),
 				RTCP_SDES_TOOL,
@@ -368,7 +377,7 @@ static struct rtp **initialize_network(char *addrs, int port_base, struct pdb *p
 	}
 	if(devices != NULL) devices[index] = NULL;
 	free(tmp);
-        
+
         return devices;
 }
 
@@ -428,100 +437,6 @@ static void *ihdtv_sender_thread(void *arg)
 
 static void *receiver_thread(void *arg)
 {
-        struct state_uv *uv = (struct state_uv *)arg;
-
-        struct pdb_e *cp;
-        struct timeval timeout;
-        int fr;
-        int ret;
-        unsigned int tiles_post = 0;
-        struct timeval last_tile_received = {0, 0};
-        struct pbuf_video_data pbuf_data;
-
-
-        initialize_video_decompress();
-        pbuf_data.decoder = decoder_init(uv->decoder_mode, uv->postprocess);
-        if(!pbuf_data.decoder) {
-                fprintf(stderr, "Error initializing decoder ('-M' option).\n");
-                exit_uv(1);
-        } else {
-                decoder_register_video_display(pbuf_data.decoder, uv->display_device);
-        }
-        pbuf_data.frame_buffer = frame_buffer;
-
-        fr = 1;
-
-        while (!should_exit) {
-                /* Housekeeping and RTCP... */
-                gettimeofday(&uv->curr_time, NULL);
-                uv->ts = tv_diff(uv->curr_time, uv->start_time) * 90000;
-                rtp_update(uv->network_devices[0], uv->curr_time);
-                rtp_send_ctrl(uv->network_devices[0], uv->ts, 0, uv->curr_time);
-
-                /* Receive packets from the network... The timeout is adjusted */
-                /* to match the video capture rate, so the transmitter works.  */
-                if (fr) {
-                        gettimeofday(&uv->curr_time, NULL);
-                        fr = 0;
-                }
-
-                timeout.tv_sec = 0;
-                timeout.tv_usec = 999999 / 59.94;
-                ret = rtp_recv_poll_r(uv->network_devices, &timeout, uv->ts);
-
-                /*
-                   if (ret == FALSE) {
-                   printf("Failed to receive data\n");
-                   }
-                 */
-
-                /* Decode and render for each participant in the conference... */
-                cp = pdb_iter_init(uv->participants);
-                while (cp != NULL) {
-                        if (tfrc_feedback_is_due(cp->tfrc_state, uv->curr_time)) {
-                                debug_msg("tfrc rate %f\n",
-                                          tfrc_feedback_txrate(cp->tfrc_state,
-                                                               uv->curr_time));
-                        }
-
-                        /* Decode and render video... */
-                        if (pbuf_decode
-                            (cp->playout_buffer, uv->curr_time, decode_frame, &pbuf_data, TRUE)) {
-                                tiles_post++;
-                                /* we have data from all connections we need */
-                                if(tiles_post == uv->connections_count) 
-                                {
-                                        tiles_post = 0;
-                                        gettimeofday(&uv->curr_time, NULL);
-                                        fr = 1;
-                                        display_put_frame(uv->display_device,
-                                                          (char *) pbuf_data.frame_buffer);
-                                        pbuf_data.frame_buffer =
-                                            display_get_frame(uv->display_device);
-                                }
-                                last_tile_received = uv->curr_time;
-                        }
-                        pbuf_remove(cp->playout_buffer, uv->curr_time);
-                        cp = pdb_iter_next(uv->participants);
-                }
-                pdb_iter_done(uv->participants);
-
-                /* dual-link TIMEOUT - we won't wait for next tiles */
-                if(tiles_post > 1 && tv_diff(uv->curr_time, last_tile_received) > 
-                                999999 / 59.94 / uv->connections_count) {
-                        tiles_post = 0;
-                        gettimeofday(&uv->curr_time, NULL);
-                        fr = 1;
-                        display_put_frame(uv->display_device,
-                                          pbuf_data.frame_buffer->tiles[0].data);
-                        pbuf_data.frame_buffer =
-                            display_get_frame(uv->display_device);
-                        last_tile_received = uv->curr_time;
-                }
-        }
-        
-        decoder_destroy(pbuf_data.decoder);
-
         return 0;
 }
 
@@ -535,13 +450,13 @@ static void *sender_thread(void *arg)
         struct audio_frame *audio;
         //struct video_frame *splitted_frames = NULL;
         int tile_y_count;
-        
+
 
         struct state_color_transform *color_transform = NULL;
 
         color_transform = color_transform_init(&context);
- 
-        struct compress_state *compression; 
+
+        struct compress_state *compression;
 
         init_gl_context(&context);
 
@@ -585,8 +500,12 @@ static void *sender_thread(void *arg)
                         if(!tx_frame)
                                 continue;
                         if(uv->connections_count == 1) { /* normal case - only one connection */
-                                tx_send(uv->tx, tx_frame, 
+#ifndef USE_UDT
+                                tx_send(uv->tx, tx_frame,
                                                 uv->network_devices[0]);
+#else
+                                udt_send(uv->udt_transmit, tx_frame);
+#endif
                         } else { /* split */
                                 int i;
 
@@ -594,14 +513,20 @@ static void *sender_thread(void *arg)
                                 vf_split_horizontal(splitted_frames, tx_frame,
                                                tile_y_count);
                                 for (i = 0; i < tile_y_count; ++i) {
+#ifndef USE_UDT
                                         tx_send_tile(uv->tx, splitted_frames, i,
                                                         uv->network_devices[i], tx_frame->frames);
+#endif
                                 }
                         }
                 }
         }
+
+#ifdef USE_UDT
+        udt_transmit_done(uv->udt_transmit);
+#endif
         vf_free(splitted_frames);
-        
+
         compress_done(compression);
         destroy_gl_context(&context);
 
@@ -630,10 +555,10 @@ int main(int argc, char *argv[])
         char *requested_fec = NULL;
         char *save_ptr = NULL;
         sigset_t mask;
-        
+
         struct state_uv *uv;
         int ch;
-        
+
         pthread_t receiver_thread_id, sender_thread_id;
         unsigned vidcap_flags = 0,
                  display_flags = 0;
@@ -672,9 +597,11 @@ int main(int argc, char *argv[])
         uv->postprocess = NULL;
         uv->requested_mtu = 0;
         uv->use_ihdtv_protocol = 0;
+#ifndef USE_UDT
         uv->participants = NULL;
         uv->tx = NULL;
         uv->network_devices = NULL;
+#endif
         uv->port_number = PORT_BASE;
 	uv->comm_fd = 0;
 
@@ -724,7 +651,7 @@ int main(int argc, char *argv[])
                         printf("setting ihdtv protocol\n");
                         break;
                 case 'r':
-                        audio_recv = optarg;                       
+                        audio_recv = optarg;
                         break;
                 case 's':
                         audio_send = optarg;
@@ -751,7 +678,7 @@ int main(int argc, char *argv[])
                         return EXIT_FAIL_USAGE;
                 }
         }
-        
+
         argc -= optind;
         argv += optind;
 
@@ -804,8 +731,6 @@ int main(int argc, char *argv[])
 
         gettimeofday(&uv->start_time, NULL);
 
-        uv->participants = pdb_init();
-
         if ((uv->capture_device =
                         initialize_video_capture(uv->requested_capture, capture_cfg, vidcap_flags)) == NULL) {
                 printf("Unable to open capture device: %s\n",
@@ -835,7 +760,7 @@ int main(int argc, char *argv[])
 #else
         printf("WARNING: System does not support real-time scheduling\n");
 #endif /* HAVE_SCHED_SETSCHEDULER */
-#endif /* USE_RT */         
+#endif /* USE_RT */
 
         if (uv->use_ihdtv_protocol) {
                 ihdtv_connection tx_connection, rx_connection;
@@ -910,6 +835,12 @@ int main(int argc, char *argv[])
                         sleep(1);
 
         } else {
+                if (uv->requested_mtu == 0)     // mtu wasn't specified on the command line
+                {
+                        uv->requested_mtu = 1500;       // the default value for rpt
+                }
+
+#ifndef USE_UDT
                 if ((uv->network_devices =
                      initialize_network(network_device, uv->port_number, uv->participants)) == NULL) {
                         printf("Unable to open network\n");
@@ -922,20 +853,25 @@ int main(int argc, char *argv[])
                         for(item = uv->network_devices; *item != NULL; ++item)
                                 ++uv->connections_count;
                 }
-
-                if (uv->requested_mtu == 0)     // mtu wasn't specified on the command line
-                {
-                        uv->requested_mtu = 1500;       // the default value for rpt
-                }
+                uv->participants = pdb_init();
 
                 if ((uv->tx = initialize_transmit(uv->requested_mtu, requested_fec)) == NULL) {
                         printf("Unable to initialize transmitter\n");
                         exit_status = EXIT_FAIL_TRANSMIT;
                         goto cleanup;
                 }
+#else
+                uv->connections_count = 1;
+                uv->udt_transmit = udt_transmit_init(network_device, uv->port_number);
+                if(!uv->udt_transmit) {
+                        exit_status = EXIT_FAILURE;
+                        fprintf(stderr, "Unable to connect to peer\n");
+                        goto cleanup;
+                }
+#endif
 
                 /* following block only shows help (otherwise initialized in receiver thread */
-                if((uv->postprocess && strstr(uv->postprocess, "help") != NULL) || 
+                if((uv->postprocess && strstr(uv->postprocess, "help") != NULL) ||
                                 (uv->decoder_mode && strstr(uv->decoder_mode, "help") != NULL)) {
                         struct state_decoder *dec = decoder_init(uv->decoder_mode, uv->postprocess);
                         decoder_destroy(dec);
@@ -949,7 +885,7 @@ int main(int argc, char *argv[])
                         exit_status = EXIT_SUCCESS;
                         goto cleanup;
                 }
-                        
+
                 if (strcmp("none", uv->requested_display) != 0) {
                         if (pthread_create
                             (&receiver_thread_id, NULL, receiver_thread,
@@ -969,11 +905,11 @@ int main(int argc, char *argv[])
                         }
                 }
         }
-        
+
         if(audio_does_receive_sdi(uv->audio)) {
                 audio_register_get_callback(uv->audio, (struct audio_frame * (*)(void *)) display_get_audio_frame, uv->display_device);
                 audio_register_put_callback(uv->audio, (void (*)(void *, struct audio_frame *)) display_put_audio_frame, uv->display_device);
-                audio_register_reconfigure_callback(uv->audio, (int (*)(void *, int, int, 
+                audio_register_reconfigure_callback(uv->audio, (int (*)(void *, int, int,
                                                         int)) display_reconfigure_audio, uv->display_device);
         }
 
@@ -1031,13 +967,13 @@ int main(int argc, char *argv[])
                         }
                 }
         }
-        
+
         if (strcmp("none", uv->requested_display) != 0)
                 pthread_join(receiver_thread_id, NULL);
 
         if (strcmp("none", uv->requested_capture) != 0 || uv->requested_compression)
                 pthread_join(sender_thread_id, NULL);
-        
+
         /* also wait for audio threads */
         audio_join(uv->audio);
 
@@ -1048,16 +984,18 @@ cleanup:
 
         if(uv->audio)
                 audio_done(uv->audio);
-        if(uv->tx)
-                tx_done(uv->tx);
-	if(uv->network_devices)
-                destroy_devices(uv->network_devices);
         if(uv->capture_device)
                 vidcap_done(uv->capture_device);
         if(uv->display_device)
                 display_done(uv->display_device);
+#ifndef USE_UDT
+        if(uv->tx)
+                tx_done(uv->tx);
+	if(uv->network_devices)
+                destroy_devices(uv->network_devices);
         if (uv->participants != NULL)
                 pdb_destroy(&uv->participants);
+#endif
         printf("Exit\n");
 
         return exit_status;

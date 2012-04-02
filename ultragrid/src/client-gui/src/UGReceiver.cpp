@@ -18,14 +18,22 @@ extern "C" {
 #include "video_capture.h"
 #include "video_display.h"
 #include "video_decompress.h"
+
+#include "udt_receive.h"
 };
 
+#define USE_UDT 1
+
 struct state_uv {
+#ifndef USE_UDT
         struct rtp **network_devices;
+        struct pdb *participants;
+#else
+        struct udt_recv *udt_receive;
+#endif
         unsigned int connections_count;
 
         struct timeval start_time, curr_time;
-        struct pdb *participants;
 
         char *decoder_mode;
         char *postprocess;
@@ -212,6 +220,9 @@ static void *receiver_thread(void *arg)
         struct timeval last_tile_received = {0, 0};
         struct pbuf_video_data pbuf_data;
 
+#ifdef USE_UDT
+        uv->udt_receive = udt_receive_init("localhost", 5004);
+#endif
 
         initialize_video_decompress();
         pbuf_data.decoder = decoder_init(uv->decoder_mode, uv->postprocess);
@@ -225,7 +236,17 @@ static void *receiver_thread(void *arg)
 
         fr = 1;
 
+        /*struct video_frame *frame = vf_alloc(1);
+        frame->tiles[0].data_len = 5 * 1024 *1024;
+        frame->tiles[0].data =  new char[5 * 1024 *1024];*/
+        ret = udt_receive_accept(uv->udt_receive);
+
+        if(!ret) {
+            fprintf(stderr, "Failed to accept");
+        }
+
         while (!should_exit) {
+#ifndef USE_UDT
                 /* Housekeeping and RTCP... */
                 gettimeofday(&uv->curr_time, NULL);
                 uv->ts = tv_diff(uv->curr_time, uv->start_time) * 90000;
@@ -292,6 +313,35 @@ static void *receiver_thread(void *arg)
                             display_get_frame(uv->display_device);
                         last_tile_received = uv->curr_time;
                 }
+#else
+                int res, data_len;
+                video_payload_hdr_t header;
+                int len = sizeof(header);
+                char *buffer;
+                res = udt_receive(uv->udt_receive, (char *) &header, &len);
+                if(!res || len != sizeof(video_payload_hdr_t))
+                    goto error;
+                data_len = decoder_reconfigure((char *) &header, len, &pbuf_data);
+                decoder_get_buffer(&pbuf_data, &buffer, &len);
+                res = udt_receive(uv->udt_receive, buffer, &len);
+                if(!res || len != data_len) {
+                    goto error;
+                }
+                decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, len, pbuf_data.frame_buffer);
+
+                display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
+                pbuf_data.frame_buffer = display_get_frame(uv->display_device);
+
+                goto no_err;
+error:
+                std::cerr << "Connection lost, waiting for new connection" << std::endl;
+                std::cerr << "Trying to accpet" << std::endl;
+
+                ret = udt_receive_accept(uv->udt_receive);
+
+no_err:
+                ;
+#endif
         }
 
         decoder_destroy(pbuf_data.decoder);
@@ -307,8 +357,10 @@ UGReceiver::UGReceiver(client_guiFrame * const p, const char *display, GLView *g
     pthread_t receiver_thread_id;
 
     uv = (struct state_uv *) malloc(sizeof(struct state_uv));
+#ifndef USE_UDT
     uv->participants = pdb_init();
     uv->network_devices = initialize_network(strdup("localhost"), 5004, uv->participants);
+#endif
     uv->connections_count = 1;
     gettimeofday(&uv->start_time, NULL);
     uv->decoder_mode = NULL;

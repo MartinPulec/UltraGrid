@@ -9,9 +9,11 @@ CXXFLAGS      = -fPIC -DHAVE_CONFIG_H @CXXFLAGS@ -DPATH_PREFIX=@prefix@ -DLIB_DI
 NVCCFLAGS     = @NVCCFLAGS@ -Xcompiler -fPIC
 LDFLAGS      =  @LDFLAGS@
 LIBS         += @LIBS@ @JACK_TRANS_LIB@ @MATHLIBS@ @COREAUDIO_LIB@ \
-		@X_PRE_LIBS@ @X_LIBS@ @X_EXTRA_LIBS@ -lm -pthread -ltiff -L/opt/local/lib
+		@X_PRE_LIBS@ @X_LIBS@ @X_EXTRA_LIBS@ -lm -pthread -ltiff -L/opt/local/lib \
+		../udt4/src/libudt.a
 INC           = -I.. -Isrc -Itest @DVS_INC@ @DELTACAST_INC@ @QUICKTIME_INC@ @DECKLINK_INC@ @PORTAUDIO_INC@ \
-                @GL_INC@ @SAGE_INC@ @QUAD_INC@ @JACK_TRANS_INC@ @JPEG_INC@ @COREAUDIO_INC@ @SPEEX_INC@
+                @GL_INC@ @SAGE_INC@ @QUAD_INC@ @JACK_TRANS_INC@ @JPEG_INC@ @COREAUDIO_INC@ @SPEEX_INC@ \
+		-I../udt4/src/
 DECKLINK_PATH = @DECKLINK_PATH@
 PERF          = bin/uv_perf
 BUNDLE        = uv.app
@@ -95,7 +97,9 @@ OBJS	      = @OBJS@ \
 		@X_OBJ@ \
 		src/utils/thread_pool.o \
 		src/gl_context.o \
-		src/color_transform.o
+		src/color_transform.o \
+		src/udt_transmit.o \
+		src/udt_receive.o
 
 SDL_LIB_OBJ  = \
 		src/audio/utils.o \

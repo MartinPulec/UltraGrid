@@ -54,6 +54,10 @@
 
 #include <GL/glew.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum color_space {
         RGB_709_D65,
         XYZ
@@ -187,6 +191,11 @@ double compute_fps(int fps, int fpsd, int fd, int fi);
 #define AUX_YUV         (1<<4) 
 #define AUX_10Bit       (1<<5)
 
+
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif
 

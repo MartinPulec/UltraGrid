@@ -49,6 +49,10 @@
 #define __video_codec_h
 #include "video.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef  void (*decoder_t)(unsigned char *dst, unsigned char *src, int dst_len, int rshift, int gshift, int bshift);
 
 extern double matrix_identity[];
@@ -99,6 +103,10 @@ void vc_copylineRGB(unsigned char *dst, unsigned char *src, int dst_len, int rsh
  * @return TRUE or FALSE
  */
 int codec_is_a_rgb(codec_t codec);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
 
 #endif
 
