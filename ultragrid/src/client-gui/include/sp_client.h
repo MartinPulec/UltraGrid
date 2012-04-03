@@ -23,7 +23,7 @@ struct response {
 class sp_client
 {
     public:
-        sp_client();
+        sp_client(bool asyncIOHandle = false);
         void connect_to(std::string host, int port);
         void disconnect();
         bool isConnected();
@@ -38,6 +38,7 @@ class sp_client
         virtual ~sp_client();
     protected:
     private:
+        bool asyncIOHandle;
         int fd;
         char *buffer;
         int buffer_len;

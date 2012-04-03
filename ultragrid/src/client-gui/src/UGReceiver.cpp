@@ -319,12 +319,23 @@ static void *receiver_thread(void *arg)
                 int len = sizeof(header);
                 char *buffer;
                 res = udt_receive(uv->udt_receive, (char *) &header, &len);
-                if(!res || len != sizeof(video_payload_hdr_t))
+                if(!res) {
+                    std::cerr << "(res: " << res << ", len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
                     goto error;
+                }
+                if(len != sizeof(video_payload_hdr_t)) {
+                    std::cerr << "(len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
+                    goto error;
+                }
                 data_len = decoder_reconfigure((char *) &header, len, &pbuf_data);
                 decoder_get_buffer(&pbuf_data, &buffer, &len);
                 res = udt_receive(uv->udt_receive, buffer, &len);
-                if(!res || len != data_len) {
+                if(!res) {
+                    std::cerr << "(res: " << res << ")" << std::endl;
+                    goto error;
+                }
+                if(len != data_len) {
+                    std::cerr << "(len: " << len << ", data_len: " << data_len  << ")" << std::endl;
                     goto error;
                 }
                 decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, len, pbuf_data.frame_buffer);

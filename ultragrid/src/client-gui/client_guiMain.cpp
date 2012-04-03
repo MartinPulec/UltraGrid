@@ -697,7 +697,6 @@ void client_guiFrame::KeyDown(wxKeyEvent& evt)
                     } else {
                         gl->ShowOnlyChannel(evt.GetUnicodeKey());
                     }
-                    std::cerr <<"Y";
                     LastColorModifiingKey = evt.GetUnicodeKey();
                     LastColorModifiingModifiers = evt.GetModifiers();
                 }

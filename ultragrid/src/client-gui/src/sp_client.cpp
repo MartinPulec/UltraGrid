@@ -12,6 +12,14 @@
 #include <fcntl.h>
 #include <iostream>
 
+#include <sys/select.h>
+
+/* According to earlier standards */
+#include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+
 #include "../include/sp_client.h"
 #include "../include/AsyncMsgHandler.h"
 
@@ -21,10 +29,11 @@ static std::string valid_commands_str[] = {
 
 
 
-sp_client::sp_client() :
+sp_client::sp_client(bool aioH) :
     valid_commands(valid_commands_str, valid_commands_str + sizeof(valid_commands_str) / sizeof(std::string)),
     fd(-1),
-    msgHandler(0ul)
+    msgHandler(0ul),
+    asyncIOHandle(aioH)
 {
     buffer_len = 1024*1024;
     buffer = new char[buffer_len];
@@ -152,7 +161,9 @@ void sp_client::connect_to(std::string host, int port)
     }
 
     freeaddrinfo(res0);
-    setAsyncNotify();
+    if(asyncIOHandle) {
+        setAsyncNotify();
+    }
 }
 
 void sp_client::setAsyncNotify()
@@ -170,6 +181,10 @@ void sp_client::unsetAsyncNotify()
 
 void sp_client::disconnect()
 {
+    if(asyncIOHandle) {
+        unsetAsyncNotify();
+    }
+
     if(this->fd != -1) {
         close(this->fd);
         this->fd = -1;
@@ -180,7 +195,9 @@ void sp_client::send(struct message *message, struct response *response)
 {
     int rc;
 
-    unsetAsyncNotify();
+    if(asyncIOHandle) {
+        unsetAsyncNotify();
+    }
 
     char *buffer = (char *) malloc(message->len + 1);
     strncpy(buffer, message->msg, message->len);
@@ -234,8 +251,9 @@ void sp_client::send(struct message *message, struct response *response)
 
     // TODO: doresit zacatek dalsiho packetu
 
-
-    setAsyncNotify();
+    if(asyncIOHandle) {
+        setAsyncNotify();
+    }
 }
 
 void sp_client::ProcessResponse(char *data, int len, struct response *response)
@@ -271,12 +289,24 @@ void sp_client::ProcessResponse(char *data, int len, struct response *response)
 void sp_client::ProcessIncomingData()
 {
     int rc;
+    int flags;
+
+    //set socket nonblocking flag
+    if( (flags = fcntl(this->fd, F_GETFL, 0)) < 0)
+        return;
+
+    if(fcntl(this->fd, F_SETFL, flags | O_NONBLOCK) < 0)
+        return;
 
     rc = recv(this->fd, this->buffer, this->buffer_len, 0);
 
+    //put socket back in blocking mode
+    if(fcntl(this->fd, F_SETFL, flags) < 0)
+        return;
+
     if(rc == -1) {
         std::cerr << "Timeout" << std::endl;
-	return;
+        return;
     }
 
     if(rc == 0) {

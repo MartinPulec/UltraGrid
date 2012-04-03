@@ -497,6 +497,7 @@ static void *sender_thread(void *arg)
                                 fprintf(stderr, "Compression needed!\n");
                                 abort();
                         }
+
                         if(!tx_frame)
                                 continue;
                         if(uv->connections_count == 1) { /* normal case - only one connection */

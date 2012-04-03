@@ -2,7 +2,8 @@
 
 #include <stdexcept>
 
-ClientManager::ClientManager()
+ClientManager::ClientManager() :
+    stream_connection(true)
 {
     //ctor
 }

@@ -133,9 +133,13 @@ struct udt_recv {
 
 struct udt_recv *udt_receive_init(char *address, unsigned int port)
 {
-        struct udt_recv *s;
+        struct udt_recv *s = 0;
 
-        s = new udt_recv(address, port);
+        try {
+                s = new udt_recv(address, port);
+        } catch (std::exception &e) {
+                std::cerr << e.what() << std::endl;
+        }
 
         return s;
 }

@@ -52,6 +52,7 @@
 		<Unit filename="include/Settings.h" />
 		<Unit filename="include/UGReceiver.h" />
 		<Unit filename="include/Utils.h" />
+		<Unit filename="include/VideoBuffer.h" />
 		<Unit filename="include/VideoEntry.h" />
 		<Unit filename="include/sp_client.h" />
 		<Unit filename="src/AsyncMsgHandler.cpp" />
@@ -61,6 +62,7 @@
 		<Unit filename="src/Settings.cpp" />
 		<Unit filename="src/UGReceiver.cpp" />
 		<Unit filename="src/Utils.cpp" />
+		<Unit filename="src/VideoBuffer.cpp" />
 		<Unit filename="src/VideoEntry.cpp" />
 		<Unit filename="src/sp_client.cpp" />
 		<Unit filename="wxsmith/CompressionSetting.wxs" />

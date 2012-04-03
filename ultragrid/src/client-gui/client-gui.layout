@@ -1,70 +1,73 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
 <CodeBlocks_layout_file>
 	<ActiveTarget name="Debug" />
-	<File name="ServerSelectionDialog.cpp" open="1" top="0" tabpos="7">
+	<File name="ServerSelectionDialog.cpp" open="1" top="0" tabpos="14">
 		<Cursor position="1842" topLine="0" />
 	</File>
 	<File name="ServerSelectionDialog.h" open="0" top="0" tabpos="8">
 		<Cursor position="258" topLine="0" />
 	</File>
-	<File name="VideoSelection.cpp" open="1" top="0" tabpos="10">
-		<Cursor position="3115" topLine="36" />
+	<File name="VideoSelection.cpp" open="1" top="0" tabpos="17">
+		<Cursor position="2959" topLine="18" />
 	</File>
-	<File name="VideoSelection.h" open="1" top="0" tabpos="11">
+	<File name="VideoSelection.h" open="1" top="0" tabpos="18">
 		<Cursor position="893" topLine="0" />
 	</File>
-	<File name="client_guiApp.cpp" open="1" top="0" tabpos="4">
+	<File name="client_guiApp.cpp" open="1" top="0" tabpos="11">
 		<Cursor position="467" topLine="0" />
 	</File>
-	<File name="client_guiMain.cpp" open="1" top="1" tabpos="5">
-		<Cursor position="5219" topLine="60" />
+	<File name="client_guiMain.cpp" open="1" top="0" tabpos="12">
+		<Cursor position="17933" topLine="392" />
 	</File>
-	<File name="client_guiMain.h" open="1" top="0" tabpos="6">
+	<File name="client_guiMain.h" open="1" top="0" tabpos="13">
 		<Cursor position="3172" topLine="32" />
 	</File>
-	<File name="include/AsyncMsgHandler.h" open="1" top="0" tabpos="16">
+	<File name="include/AsyncMsgHandler.h" open="0" top="0" tabpos="16">
 		<Cursor position="0" topLine="0" />
 	</File>
-	<File name="include/GLView.h" open="1" top="0" tabpos="8">
+	<File name="include/GLView.h" open="1" top="0" tabpos="15">
 		<Cursor position="216" topLine="0" />
 	</File>
-	<File name="include/ProgressSlider.h" open="1" top="0" tabpos="18">
+	<File name="include/ProgressSlider.h" open="0" top="0" tabpos="18">
 		<Cursor position="215" topLine="0" />
 	</File>
 	<File name="include/Settings.h" open="0" top="0" tabpos="9">
 		<Cursor position="419" topLine="0" />
 	</File>
-	<File name="include/Utils.h" open="1" top="0" tabpos="22">
+	<File name="include/Utils.h" open="0" top="0" tabpos="22">
 		<Cursor position="200" topLine="0" />
 	</File>
-	<File name="include/VideoEntry.h" open="1" top="0" tabpos="17">
+	<File name="include/VideoEntry.h" open="0" top="0" tabpos="17">
 		<Cursor position="94" topLine="0" />
 	</File>
-	<File name="include/sp_client.h" open="1" top="0" tabpos="13">
+	<File name="include/sp_client.h" open="1" top="0" tabpos="20">
 		<Cursor position="520" topLine="0" />
 	</File>
-	<File name="src/AsyncMsgHandler.cpp" open="1" top="0" tabpos="15">
+	<File name="src/AsyncMsgHandler.cpp" open="0" top="0" tabpos="15">
 		<Cursor position="39" topLine="0" />
 	</File>
-	<File name="src/ClientManager.cpp" open="1" top="0" tabpos="20">
+	<File name="src/ClientManager.cpp" open="0" top="0" tabpos="20">
 		<Cursor position="1367" topLine="12" />
 	</File>
-	<File name="src/GLView.cpp" open="1" top="0" tabpos="9">
+	<File name="src/GLView.cpp" open="1" top="0" tabpos="16">
 		<Cursor position="26596" topLine="875" />
 	</File>
-	<File name="src/ProgressSlider.cpp" open="1" top="0" tabpos="19">
+	<File name="src/ProgressSlider.cpp" open="0" top="0" tabpos="19">
 		<Cursor position="728" topLine="0" />
 	</File>
-	<File name="src/Settings.cpp" open="1" top="0" tabpos="14">
+	<File name="src/Settings.cpp" open="1" top="0" tabpos="21">
 		<Cursor position="327" topLine="0" />
 	</File>
-	<File name="src/Utils.cpp" open="1" top="0" tabpos="23">
+	<File name="src/UGReceiver.cpp" open="1" top="1" tabpos="22">
+		<Cursor position="11135" topLine="301" />
+	</File>
+	<File name="src/Utils.cpp" open="0" top="0" tabpos="23">
 		<Cursor position="106" topLine="0" />
 	</File>
-	<File name="src/VideoEntry.cpp" open="1" top="0" tabpos="21">
+	<File name="src/VideoEntry.cpp" open="0" top="0" tabpos="21">
 		<Cursor position="0" topLine="0" />
 	</File>
-	<File name="src/sp_client.cpp" open="1" top="0" tabpos="12">
-		<Cursor position="6379" topLine="196" />
+	<File name="src/sp_client.cpp" open="1" top="0" tabpos="19">
+		<Cursor position="4404" topLine="0" />
 	</File>
 </CodeBlocks_layout_file>

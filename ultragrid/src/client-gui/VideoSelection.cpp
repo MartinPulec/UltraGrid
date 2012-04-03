@@ -90,7 +90,6 @@ void VideoSelection::OnGetListClick(wxCommandEvent& event)
             wxMessageBox(msg, _("Error downloading media file"));
         }
 
-
         Parse(resp.body, resp.body_len);
 
     } catch (std::exception &e) {
