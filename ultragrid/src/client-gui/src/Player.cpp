@@ -36,13 +36,12 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
 void Player::Notify()
 {
     // we just want to prefill buffer
-    if(current_frame <= buffer.GetUpperBound()) {
+    if(current_frame > buffer.GetUpperBound()) {
         return;
     }
 
     std::tr1::shared_ptr<char> res = buffer.GetFrame(current_frame);
     if(res.get()) { // not empty
-        std::cerr << current_frame << " " ;
         view->putframe(res);
         parent->UpdateTimer(current_frame);
     }
