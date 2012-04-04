@@ -3,10 +3,11 @@
 udt_init() {
         cd ../udt4
         make clean
-        if [ `uname` -eq "Linux" ]; then
+        if [ `uname` = "Linux" ]; then
                 if [ `uname -p` = "x86_64" ]; then
                         make -e arch=AMD64
                 else
+                        exit
                         make
                 fi
         else
