@@ -3,11 +3,15 @@
 
 class client_guiFrame;
 class GLView;
+class VideoBuffer;
 struct state_uv;
 
 class UGReceiver {
     public:
-        UGReceiver(client_guiFrame * const p, const char *display, GLView *gl);
+        UGReceiver(const char *display, VideoBuffer *gl);
+        ~UGReceiver();
+        void Accept();
+        void Disconnect();
     private:
         client_guiFrame *parent;
         struct state_uv *uv;

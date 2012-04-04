@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <sys/time.h>
+#include <pthread.h>
 
 #include "../include/UGReceiver.h"
 #include "../client_guiMain.h"
@@ -24,6 +25,20 @@ extern "C" {
 
 #define USE_UDT 1
 
+enum cmd {
+    CMD_ACCEPT,
+    CMD_QUIT,
+    CMD_DISCONNECT,
+    CMD_NONE
+};
+
+enum state {
+    ST_NONE,
+    ST_ACCEPTED,
+    ST_EXIT
+};
+
+
 struct state_uv {
 #ifndef USE_UDT
         struct rtp **network_devices;
@@ -37,6 +52,14 @@ struct state_uv {
 
         char *decoder_mode;
         char *postprocess;
+
+        pthread_mutex_t lock;
+        pthread_cond_t boss_cv;
+        pthread_cond_t worker_cv;
+        volatile bool boss_waiting;
+        volatile bool worker_waiting;
+        enum cmd command;
+        enum state state;
 
         uint32_t ts;
         struct display *display_device;
@@ -236,17 +259,10 @@ static void *receiver_thread(void *arg)
 
         fr = 1;
 
-        /*struct video_frame *frame = vf_alloc(1);
-        frame->tiles[0].data_len = 5 * 1024 *1024;
-        frame->tiles[0].data =  new char[5 * 1024 *1024];*/
-        ret = udt_receive_accept(uv->udt_receive);
-
-        if(!ret) {
-            fprintf(stderr, "Failed to accept");
-        }
-
-        while (!should_exit) {
+        while (1) {
 #ifndef USE_UDT
+                abort();
+
                 /* Housekeeping and RTCP... */
                 gettimeofday(&uv->curr_time, NULL);
                 uv->ts = tv_diff(uv->curr_time, uv->start_time) * 90000;
@@ -314,11 +330,73 @@ static void *receiver_thread(void *arg)
                         last_tile_received = uv->curr_time;
                 }
 #else
+                // LOCK - LOCK - LOCK
+                pthread_mutex_lock(&uv->lock);
+
+                // cannot be while !!!
+                // TODO: figure out more cleaner way
+                if(uv->state == ST_NONE && uv->command == CMD_NONE) {
+                    uv->worker_waiting = true;
+                    pthread_cond_wait(&uv->worker_cv, &uv->lock);
+                    uv->worker_waiting = false;
+                }
+
+
+                bool accept = false;
+
+                switch(uv->command) {
+                    case CMD_ACCEPT:
+                        accept = true;
+                        std::cerr << "Command: accept" << std::endl;
+                        uv->state = ST_ACCEPTED;
+                        break;
+                    case CMD_QUIT:
+                        uv->state = ST_EXIT;
+                        break;
+                    case CMD_DISCONNECT:
+                        ret = udt_receive_disconnect(uv->udt_receive);
+                        std::cerr << "Command: disconnect" << std::endl;
+                        uv->state = ST_NONE;
+                        break;
+                    case CMD_NONE:
+                        break;
+                }
+
+                uv->command = CMD_NONE;
+
+                if(uv->boss_waiting)
+                    pthread_cond_signal(&uv->boss_cv);
+
+                // UNLOCK - UNLOCK - UNLOCK
+                pthread_mutex_unlock(&uv->lock);
+
+                if(accept) {
+                    ret = udt_receive_accept(uv->udt_receive);
+                    uv->state = ST_ACCEPTED;
+
+                    if(!ret) {
+                        fprintf(stderr, "Failed to accept\n");
+                    } else {
+                        fprintf(stderr, "Accepted\n");
+                    }
+                }
+
+                if(uv->state == ST_EXIT) {
+                    goto quit;
+                } else if(uv->state == ST_NONE) {
+                    continue; // jump to next iteration and wait for command
+                } else if(uv->state == ST_ACCEPTED) {
+                }
+                // accepted
+
                 int res, data_len;
-                video_payload_hdr_t header;
-                int len = sizeof(header);
+                struct {
+                    video_payload_hdr_t header;
+                    char pad[8];
+                } a;
+                int len = sizeof(a) + 1;
                 char *buffer;
-                res = udt_receive(uv->udt_receive, (char *) &header, &len);
+                res = udt_receive(uv->udt_receive, (char *) &a.header, &len);
                 if(!res) {
                     std::cerr << "(res: " << res << ", len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
                     goto error;
@@ -327,7 +405,7 @@ static void *receiver_thread(void *arg)
                     std::cerr << "(len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
                     goto error;
                 }
-                data_len = decoder_reconfigure((char *) &header, len, &pbuf_data);
+                data_len = decoder_reconfigure((char *) &a.header, len, &pbuf_data);
                 decoder_get_buffer(&pbuf_data, &buffer, &len);
                 res = udt_receive(uv->udt_receive, buffer, &len);
                 if(!res) {
@@ -342,18 +420,15 @@ static void *receiver_thread(void *arg)
 
                 display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
                 pbuf_data.frame_buffer = display_get_frame(uv->display_device);
-
-                goto no_err;
 error:
-                std::cerr << "Connection lost, waiting for new connection" << std::endl;
-                std::cerr << "Trying to accpet" << std::endl;
-
-                ret = udt_receive_accept(uv->udt_receive);
+                ;
 
 no_err:
                 ;
 #endif
         }
+
+quit:
 
         decoder_destroy(pbuf_data.decoder);
 
@@ -362,8 +437,7 @@ no_err:
 
 
 
-UGReceiver::UGReceiver(client_guiFrame * const p, const char *display, GLView *gl)
-    : parent(p)
+UGReceiver::UGReceiver(const char *display, VideoBuffer *buffer)
 {
     pthread_t receiver_thread_id;
 
@@ -376,10 +450,22 @@ UGReceiver::UGReceiver(client_guiFrame * const p, const char *display, GLView *g
     gettimeofday(&uv->start_time, NULL);
     uv->decoder_mode = NULL;
     uv->postprocess = NULL;
-    if(strcmp(display, "wxgl") == 0)
-        uv->display_device = initialize_video_display(display, (char *) gl, 0 /*flags */);
-    else
+
+    pthread_mutex_init(&uv->lock, NULL);
+    pthread_cond_init(&uv->boss_cv, NULL);
+    pthread_cond_init(&uv->worker_cv, NULL);
+    uv->boss_waiting = true;
+    uv->worker_waiting = true;
+
+    uv->command = CMD_NONE;
+    uv->state = ST_NONE;
+
+    if(strcmp(display, "wxgl") == 0) {
+        uv->display_device = initialize_video_display(display, (char *) buffer, 0 /*flags */);
+    } else {
+        abort(); // is still supported ?
         uv->display_device = initialize_video_display(display, NULL, 0 /*flags */);
+    }
 
     if (pthread_create
         (&receiver_thread_id, NULL, receiver_thread,
@@ -387,4 +473,79 @@ UGReceiver::UGReceiver(client_guiFrame * const p, const char *display, GLView *g
             perror("Unable to create display thread!\n");
             // TODO handle error
     }
+}
+
+void UGReceiver::Accept()
+{
+    pthread_mutex_lock(&uv->lock);
+
+    uv->command = CMD_ACCEPT;
+
+    uv->boss_waiting = true;
+    pthread_mutex_unlock(&uv->lock);
+
+    while(!uv->worker_waiting)
+        ;
+
+    pthread_mutex_lock(&uv->lock);
+    if(uv->worker_waiting)
+        pthread_cond_signal(&uv->worker_cv);
+
+    while(!uv->worker_waiting) {
+        pthread_cond_wait(&uv->boss_cv, &uv->lock);
+    }
+    uv->boss_waiting = false;
+
+    pthread_mutex_unlock(&uv->lock);
+}
+
+void UGReceiver::Disconnect()
+{
+    pthread_mutex_lock(&uv->lock);
+
+    uv->command = CMD_DISCONNECT;
+
+    uv->boss_waiting = true;
+    pthread_mutex_unlock(&uv->lock);
+
+    while(!uv->worker_waiting)
+        ;
+
+    pthread_mutex_lock(&uv->lock);
+
+    if(uv->worker_waiting)
+        pthread_cond_signal(&uv->worker_cv);
+
+    while(!uv->worker_waiting) {
+        pthread_cond_wait(&uv->boss_cv, &uv->lock);
+    }
+    uv->boss_waiting = false;
+
+    pthread_mutex_unlock(&uv->lock);
+}
+
+UGReceiver::~UGReceiver()
+{
+    pthread_mutex_lock(&uv->lock);
+
+    uv->command = CMD_QUIT;
+
+    uv->boss_waiting = true;
+    pthread_mutex_unlock(&uv->lock);
+
+    while(!uv->worker_waiting)
+        ;
+
+    pthread_mutex_lock(&uv->lock);
+
+    if(uv->worker_waiting)
+        pthread_cond_signal(&uv->worker_cv);
+
+
+    while(!uv->worker_waiting) {
+        pthread_cond_wait(&uv->boss_cv, &uv->lock);
+    }
+    uv->boss_waiting = false;
+
+    pthread_mutex_unlock(&uv->lock);
 }

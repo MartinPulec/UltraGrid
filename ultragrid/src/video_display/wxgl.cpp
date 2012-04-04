@@ -50,17 +50,20 @@ extern "C" {
 #include "video_display.h"
 }
 
+#include <tr1/memory>
+
 #include "video_display/wxgl.h"
 #include "client-gui/client_guiMain.h"
-#include "client-gui/include/GLView.h"
+#include "client-gui/include/VideoBuffer.h"
 
 #define MAGIC_WXGL	0x1f87bd3a
 
 struct state_wxgl {
         uint32_t magic;
-        GLView *parent;
+        VideoBuffer *buffer;
         struct video_frame *frame;
         struct tile *tile;
+        std::tr1::shared_ptr<char> buffer_data;
 };
 
 void *display_wxgl_init(char *fmt, unsigned int flags)
@@ -71,7 +74,7 @@ void *display_wxgl_init(char *fmt, unsigned int flags)
     s = (struct state_wxgl *)calloc(1, sizeof(struct state_wxgl));
     if (s != NULL) {
         s->magic = MAGIC_WXGL;
-        s->parent = (GLView *) fmt;
+        s->buffer = (VideoBuffer *) fmt;
         s->frame = vf_alloc(1);
         s->tile = vf_get_tile(s->frame, 0);
         s->tile->data = NULL;
@@ -102,6 +105,8 @@ struct video_frame *display_wxgl_getf(void *state)
 {
     struct state_wxgl *s = (struct state_wxgl *)state;
     assert(s->magic == MAGIC_WXGL);
+    s->buffer_data = s->buffer->getframe();
+    s->tile->data = s->buffer_data.get();
     return s->frame;
 }
 
@@ -110,7 +115,8 @@ int display_wxgl_putf(void *state, char *frame)
     struct state_wxgl *s = (struct state_wxgl *)state;
     assert(s->magic == MAGIC_WXGL);
 
-    s->parent->putframe(s->tile->data, s->frame->frames);
+    s->buffer->putframe(s->buffer_data, s->frame->frames);
+    s->buffer_data = std::tr1::shared_ptr<char>();
 
     return 0;
 }
@@ -183,8 +189,8 @@ int display_wxgl_reconfigure(void *state, struct video_desc desc)
         else
             s->tile->data_len = desc.height;
         s->tile->data_len *= vc_get_linesize(desc.width, desc.color_spec);
-        s->tile->data = (char *) malloc(s->tile->data_len);
-        s->parent->reconfigure(desc.width, desc.height, (int) desc.color_spec);
+
+        s->buffer->reconfigure(desc.width, desc.height, (int) desc.color_spec, s->tile->data_len);
 
         return TRUE;
 }

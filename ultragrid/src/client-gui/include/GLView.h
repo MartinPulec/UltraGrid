@@ -4,6 +4,12 @@
 #include <wx/glcanvas.h>
 #include <wx/frame.h>
 
+#include <wx/timer.h>
+
+#include <pthread.h>
+
+#include <tr1/memory>
+
 #include "../include/ClientDataIntPair.h"
 
 #define MOUSE_CLICKED_MAGIC 0x1b3ff678
@@ -31,15 +37,17 @@ class GLView : public wxGLCanvas
     public:
         GLView(wxFrame *parent, wxWindowID id=wxID_ANY, const wxPoint &pos=wxDefaultPosition, const wxSize &size=wxDefaultSize, long style=0, const wxString &name=wxT("GLCanvas"), int *attribList=NULL);
         virtual ~GLView();
+        /*
+         * @returns buffer size
+         */
         void reconfigure(int width, int height, int codec);
-        void putframe(char *data, unsigned int frames);
+        void putframe(std::tr1::shared_ptr<char> data);
         void PostInit(wxWindowCreateEvent&);
         unsigned int GetFrameSeq();
 
         void OnPaint( wxPaintEvent& WXUNUSED(event) );
         void Render();
         void LoadSplashScreen();
-        void Receive(bool);
         void KeyDown(wxKeyEvent& evt);
 
         void ToggleLightness();
@@ -59,6 +67,7 @@ class GLView : public wxGLCanvas
         DECLARE_EVENT_TABLE()
 
     private:
+        pthread_mutex_t lock;
         void Reconf(wxCommandEvent&);
         void Putf(wxCommandEvent&);
         void Resized(wxSizeEvent& evt);
@@ -71,7 +80,6 @@ class GLView : public wxGLCanvas
 
         void resize();
 
-        bool receive;
         ClientDataIntPair sizeIncrement;
         wxGLContext *context;
         wxFrame* parent;
@@ -101,6 +109,8 @@ class GLView : public wxGLCanvas
         GLuint		texture_display;
         GLuint		texture_uyvy;
         GLuint		texture_final;
+
+        std::tr1::shared_ptr<char> Frame;
 
         double vpXMultiplier, vpYMultiplier;
         double xoffset, yoffset;

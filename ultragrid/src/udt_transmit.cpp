@@ -90,12 +90,10 @@ struct udt_transmit {
 
                 err = UDT::ERROR;
 
-                struct timeval tv;
-                tv.tv_sec = 3;  /* 5 Secs Timeout */
-                tv.tv_usec = 0;
+                int timeout = 3;
 
-                //UDT::setsockopt(socket, /* unused */ 0, UDT_SNDTIMEO, (const char *) &tv, sizeof(struct timeval));
-                //UDT::setsockopt(socket, /* unused */ 0, UDT_RCVTIMEO, (const char *) &tv, sizeof(struct timeval));
+                //UDT::setsockopt(socket, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
+                //UDT::setsockopt(socket, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
 
                 err = UDT::connect(socket, res->ai_addr, res->ai_addrlen);
 

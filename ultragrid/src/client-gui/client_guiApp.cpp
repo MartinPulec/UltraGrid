@@ -25,6 +25,8 @@ void handler(int signal)
     if(signal == SIGIO) {
         if(app)
             app->DataReceived();
+    } else if (signal == SIGPIPE) {
+        // SIGPIPE
     }
 }
 

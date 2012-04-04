@@ -78,7 +78,6 @@ BEGIN_EVENT_TABLE(client_guiFrame,wxFrame)
     //(*EventTable(client_guiFrame)
     //*)
     EVT_COMMAND  (wxID_ANY, wxEVT_RECONF, client_guiFrame::Resize)
-    EVT_COMMAND  (wxID_ANY, wxEVT_UPDATE_TIMER, client_guiFrame::UpdateTimer)
     EVT_COMMAND  (wxID_ANY, wxEVT_TOGGLE_FULLSCREEN, client_guiFrame::ToggleFullscreen)
     EVT_COMMAND  (wxID_ANY, wxEVT_TOGGLE_PAUSE, client_guiFrame::TogglePause)
     EVT_COMMAND  (wxID_ANY, wxEVT_SCROLLED, client_guiFrame::Scrolled)
@@ -212,11 +211,10 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
 
     /*SetSizer(FlexGridSizer1);
     SetAutoLayout(true);*/
-    receiver = new UGReceiver(this, (const char *) "wxgl", gl);
 
     selectVideo = new VideoSelection(this, &settings);
 
-    connection.SetMsgHandler(&msgHandler);
+    player.SetMsgHandler(&msgHandler);
 
     //this->SetSize(600, 400);
     ChangeState(sInit);
@@ -225,15 +223,17 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     entries[0].Set(wxACCEL_NORMAL, (int) WXK_SPACE, PlayButton);
     wxAcceleratorTable accel(1, entries);
     SetAcceleratorTable(accel);*/
+    player.Init(gl, this, &settings);
 
-    speed = 1.0;
-    SpeedStr->SetLabel(Utils::FromCDouble(speed, 2));
+    SpeedStr->SetLabel(Utils::FromCDouble(player.GetSpeed(), 2));
 }
 
 client_guiFrame::~client_guiFrame()
 {
+    //dtor
     //(*Destroy(client_guiFrame)
     //*)
+    delete selectVideo;
 }
 
 void client_guiFrame::OnServerSetting(wxCommandEvent& event)
@@ -308,16 +308,6 @@ void client_guiFrame::OnStopBtnClick(wxCommandEvent& event)
 
 void client_guiFrame::PlaySelection()
 {
-    wxString item;
-    wxString hostname;
-    wxString path;
-
-    wxString failedPart;
-
-    /*if(UG.StopRunning()) { // stopped
-        return;
-    }*/
-
     if(this->playList.empty()) {
         StatusBar1->PushStatusText(wxT("No video selected!"));
         //wxMessageBox(_("No video selected"), _("Unable to play"));
@@ -325,69 +315,37 @@ void client_guiFrame::PlaySelection()
     }
 
     try {
-        item = this->playList[0].URL;
-        item = item.Mid(wxString(L"rtp://").Len());
-        hostname = item.BeforeFirst('/');
-        path = item.AfterFirst('/');
-        wxString video_format = this->playList[0].format;
-
         double fps;
         if(!this->fps->GetValue().ToDouble(&fps)) {
              /* error! */
         }
 
-        //this->playList.pop_back();
+        player.Play(this->playList[0], fps);
 
-        failedPart = wxT("connect");
-        this->connection.connect_to(std::string(hostname.mb_str()), 5100);
-
-        StatusBar1->PushStatusText(item);
+        StatusBar1->PushStatusText(this->playList[0].URL);
         ChangeState(sPlaying);
         total_frames = this->playList[0].total_frames;
-
-
-        failedPart = wxT("format setting");
-        this->connection.set_parameter(wxT("format"), video_format + wxT(" ") + this->playList[0].colorSpace);
-        failedPart = wxT("compression setting");
-        this->connection.set_parameter(wxT("compression"), wxString(settings.GetValue(std::string("compression"), std::string("none")).c_str(), wxConvUTF8) << wxT(" ") +
-                wxString(settings.GetValue(std::string("jpeg_qual"), std::string("80")).c_str(), wxConvUTF8));
-
-        failedPart = wxT("setup");
-        this->connection.setup(wxT("/") + path);
-        failedPart = wxT("setting FPS");
-        this->connection.set_parameter(wxT("fps"), Utils::FromCDouble(fps, 2));
-        failedPart = wxT("setting loop");
-        connection.set_parameter(wxT("loop"), ToggleLoop->GetValue() ? wxT("ON") : wxT("OFF"));
-        failedPart = wxT("setting speed");
-        connection.set_parameter(wxT("speed"), Utils::FromCDouble(speed, 2));
-
-        gl->Receive(true);
-        failedPart = wxT("playing");
-
-        connection.play();
-
     } catch (std::exception &e) {
         wxString msg = wxString::FromUTF8(e.what());
-        wxMessageBox(msg + wxT("(") + failedPart + wxT(")"), _("Playback error"));
-        this->connection.disconnect();
+        wxMessageBox(msg, _("Playback error"));
     }
 }
 
 void client_guiFrame::Stop()
 {
     try {
-        connection.teardown();
+        player.Stop();
     } catch (std::exception &e) {
         wxMessageBox(wxString::FromUTF8(e.what()), _("Error stopping media"));
     }
 
     StatusBar1->PushStatusText(wxT("stopped"));
-    this->connection.disconnect();
+
     ChangeState(sInit);
     DoUpdateCounters(0);
     //Refresh();
     gl->LoadSplashScreen();
-    gl->Receive(false);
+
     total_frames = 0;
 }
 
@@ -418,13 +376,13 @@ void client_guiFrame::OnSelectClick(wxCommandEvent& event)
 
 void client_guiFrame::DataReceived()
 {
-    connection.ProcessIncomingData();
+    player.ProcessIncomingData();
 }
 
 void client_guiFrame::DoDisconnect()
 {
     StatusBar1->PushStatusText(wxT("interrupted by server"));
-    connection.disconnect();
+    player.Stop();
     ChangeState(sInit);
 }
 
@@ -449,10 +407,10 @@ void client_guiFrame::DoUpdateCounters(int val)
     }
 }
 
-void client_guiFrame::UpdateTimer(wxCommandEvent&)
+void client_guiFrame::UpdateTimer(int val)
 {
     if(state != sInit)
-        DoUpdateCounters(gl->GetFrameSeq());
+        DoUpdateCounters(val);
 }
 
 void client_guiFrame::JumpToFrame(int frame)
@@ -462,9 +420,9 @@ void client_guiFrame::JumpToFrame(int frame)
             return;
 
         if(state == sPlaying) {
-            connection.play(wxString::Format(wxT("%d"), frame));
+            player.JumpAndPlay(wxString::Format(wxT("%d"), frame));
         } else if (state == sReady) {
-            connection.pause(wxString::Format(wxT("%d"), frame));
+            player.JumpAndPause(wxString::Format(wxT("%d"), frame));
         } else {
             return;
         }
@@ -500,7 +458,7 @@ void client_guiFrame::DoPause()
         return;
 
     try {
-        connection.pause();
+        player.Pause();
         ChangeState(sReady);
     } catch (std::exception &e) {
         wxString msg = wxString::FromUTF8(e.what());
@@ -512,7 +470,7 @@ void client_guiFrame::Resume()
 {
     try {
         // TODO: handle TMOUT
-        connection.play();
+        player.Play();
 
         ChangeState(sPlaying);
     } catch (std::exception &e) {
@@ -545,16 +503,13 @@ void client_guiFrame::OnButton1Click2(wxCommandEvent& event)
     struct message msg;
     struct response resp;
 
-    if(!this->connection.isConnected())
-        return;
-
     try {
         double fps;
         if(!this->fps->GetValue().ToDouble(&fps)) {
              /* error! */
         }
 
-        connection.set_parameter(wxT("fps"), wxString::Format(wxT("%2.2f"),fps));
+        player.SetFPS(fps);
     } catch (std::exception &e) {
         wxString msg = wxString::FromUTF8(e.what());
         wxMessageBox(msg, _("Error to set fps"));
@@ -734,22 +689,8 @@ void client_guiFrame::KeyDown(wxKeyEvent& evt)
 
 void client_guiFrame::OnButton1Click3(wxCommandEvent& event)
 {
-    wxString val;
-    if(ToggleLoop->GetValue() == true) {
-        val = wxT("ON");
-    } else {
-        val = wxT("OFF");
-    }
-
-    wxString msgstr;
-    struct message msg;
-    struct response resp;
-
-    if(!connection.isConnected())
-        return;
-
     try {
-        connection.set_parameter(wxT("loop"), val);
+        player.SetLoop(ToggleLoop->GetValue());
     } catch (std::exception &e) {
         ToggleLoop->SetValue(!ToggleLoop->GetValue());
         wxMessageBox(wxString::FromUTF8(e.what()), _("Error setting loop"));
@@ -774,9 +715,7 @@ void client_guiFrame::ChangeSpeed(double ratio)
     try {
         speed *= ratio;
 
-        if(connection.isConnected()) {
-           connection.set_parameter(wxT("speed"), Utils::FromCDouble(speed, 2));
-        }
+        player.SetSpeed(speed);
     } catch (std::exception &e) {
         speed /= ratio;
         wxMessageBox(wxString::FromUTF8(e.what()), _("Error setting speed"));
@@ -787,9 +726,7 @@ void client_guiFrame::ChangeSpeed(double ratio)
 void client_guiFrame::ChangeDirection(int direction)
 {
     try {
-        if(connection.isConnected()) {
-           connection.set_parameter(wxT("speed"), Utils::FromCDouble(1.0 * direction, 2));
-        }
+        player.SetSpeed(1.0 * direction);
         speed = 1.0 * direction;
     } catch (std::exception &e) {
         wxMessageBox(wxString::FromUTF8(e.what()), _("Error setting speed"));

@@ -99,7 +99,9 @@ OBJS	      = @OBJS@ \
 		src/gl_context.o \
 		src/color_transform.o \
 		src/udt_transmit.o \
-		src/udt_receive.o
+		src/udt_receive.o \
+		src/client-gui/src/VideoBuffer.o \
+
 
 SDL_LIB_OBJ  = \
 		src/audio/utils.o \
@@ -267,7 +269,7 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 	     src/client-gui/src/ClientManager.o \
 	     src/client-gui/src/CustomGridBagSizer.o \
 	     src/client-gui/src/Utils.o \
-	     src/client-gui/src/VideoBuffer.o \
+	     src/client-gui/src/Player.o \
 
 SERVER_OBJ = src/server/sp_server.o \
 	     src/server/streaming_server.o \

@@ -555,22 +555,6 @@ gpujpeg_coder_deinit(struct gpujpeg_coder* coder)
 {
     /*if ( coder->data_raw != NULL )
         cudaFreeHost(coder->data_raw);*/
-    if ( coder->d_data_raw != NULL )
-        cudaFree(coder->d_data_raw);
-    if ( coder->d_data != NULL )
-        cudaFree(coder->d_data);
-    if ( coder->data_quantized != NULL )
-        cudaFreeHost(coder->data_quantized);    
-    if ( coder->d_data_quantized != NULL )
-        cudaFree(coder->d_data_quantized);    
-    if ( coder->data_compressed != NULL )
-        cudaFreeHost(coder->data_compressed);    
-    if ( coder->d_data_compressed != NULL )
-        cudaFree(coder->d_data_compressed);    
-    if ( coder->segment != NULL )
-        cudaFreeHost(coder->segment); 
-    if ( coder->d_segment != NULL )
-        cudaFree(coder->d_segment);
     return 0;
 }
 

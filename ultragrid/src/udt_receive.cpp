@@ -75,13 +75,11 @@ struct udt_recv {
 
                 err = UDT::ERROR;
 
-#if 0
-                struct timeval tv;
-                tv.tv_sec = 5;  /* 5 Secs Timeout */
-                tv.tv_usec = 0;
-                setsockopt(this->fd, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                setsockopt(this->fd, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-#endif
+                int timeout = 500; //ms
+                UDT::setsockopt(socket, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
+                UDT::setsockopt(socket, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
+
+
                 sockaddr_in my_addr;
                 my_addr.sin_family = AF_INET;
                 my_addr.sin_port = htons(port);
@@ -101,15 +99,35 @@ struct udt_recv {
                 }
         }
 
-        void accept()
+        bool accept()
         {
                 int namelen;
                 sockaddr_in their_addr;
 
+
+                bool val = false;
+                UDT::setsockopt(socket, /* unused */ 0, UDT_RCVSYN, (const char *) &val, sizeof(bool));
+
                 recver = UDT::accept(socket, (sockaddr*)&their_addr, &namelen);
                 if(recver == UDT::INVALID_SOCK) {
+                    if(UDT::getlasterror().getErrorCode() == CUDTException::EASYNCRCV) {
+                        std::cerr << "No connection pending" << std::endl;
+                        return false;
+                    } else {
                         throw std::runtime_error(std::string("accept: ") + UDT::getlasterror().getErrorMessage());
+                    }
                 }
+
+
+                val = true;
+                UDT::setsockopt(socket, /* unused */ 0, UDT_RCVSYN, (const char *) &val, sizeof(bool));
+
+                return true;
+        }
+
+        void disconnect()
+        {
+                UDT::close(recver);
         }
 
 
@@ -157,10 +175,17 @@ int udt_receive_accept(struct udt_recv  *udt_receive)
 {
     int ret = 1;
     try {
-        udt_receive->accept();
+        if(!udt_receive->accept()) {
+            ret = 0;
+        }
     } catch (...) {
         ret = 0;
     }
 
     return ret;
+}
+
+int udt_receive_disconnect(struct udt_recv  *udt_receive)
+{
+    udt_receive->disconnect();
 }

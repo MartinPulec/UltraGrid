@@ -5,6 +5,7 @@
 		<Option title="client-gui" />
 		<Option pch_mode="2" />
 		<Option compiler="gcc" />
+		<Option virtualFolders="client-gui/src/;client-gui/include/;" />
 		<Build>
 			<Target title="Debug">
 				<Option output="bin/Debug/client-gui" prefix_auto="1" extension_auto="1" />
@@ -48,6 +49,7 @@
 		<Unit filename="include/AsyncMsgHandler.h" />
 		<Unit filename="include/ClientManager.h" />
 		<Unit filename="include/GLView.h" />
+		<Unit filename="include/Player.h" />
 		<Unit filename="include/ProgressSlider.h" />
 		<Unit filename="include/Settings.h" />
 		<Unit filename="include/UGReceiver.h" />
@@ -58,9 +60,12 @@
 		<Unit filename="src/AsyncMsgHandler.cpp" />
 		<Unit filename="src/ClientManager.cpp" />
 		<Unit filename="src/GLView.cpp" />
+		<Unit filename="src/Player.cpp" />
 		<Unit filename="src/ProgressSlider.cpp" />
 		<Unit filename="src/Settings.cpp" />
-		<Unit filename="src/UGReceiver.cpp" />
+		<Unit filename="src/UGReceiver.cpp">
+			<Option virtualFolder="client-gui/include/" />
+		</Unit>
 		<Unit filename="src/Utils.cpp" />
 		<Unit filename="src/VideoBuffer.cpp" />
 		<Unit filename="src/VideoEntry.cpp" />
@@ -68,6 +73,17 @@
 		<Unit filename="wxsmith/CompressionSetting.wxs" />
 		<Unit filename="wxsmith/ServerSelectionDialog.wxs" />
 		<Unit filename="wxsmith/client_guiframe.wxs" />
+		<Unit filename="../include/Player.h">
+			<Option virtualFolder="client-gui/include/" />
+		</Unit>
+		<Unit filename="../src/Player.cpp">
+			<Option virtualFolder="client-gui/src/" />
+		</Unit>
+		<Unit filename="../udt_receive.cpp" />
+		<Unit filename="../udt_receive.h" />
+		<Unit filename="../udt_transmit.cpp" />
+		<Unit filename="../udt_transmit.h" />
+		<Unit filename="../video_display/wxgl.cpp" />
 		<Extensions>
 			<code_completion />
 			<envvars />

@@ -19,6 +19,8 @@
 #include "include/ProgressSlider.h"
 #include "include/CustomGridBagSizer.h"
 #include "include/ClientManager.h"
+#include "include/VideoBuffer.h"
+#include "include/Player.h"
 
 //(*Headers(client_guiFrame)
 #include <wx/glcanvas.h>
@@ -49,6 +51,7 @@ class client_guiFrame: public wxFrame
         virtual ~client_guiFrame();
         void DataReceived();
         void DoDisconnect();
+        void UpdateTimer(int val);
 
     private:
 
@@ -75,7 +78,6 @@ class client_guiFrame: public wxFrame
         void OnBackwardFastClick(wxCommandEvent& event);
         //*)
         void Resize(wxCommandEvent&);
-        void UpdateTimer(wxCommandEvent&);
         void Scrolled(wxCommandEvent&);
         void ToggleFullscreen(wxCommandEvent&);
         void TogglePause(wxCommandEvent&);
@@ -144,11 +146,10 @@ class client_guiFrame: public wxFrame
         wxSpinCtrl* FrameCount;
         //*)
 
-        ClientManager connection;
+        Player player;
         ArrayOfVideoEntries playList;
         Settings settings;
 
-        UGReceiver *receiver;
         VideoSelection *selectVideo;
         AsyncMsgHandler msgHandler;
 

@@ -61,6 +61,7 @@ struct udt_recv *udt_receive_init(char *address, unsigned int port);
 void		    udt_receive_done(struct udt_recv *udt_receive);
 int                 udt_receive(struct udt_recv  *udt_receive, char *buffer, int *len);
 int                 udt_receive_accept(struct udt_recv  *udt_receive);
+int                 udt_receive_disconnect(struct udt_recv  *udt_receive);
 
 #ifdef __cplusplus
 }
