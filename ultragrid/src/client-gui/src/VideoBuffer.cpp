@@ -1,5 +1,8 @@
 #include <iostream>
 
+#include "config.h"
+#include "config_unix.h"
+
 #include "../include/VideoBuffer.h"
 #include "../include/GLView.h"
 
@@ -38,6 +41,10 @@ void VideoBuffer::SetGLView(GLView *view)
 void VideoBuffer::putframe(shared_ptr<char> data, unsigned int frames)
 {
     pthread_mutex_lock(&lock);
+#ifdef DEBUG
+    std::cerr << "Buffer: Received frame " << frames << std::endl;
+#endif
+
 
     buffered_frames.insert(std::pair<int, std::tr1::shared_ptr<char> >(frames, data));
     current_item = frames;

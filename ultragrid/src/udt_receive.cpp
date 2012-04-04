@@ -120,7 +120,10 @@ struct udt_recv {
 
 
                 val = true;
-                UDT::setsockopt(socket, /* unused */ 0, UDT_RCVSYN, (const char *) &val, sizeof(bool));
+                UDT::setsockopt(recver, /* unused */ 0, UDT_RCVSYN, (const char *) &val, sizeof(bool));
+                int timeout = 500; //ms
+                UDT::setsockopt(recver, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
+                UDT::setsockopt(recver, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
 
                 return true;
         }
@@ -134,8 +137,8 @@ struct udt_recv {
         int receive(char *buffer, int *len)
         {
                 int res = UDT::recvmsg(recver, buffer, *len);
-                if(recver == UDT::ERROR) {
-                        std::cerr << UDT::getlasterror().getErrorMessage();
+                if(res == UDT::ERROR) {
+                        std::cerr << UDT::getlasterror().getErrorMessage() << std::endl;
                         return 0;
                 }
                 *len = res;

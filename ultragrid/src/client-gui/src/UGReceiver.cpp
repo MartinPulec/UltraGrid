@@ -371,13 +371,16 @@ static void *receiver_thread(void *arg)
                 pthread_mutex_unlock(&uv->lock);
 
                 if(accept) {
-                    ret = udt_receive_accept(uv->udt_receive);
-                    uv->state = ST_ACCEPTED;
+                    while(uv->command == CMD_NONE) {
+                        ret = udt_receive_accept(uv->udt_receive);
 
-                    if(!ret) {
-                        fprintf(stderr, "Failed to accept\n");
-                    } else {
-                        fprintf(stderr, "Accepted\n");
+                        if(!ret) {
+                            fprintf(stderr, "Failed to accept\n");
+                        } else {
+                            uv->state = ST_ACCEPTED;
+                            fprintf(stderr, "Accepted\n");
+                            break;
+                        }
                     }
                 }
 
@@ -405,6 +408,7 @@ static void *receiver_thread(void *arg)
                     std::cerr << "(len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
                     goto error;
                 }
+
                 data_len = decoder_reconfigure((char *) &a.header, len, &pbuf_data);
                 decoder_get_buffer(&pbuf_data, &buffer, &len);
                 res = udt_receive(uv->udt_receive, buffer, &len);
@@ -416,10 +420,12 @@ static void *receiver_thread(void *arg)
                     std::cerr << "(len: " << len << ", data_len: " << data_len  << ")" << std::endl;
                     goto error;
                 }
+
                 decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, len, pbuf_data.frame_buffer);
 
                 display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
                 pbuf_data.frame_buffer = display_get_frame(uv->display_device);
+
 error:
                 ;
 
