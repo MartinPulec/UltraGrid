@@ -13,19 +13,19 @@
  * Redistribution and use in source and binary forms, with or without
  * modification, is permitted provided that the following conditions
  * are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 
+ *
  * 3. All advertising materials mentioning features or use of this software
  *    must display the following acknowledgement:
- * 
+ *
  *      This product includes software developed by CESNET z.s.p.o.
- * 
+ *
  * 4. Neither the name of the CESNET nor the names of its contributors may be
  *    used to endorse or promote products derived from this software without
  *    specific prior written permission.
@@ -187,7 +187,7 @@ struct vidcap_dpx_state {
         volatile struct video_frame *frame;
         struct tile        *tile;
         pthread_mutex_t lock;
-        
+
         pthread_cond_t reader_cv;
         pthread_cond_t processing_cv;
         volatile int reader_waiting;
@@ -195,31 +195,31 @@ struct vidcap_dpx_state {
 
         volatile int should_pause;
         pthread_cond_t pause_cv;
-        
+
         unsigned int        loop:1;
         volatile unsigned int        finished:1;
         volatile unsigned int        should_exit_thread:1;
-        
+
         char               *buffer_read[BUFFER_LEN];
         volatile int        buffer_read_start, buffer_read_end;
         char               *buffer_processed[BUFFER_LEN];
         volatile int        buffer_processed_start, buffer_processed_end;
-        
+
         char               *buffer_send;
-        
+
         pthread_t           reading_thread, processing_thread;
         int                 frames;
         struct timeval      t, t0;
-        
+
         glob_t              glob;
         int                 index;
-        
+
         unsigned int                *lut;
         lut_func_t          lut_func;
         float               gamma;
-        
+
         struct timeval      prev_time, cur_time;
-        
+
         unsigned            big_endian:1;
 
         unsigned int        should_jump:1;
@@ -227,7 +227,7 @@ struct vidcap_dpx_state {
         unsigned int        playone:1;
 
         float               speed;
-        
+
         struct file_information file_information;
         struct _image_information image_information;
         struct _image_orientation image_orientation;
@@ -263,14 +263,14 @@ static void create_lut(struct vidcap_dpx_state *s)
 {
         int x;
         int max_val;
-        
+
         max_val = 1<<s->image_information.image_element[0].bit_size;
         //if(s->image_information.image_element[0].transfer == 0)
-        
+
         free(s->lut);
         s->lut = (unsigned int *) malloc(sizeof(unsigned int) *
                         max_val);
-        
+
         for (x = 0;
                 x < max_val;
                 ++x)
@@ -287,7 +287,7 @@ static void apply_lut_10b(int *lut, char *out_data, char *in_data, int size)
         register unsigned int *in = (unsigned int *) in_data;
         register unsigned int *out = (unsigned int *) out_data;
         register int r,g,b;
-        
+
         for(x = 0; x < elems; ++x) {
                 register unsigned int val = *in++;
                 r = lut[val >> 22];
@@ -304,7 +304,7 @@ static void apply_lut_10b_be(int *lut, char *out_data, char *in_data, int size)
         register unsigned int *in = (unsigned int *) in_data;
         register unsigned int *out = (unsigned int *) out_data;
         register int r,g,b;
-        
+
         for(x = 0; x < elems; ++x) {
                 register unsigned int val = htonl(*in++);
                 r = lut[val >> 22];
@@ -322,7 +322,7 @@ static void apply_lut_8b(int *lut, char *out_data, char *in_data, int size)
         register unsigned int *in = (unsigned int *) in_data;
         register unsigned int *out = (unsigned int *) out_data;
         register int r,g,b;
-        
+
         for(x = 0; x < elems; ++x) {
                 register unsigned int val = *in++;
                 r = lut[(val >> 16) & 0xff];
@@ -336,7 +336,7 @@ struct vidcap_type *
 vidcap_dpx_probe(void)
 {
 	struct vidcap_type*		vt;
-    
+
 	vt = (struct vidcap_type *) malloc(sizeof(struct vidcap_type));
 	if (vt != NULL) {
 		vt->id          = VIDCAP_DPX_ID;
@@ -360,12 +360,12 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
 	printf("vidcap_dpx_init\n");
 
         s = (struct vidcap_dpx_state *) calloc(1, sizeof(struct vidcap_dpx_state));
-        
+
         if(!fmt || strcmp(fmt, "help") == 0) {
                 usage();
                 return NULL;
         }
-        
+
         pthread_mutex_init(&s->lock, NULL);
         pthread_cond_init(&s->processing_cv, NULL);
         pthread_cond_init(&s->reader_cv, NULL);
@@ -375,15 +375,15 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         s->should_pause = TRUE;
         s->should_jump = FALSE;
         s->grab_waiting = FALSE;
-        
-        
+
+
         s->buffer_processed_start = s->buffer_processed_end = 0;
         s->buffer_read_start = s->buffer_read_end = 0;
         s->index = 0;
-        
+
         s->should_exit_thread = FALSE;
         s->finished = FALSE;
-        
+
         s->frame = vf_alloc(1);
         s->frame->fps = 30.0;
         s->frame->frames = -1;
@@ -391,7 +391,7 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         s->loop = FALSE;
         s->playone = FALSE;
         s->speed = 1.0;
-        
+
         item = strtok_r(fmt, ":", &save_ptr);
         while(item) {
                 if(strncmp("files=", item, strlen("files=")) == 0) {
@@ -405,10 +405,10 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
                 } else if(strncmp("loop", item, strlen("loop")) == 0) {
                         s->loop = TRUE;
                 }
-                
+
                 item = strtok_r(NULL, ":", &save_ptr);
         }
-        
+
         int ret = glob(glob_pattern, 0, NULL, &s->glob);
         if (ret)
         {
@@ -416,7 +416,7 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
                 perror("");
                 return NULL;
         }
-        
+
         char *filename = s->glob.gl_pathv[0];
         int fd = open(filename, O_RDONLY);
         if(fd == -1) {
@@ -425,13 +425,13 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
                 free(s);
                 return NULL;
         }
-        
+
         read(fd, &s->file_information, sizeof(s->file_information));
         read(fd, &s->image_information, sizeof(s->image_information));
         read(fd, &s->image_orientation, sizeof(s->image_orientation));
         read(fd, &s->motion_header, sizeof(s->motion_header));
         read(fd, &s->television_header, sizeof(s->television_header));
-        
+
         if(s->file_information.magic_num == 'XPDS')
                 s->big_endian = TRUE;
         else if(s->file_information.magic_num == 'SDPX')
@@ -442,7 +442,7 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
                 free(s);
                 return NULL;
         }
-        
+
         switch (s->image_information.image_element[0].bit_size)
         {
                 case 8:
@@ -457,32 +457,32 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
                                 s->lut_func = apply_lut_10b;
                         break;
                 default:
-                        fprintf(stderr, "[DPX] Currently no support for %d-bit images.", 
+                        fprintf(stderr, "[DPX] Currently no support for %d-bit images.",
                                         s->image_information.image_element[0].bit_size);
                         free(s);
                         return NULL;
         }
-        
+
         create_lut(s);
-        
+
         s->frame->interlacing = PROGRESSIVE;
         s->tile = vf_get_tile(s->frame, 0);
         s->tile->width = to_native_order(s, s->image_information.pixels_per_line);
         s->tile->height = to_native_order(s, s->image_information.lines_per_image_ele);
-        
+
         s->tile->data_len = s->tile->width * s->tile->height * 4;
-        
+
         for (i = 0; i < BUFFER_LEN; ++i) {
                 s->buffer_read[i] = malloc(s->tile->data_len);
                 s->buffer_processed[i] = malloc(s->tile->data_len);
         }
         s->buffer_send = malloc(s->tile->data_len);
-        
+
         close(fd);
 
         pthread_create(&s->reading_thread, NULL, reading_thread, s);
         pthread_create(&s->processing_thread, NULL, processing_thread, s);
-        
+
         s->prev_time.tv_sec = s->prev_time.tv_usec = 0;
 
 	return s;
@@ -516,10 +516,10 @@ vidcap_dpx_done(void *state)
         if(s->processing_waiting)
                 pthread_cond_signal(&s->processing_cv);
         pthread_mutex_unlock(&s->lock);
-        
+
 	pthread_join(s->reading_thread, NULL);
 	pthread_join(s->processing_thread, NULL);
-        
+
         vf_free(s->frame);
         for (i = 0; i < BUFFER_LEN; ++i) {
                 free(s->buffer_read[i]);
@@ -549,9 +549,9 @@ static void * reading_thread(void *args)
                                 goto after_while;
                         }
                 }
-                
+
                 pthread_mutex_unlock(&s->lock);
-                                        
+
                 char *filename = s->glob.gl_pathv[s->index];
                 s->index += ROUND_FROM_ZERO(s->speed);
                 int fd = open(filename, O_RDONLY);
@@ -562,22 +562,22 @@ static void * reading_thread(void *args)
                                         s->tile->data_len - bytes_read,
                                         file_offset + bytes_read);
                 } while(bytes_read < s->tile->data_len);
-                
+
                 close(fd);
-                
+
                 pthread_mutex_lock(&s->lock);
                 s->buffer_read_end = (s->buffer_read_end + 1) % BUFFER_LEN; /* and we will read next one */
                 if(s->processing_waiting)
                         pthread_cond_signal(&s->processing_cv);
                 pthread_mutex_unlock(&s->lock);
-                
+
                 if( (s->speed > 0.0 && s->index >= (int) s->glob.gl_pathc) ||
                                 s->index < 0) {
                         s->finished = TRUE;
                 }
         }
 after_while:
-        
+
         while(!s->should_exit_thread)
                 ;
 
@@ -604,7 +604,7 @@ static void * processing_thread(void *args)
                         }
                 }
                 pthread_mutex_unlock(&s->lock);
-                
+
                 pthread_mutex_lock(&s->lock);
                 if(s->should_exit_thread) {
                         break;
@@ -619,12 +619,12 @@ static void * processing_thread(void *args)
                                 goto after_while;
                         }
                 }
-                
+
                 pthread_mutex_unlock(&s->lock);
-                
+
                 s->lut_func(s->lut, s->buffer_processed[s->buffer_processed_end],
                                 s->buffer_read[s->buffer_read_start], s->tile->data_len);
-                
+
                 pthread_mutex_lock(&s->lock);
                 s->buffer_read_start = (s->buffer_read_start + 1) % BUFFER_LEN; /* and we will read next one */
                 s->buffer_processed_end = (s->buffer_processed_end + 1) % BUFFER_LEN; /* and we will read next one */
@@ -641,7 +641,7 @@ struct video_frame *
 vidcap_dpx_grab(void *state, struct audio_frame **audio)
 {
 	struct vidcap_dpx_state 	*s = (struct vidcap_dpx_state *) state;
-        
+
         pthread_mutex_lock(&s->lock);
         while((s->should_pause || s->should_jump) && !s->playone) {
                 s->grab_waiting = TRUE;
@@ -649,7 +649,7 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
                 s->grab_waiting = FALSE;
         }
         s->playone = FALSE;
-        
+
         if(s->finished && s->buffer_processed_start == s->buffer_processed_end &&
                         s->buffer_read_start == s->buffer_read_end) {
                 if(s->loop) {
@@ -668,7 +668,7 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
         }
 
         pthread_mutex_unlock(&s->lock);
-        
+
         while(s->buffer_processed_start == s->buffer_processed_end && !should_exit && !s->finished && !s->should_jump)
                 ;
 
@@ -687,11 +687,11 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
         }
         s->prev_time = s->cur_time;
         //tv_add_usec(&s->prev_time, 1000000.0 / s->frame->fps);
-        
+
         s->tile->data = s->buffer_processed[s->buffer_processed_start];
         s->buffer_processed[s->buffer_processed_start] = s->buffer_send;
         s->buffer_send = s->tile->data;
-        
+
         pthread_mutex_lock(&s->lock);
         s->buffer_processed_start = (s->buffer_processed_start + 1) % BUFFER_LEN;
         if(s->processing_waiting)
@@ -709,14 +709,14 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
         }
 
         gettimeofday(&s->t, NULL);
-        double seconds = tv_diff(s->t, s->t0);    
+        double seconds = tv_diff(s->t, s->t0);
         if (seconds >= 5) {
             float fps  = s->frames / seconds;
             fprintf(stderr, "%d frames in %g seconds = %g FPS\n", s->frames, seconds, fps);
             s->t0 = s->t;
             s->frames = 0;
         }
-        
+
         *audio = NULL;
 
 	return s->frame;
@@ -802,7 +802,8 @@ void vidcap_dpx_command(struct vidcap *state, int command, void *data)
                 pthread_mutex_lock(&s->lock);
                 flush_pipeline(s);
                 clamp_indices(s);
-                s->frame->frames  = s->index - ROUND_FROM_ZERO(s->speed);
+                //s->frame->frames  = s->index - ROUND_FROM_ZERO(s->speed);
+                s->index = s->frame->frames + ROUND_FROM_ZERO(s->speed);
                 s->speed = *(float *) data;
                 play_after_flush(s);
                 pthread_mutex_unlock(&s->lock);

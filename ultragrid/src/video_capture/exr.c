@@ -13,19 +13,19 @@
  * Redistribution and use in source and binary forms, with or without
  * modification, is permitted provided that the following conditions
  * are met:
- * 
+ *
  * 1. Redistributions of source code must retain the above copyright
  *    notice, this list of conditions and the following disclaimer.
- * 
+ *
  * 2. Redistributions in binary form must reproduce the above copyright
  *    notice, this list of conditions and the following disclaimer in the
  *    documentation and/or other materials provided with the distribution.
- * 
+ *
  * 3. All advertising materials mentioning features or use of this software
  *    must display the following acknowledgement:
- * 
+ *
  *      This product includes software developed by CESNET z.s.p.o.
- * 
+ *
  * 4. Neither the name of the CESNET nor the names of its contributors may be
  *    used to endorse or promote products derived from this software without
  *    specific prior written permission.
@@ -101,7 +101,7 @@ struct vidcap_exr_state {
         struct tile        *tile;
 
         pthread_mutex_t lock;
-        
+
         pthread_cond_t reader_cv;
         volatile int reader_waiting;
 
@@ -113,7 +113,7 @@ struct vidcap_exr_state {
         volatile unsigned int        should_exit_thread:1;
 
         struct  job         jobs[THREADS];
-        
+
         char               *buffer_read[BUFFER_LEN];
         /* those are buffers which are computed
          * but not yet make public (eg. because they are disconginout - previous frame missing */
@@ -122,19 +122,19 @@ struct vidcap_exr_state {
          * working read end is ahead buffer_read_end and tells which will be the next element that will
          * go (asynchronously) computed */
         volatile int        buffer_read_start, buffer_read_end, working_read_end;
-        
+
         char               *buffer_send;
-        
+
         pthread_t           reading_thread;
         int                 frames;
         struct timeval      t, t0;
-        
+
         glob_t              glob;
         int                 index;
-        
+
         int                *lut;
         float               gamma;
-        
+
         struct timeval      prev_time, cur_time;
 
         unsigned int        should_jump:1;
@@ -174,7 +174,7 @@ struct vidcap_type *
 vidcap_exr_probe(void)
 {
 	struct vidcap_type*		vt;
-    
+
 	vt = (struct vidcap_type *) malloc(sizeof(struct vidcap_type));
 	if (vt != NULL) {
 		vt->id          = VIDCAP_EXR_ID;
@@ -197,7 +197,7 @@ vidcap_exr_init(char *fmt, unsigned int flags)
 	printf("vidcap_exr_init\n");
 
         s = (struct vidcap_exr_state *) calloc(1, sizeof(struct vidcap_exr_state));
-        
+
         if(!fmt || strcmp(fmt, "help") == 0) {
                 usage();
                 return NULL;
@@ -210,14 +210,14 @@ vidcap_exr_init(char *fmt, unsigned int flags)
         s->should_pause = FALSE;
         s->should_jump = FALSE;
         s->grab_waiting = FALSE;
-        
+
         s->buffer_read_start = s->buffer_read_end = s->working_read_end = 0;
         s->index = 0;
         s->speed = 1.0;
-        
+
         s->should_exit_thread = FALSE;
         s->finished = 0;
-        
+
         s->frame = vf_alloc(1);
         s->frame->fps = 30.0;
         s->frame->frames = -1;
@@ -225,7 +225,7 @@ vidcap_exr_init(char *fmt, unsigned int flags)
         s->gamma = 1.0;
         s->loop = FALSE;
         s->playone = FALSE;
-        
+
         item = strtok_r(fmt, ":", &save_ptr);
         while(item) {
                 if(strncmp("files=", item, strlen("files=")) == 0) {
@@ -239,17 +239,17 @@ vidcap_exr_init(char *fmt, unsigned int flags)
                 } else if(strncmp("loop", item, strlen("loop")) == 0) {
                         s->loop = TRUE;
                 }
-                
+
                 item = strtok_r(NULL, ":", &save_ptr);
         }
-        
+
         int ret = glob(glob_pattern, 0, NULL, &s->glob);
         if (ret)
         {
                 perror("Opening exr files failed");
                 return NULL;
         }
-        
+
         char *filename = s->glob.gl_pathv[0];
 
         ImfInputFile *file = ImfOpenInputFile(filename);
@@ -265,12 +265,12 @@ vidcap_exr_init(char *fmt, unsigned int flags)
         s->frame->color_spec = RGB16;
         s->tile->data_len = vc_get_linesize(s->tile->width, s->frame->color_spec) * s->tile->height;
 
-        
+
         for (i = 0; i < BUFFER_LEN; ++i) {
                 s->buffer_read[i] = (char *) malloc(s->tile->data_len);
         }
         s->buffer_send = (char *) malloc(s->tile->data_len);
-        
+
         for(i = 0; i < THREADS; ++i) {
                 s->jobs[i].scanline = (ImfRgba *) malloc(s->tile->width * sizeof(ImfRgba));
                 s->jobs[i].used = FALSE;
@@ -312,7 +312,7 @@ vidcap_exr_done(void *state)
         if(s->reader_waiting)
                 pthread_cond_broadcast(&s->reader_cv);
         pthread_mutex_unlock(&s->lock);
-        
+
         vf_free(s->frame);
         for (i = 0; i < BUFFER_LEN; ++i) {
                 free(s->buffer_read[i]);
@@ -357,7 +357,7 @@ static void * reading_thread(void *args)
                         goto after_while;
                 }
 
-                
+
                 /*if((s->speed > 0.0 && my_index >= (int) s->glob.gl_pathc) ||
                                 my_index < 0) {
                         ++s->finished;
@@ -372,7 +372,7 @@ static void * reading_thread(void *args)
                                 goto after_while;
                         }
                 }
-                
+
                 // UNLOCK - UNLOCK - UNLOCK
                 pthread_mutex_unlock(&s->lock);
 
@@ -381,7 +381,7 @@ static void * reading_thread(void *args)
                                 s->index < 0) {
                         was_last = TRUE;
                 }
-                
+
                 if(thread_pool_get_overall_count(s->pool) < THREADS && !was_last) {
                         int slot = find_unused_slot(s->jobs, THREADS);
                         assert(slot >= 0);
@@ -390,7 +390,7 @@ static void * reading_thread(void *args)
 
                         s->jobs[slot].frame_id = s->index;
                         s->jobs[slot].filename = filename;
-                        
+
                         s->jobs[slot].slot = s->working_read_end; //s->buffer_read_end;
                         s->jobs[slot].out_data = s->buffer_read[s->working_read_end]; //s->buffer_read_end;
 
@@ -420,13 +420,13 @@ static void * reading_thread(void *args)
 
 
                 pthread_mutex_unlock(&s->lock);
-                
+
                 if(was_last && thread_pool_get_overall_count(s->pool) == 0) {
                         s->finished = TRUE;
                 }
         }
 after_while:
-        
+
         while(!s->should_exit_thread)
                 ;
 
@@ -438,7 +438,7 @@ struct video_frame *
 vidcap_exr_grab(void *state, struct audio_frame **audio)
 {
 	struct vidcap_exr_state 	*s = (struct vidcap_exr_state *) state;
-        
+
         // LOCK - LOCK - LOCK - LOCK
         pthread_mutex_lock(&s->lock);
         while((s->should_pause || s->should_jump) && !s->playone) {
@@ -448,7 +448,7 @@ vidcap_exr_grab(void *state, struct audio_frame **audio)
         }
         s->playone = FALSE;
 
-        if(s->finished && 
+        if(s->finished &&
                         s->buffer_read_start == s->buffer_read_end) {
                 if(s->loop) {
                         s->finished = FALSE;
@@ -467,7 +467,7 @@ vidcap_exr_grab(void *state, struct audio_frame **audio)
 
         // UNLOCK - UNLOCK - UNLOCK - UNLOCK
         pthread_mutex_unlock(&s->lock);
-        
+
         while(s->buffer_read_start == s->buffer_read_end && !should_exit && !s->finished && !s->should_jump)
                 ;
 
@@ -486,11 +486,11 @@ vidcap_exr_grab(void *state, struct audio_frame **audio)
         }
         s->prev_time = s->cur_time;
         //tv_add_usec(&s->prev_time, 1000000.0 / s->frame->fps);
-        
+
         s->tile->data = s->buffer_read[s->buffer_read_start];
         s->buffer_read[s->buffer_read_start] = s->buffer_send;
         s->buffer_send = s->tile->data;
-        
+
         pthread_mutex_lock(&s->lock);
         s->buffer_read_start = (s->buffer_read_start + 1) % BUFFER_LEN;
         if(s->reader_waiting)
@@ -508,14 +508,14 @@ vidcap_exr_grab(void *state, struct audio_frame **audio)
 
 
         gettimeofday(&s->t, NULL);
-        double seconds = tv_diff(s->t, s->t0);    
+        double seconds = tv_diff(s->t, s->t0);
         if (seconds >= 5) {
             float fps  = s->frames / seconds;
             fprintf(stderr, "%d frames in %g seconds = %g FPS\n", s->frames, seconds, fps);
             s->t0 = s->t;
             s->frames = 0;
         }
-        
+
         *audio = NULL;
 
 	return s->frame;
@@ -594,7 +594,8 @@ void vidcap_exr_command(struct vidcap *state, int command, void *data)
                 pthread_mutex_lock(&s->lock);
                 flush_pipeline(s);
 
-                s->frame->frames  = s->index - 1;
+                s->index = s->frame->frames + 1;
+                //s->frame->frames  = s->index - 1;
                 s->speed = *(float *) data;
 
                 play_after_flush(s);
