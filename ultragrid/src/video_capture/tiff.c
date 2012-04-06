@@ -416,6 +416,19 @@ static void * reading_thread(void *args)
 
                 s->index += ROUND_FROM_ZERO(s->speed);
 
+                if(s->index >= (int) s->glob.gl_pathc) {
+                        if(s->index != (int) s->glob.gl_pathc - 1 + ROUND_FROM_ZERO(s->speed)) {
+                                s->index = (int) s->glob.gl_pathc - 1;
+                        }
+                }
+
+                if(s->index < 0) {
+                        if(s->index != ROUND_FROM_ZERO(s->speed)) {
+                                s->index = 0;
+                        }
+                }
+
+
                 tdata_t dest = s->buffer_read[s->buffer_read_end];
                 tstrip_t const numberOfStrips = TIFFNumberOfStrips(tif);
                 unsigned int rowsPerStrip;

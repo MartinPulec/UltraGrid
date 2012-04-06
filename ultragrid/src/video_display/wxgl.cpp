@@ -117,7 +117,6 @@ int display_wxgl_putf(void *state, char *frame)
 
     s->buffer->putframe(s->buffer_data, s->frame->frames);
     s->buffer_data = std::tr1::shared_ptr<char>();
-
     return 0;
 }
 
@@ -181,8 +180,6 @@ int display_wxgl_reconfigure(void *state, struct video_desc desc)
         struct state_wxgl *s = (struct state_wxgl *)state;
         assert(s->magic == MAGIC_WXGL);
         int dxt_height = (desc.height + 3) / 4 * 4;
-
-        free(s->tile->data);
 
         if(desc.color_spec == DXT1 || desc.color_spec == DXT5 || desc.color_spec == DXT1_YUV)
             s->tile->data_len = dxt_height;

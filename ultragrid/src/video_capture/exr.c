@@ -377,6 +377,19 @@ static void * reading_thread(void *args)
                 pthread_mutex_unlock(&s->lock);
 
                 int was_last = FALSE;
+
+                if(s->index >= (int) s->glob.gl_pathc) {
+                        if(s->index != (int) s->glob.gl_pathc - 1 + ROUND_FROM_ZERO(s->speed)) {
+                                s->index = (int) s->glob.gl_pathc - 1;
+                        }
+                }
+
+                if(s->index < 0) {
+                        if(s->index != ROUND_FROM_ZERO(s->speed)) {
+                                s->index = 0;
+                        }
+                }
+
                 if( (s->speed > 0.0 && s->index >= (int) s->glob.gl_pathc) ||
                                 s->index < 0) {
                         was_last = TRUE;

@@ -8,6 +8,7 @@
 #include "../include/Utils.h"
 
 #define SIGN(x) ((int) (x / fabs(x)))
+#define ROUND_FROM_ZERO(x) (ceil(fabs(x)) * SIGN(x))
 
 
 Player::Player() :
@@ -54,7 +55,7 @@ void Player::Notify()
 
     res = buffer.GetFrame(GetCurrentFrame());
     while(!res.get()) { // not empty
-        SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
+        SetCurrentFrame(GetCurrentFrame() + ROUND_FROM_ZERO(speed));
 
         if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
             goto update_state;
