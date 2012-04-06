@@ -51,6 +51,7 @@
  */
 
 #include <udt.h>
+
 #include <stdexcept>
 #include <iostream>
 
@@ -65,6 +66,9 @@ struct udt_recv {
         udt_recv(char *address, unsigned int port)
         {
                 UDT::startup();
+
+                udt_epoll_id = UDT::epoll_create();
+
                 socket = UDT::socket(AF_INET, SOCK_DGRAM, 0);
 
                 if(socket == UDT::INVALID_SOCK) {
@@ -76,8 +80,8 @@ struct udt_recv {
                 err = UDT::ERROR;
 
                 int timeout = 500; //ms
-                UDT::setsockopt(socket, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
-                UDT::setsockopt(socket, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
+                //UDT::setsockopt(socket, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
+                //UDT::setsockopt(socket, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
 
 
                 sockaddr_in my_addr;
@@ -121,21 +125,38 @@ struct udt_recv {
 
                 val = true;
                 UDT::setsockopt(recver, /* unused */ 0, UDT_RCVSYN, (const char *) &val, sizeof(bool));
+
                 int timeout = 500; //ms
-                UDT::setsockopt(recver, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
-                UDT::setsockopt(recver, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
+                //UDT::setsockopt(recver, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
+                //UDT::setsockopt(recver, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
+
+                UDT::epoll_add_usock(udt_epoll_id, recver);
 
                 return true;
         }
 
         void disconnect()
         {
+                UDT::epoll_remove_usock(udt_epoll_id, recver);
                 UDT::close(recver);
         }
 
 
         int receive(char *buffer, int *len)
         {
+                std::set<UDTSOCKET> readfds;
+                if(UDT::epoll_wait(udt_epoll_id, &readfds, NULL, 500, NULL, NULL) >= 1) {
+                    int res = UDT::recvmsg(recver, buffer, *len);
+                    if(res == UDT::ERROR) {
+                            std::cerr << UDT::getlasterror().getErrorMessage() << std::endl;
+                            return 0;
+                    }
+                    *len = res;
+                } else {
+                    return 0;
+                }
+
+                /*
                 int res = UDT::recvmsg(recver, buffer, *len);
                 if(res == UDT::ERROR) {
                         std::cerr << UDT::getlasterror().getErrorMessage() << std::endl;
@@ -144,12 +165,15 @@ struct udt_recv {
                 *len = res;
 
                 return 1;
+                */
         }
 
         private:
 
         UDTSOCKET socket;
         UDTSOCKET recver;
+
+        int udt_epoll_id;
 };
 
 struct udt_recv *udt_receive_init(char *address, unsigned int port)
