@@ -73,7 +73,7 @@ void ClientManager::setup(wxString path)
     }
 }
 
-void ClientManager::play(wxString pos)
+void ClientManager::play(int pos)
 {
     wxString msgstr;
     struct message msg;
@@ -82,7 +82,7 @@ void ClientManager::play(wxString pos)
 
     msgstr = L"";
     msgstr << wxT("PLAY");
-    if(!pos.IsEmpty()) {
+    if(pos != -1) {
         msgstr << wxT(" ") << pos;
     }
     buf = msgstr.mb_str();
@@ -99,7 +99,7 @@ void ClientManager::play(wxString pos)
     }
 }
 
-void ClientManager::pause(wxString pos)
+void ClientManager::pause(int pos, int howMuch)
 {
     wxString msgstr;
     struct message msg;
@@ -108,8 +108,8 @@ void ClientManager::pause(wxString pos)
 
     msgstr = L"";
     msgstr << wxT("PAUSE");
-    if(!pos.IsEmpty()) {
-        msgstr << wxT(" ") << pos;
+    if(pos != -1) {
+        msgstr << wxT(" ") << pos << wxT(" ") << howMuch;
     }
     buf = msgstr.mb_str();
     msg.msg = buf.data();

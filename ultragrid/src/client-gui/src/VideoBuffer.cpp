@@ -19,9 +19,7 @@ struct CharPtrDeleter
 };
 
 
-VideoBuffer::VideoBuffer() :
-    before_min(-1),
-    after_max(0)
+VideoBuffer::VideoBuffer()
 {
     //ctor
     pthread_mutex_init(&lock, NULL);
@@ -47,9 +45,6 @@ void VideoBuffer::putframe(shared_ptr<char> data, unsigned int frames)
 
 
     buffered_frames.insert(std::pair<int, std::tr1::shared_ptr<char> >(frames, data));
-    current_item = frames;
-
-    after_max = frames + 1;
 
     pthread_mutex_unlock(&lock);
 }
@@ -78,11 +73,13 @@ void VideoBuffer::DropFrames(int low, int high)
     low_it = buffered_frames.lower_bound (low);
     high_it = buffered_frames.upper_bound (high);
 
-    buffered_frames.erase(buffered_frames.begin(), low_it);
-    buffered_frames.erase(high_it, buffered_frames.end());
+    //buffered_frames.erase(buffered_frames.begin(), low_it);
+    //buffered_frames.erase(high_it, buffered_frames.end());
+    buffered_frames.erase(low_it, high_it);
 
-    before_min = low;
-    after_max = high;
+    //before_min = (before_min > low ? before_min : low);
+    //after_max = (after_max < high ? after_max : high);
+
     pthread_mutex_unlock(&lock);
 }
 
@@ -106,18 +103,40 @@ std::tr1::shared_ptr<char> VideoBuffer::GetFrame(int frame)
 
 int VideoBuffer::GetLowerBound()
 {
+    int before_min;
+
+    pthread_mutex_lock(&lock);
+    if(buffered_frames.begin() != buffered_frames.end()) {
+        before_min = buffered_frames.begin()->first - 1;
+    } else {
+        before_min = -1;
+    }
+    pthread_mutex_unlock(&lock);
+
     return before_min;
 }
 
 int VideoBuffer::GetUpperBound()
 {
+    int after_max;
+
+    pthread_mutex_lock(&lock);
+    if(buffered_frames.begin() != buffered_frames.end()) {
+        after_max = buffered_frames.rbegin()->first + 1;
+    } else {
+        after_max = 0;
+    }
+    pthread_mutex_unlock(&lock);
+
     return after_max;
 }
 
 void VideoBuffer::Reset()
 {
-    after_max = 0;
-    before_min = -1;
-
     buffered_frames.clear();
+}
+
+bool VideoBuffer::HasFrame(int number)
+{
+    return buffered_frames.find(number) != buffered_frames.end();
 }

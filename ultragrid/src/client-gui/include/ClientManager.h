@@ -18,8 +18,8 @@ class ClientManager
 
         void set_parameter(wxString val, wxString param);
         void setup(wxString path);
-        void play(wxString pos = wxEmptyString);
-        void pause(wxString pos = wxEmptyString);
+        void play(int pos = -1);
+        void pause(int pos = -1, int howMuch = 1);
 
         bool isConnected();
 

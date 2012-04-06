@@ -6,6 +6,7 @@
 
 #include <pthread.h>
 
+
 class GLView;
 
 typedef std::tr1::shared_ptr<char> shared_frame;
@@ -27,6 +28,7 @@ class VideoBuffer
         std::tr1::shared_ptr<char> GetFrame(int frame);
         int GetUpperBound();
         int GetLowerBound();
+        bool HasFrame(int number);
         void DropFrames(int low, int high);
 
         void Reset();
@@ -34,12 +36,10 @@ class VideoBuffer
     protected:
     private:
         std::map<int, std::tr1::shared_ptr<char> > buffered_frames;
-        int before_min, after_max;
         GLView *view;
 
         pthread_mutex_t lock;
 
-        int current_item;
         int data_len;
 
         void DropUnusedFrames();

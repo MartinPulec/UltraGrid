@@ -637,17 +637,10 @@ void GLView::putframe(std::tr1::shared_ptr<char> data)
     this->data = data.get();
     this->Frame = data;
 
-    this->frames = frames;
-
     pthread_mutex_unlock(&lock);
 
     wxCommandEvent event(wxEVT_PUTF, GetId());
     wxPostEvent(this, event);
-}
-
-unsigned int GLView::GetFrameSeq()
-{
-    return this->frames;
 }
 
 void GLView::Putf(wxCommandEvent&)

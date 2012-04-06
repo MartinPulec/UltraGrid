@@ -217,7 +217,6 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     player.SetMsgHandler(&msgHandler);
 
     //this->SetSize(600, 400);
-    ChangeState(sInit);
 /*
     wxAcceleratorEntry entries[14];
     entries[0].Set(wxACCEL_NORMAL, (int) WXK_SPACE, PlayButton);
@@ -297,9 +296,9 @@ void client_guiFrame::OnButton1Click(wxCommandEvent& event)
 
 void client_guiFrame::OnStopBtnClick(wxCommandEvent& event)
 {
-    if(state == sInit) {
+    if(player.GetState() == sInit) {
         // nothing
-    } else if(state == sReady) {
+    } else if(player.GetState() == sReady) {
         Stop();
     } else {
         Stop();
@@ -320,7 +319,8 @@ void client_guiFrame::PlaySelection()
              /* error! */
         }
 
-        player.Play(this->playList[0], fps);
+        int start_pos = Slider1->GetValue() / 100.0 * (this->playList[0].total_frames - 1);
+        player.Play(this->playList[0], fps, start_pos);
 
         StatusBar1->PushStatusText(this->playList[0].URL);
         ChangeState(sPlaying);
@@ -393,12 +393,7 @@ void client_guiFrame::OnTextCtrl1Text(wxCommandEvent& event)
 void client_guiFrame::DoUpdateCounters(int val)
 {
     if(!this->playList.IsEmpty()) {
-        Slider1->SetValue((double)  val / (this->total_frames - 1) * 100.0);
-
-        if((speed > 0.0 && Slider1->GetValue() == 100 && ToggleLoop->GetValue() == false) ||
-           (speed < 0.0 && Slider1->GetValue() == 0 && ToggleLoop->GetValue() == false)) {
-            DoPause();
-        }
+        Slider1->SetValue((double)  val / (player.GetTotalFrames()- 1) * 100.0);
 
         FrameCount->SetValue(val);
     } else {
@@ -409,7 +404,7 @@ void client_guiFrame::DoUpdateCounters(int val)
 
 void client_guiFrame::UpdateTimer(int val)
 {
-    if(state != sInit)
+    if(player.GetState() != sInit)
         DoUpdateCounters(val);
 }
 
@@ -419,10 +414,10 @@ void client_guiFrame::JumpToFrame(int frame)
         if(frame < 0 || frame >= this->total_frames)
             return;
 
-        if(state == sPlaying) {
-            player.JumpAndPlay(wxString::Format(wxT("%d"), frame));
-        } else if (state == sReady) {
-            player.JumpAndPause(wxString::Format(wxT("%d"), frame));
+        if(player.GetState() == sPlaying) {
+            player.JumpAndPlay(frame);
+        } else if (player.GetState() == sReady) {
+            player.JumpAndPause(frame);
         } else {
             return;
         }
@@ -443,18 +438,18 @@ void client_guiFrame::Scrolled(wxCommandEvent&)
 void client_guiFrame::OnPauseClick(wxCommandEvent& event)
 {
     //assert(event.GetExtraLong() != MOUSE_CLICKED_MAGIC);
-    if(state == sInit && event.GetExtraLong() != MOUSE_CLICKED_MAGIC) {
+    if(player.GetState() == sInit && event.GetExtraLong() != MOUSE_CLICKED_MAGIC) {
         PlaySelection();
-    } else if(state == sPlaying) {
+    } else if(player.GetState() == sPlaying) {
         DoPause();
-    } else if(state == sReady) {
+    } else if(player.GetState() == sReady) {
         Resume();
     }
 }
 
 void client_guiFrame::DoPause()
 {
-    if(state != sPlaying)
+    if(player.GetState() != sPlaying)
         return;
 
     try {
@@ -481,7 +476,7 @@ void client_guiFrame::Resume()
 
 void client_guiFrame::ChangeState(enum playerState newState)
 {
-    state = newState;
+    player.ChangeState(newState);
 
     switch(newState) {
         case sInit:
@@ -565,7 +560,7 @@ void client_guiFrame::Mouse(wxMouseEvent& evt)
         if(evt.LeftUp()) {
             dragging = false;
         } else if(evt.Dragging()) {
-            if(state != sInit) {
+            if(player.GetState() != sInit) {
                 wxPoint position = evt.GetPosition();
                 if(dragging) {
                     gl->GoPixels(lastDragPosition.x - position.x, lastDragPosition.y - position.y);
@@ -593,7 +588,7 @@ void client_guiFrame::Mouse(wxMouseEvent& evt)
 
 void client_guiFrame::OnFrameCountChange(wxSpinEvent& event)
 {
-    if(state != sInit) {
+    if(player.GetState() != sInit) {
         JumpToFrame(event.GetPosition());
     }
 }
@@ -616,28 +611,28 @@ void client_guiFrame::KeyDown(wxKeyEvent& evt)
             break;
     }
 
-    if(state != sInit) {
+    if(player.GetState() != sInit) {
         switch(evt.GetKeyCode()) {
             case WXK_SPACE:
-                 if(state == sPlaying) {
+                 if(player.GetState() == sPlaying) {
                     DoPause();
-                 } else if(state == sReady) {
+                 } else if(player.GetState() == sReady) {
                     Resume();
                  }
                 break;
             case 'K':
-                if(state == sPlaying)
+                if(player.GetState() == sPlaying)
                     DoPause();
                 break;
             case 'J':
-                JumpToFrame(gl->GetFrameSeq() - 1);
+                JumpToFrame(player.GetCurrentFrame() - 1);
                 break;
             case 'L':
-                JumpToFrame(gl->GetFrameSeq() + 1);
+                JumpToFrame(player.GetCurrentFrame() + 1);
                 break;
             case 'C':
                 gl->ToggleLightness();
-                if(state == sReady)
+                if(player.GetState() == sReady)
                     gl->Render();
                 break;
             case 'R':
@@ -655,7 +650,7 @@ void client_guiFrame::KeyDown(wxKeyEvent& evt)
                     LastColorModifiingKey = evt.GetUnicodeKey();
                     LastColorModifiingModifiers = evt.GetModifiers();
                 }
-                if(state == sReady)
+                if(player.GetState() == sReady)
                     gl->Render();
 
                 break;
@@ -700,7 +695,7 @@ void client_guiFrame::OnButton1Click3(wxCommandEvent& event)
 void client_guiFrame::Wheel(wxMouseEvent& evt)
 {
     if(evt.GetEventObject() == gl) {
-        if(state != sInit) {
+        if(player.GetState() != sInit) {
             if(evt.GetWheelRotation() == 0)
                 return;
             double ratio = evt.GetWheelRotation() / 200.0;
@@ -713,26 +708,23 @@ void client_guiFrame::Wheel(wxMouseEvent& evt)
 void client_guiFrame::ChangeSpeed(double ratio)
 {
     try {
-        speed *= ratio;
-
-        player.SetSpeed(speed);
+        player.SetSpeed(player.GetSpeed() * ratio);
     } catch (std::exception &e) {
-        speed /= ratio;
+        player.SetSpeed(player.GetSpeed() / ratio);
         wxMessageBox(wxString::FromUTF8(e.what()), _("Error setting speed"));
     }
-    SpeedStr->SetLabel(Utils::FromCDouble(speed, 2));
+    SpeedStr->SetLabel(Utils::FromCDouble(player.GetSpeed(), 2));
 }
 
 void client_guiFrame::ChangeDirection(int direction)
 {
     try {
         player.SetSpeed(1.0 * direction);
-        speed = 1.0 * direction;
     } catch (std::exception &e) {
         wxMessageBox(wxString::FromUTF8(e.what()), _("Error setting speed"));
     }
 
-    SpeedStr->SetLabel(Utils::FromCDouble(speed, 2));
+    SpeedStr->SetLabel(Utils::FromCDouble(player.GetSpeed(), 2));
 }
 
 

@@ -37,12 +37,6 @@
 
 #include <wx/tglbtn.h>
 
-enum playerState {
-    sInit,
-    sReady,
-    sPlaying
-};
-
 class client_guiFrame: public wxFrame
 {
     public:
@@ -156,15 +150,13 @@ class client_guiFrame: public wxFrame
         long int total_frames;
         int LastColorModifiingKey;
         int LastColorModifiingModifiers;
-        double speed;
 
         bool dragging;
         wxPoint lastDragPosition;
 
-        enum playerState state;
-
         DECLARE_EVENT_TABLE()
     friend class UltraGridManager;
+    friend class Player;
 };
 
 #endif // CLIENT_GUIMAIN_H

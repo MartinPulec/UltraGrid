@@ -224,7 +224,7 @@ struct vidcap_dpx_state {
 
         unsigned int        should_jump:1;
         volatile unsigned int        grab_waiting:1;
-        unsigned int        playone:1;
+        unsigned int        playone;
 
         float               speed;
 
@@ -389,7 +389,7 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         s->frame->frames = -1;
         s->gamma = 1.0;
         s->loop = FALSE;
-        s->playone = FALSE;
+        s->playone = 0;
         s->speed = 1.0;
 
         item = strtok_r(fmt, ":", &save_ptr);
@@ -554,6 +554,19 @@ static void * reading_thread(void *args)
 
                 char *filename = s->glob.gl_pathv[s->index];
                 s->index += ROUND_FROM_ZERO(s->speed);
+
+                if(s->index >= (int) s->glob.gl_pathc) {
+                        if(s->index != (int) s->glob.gl_pathc - 1 + ROUND_FROM_ZERO(s->speed)) {
+                                s->index = (int) s->glob.gl_pathc - 1;
+                        }
+                }
+
+                if(s->index < 0) {
+                        if(s->index != ROUND_FROM_ZERO(s->speed)) {
+                                s->index = 0;
+                        }
+                }
+
                 int fd = open(filename, O_RDONLY);
                 ssize_t bytes_read = 0;
                 unsigned int file_offset = to_native_order(s, s->file_information.offset);
@@ -648,15 +661,18 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
                 pthread_cond_wait(&s->pause_cv, &s->lock);
                 s->grab_waiting = FALSE;
         }
-        s->playone = FALSE;
+        if(s->playone > 0)
+                s->playone--;
 
         if(s->finished && s->buffer_processed_start == s->buffer_processed_end &&
                         s->buffer_read_start == s->buffer_read_end) {
                 if(s->loop) {
                         if(s->speed > 0.0) {
-                                s->index = s->frame->frames = 0;
+                                s->index =  0;
+                                s->frame->frames = - ROUND_FROM_ZERO(s->speed);
                         } else {
-                                s->index = s->frame->frames = s->glob.gl_pathc - 1;
+                                s->index = s->glob.gl_pathc - 1;
+                                s->frame->frames = s->index; - ROUND_FROM_ZERO(s->speed);
                         }
 
                         s->finished = FALSE;
@@ -776,7 +792,7 @@ void vidcap_dpx_command(struct vidcap *state, int command, void *data)
         } else if(command == VIDCAP_PLAYONE) {
                 fprintf(stderr, "[DPX] PLAYONE\n");
                 pthread_mutex_lock(&s->lock);
-                s->playone = TRUE;
+                s->playone = *(int *) data;
                 pthread_cond_signal(&s->pause_cv);
                 pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_FPS) {

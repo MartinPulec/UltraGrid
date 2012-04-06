@@ -7,11 +7,14 @@
 #include "../include/VideoEntry.h"
 #include "../include/Utils.h"
 
+#define SIGN(x) ((int) (x / fabs(x)))
+
 
 Player::Player() :
     receiver(0),
     speed(1.0),
-    loop(false)
+    loop(false),
+    state(sInit)
 {
     //ctor
 }
@@ -35,23 +38,96 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
 //called upon refresh
 void Player::Notify()
 {
-    // we just want to prefill buffer
-    if(current_frame > buffer.GetUpperBound()) {
-        return;
+    // there is no frame beyond our buffer
+    if(speed > 0.0) {
+        if(GetCurrentFrame() >= buffer.GetUpperBound()) {
+            return;
+        }
+    } else {
+        if(GetCurrentFrame() <= buffer.GetLowerBound() )
+        {
+            return;
+        }
     }
 
-    std::tr1::shared_ptr<char> res = buffer.GetFrame(current_frame);
-    if(res.get()) { // not empty
+    std::tr1::shared_ptr<char> res;
+
+    res = buffer.GetFrame(GetCurrentFrame());
+    while(!res.get()) { // not empty
+        SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
+
+        if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
+            goto update_state;
+        }
+
+        res = buffer.GetFrame(GetCurrentFrame());
+    }
+
+    if(res.get()) {
         view->putframe(res);
-        parent->UpdateTimer(current_frame);
+        parent->UpdateTimer(GetCurrentFrame() );
     }
 
-    buffer.DropFrames(current_frame - 20, current_frame + 20);
+    DropOutOfBoundFrames(20);
 
-    current_frame ++;
+    SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
+
+
+update_state:
+
+    if(((GetSpeed() > 0.0 && GetCurrentFrame() >= total_frames) ||
+           (GetSpeed() < 0.0 && GetCurrentFrame() < 0))) {
+               if(!loop) {
+                    parent->DoPause();
+                } else {
+                    Pause();
+                    DropOutOfBoundFrames();
+                    JumpAndPlay(GetSpeed() > 0.0  ? 0 : total_frames - 1);
+                    //Play();
+                }
+    }
 }
 
-void Player::Play(VideoEntry &item, double fps)
+void Player::Playone()
+{
+    std::tr1::shared_ptr<char> res;
+
+    res = buffer.GetFrame(GetCurrentFrame());
+    while(!res.get()) { // not empty
+        res = buffer.GetFrame(GetCurrentFrame());
+    }
+
+    view->putframe(res);
+    parent->UpdateTimer(GetCurrentFrame() );
+}
+
+void Player::DropOutOfBoundFrames(int interval)
+{
+    if (interval) {
+        if(total_frames < 2 * interval)
+            return;
+
+        if(GetCurrentFrame() < interval || GetCurrentFrame() + interval > total_frames - 1) {
+            int min, max;
+
+            // not mistake - exactly one value over/underruns buffer size
+            max = (GetCurrentFrame() - interval + total_frames) % total_frames;
+            min = (GetCurrentFrame() + interval) % total_frames;
+
+            buffer.DropFrames(min, max);
+        } else {
+            int val = GetCurrentFrame() - 20;
+            buffer.DropFrames(0, val);
+
+            val = GetCurrentFrame() + 20;
+            buffer.DropFrames(val, total_frames);
+        }
+    } else {
+        buffer.DropFrames(0, total_frames);
+    }
+}
+
+void Player::Play(VideoEntry &item, double fps, int start_frame)
 {
     wxString failedPart;
 
@@ -59,6 +135,9 @@ void Player::Play(VideoEntry &item, double fps)
         wxString tmp;
         wxString hostname;
         wxString path;
+
+        total_frames = item.total_frames;
+        SetCurrentFrame(start_frame);
 
         tmp = item.URL;
         tmp = tmp.Mid(wxString(L"rtp://").Len());
@@ -81,8 +160,8 @@ void Player::Play(VideoEntry &item, double fps)
         this->connection.setup(wxT("/") + path);
         failedPart = wxT("setting FPS");
         this->connection.set_parameter(wxT("fps"), Utils::FromCDouble(fps, 2));
-        failedPart = wxT("setting loop");
-        connection.set_parameter(wxT("loop"), loop ? wxT("ON") : wxT("OFF"));
+        /*failedPart = wxT("setting loop");
+        connection.set_parameter(wxT("loop"), loop ? wxT("ON") : wxT("OFF"));*/
         failedPart = wxT("setting speed");
         connection.set_parameter(wxT("speed"), Utils::FromCDouble(speed, 2));
 
@@ -92,10 +171,9 @@ void Player::Play(VideoEntry &item, double fps)
         receiver->Accept();
         this->fps = fps;
         Start(1000/fps);
-        current_frame = 0;
 
-
-        connection.play();
+        connection.play(start_frame);
+        //connection.play();
     } catch (std::exception &e) {
         Stop();
         wxString msg = wxString::FromUTF8(e.what());
@@ -111,7 +189,6 @@ void Player::Stop()
     wxTimer::Stop();
     receiver->Disconnect();
     buffer.Reset();
-    speed = 1.0;
 
     //connection.teardown();
     connection.disconnect();
@@ -127,23 +204,47 @@ void Player::ProcessIncomingData()
     connection.ProcessIncomingData();
 }
 
-void Player::JumpAndPlay(wxString frame)
+void Player::JumpAndPlay(int frame)
 {
+    current_frame = frame;
+    std::cerr <<  "Current frame: " << current_frame << std::endl;
     connection.play(frame);
+    wxTimer::Start();
 }
 
-void Player::JumpAndPause(wxString frame)
+void Player::JumpAndPause(int frame)
 {
-    connection.pause(frame);
+    current_frame = frame;
+    std::cerr <<  "Current frame: " << current_frame << std::endl;
+
+    for(int i = 0; i < 5; ++i) {
+        if(!buffer.HasFrame(frame + SIGN(speed) * i)) {
+            //require 5 frames
+            if(speed > 0.0) {
+                if (frame + i < total_frames) {
+                    connection.pause(frame + i, 5);
+                }
+            } else {
+                if (frame - i >= 0) {
+                    connection.pause(frame - i, 5);
+                }
+            }
+            break;
+        }
+    }
+
+    Playone();
 }
 
 void Player::Play()
 {
+    wxTimer::Start();
     connection.play();
 }
 
 void Player::Pause()
 {
+    wxTimer::Stop();
     connection.pause();
 }
 
@@ -170,11 +271,12 @@ void Player::SetLoop(bool val)
         str = wxT("OFF");
     }
 
-    connection.set_parameter(wxT("loop"), str);
+    //connection.set_parameter(wxT("loop"), str);
 }
 
 void Player::SetSpeed(double val)
 {
+    speed = val;
     if(connection.isConnected()) {
         connection.set_parameter(wxT("speed"), Utils::FromCDouble(val, 2));
     }
@@ -183,4 +285,30 @@ void Player::SetSpeed(double val)
 void Player::SetMsgHandler(AsyncMsgHandler *msgHandler)
 {
     connection.SetMsgHandler(msgHandler);
+}
+
+void Player::ChangeState(enum playerState newState)
+{
+    state = newState;
+}
+
+enum playerState Player::GetState()
+{
+    return state;
+}
+
+void Player::SetCurrentFrame(int frame)
+{
+    current_frame = frame;
+    std::cerr << "Player::SetCurrentFrame(int frame)" << frame << std::endl;
+}
+
+int Player::GetCurrentFrame()
+{
+    return current_frame;
+}
+
+int Player::GetTotalFrames()
+{
+    return total_frames;
 }

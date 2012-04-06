@@ -139,7 +139,7 @@ struct vidcap_exr_state {
 
         unsigned int        should_jump:1;
         unsigned int        grab_waiting:1;
-        unsigned int        playone:1;
+        unsigned int        playone;
 
         int                 min_x, min_y, max_x, max_y;
 
@@ -224,7 +224,7 @@ vidcap_exr_init(char *fmt, unsigned int flags)
         s->tile = &s->frame->tiles[0];
         s->gamma = 1.0;
         s->loop = FALSE;
-        s->playone = FALSE;
+        s->playone = 0;
 
         item = strtok_r(fmt, ":", &save_ptr);
         while(item) {
@@ -446,7 +446,9 @@ vidcap_exr_grab(void *state, struct audio_frame **audio)
                 pthread_cond_wait(&s->pause_cv, &s->lock);
                 s->grab_waiting = FALSE;
         }
-        s->playone = FALSE;
+        if(s->playone > 0) {
+                s->playone--;
+        }
 
         if(s->finished &&
                         s->buffer_read_start == s->buffer_read_end) {
@@ -574,7 +576,7 @@ void vidcap_exr_command(struct vidcap *state, int command, void *data)
                 pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_PLAYONE) {
                 pthread_mutex_lock(&s->lock);
-                s->playone = TRUE;
+                s->playone = *(int *) data;
                 pthread_cond_signal(&s->pause_cv);
                 pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_FPS) {

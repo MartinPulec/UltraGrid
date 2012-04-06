@@ -188,16 +188,22 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                 if(message->data[0] != '\0') {
                         int len;
                         char msg_text[40];
-                        snprintf(msg_text, 40, "SETPOS %s", message->data);
+                        char *save_ptr = NULL;
+                        char *tmp = strdup(message->data);
+                        char *pos = strtok_r(tmp, " ", &save_ptr);
+                        snprintf(msg_text, 40, "SETPOS %s", pos);
+
+                        char *count = strtok_r(NULL, " ", &save_ptr);
 
                         len = strlen(msg_text);
                         write(comm_fd, &len, sizeof(len));
                         write(comm_fd, msg_text, len);
 
-                        snprintf(msg_text, 40, "PLAYONE");
+                        snprintf(msg_text, 40, "PLAYONE %s", count);
                         len = strlen(msg_text);
                         write(comm_fd, &len, sizeof(len));
                         write(comm_fd, msg_text, len);
+                        free(tmp);
                 }
                 if(state == Playing) {
                         int len;

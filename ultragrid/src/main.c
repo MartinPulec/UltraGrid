@@ -945,7 +945,8 @@ int main(int argc, char *argv[])
                                 } else
                                 /* note PLAY is prefix of PLAYONE, so this must be first */
                                 if(strncmp(buff, "PLAYONE", strlen("PLAYONE")) == 0) {
-                                        vidcap_command(uv->capture_device, VIDCAP_PLAYONE, NULL);
+                                        int count = atoi(buff + strlen("PLAYONE") + 1);
+                                        vidcap_command(uv->capture_device, VIDCAP_PLAYONE, &count);
                                 } else if(strncmp(buff, "PLAY", strlen("PLAY")) == 0) {
                                         vidcap_command(uv->capture_device, VIDCAP_PLAY, NULL);
                                 } else if(strncmp(buff, "FPS", strlen("FPS")) == 0) {

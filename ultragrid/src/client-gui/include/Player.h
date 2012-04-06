@@ -15,6 +15,12 @@ class UGReceiver;
 class VideoEntry;
 class AsyncMsgHandler;
 
+enum playerState {
+    sInit,
+    sReady,
+    sPlaying
+};
+
 
 class Player : public wxTimer
 {
@@ -26,14 +32,14 @@ class Player : public wxTimer
 
         void Notify();
 
-        void Play(VideoEntry &item, double fps);
+        void Play(VideoEntry &item, double fps, int start_frame);
         void Stop();
 
         double GetSpeed();
         void ProcessIncomingData();
 
-        void JumpAndPlay(wxString frame);
-        void JumpAndPause(wxString frame);
+        void JumpAndPlay(int frame);
+        void JumpAndPause(int frame);
 
         void Play();
         void Pause();
@@ -44,9 +50,21 @@ class Player : public wxTimer
         void SetSpeed(double val);
 
         void SetMsgHandler(AsyncMsgHandler *msgHandler);
+        void ChangeState(enum playerState newState);
+        enum playerState GetState();
+
+        int GetTotalFrames();
+
+        int GetCurrentFrame();
 
     protected:
     private:
+        void SetCurrentFrame(int frame);
+
+        void Playone();
+
+        void DropOutOfBoundFrames(int interval = 0);
+
         GLView *view;
         VideoBuffer buffer;
         client_guiFrame *parent;
@@ -57,8 +75,10 @@ class Player : public wxTimer
 
         double fps;
         double speed;
+        int total_frames;
         bool loop;
         int current_frame;
+        enum playerState state;
 };
 
 #endif // PLAYER_H

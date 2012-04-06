@@ -43,7 +43,6 @@ class GLView : public wxGLCanvas
         void reconfigure(int width, int height, int codec);
         void putframe(std::tr1::shared_ptr<char> data);
         void PostInit(wxWindowCreateEvent&);
-        unsigned int GetFrameSeq();
 
         void OnPaint( wxPaintEvent& WXUNUSED(event) );
         void Render();
@@ -88,7 +87,6 @@ class GLView : public wxGLCanvas
         int dxt_height; /* ceiled to multiples of 4 */
         double aspect;
         char *data;
-        unsigned int frames;
 
         double scaleX, scaleY;
 
