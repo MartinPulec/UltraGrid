@@ -6,7 +6,12 @@ DEFINE_EVENT_TYPE(wxEVT_SCROLLED)
 BEGIN_EVENT_TABLE(ProgressSlider,wxSlider)
     //(*EventTable(client_guiFrame)
     //*)
+#ifdef __WXMAC__
     EVT_SCROLL_THUMBRELEASE(ProgressSlider::SliderMoved)
+#else
+    EVT_SCROLL_CHANGED(ProgressSlider::SliderMoved)
+#endif
+
 END_EVENT_TABLE()
 
 
