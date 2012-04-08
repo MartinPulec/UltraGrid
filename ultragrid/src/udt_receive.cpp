@@ -153,6 +153,7 @@ struct udt_recv {
                     }
                     *len = res;
                 } else {
+                    std::cerr << "UDT receive: timeout" << std::endl;
                     return 0;
                 }
 
@@ -163,9 +164,9 @@ struct udt_recv {
                         return 0;
                 }
                 *len = res;
+                */
 
                 return 1;
-                */
         }
 
         private:
