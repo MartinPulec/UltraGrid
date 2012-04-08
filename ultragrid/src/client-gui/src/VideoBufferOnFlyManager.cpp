@@ -14,7 +14,7 @@ VideoBufferOnFlyManager::VideoBufferOnFlyManager(ClientManager & connection, Vid
     lastRequestedFrame_(-1)
 {
     //ctor
-    pthread_spin_init(&this->lock_, 0);
+    platform_spin_init(&this->lock_);
 
     this->lastRequestTime_.tv_sec = 0;
     this->lastRequestTime_.tv_usec = 0;
@@ -29,16 +29,16 @@ VideoBufferOnFlyManager::~VideoBufferOnFlyManager()
     //dtor
     this->buffer_.unregisterObserver(this);
 
-    pthread_spin_destroy(&this->lock_);
+    platform_spin_destroy(&this->lock_);
 }
 
 void VideoBufferOnFlyManager::Notify()
 {
-    pthread_spin_lock(&this->lock_);
+    platform_spin_lock(&this->lock_);
     if(buffer_.HasFrame(this->lastRequestedFrame_)) {
         gettimeofday(&this->lastFrameReceivedTime_, NULL);
     }
-    pthread_spin_unlock(&this->lock_);
+    platform_spin_unlock(&this->lock_);
 }
 
 int VideoBufferOnFlyManager::Clamp(int frame_nr, int total_frames)
@@ -52,7 +52,7 @@ int VideoBufferOnFlyManager::Clamp(int frame_nr, int total_frames)
 
 void VideoBufferOnFlyManager::RequestAdditionalBuffers(int current_frame, int total_frames, int play_direction)
 {
-    pthread_spin_lock(&this->lock_);
+    platform_spin_lock(&this->lock_);
 
     this->lastRequestedFrame_ = current_frame;
     this->lastFrameReceivedTime_.tv_sec = 0;
@@ -82,11 +82,15 @@ void VideoBufferOnFlyManager::RequestAdditionalBuffers(int current_frame, int to
         }
     }
 
+request_not_sent:
+    platform_spin_unlock(&this->lock_);
+    return;
+
 request_sent:
 
     gettimeofday(&this->lastRequestTime_, NULL);
 
-    pthread_spin_unlock(&this->lock_);
+    platform_spin_unlock(&this->lock_);
 }
 
 bool VideoBufferOnFlyManager::LastRequestIsDue(double fps)
@@ -94,7 +98,7 @@ bool VideoBufferOnFlyManager::LastRequestIsDue(double fps)
     struct timeval current_time;
     bool ret;
 
-    pthread_spin_unlock(&this->lock_);
+    platform_spin_unlock(&this->lock_);
 
     gettimeofday(&current_time, NULL);
 
@@ -107,7 +111,7 @@ bool VideoBufferOnFlyManager::LastRequestIsDue(double fps)
     } else {
         ret = false;
     }
-    pthread_spin_unlock(&this->lock_);
+    platform_spin_unlock(&this->lock_);
 
     return ret;
 }

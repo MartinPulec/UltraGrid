@@ -62,6 +62,7 @@ OBJS	      = @OBJS@ \
 		@COREAUDIO_OBJ@ \
 		@JACK_TRANS_OBJ@ \
 		@SPEEX_OBJ@ \
+		src/compat/platform_spinlock.o \
 		src/compat/platform_semaphore.o \
 		src/compat/platform_time.o \
 		src/crypto/crypt_aes.o \

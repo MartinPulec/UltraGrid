@@ -1,7 +1,7 @@
 #ifndef VIDEOBUFFERONFLYMANAGER_H
 #define VIDEOBUFFERONFLYMANAGER_H
 
-#include <pthread.h>
+#include "compat/platform_spinlock.h"
 #include <sys/time.h>
 
 #include "../include/ClientManager.h"
@@ -22,7 +22,7 @@ class VideoBufferOnFlyManager: public Observer
         ClientManager &connection_;
         VideoBuffer & buffer_;
 
-        pthread_spinlock_t lock_;
+        platform_spinlock_t lock_;
 
         struct timeval lastRequestTime_;
         struct timeval lastFrameReceivedTime_;
