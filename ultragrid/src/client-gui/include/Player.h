@@ -6,6 +6,7 @@
 #include "../include/VideoBuffer.h"
 #include "../include/ClientManager.h"
 #include "../include/Settings.h"
+#include "../include/VideoBufferOnFlyManager.h"
 
 class GLView;
 class VideoBuffer;
@@ -33,7 +34,7 @@ class Player : public wxTimer
         void Notify();
 
         void Play(VideoEntry &item, double fps, int start_frame);
-        void Stop();
+        void StopPlayback();
 
         double GetSpeed();
         void ProcessIncomingData();
@@ -61,7 +62,12 @@ class Player : public wxTimer
     private:
         void SetCurrentFrame(int frame);
 
-        void Playone();
+        bool Playone();
+
+        void RequestAdditionalBuffers();
+
+        void ScheduleOneFrame();
+        void SchedulePlay();
 
         void DropOutOfBoundFrames(int interval = 0);
 
@@ -73,12 +79,15 @@ class Player : public wxTimer
 
         ClientManager connection;
 
+        VideoBufferOnFlyManager onFlyManager;
+
         double fps;
         double speed;
         int total_frames;
         bool loop;
         int current_frame;
         enum playerState state;
+        bool scheduledPlayone;
 };
 
 #endif // PLAYER_H

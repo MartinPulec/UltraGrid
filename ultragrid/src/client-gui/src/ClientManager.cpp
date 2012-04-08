@@ -99,7 +99,7 @@ void ClientManager::play(int pos)
     }
 }
 
-void ClientManager::pause(int pos, int howMuch)
+void ClientManager::pause(int pos, int howMuch, bool nonblock)
 {
     wxString msgstr;
     struct message msg;
@@ -116,12 +116,14 @@ void ClientManager::pause(int pos, int howMuch)
     msg.len = msgstr.Len();
 
     // TODO: handle TMOUT
-    this->stream_connection.send(&msg, &resp);
+    this->stream_connection.send(&msg, &resp, nonblock);
 
-    if(resp.code != 200) {
-        wxString msg;
-        msg << wxT("Error pausing stream: ") << resp.code << L" " << wxString::FromUTF8((resp.msg));
-        throw std::runtime_error(std::string(msg.mb_str()));
+    if(!nonblock) {
+        if(resp.code != 200) {
+            wxString msg;
+            msg << wxT("Error pausing stream: ") << resp.code << L" " << wxString::FromUTF8((resp.msg));
+            throw std::runtime_error(std::string(msg.mb_str()));
+        }
     }
 }
 
@@ -152,4 +154,9 @@ void ClientManager::ProcessIncomingData()
 bool ClientManager::isConnected()
 {
     return stream_connection.isConnected();
+}
+
+int ClientManager::GetRTTMs()
+{
+    return stream_connection.GetRTTMs();
 }

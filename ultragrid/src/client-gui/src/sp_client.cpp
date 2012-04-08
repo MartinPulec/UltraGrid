@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -13,27 +14,36 @@
 #include <iostream>
 
 #include <sys/select.h>
+#include <sys/time.h>
 
 /* According to earlier standards */
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#endif
 
 #include "../include/sp_client.h"
 #include "../include/AsyncMsgHandler.h"
+#include "../include/ConnectionClosedException.h"
+
+#include "tv.h"
 
 static std::string valid_commands_str[] = {
     std::string("TEARDOWN")
 };
 
-
-
 sp_client::sp_client(bool aioH) :
     valid_commands(valid_commands_str, valid_commands_str + sizeof(valid_commands_str) / sizeof(std::string)),
     fd(-1),
     msgHandler(0ul),
-    asyncIOHandle(aioH)
+    asyncIOHandle(aioH),
+    expectingAsyncResponse(0),
+    rtt(0),
+    rtt_measurments(0)
 {
     buffer_len = 1024*1024;
     buffer = new char[buffer_len];
@@ -118,6 +128,8 @@ void sp_client::connect_to(std::string host, int port)
     struct addrinfo hints, *res, *res0;
     int err;
 
+    expectingAsyncResponse = 0;
+
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
@@ -181,6 +193,9 @@ void sp_client::unsetAsyncNotify()
 
 void sp_client::disconnect()
 {
+    rtt = 0;
+    rtt_measurments = 0;
+
     if(asyncIOHandle) {
         unsetAsyncNotify();
     }
@@ -191,11 +206,14 @@ void sp_client::disconnect()
     }
 }
 
-void sp_client::send(struct message *message, struct response *response)
+bool sp_client::send(struct message *message, struct response *response, bool nonblock)
 {
     int rc;
+    bool res;
 
-    if(asyncIOHandle) {
+    struct timeval t0, t1;
+
+    if(asyncIOHandle && !nonblock) {
         unsetAsyncNotify();
     }
 
@@ -203,62 +221,94 @@ void sp_client::send(struct message *message, struct response *response)
     strncpy(buffer, message->msg, message->len);
     buffer[message->len] = '\0';
 
-    write(this->fd, buffer, message->len + 1);
+    if(!nonblock) {
+        gettimeofday(&t0, NULL);
+    }
+
+    int ret = write(this->fd, buffer, message->len + 1);
+#ifdef DEBUG
+    std::cerr << "Message : \"";
+    write(2, buffer, message->len + 1);
+    std::cerr << "\"" << std::endl;
+#endif
+    if(ret == -1) {
+        throw ConnectionClosedException();
+    }
+
+    assert(ret == message->len + 1);
     free(buffer);
 
-    rc = recv(this->fd, this->buffer, this->buffer_len, 0);
-    if(rc == -1) {
-        throw std::runtime_error(std::string("Timeout"));
-    }
+    if(nonblock) {
+        expectingAsyncResponse++;
+    } else {
+        rc = recv(this->fd, this->buffer, this->buffer_len, 0);
+        if(rc == -1) {
+            throw std::runtime_error(std::string("Timeout"));
+        }
 
-    int i = 0;
+        int i = 0;
 
-    while(i < rc) {
-        if(this->buffer[i] == '\0')
-            break;
+        while(i < rc) {
+            if(this->buffer[i] == '\0')
+                break;
 
-        ++i;
-        if(i == rc) {
-            int ret = recv(this->fd, this->buffer + rc, this->buffer_len - rc, 0);
-            if (ret > 0) {
-                rc += ret;
-            } else if (ret == 0) {
-                throw std::runtime_error(std::string("Connection closed"));
-            } else {
-                throw std::runtime_error(std::string("Timeout"));
+            ++i;
+            if(i == rc) {
+                int ret = recv(this->fd, this->buffer + rc, this->buffer_len - rc, 0);
+                if (ret > 0) {
+                    rc += ret;
+                } else if (ret == 0) {
+                    throw std::runtime_error(std::string("Connection closed"));
+                } else {
+                    throw std::runtime_error(std::string("Timeout"));
+                }
             }
         }
+
+        /* i is from now index of '\0' */
+
+        const char *ptr = strstr(this->buffer, "Content-Length:");
+        if(!ptr) {
+            ProcessResponse(this->buffer, i + 1, response);
+        } else {
+            ptr += sizeof("Content-Length:");
+            int body_len = atoi(ptr);
+            while(*ptr != '\r' && ptr < this->buffer + rc)
+                ++ptr;
+            ptr += 4; /* \r\n\r\n */
+            int header_len = ptr - this->buffer;
+            int total_len = header_len + body_len;
+            while(rc < total_len) {
+                rc += recv(this->fd, this->buffer + rc, this->buffer_len - rc, 0);
+            }
+            res = ProcessResponse(this->buffer, total_len, response);
+        }
     }
 
-    /* i is from now index of '\0' */
-
-    const char *ptr = strstr(this->buffer, "Content-Length:");
-    if(!ptr) {
-        ProcessResponse(this->buffer, i + 1, response);
-    } else {
-        ptr += sizeof("Content-Length:");
-        int body_len = atoi(ptr);
-        while(*ptr != '\r' && ptr < this->buffer + rc)
-            ++ptr;
-        ptr += 4; /* \r\n\r\n */
-        int header_len = ptr - this->buffer;
-        int total_len = header_len + body_len;
-        while(rc < total_len) {
-            rc += recv(this->fd, this->buffer + rc, this->buffer_len - rc, 0);
-        }
-        ProcessResponse(this->buffer, total_len, response);
+    if(!nonblock) {
+        gettimeofday(&t1, NULL);
+        int new_rtt = (rtt_measurments * rtt + tv_diff_usec(t1, t0) / 1000) / (rtt_measurments + 1);
+        rtt = new_rtt;
+        rtt_measurments++;
     }
 
     // TODO: doresit zacatek dalsiho packetu
 
-    if(asyncIOHandle) {
+    if(asyncIOHandle && !nonblock) {
         setAsyncNotify();
     }
+
+    return res;
 }
 
-void sp_client::ProcessResponse(char *data, int len, struct response *response)
+bool sp_client::ProcessResponse(char *data, int len, struct response *response)
 {
     char *ptr;
+
+    if(len <= 0 || !isdigit(data[0])) {
+        return false;
+    }
+
     ptr = data;
     response->code = atoi(ptr);
 
@@ -284,6 +334,8 @@ void sp_client::ProcessResponse(char *data, int len, struct response *response)
 
         response->body = ptr;
     }
+
+    return true;
 }
 
 void sp_client::ProcessIncomingData()
@@ -341,19 +393,24 @@ void sp_client::ProcessBuffer(char *data, int len)
 
     if(start == rc)
     {
-        response.code = 451;
-        response.msg = "Parameter Not Understood";
-        response.msg_len = strlen(response.msg);
-        response.body_len = 0;
-
-        SendResponse(&response);
-
+        std::cerr << "Misspelled message received." << std::endl;
         return;
     }
 
     command.assign(this->buffer + start, pos - start);
 
     std::cerr << "Command: " << command << " received." << std::endl;
+
+    if(isdigit(command[0])) {
+        expectingAsyncResponse--;
+        return;
+    }
+
+
+    if(!isalpha(command[0])) {
+        std::cerr << "Misspelled message received." << std::endl;
+        return;
+    }
 
     if(valid_commands.find(command) == valid_commands.end()) {
         response.code = 451;
@@ -384,7 +441,14 @@ void sp_client::SendResponse(struct response *response)
     if(response->body_len > 0) {
             len += snprintf(buff + len, hdr_size - len, "Content-Length: %u\r\n", (unsigned int) response->body_len);
     }
+
     len += snprintf(buff + len, hdr_size - len, "\r\n");
+    if(len == hdr_size - 1) {
+        std::cerr << "Warning: Possible snding buffer underflow (void sp_client::SendResponse(struct response *response))!!! " << std::endl;
+        return;
+    }
+    buff[len] = '\0';
+    len++;
 
     write(fd, buff, len);
 
@@ -400,4 +464,13 @@ void sp_client::SetMsgHandler(AsyncMsgHandler *msgHandler)
 bool sp_client::isConnected()
 {
     return this->fd != -1;
+}
+
+int sp_client::GetRTTMs()
+{
+    if(rtt_measurments > 0) {
+        return rtt;
+    } else {
+        return -1;
+    }
 }

@@ -47,6 +47,8 @@ void VideoBuffer::putframe(shared_ptr<char> data, unsigned int frames)
     buffered_frames.insert(std::pair<int, std::tr1::shared_ptr<char> >(frames, data));
 
     pthread_mutex_unlock(&lock);
+
+    Observable::notifyObservers();
 }
 
 shared_ptr<char> VideoBuffer::getframe()

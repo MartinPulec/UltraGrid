@@ -804,6 +804,7 @@ void vidcap_dpx_command(struct vidcap *state, int command, void *data)
                 pthread_mutex_lock(&s->lock);
                 flush_pipeline(s);
                 s->index = *(int *) data;
+                clamp_indices(s);
                 fprintf(stderr, "[DPX] New position: %d\n", s->index);
                 s->frame->frames = s->index - ROUND_FROM_ZERO(s->speed);
                 play_after_flush(s);

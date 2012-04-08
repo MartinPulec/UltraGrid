@@ -27,7 +27,7 @@ class sp_client
         void connect_to(std::string host, int port);
         void disconnect();
         bool isConnected();
-        void send(struct message*, struct response *);
+        bool send(struct message*, struct response *, bool nonblock = false);
         void setAsyncNotify();
         void unsetAsyncNotify();
         void ProcessIncomingData();
@@ -35,6 +35,9 @@ class sp_client
         void SendResponse(struct response *resp);
 
         void SetMsgHandler(AsyncMsgHandler *msgHandler);
+
+        int GetRTTMs();
+
         virtual ~sp_client();
     protected:
     private:
@@ -43,12 +46,17 @@ class sp_client
         char *buffer;
         int buffer_len;
 
+        int expectingAsyncResponse;
+
         AsyncMsgHandler *msgHandler;
 
         const std::set<std::string> valid_commands;
 
-        void ProcessResponse(char *data, int len, struct response *response);
+        bool ProcessResponse(char *data, int len, struct response *response);
         void ProcessBuffer(char *data, int len);
+
+        int rtt;
+        int rtt_measurments;
 
 };
 

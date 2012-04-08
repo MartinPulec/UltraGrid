@@ -561,17 +561,29 @@ static void play_after_flush(struct vidcap_exr_state *s)
 
 }
 
+static void clamp_indices(struct vidcap_exr_state *s)
+{
+        if(s->index < 0) {
+                s->index = 0;
+        } else if(s->index >= (int) s->glob.gl_pathc) {
+                s->index = s->glob.gl_pathc - 1;
+        }
+
+}
+
 /* must be called locked !!!!! */
 static void setpos(struct vidcap_exr_state *s, int i)
 {
                 flush_pipeline(s);
 
                 s->index = i;
+                clamp_indices(s);
                 fprintf(stderr, "New position: %d\n", s->index);
                 s->frame->frames = s->index - 1;
 
                 play_after_flush(s);
 }
+
 
 void vidcap_exr_command(struct vidcap *state, int command, void *data)
 {

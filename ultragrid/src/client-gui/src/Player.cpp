@@ -15,7 +15,10 @@ Player::Player() :
     receiver(0),
     speed(1.0),
     loop(false),
-    state(sInit)
+    state(sInit),
+    buffer(),
+    connection(),
+    onFlyManager(connection, buffer)
 {
     //ctor
 }
@@ -39,67 +42,83 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
 //called upon refresh
 void Player::Notify()
 {
-    // there is no frame beyond our buffer
-    if(speed > 0.0) {
-        if(GetCurrentFrame() >= buffer.GetUpperBound()) {
-            return;
+    if(scheduledPlayone) {
+        if(!Playone()) {
+            if(onFlyManager.LastRequestIsDue(this->fps)) {
+                onFlyManager.RequestAdditionalBuffers(current_frame, total_frames, SIGN(this->speed));
+            }
+            ScheduleOneFrame();
+        } else {
+            scheduledPlayone = false;
         }
-    } else {
-        if(GetCurrentFrame() <= buffer.GetLowerBound() )
-        {
-            return;
+    } else { // regular play
+        // there is no frame beyond our buffer
+        if(speed > 0.0) {
+            if(GetCurrentFrame() >= buffer.GetUpperBound()) {
+                return;
+            }
+        } else {
+            if(GetCurrentFrame() <= buffer.GetLowerBound() )
+            {
+                return;
+            }
         }
-    }
 
-    std::tr1::shared_ptr<char> res;
-
-    res = buffer.GetFrame(GetCurrentFrame());
-    while(!res.get()) { // not empty
-        SetCurrentFrame(GetCurrentFrame() + ROUND_FROM_ZERO(speed));
-
-        if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
-            goto update_state;
-        }
+        std::tr1::shared_ptr<char> res;
 
         res = buffer.GetFrame(GetCurrentFrame());
-    }
+        while(!res.get()) { // not empty
+            SetCurrentFrame(GetCurrentFrame() + ROUND_FROM_ZERO(speed));
 
-    if(res.get()) {
-        view->putframe(res);
-        parent->UpdateTimer(GetCurrentFrame() );
-    }
+            if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
+                goto update_state;
+            }
 
-    DropOutOfBoundFrames(20);
+            res = buffer.GetFrame(GetCurrentFrame());
+        }
 
-    SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
+        if(res.get()) {
+            view->putframe(res);
+            parent->UpdateTimer(GetCurrentFrame() );
+        }
+
+        DropOutOfBoundFrames(20);
+
+        SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
 
 
-update_state:
+    update_state:
 
-    if(((GetSpeed() > 0.0 && GetCurrentFrame() >= total_frames) ||
-           (GetSpeed() < 0.0 && GetCurrentFrame() < 0))) {
-               if(!loop) {
-                    parent->DoPause();
-                } else {
-                    Pause();
-                    DropOutOfBoundFrames();
-                    JumpAndPlay(GetSpeed() > 0.0  ? 0 : total_frames - 1);
-                    //Play();
-                }
+        if(((GetSpeed() > 0.0 && GetCurrentFrame() >= total_frames) ||
+               (GetSpeed() < 0.0 && GetCurrentFrame() < 0))) {
+                   if(!loop) {
+                        parent->DoPause();
+                    } else {
+                        Pause();
+                        DropOutOfBoundFrames();
+                        JumpAndPlay(GetSpeed() > 0.0  ? 0 : total_frames - 1);
+                        //Play();
+                    }
+        }
     }
 }
 
-void Player::Playone()
+bool Player::Playone()
 {
     std::tr1::shared_ptr<char> res;
 
     res = buffer.GetFrame(GetCurrentFrame());
-    while(!res.get()) { // not empty
-        res = buffer.GetFrame(GetCurrentFrame());
-    }
+    if(res.get()) { // not empty
+        view->putframe(res);
 
-    view->putframe(res);
-    parent->UpdateTimer(GetCurrentFrame() );
+        DropOutOfBoundFrames(20);
+
+        parent->UpdateTimer(GetCurrentFrame() );
+
+        return true;
+    } else { // not in buffer
+        return false;
+    }
 }
 
 void Player::DropOutOfBoundFrames(int interval)
@@ -176,7 +195,7 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
         connection.play(start_frame);
         //connection.play();
     } catch (std::exception &e) {
-        Stop();
+        StopPlayback();
         wxString msg = wxString::FromUTF8(e.what());
         msg += wxT("(") + failedPart + wxT(")");
         std::string newMsg =std::string(msg.mb_str());
@@ -185,7 +204,7 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
     }
 }
 
-void Player::Stop()
+void Player::StopPlayback()
 {
     wxTimer::Stop();
     receiver->Disconnect();
@@ -218,28 +237,18 @@ void Player::JumpAndPause(int frame)
     current_frame = frame;
     std::cerr <<  "Current frame: " << current_frame << std::endl;
 
-    for(int i = 0; i < 5; ++i) {
-        if(!buffer.HasFrame(frame + SIGN(speed) * i)) {
-            //require 5 frames
-            if(speed > 0.0) {
-                if (frame + i < total_frames) {
-                    connection.pause(frame + i, 5);
-                }
-            } else {
-                if (frame - i >= 0) {
-                    connection.pause(frame - i, 5);
-                }
-            }
-            break;
-        }
+    if(onFlyManager.LastRequestIsDue(this->fps)) {
+        onFlyManager.RequestAdditionalBuffers(current_frame, total_frames, SIGN(this->speed));
     }
 
-    Playone();
+    if(!Playone()) {
+        ScheduleOneFrame();
+    }
 }
 
 void Player::Play()
 {
-    wxTimer::Start();
+    SchedulePlay();
     connection.play();
 }
 
@@ -312,4 +321,16 @@ int Player::GetCurrentFrame()
 int Player::GetTotalFrames()
 {
     return total_frames;
+}
+
+void Player::ScheduleOneFrame()
+{
+    scheduledPlayone = true;
+    wxTimer::Start(-1, wxTIMER_ONE_SHOT);
+}
+
+void Player::SchedulePlay()
+{
+    scheduledPlayone = false;
+    wxTimer::Start(-1, wxTIMER_CONTINUOUS);
 }

@@ -297,6 +297,11 @@ bool sp_serv::parse_message(struct client_session *client, struct msg *msg, char
         }
 
         command.assign(bytes + start, pos - start);
+        
+        if(!isalpha(command.c_str()[0])) {
+                std::cerr << "Misspelled command received" << std::endl;
+                return false;
+        }
 
         if(valid_commands.find(command) == valid_commands.end()) {
                 response.code = 451;

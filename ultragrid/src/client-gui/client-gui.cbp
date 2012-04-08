@@ -48,18 +48,26 @@
 		<Unit filename="client_guiMain.h" />
 		<Unit filename="include/AsyncMsgHandler.h" />
 		<Unit filename="include/ClientManager.h" />
+		<Unit filename="include/ConnectionClosedException.h" />
 		<Unit filename="include/GLView.h" />
+		<Unit filename="include/Observable.h" />
+		<Unit filename="include/Observer.cpp" />
+		<Unit filename="include/Observer.h" />
 		<Unit filename="include/Player.h" />
 		<Unit filename="include/ProgressSlider.h" />
 		<Unit filename="include/Settings.h" />
 		<Unit filename="include/UGReceiver.h" />
 		<Unit filename="include/Utils.h" />
 		<Unit filename="include/VideoBuffer.h" />
+		<Unit filename="include/VideoBufferOnFlyManager.h" />
 		<Unit filename="include/VideoEntry.h" />
 		<Unit filename="include/sp_client.h" />
 		<Unit filename="src/AsyncMsgHandler.cpp" />
 		<Unit filename="src/ClientManager.cpp" />
+		<Unit filename="src/ConnectionClosedException.cpp" />
 		<Unit filename="src/GLView.cpp" />
+		<Unit filename="src/Observable.cpp" />
+		<Unit filename="src/Observer.h" />
 		<Unit filename="src/Player.cpp" />
 		<Unit filename="src/ProgressSlider.cpp" />
 		<Unit filename="src/Settings.cpp" />
@@ -68,14 +76,17 @@
 		</Unit>
 		<Unit filename="src/Utils.cpp" />
 		<Unit filename="src/VideoBuffer.cpp" />
+		<Unit filename="src/VideoBufferOnFlyManager.cpp" />
 		<Unit filename="src/VideoEntry.cpp" />
 		<Unit filename="src/sp_client.cpp" />
 		<Unit filename="wxsmith/CompressionSetting.wxs" />
 		<Unit filename="wxsmith/ServerSelectionDialog.wxs" />
 		<Unit filename="wxsmith/client_guiframe.wxs" />
+		<Unit filename="../include/ConnectionClosedException.h" />
 		<Unit filename="../include/Player.h">
 			<Option virtualFolder="client-gui/include/" />
 		</Unit>
+		<Unit filename="../src/ConnectionClosedException.cpp" />
 		<Unit filename="../src/Player.cpp">
 			<Option virtualFolder="client-gui/src/" />
 		</Unit>

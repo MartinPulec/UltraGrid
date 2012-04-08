@@ -6,12 +6,14 @@
 
 #include <pthread.h>
 
+#include "../include/Observable.h"
+
 
 class GLView;
 
 typedef std::tr1::shared_ptr<char> shared_frame;
 
-class VideoBuffer
+class VideoBuffer: public Observable
 {
     public:
         VideoBuffer();

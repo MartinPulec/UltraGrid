@@ -334,7 +334,7 @@ void client_guiFrame::PlaySelection()
 void client_guiFrame::Stop()
 {
     try {
-        player.Stop();
+        player.StopPlayback();
     } catch (std::exception &e) {
         wxMessageBox(wxString::FromUTF8(e.what()), _("Error stopping media"));
     }
@@ -382,7 +382,7 @@ void client_guiFrame::DataReceived()
 void client_guiFrame::DoDisconnect()
 {
     StatusBar1->PushStatusText(wxT("interrupted by server"));
-    player.Stop();
+    player.StopPlayback();
     ChangeState(sInit);
 }
 

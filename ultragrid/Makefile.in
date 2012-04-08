@@ -101,6 +101,7 @@ OBJS	      = @OBJS@ \
 		src/udt_transmit.o \
 		src/udt_receive.o \
 		src/client-gui/src/VideoBuffer.o \
+	     	src/client-gui/src/Observable.o \
 
 
 SDL_LIB_OBJ  = \
@@ -270,6 +271,8 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 	     src/client-gui/src/CustomGridBagSizer.o \
 	     src/client-gui/src/Utils.o \
 	     src/client-gui/src/Player.o \
+	     src/client-gui/src/ConnectionClosedException.o \
+	     src/client-gui/src/VideoBufferOnFlyManager.o \
 
 SERVER_OBJ = src/server/sp_server.o \
 	     src/server/streaming_server.o \
@@ -282,7 +285,7 @@ SERVER_GUI_OBJ = src/serv-gui/serv_guiApp.o \
 all: client server server-gui modules ag-plugins configure-messages
 
 client: $(OBJS) $(CLIENT_OBJ)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(OBJS) $(LIBS) -DHAVE_CONFIG_H $(INC) $(CLIENT_OBJ) `wx-config --libs` `wx-config --gl-libs` `wx-config --cxxflags` -o bin/client
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(CLIENT_OBJ) $(OBJS) $(LIBS) -DHAVE_CONFIG_H $(INC) `wx-config --libs` `wx-config --gl-libs` `wx-config --cxxflags` -o bin/client
 
 server: $(SERVER_OBJ) $(OBJS) src/main.o 
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -DHAVE_CONFIG_H $(INC) $(SERVER_OBJ) $(OBJS) $(LIBS) `wx-config --libs` `wx-config --gl-libs` src/main.o -o bin/server

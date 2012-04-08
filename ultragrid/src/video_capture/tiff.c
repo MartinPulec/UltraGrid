@@ -613,6 +613,7 @@ void vidcap_tiff_command(struct vidcap *state, int command, void *data)
 
                 s->buffer_read_start = s->buffer_read_end = 0;
                 s->index = *(int *) data;
+                clamp_indices(s);
                 fprintf(stderr, "New position: %d\n", s->index);
                 s->frame->frames = s->index - 1;
 

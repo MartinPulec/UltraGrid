@@ -347,7 +347,7 @@ static void *receiver_thread(void *arg)
                 switch(uv->command) {
                     case CMD_ACCEPT:
                         accept = true;
-                        std::cerr << "Command: accept" << std::endl;
+                        std::cerr << "UGReceiver command: accept" << std::endl;
                         uv->state = ST_ACCEPTED;
                         break;
                     case CMD_QUIT:
@@ -355,7 +355,7 @@ static void *receiver_thread(void *arg)
                         break;
                     case CMD_DISCONNECT:
                         ret = udt_receive_disconnect(uv->udt_receive);
-                        std::cerr << "Command: disconnect" << std::endl;
+                        std::cerr << "UGReceiver command: disconnect" << std::endl;
                         uv->state = ST_NONE;
                         break;
                     case CMD_NONE:
