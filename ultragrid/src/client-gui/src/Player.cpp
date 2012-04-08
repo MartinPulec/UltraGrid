@@ -18,7 +18,8 @@ Player::Player() :
     state(sInit),
     buffer(),
     connection(),
-    onFlyManager(connection, buffer)
+    onFlyManager(connection, buffer),
+    scheduledPlayone(false)
 {
     //ctor
 }
@@ -190,7 +191,7 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
 
         receiver->Accept();
         this->fps = fps;
-        Start(1000/fps);
+        SchedulePlay();
 
         connection.play(start_frame);
         //connection.play();
@@ -332,5 +333,5 @@ void Player::ScheduleOneFrame()
 void Player::SchedulePlay()
 {
     scheduledPlayone = false;
-    wxTimer::Start(-1, wxTIMER_CONTINUOUS);
+    wxTimer::Start(1000/fps, wxTIMER_CONTINUOUS);
 }
