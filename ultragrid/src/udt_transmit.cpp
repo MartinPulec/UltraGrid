@@ -119,6 +119,9 @@ struct udt_transmit {
                 if(res == UDT::ERROR) {
                         std::cerr << res << " " << UDT::getlasterror().getErrorMessage();
                 }
+                if(res != frame->tiles[0].data_len) {
+                        std::cerr << "Sent only " << res << "B, " << frame->tiles[0].data_len << "B was scheduled!" << std::endl; 
+                }
         }
 
         void send_description(struct video_frame *frame)
