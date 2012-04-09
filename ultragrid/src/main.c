@@ -81,6 +81,7 @@
 #include "audio/audio.h"
 #include "server/streaming_server.h"
 #include "udt_transmit.h"
+#include "watermark.h"
 
 #define EXIT_FAIL_USAGE		1
 #define EXIT_FAIL_UI   		2
@@ -454,11 +455,15 @@ static void *sender_thread(void *arg)
 
         struct state_color_transform *color_transform = NULL;
 
+        struct state_watermark *watermark;
+
+        init_gl_context(&context);
+
         color_transform = color_transform_init(&context);
+        watermark = watermark_init(&context);
 
         struct compress_state *compression;
 
-        init_gl_context(&context);
 
         if(context.context == NULL) {
                 fprintf(stderr, "Error initializing GL context.\n");
@@ -484,15 +489,16 @@ static void *sender_thread(void *arg)
                 /* Capture and transmit video... */
                 tx_frame = vidcap_grab(uv->capture_device, &audio);
                 if (tx_frame != NULL) {
-                        struct video_frame *after_transform;
+                        struct video_frame *after_transform, *with_watermark;
 
                         after_transform = color_transform_transform(color_transform, tx_frame);
+                        with_watermark = add_watermark(watermark, after_transform);
                         if(audio) {
                                 audio_sdi_send(uv->audio, audio);
                         }
                         //TODO: Unghetto this
                         if (uv->requested_compression) {
-                                tx_frame = compress_frame(compression, after_transform);
+                                tx_frame = compress_frame(compression, with_watermark);
                         } else {
                                 fprintf(stderr, "Compression needed!\n");
                                 abort();
@@ -529,6 +535,7 @@ static void *sender_thread(void *arg)
         vf_free(splitted_frames);
 
         compress_done(compression);
+        watermark_done(compression);
         destroy_gl_context(&context);
 
         return NULL;

@@ -99,6 +99,7 @@ OBJS	      = @OBJS@ \
 		src/utils/thread_pool.o \
 		src/gl_context.o \
 		src/color_transform.o \
+		src/watermark.o \
 		src/udt_transmit.o \
 		src/udt_receive.o \
 		src/client-gui/src/VideoBuffer.o \

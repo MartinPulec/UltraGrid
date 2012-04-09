@@ -335,39 +335,37 @@ static void *receiver_thread(void *arg)
                 // LOCK - LOCK - LOCK
                 pthread_mutex_lock(&uv->lock);
 
+                bool accept = false;
+
                 // cannot be while !!!
                 // TODO: figure out more cleaner way
-                if(uv->state == ST_NONE && uv->command == CMD_NONE) {
+                if(uv->boss_waiting) {
                     uv->worker_waiting = true;
                     pthread_cond_wait(&uv->worker_cv, &uv->lock);
                     uv->worker_waiting = false;
-                }
 
+                    switch(uv->command) {
+                        case CMD_ACCEPT:
+                            accept = true;
+                            std::cerr << "UGReceiver command: accept" << std::endl;
+                            uv->state = ST_ACCEPTED;
+                            break;
+                        case CMD_QUIT:
+                            uv->state = ST_EXIT;
+                            break;
+                        case CMD_DISCONNECT:
+                            ret = udt_receive_disconnect(uv->udt_receive);
+                            std::cerr << "UGReceiver command: disconnect" << std::endl;
+                            uv->state = ST_NONE;
+                            break;
+                        case CMD_NONE:
+                            break;
+                    }
 
-                bool accept = false;
+                    uv->command = CMD_NONE;
 
-                switch(uv->command) {
-                    case CMD_ACCEPT:
-                        accept = true;
-                        std::cerr << "UGReceiver command: accept" << std::endl;
-                        uv->state = ST_ACCEPTED;
-                        break;
-                    case CMD_QUIT:
-                        uv->state = ST_EXIT;
-                        break;
-                    case CMD_DISCONNECT:
-                        ret = udt_receive_disconnect(uv->udt_receive);
-                        std::cerr << "UGReceiver command: disconnect" << std::endl;
-                        uv->state = ST_NONE;
-                        break;
-                    case CMD_NONE:
-                        break;
-                }
-
-                uv->command = CMD_NONE;
-
-                if(uv->boss_waiting)
                     pthread_cond_signal(&uv->boss_cv);
+                }
 
                 // UNLOCK - UNLOCK - UNLOCK
                 pthread_mutex_unlock(&uv->lock);
@@ -439,6 +437,10 @@ no_err:
 quit:
 
         decoder_destroy(pbuf_data.decoder);
+
+
+
+        std::cerr << "UGRECEIVER THREAD EXITED";
 
         return 0;
 }
@@ -543,6 +545,9 @@ void UGReceiver::Disconnect()
 
 UGReceiver::~UGReceiver()
 {
+#ifdef DEBUG
+    std::cerr << "STARTING UGRECEIVER EXIT" << std::endl;
+#endif
     pthread_mutex_lock(&uv->lock);
 
     uv->command = CMD_QUIT;
@@ -565,4 +570,8 @@ UGReceiver::~UGReceiver()
     uv->boss_waiting = false;
 
     pthread_mutex_unlock(&uv->lock);
+
+#ifdef DEBUG
+    std::cerr << "UGRECEIVER SHOULD HAVE EXITED" << std::endl;
+#endif
 }
