@@ -53,6 +53,12 @@ void Player::Notify()
             scheduledPlayone = false;
         }
     } else { // regular play
+        std::tr1::shared_ptr<char> res;
+
+        if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
+            goto update_state;
+        }
+
         // there is no frame beyond our buffer
         if(speed > 0.0) {
             if(GetCurrentFrame() >= buffer.GetUpperBound()) {
@@ -64,8 +70,6 @@ void Player::Notify()
                 return;
             }
         }
-
-        std::tr1::shared_ptr<char> res;
 
         res = buffer.GetFrame(GetCurrentFrame());
         while(!res.get()) { // not empty
