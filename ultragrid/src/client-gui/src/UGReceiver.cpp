@@ -1,8 +1,10 @@
+#include "../include/UGReceiver.h"
+
+#include <pthread.h>
+#include <signal.h>
 #include <stdint.h>
 #include <sys/time.h>
-#include <pthread.h>
 
-#include "../include/UGReceiver.h"
 #include "../client_guiMain.h"
 #include "../include/GLView.h"
 
@@ -473,12 +475,21 @@ UGReceiver::UGReceiver(const char *display, VideoBuffer *buffer)
         uv->display_device = initialize_video_display(display, NULL, 0 /*flags */);
     }
 
+    sigset_t mask;
+    sigset_t oldmask;
+
+    sigfillset(&mask);
+    pthread_sigmask(SIG_BLOCK, &mask, &oldmask);
+
+
     if (pthread_create
         (&receiver_thread_id, NULL, receiver_thread,
          (void *)uv) != 0) {
             perror("Unable to create display thread!\n");
             // TODO handle error
     }
+
+    pthread_sigmask(SIG_SETMASK, &oldmask, &mask);
 }
 
 void UGReceiver::Accept()

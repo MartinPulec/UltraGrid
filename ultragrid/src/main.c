@@ -689,7 +689,7 @@ int main(int argc, char *argv[])
         sigaddset(&mask, SIGQUIT);
         sigaddset(&mask, SIGHUP);
         sigaddset(&mask, SIGABRT);
-        sigprocmask(SIG_BLOCK, &mask, NULL);
+        pthread_sigmask(SIG_BLOCK, &mask, NULL);
 
         if (uv->use_ihdtv_protocol) {
                 if ((argc != 0) && (argc != 1) && (argc != 2)) {
@@ -914,7 +914,7 @@ int main(int argc, char *argv[])
                                                         int)) display_reconfigure_audio, uv->display_device);
         }
 
-        sigprocmask(SIG_UNBLOCK, &mask, NULL);
+        pthread_sigmask(SIG_UNBLOCK, &mask, NULL);
 #ifndef WIN32
         signal(SIGINT, signal_handler);
         signal(SIGTERM, signal_handler);
