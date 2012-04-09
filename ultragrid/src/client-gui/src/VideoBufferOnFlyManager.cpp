@@ -32,7 +32,7 @@ VideoBufferOnFlyManager::~VideoBufferOnFlyManager()
     platform_spin_destroy(&this->lock_);
 }
 
-void VideoBufferOnFlyManager::Notify()
+void VideoBufferOnFlyManager::NotifyObserver(Observable *object)
 {
     platform_spin_lock(&this->lock_);
     if(buffer_.HasFrame(this->lastRequestedFrame_)) {

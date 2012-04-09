@@ -26,7 +26,7 @@ void Observable::notifyObservers()
 {
     for(std::list <Observer *>::iterator it = observers_.begin(); it != observers_.end(); ++ it)
     {
-        (*it)->Notify();
+        (*it)->NotifyObserver(this);
     }
 
 }

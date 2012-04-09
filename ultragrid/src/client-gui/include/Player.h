@@ -3,9 +3,11 @@
 
 #include <wx/string.h>
 #include <wx/timer.h>
-#include "../include/VideoBuffer.h"
+
 #include "../include/ClientManager.h"
 #include "../include/Settings.h"
+#include "../include/Observer.h"
+#include "../include/VideoBuffer.h"
 #include "../include/VideoBufferOnFlyManager.h"
 
 class GLView;

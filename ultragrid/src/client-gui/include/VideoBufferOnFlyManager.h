@@ -13,7 +13,7 @@ class VideoBufferOnFlyManager: public Observer
     public:
         VideoBufferOnFlyManager(ClientManager & connection, VideoBuffer & buffer);
         virtual ~VideoBufferOnFlyManager();
-        void Notify();
+        void NotifyObserver(Observable *object);
         void RequestAdditionalBuffers(int current_frame, int total_frames, int play_direction);
         bool LastRequestIsDue(double fps);
 
