@@ -41,6 +41,7 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
 }
 
 //called upon refresh
+// overloaded wxTimer::Notify
 void Player::Notify()
 {
     if(scheduledPlayone) {
@@ -73,7 +74,7 @@ void Player::Notify()
 
         res = buffer.GetFrame(GetCurrentFrame());
         while(!res.get()) { // not empty
-            SetCurrentFrame(GetCurrentFrame() + ROUND_FROM_ZERO(speed));
+            SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
 
             if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
                 goto update_state;
