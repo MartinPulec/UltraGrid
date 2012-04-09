@@ -104,6 +104,15 @@ void streaming_server::run() {
                 server.recv(&timeout);
                 server.update();
         }
+
+        // we need to unset this before destructing sp_server
+        // otherwise, killed UG instances would trigger the signal handler
+        signal(SIGINT, SIG_IGN);
+        signal(SIGTERM, SIG_IGN);
+        signal(SIGQUIT, SIG_IGN);
+        signal(SIGHUP, SIG_IGN);
+        signal(SIGABRT, SIG_IGN);
+        signal(SIGCHLD, SIG_IGN);
 }
 
 bool streaming_server::read_file(std::string path, char *buffer, int *buf_len)
