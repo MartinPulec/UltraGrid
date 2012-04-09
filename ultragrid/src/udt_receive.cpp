@@ -63,7 +63,7 @@
 using namespace std;
 
 struct udt_recv {
-        udt_recv(char *address, unsigned int port)
+        udt_recv(const char *address, unsigned int port)
         {
                 UDT::startup();
 
@@ -177,7 +177,7 @@ struct udt_recv {
         int udt_epoll_id;
 };
 
-struct udt_recv *udt_receive_init(char *address, unsigned int port)
+struct udt_recv *udt_receive_init(const char *address, unsigned int port)
 {
         struct udt_recv *s = 0;
 
