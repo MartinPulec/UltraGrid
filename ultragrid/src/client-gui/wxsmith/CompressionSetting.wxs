@@ -28,7 +28,7 @@
 						<object class="wxSpinCtrl" name="ID_SPINCTRL1" variable="SpinCtrl1" member="yes">
 							<value>80</value>
 							<min>1</min>
-							<size>46,25</size>
+							<size>56,25</size>
 							<hidden>1</hidden>
 						</object>
 						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
