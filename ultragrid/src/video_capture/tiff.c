@@ -116,7 +116,7 @@ struct vidcap_tiff_state {
 
         unsigned int        should_jump:1;
         unsigned int        grab_waiting:1;
-        unsigned int        playone;
+        unsigned int        play_to_buffers;
 
         int                 tiff_color_depth;
 
@@ -194,7 +194,7 @@ vidcap_tiff_init(char *fmt, unsigned int flags)
         s->gamma = 1.0;
         s->speed = 1.0;
         s->loop = FALSE;
-        s->playone = 0;
+        s->play_to_buffers = 0;
 
         s->frame->luts_to_apply = 0;
 
@@ -476,13 +476,13 @@ vidcap_tiff_grab(void *state, struct audio_frame **audio)
 	struct vidcap_tiff_state 	*s = (struct vidcap_tiff_state *) state;
 
         pthread_mutex_lock(&s->lock);
-        while((s->should_pause || s->should_jump) && !s->playone) {
+        while((s->should_pause || s->should_jump) && !s->play_to_buffers) {
                 s->grab_waiting = TRUE;
                 pthread_cond_wait(&s->pause_cv, &s->lock);
                 s->grab_waiting = FALSE;
         }
-        if(s->playone > 0) {
-                s->playone--;
+        if(s->play_to_buffers > 0) {
+                s->play_to_buffers--;
         }
 
         if(s->finished &&
@@ -514,14 +514,16 @@ vidcap_tiff_grab(void *state, struct audio_frame **audio)
                 gettimeofday(&s->prev_time, NULL);
         }
 
-        gettimeofday(&s->cur_time, NULL);
-        if(s->frame->fps == 0) /* it would make following loop infinite */
-                return NULL;
-        while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->frame->fps / (fabs(s->speed) < 1.0 ? fabs(s->speed) : 1.0)) {
+        if(s->play_to_buffers == 0) { // regular play - we need to wait for every frame's playtime
                 gettimeofday(&s->cur_time, NULL);
-        }
-        s->prev_time = s->cur_time;
-        //tv_add_usec(&s->prev_time, 1000000.0 / s->frame->fps);
+                if(s->frame->fps == 0) /* it would make following loop infinite */
+                        return NULL;
+                while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->frame->fps / (fabs(s->speed) < 1.0 ? fabs(s->speed) : 1.0)) {
+                        gettimeofday(&s->cur_time, NULL);
+                }
+                s->prev_time = s->cur_time;
+                //tv_add_usec(&s->prev_time, 1000000.0 / s->frame->fps);
+        } // else do not wait at all
 
         s->tile->data = s->buffer_read[s->buffer_read_start];
         s->buffer_read[s->buffer_read_start] = s->buffer_send;
@@ -599,7 +601,7 @@ void vidcap_tiff_command(struct vidcap *state, int command, void *data)
                 pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_PLAYONE) {
                 pthread_mutex_lock(&s->lock);
-                s->playone = *(int *) data;
+                s->play_to_buffers = *(int *) data;
                 pthread_cond_signal(&s->pause_cv);
                 pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_FPS) {

@@ -224,7 +224,7 @@ struct vidcap_dpx_state {
 
         unsigned int        should_jump:1;
         volatile unsigned int        grab_waiting:1;
-        unsigned int        playone;
+        unsigned int        play_to_buffer;
 
         float               speed;
 
@@ -389,7 +389,7 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         s->frame->frames = -1;
         s->gamma = 1.0;
         s->loop = FALSE;
-        s->playone = 0;
+        s->play_to_buffer = 0;
         s->speed = 1.0;
 
         item = strtok_r(fmt, ":", &save_ptr);
@@ -656,13 +656,13 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
 	struct vidcap_dpx_state 	*s = (struct vidcap_dpx_state *) state;
 
         pthread_mutex_lock(&s->lock);
-        while((s->should_pause || s->should_jump) && !s->playone) {
+        while((s->should_pause || s->should_jump) && !s->play_to_buffer) {
                 s->grab_waiting = TRUE;
                 pthread_cond_wait(&s->pause_cv, &s->lock);
                 s->grab_waiting = FALSE;
         }
-        if(s->playone > 0)
-                s->playone--;
+        if(s->play_to_buffer > 0)
+                s->play_to_buffer--;
 
         if(s->finished && s->buffer_processed_start == s->buffer_processed_end &&
                         s->buffer_read_start == s->buffer_read_end) {
@@ -695,14 +695,17 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
                 gettimeofday(&s->prev_time, NULL);
         }
 
-        gettimeofday(&s->cur_time, NULL);
-        if(s->frame->fps == 0) /* it would make following loop infinite */
-                return NULL;
-        while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->frame->fps / (fabs(s->speed) < 1.0 ? fabs(s->speed) : 1.0)) {
+        // if we play regurally, we need to wait for its time
+        if(s->play_to_buffer == 0) {
                 gettimeofday(&s->cur_time, NULL);
-        }
-        s->prev_time = s->cur_time;
-        //tv_add_usec(&s->prev_time, 1000000.0 / s->frame->fps);
+                if(s->frame->fps == 0) /* it would make following loop infinite */
+                        return NULL;
+                while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->frame->fps / (fabs(s->speed) < 1.0 ? fabs(s->speed) : 1.0)) {
+                        gettimeofday(&s->cur_time, NULL);
+                }
+                s->prev_time = s->cur_time;
+                //tv_add_usec(&s->prev_time, 1000000.0 / s->frame->fps);
+        } // else we do not want to wait for next frame time
 
         s->tile->data = s->buffer_processed[s->buffer_processed_start];
         s->buffer_processed[s->buffer_processed_start] = s->buffer_send;
@@ -792,7 +795,7 @@ void vidcap_dpx_command(struct vidcap *state, int command, void *data)
         } else if(command == VIDCAP_PLAYONE) {
                 fprintf(stderr, "[DPX] PLAYONE\n");
                 pthread_mutex_lock(&s->lock);
-                s->playone = *(int *) data;
+                s->play_to_buffer = *(int *) data;
                 pthread_cond_signal(&s->pause_cv);
                 pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_FPS) {
