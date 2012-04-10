@@ -199,6 +199,10 @@
 					<help>Show info about this application</help>
 					<handler function="OnAbout" entry="EVT_MENU" />
 				</object>
+				<object class="wxMenuItem" name="idKeyBindings" variable="MenuItem5" member="no">
+					<label>Key Bindings</label>
+					<help>Show list of keybindings</help>
+				</object>
 			</object>
 		</object>
 		<object class="wxStatusBar" name="ID_STATUSBAR1" variable="StatusBar1" member="yes">

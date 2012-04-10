@@ -260,6 +260,7 @@ JACK_PLAY_LIB_OBJ = @JACK_PLAY_OBJ@ \
 
 CLIENT_OBJ = src/client-gui/client_guiApp.o \
 	     src/client-gui/client_guiMain.o \
+	     src/client-gui/KeyBindingsHelp.o \
 	     src/client-gui/ServerSelectionDialog.o \
 	     src/client-gui/VideoSelection.o \
 	     src/client-gui/src/Settings.o \

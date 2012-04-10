@@ -38,6 +38,8 @@
 		<Linker>
 			<Add option="`wx-config --libs`" />
 		</Linker>
+		<Unit filename="KeyBindingsHelp.cpp" />
+		<Unit filename="KeyBindingsHelp.h" />
 		<Unit filename="ServerSelectionDialog.cpp" />
 		<Unit filename="ServerSelectionDialog.h" />
 		<Unit filename="VideoSelection.cpp" />
@@ -106,6 +108,7 @@
 					<wxFrame wxs="wxsmith/client_guiframe.wxs" src="client_guiMain.cpp" hdr="client_guiMain.h" name="client_guiFrame" language="CPP" />
 					<wxDialog wxs="wxsmith/ServerSelectionDialog.wxs" src="ServerSelectionDialog.cpp" hdr="ServerSelectionDialog.h" name="ServerSelectionDialog" language="CPP" />
 					<wxDialog wxs="wxsmith/VideoSelection.wxs" src="VideoSelection.cpp" hdr="VideoSelection.h" name="VideoSelection" language="CPP" />
+					<wxDialog wxs="wxsmith/KeyBindingsHelp.wxs" src="KeyBindingsHelp.cpp" hdr="KeyBindingsHelp.h" name="KeyBindingsHelp" language="CPP" />
 				</resources>
 			</wxsmith>
 		</Extensions>

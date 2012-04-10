@@ -10,6 +10,7 @@
 #include "client_guiMain.h"
 #include "CompressionSetting.h"
 #include "ServerSelectionDialog.h"
+#include "KeyBindingsHelp.h"
 #include "include/ClientDataIntPair.h"
 #include "include/Utils.h"
 
@@ -71,6 +72,7 @@ const long client_guiFrame::idMenuQuit = wxNewId();
 const long client_guiFrame::idServerSetting = wxNewId();
 const long client_guiFrame::idCompressionSetting = wxNewId();
 const long client_guiFrame::idMenuAbout = wxNewId();
+const long client_guiFrame::idKeyBindings = wxNewId();
 const long client_guiFrame::ID_STATUSBAR1 = wxNewId();
 //*)
 
@@ -98,6 +100,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     wxMenu* Menu1;
     wxMenu* Menu3;
     wxMenuItem* MenuItem3;
+    wxMenuItem* MenuItem5;
     wxMenuBar* MenuBar1;
     wxMenu* Menu2;
 
@@ -162,6 +165,8 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Menu2 = new wxMenu();
     MenuItem2 = new wxMenuItem(Menu2, idMenuAbout, _("About\tF1"), _("Show info about this application"), wxITEM_NORMAL);
     Menu2->Append(MenuItem2);
+    MenuItem5 = new wxMenuItem(Menu2, idKeyBindings, _("Key Bindings"), _("Show list of keybindings"), wxITEM_NORMAL);
+    Menu2->Append(MenuItem5);
     MenuBar1->Append(Menu2, _("Help"));
     SetMenuBar(MenuBar1);
     StatusBar1 = new wxStatusBar(this, ID_STATUSBAR1, 0, _T("ID_STATUSBAR1"));
@@ -190,6 +195,8 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     //*)
     Connect(idServerSetting,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnServerSetting);
     Connect(idCompressionSetting,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnCompressSetting);
+    Connect(idKeyBindings,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnKeyBindingsHelp);
+
     gl->Connect(wxEVT_PAINT,(wxObjectEventFunction)&GLView::OnPaint,0,gl);
     /*int GLCanvasAttributes_1[] = {
     	WX_GL_RGBA,
@@ -753,4 +760,11 @@ void client_guiFrame::ResetToDefaultValues()
     gl->ResetDefaults();
     ChangeSpeed(1.0);
     ChangeDirection(1);
+}
+
+void client_guiFrame::OnKeyBindingsHelp(wxCommandEvent& event)
+{
+    KeyBindingsHelp dlg(this);
+
+    dlg.ShowModal();
 }

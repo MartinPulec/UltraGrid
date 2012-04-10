@@ -71,6 +71,8 @@ class client_guiFrame: public wxFrame
         void OnBackwardSlowClick(wxCommandEvent& event);
         void OnBackwardFastClick(wxCommandEvent& event);
         //*)
+        void OnKeyBindingsHelp(wxCommandEvent& event);
+
         void Resize(wxCommandEvent&);
         void Scrolled(wxCommandEvent&);
         void ToggleFullscreen(wxCommandEvent&);
@@ -115,6 +117,7 @@ class client_guiFrame: public wxFrame
         static const long idServerSetting;
         static const long idCompressionSetting;
         static const long idMenuAbout;
+        static const long idKeyBindings;
         static const long ID_STATUSBAR1;
         //*)
 
