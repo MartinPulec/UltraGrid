@@ -34,6 +34,17 @@
 #include <sys/types.h>
 #include <stdlib.h>
 
+#include <glob.h>
+
+#include <algorithm>
+#include <string>
+#include <stdexcept>
+
+#include "VideoProperties.h"
+
+#include "../client-gui/About.h"
+#include "../client-gui/include/Utils.h"
+
 //helper functions
 enum wxbuildinfoformat {
     short_f, long_f };
@@ -65,6 +76,7 @@ const long serv_guiFrame::ID_STATICTEXT1 = wxNewId();
 const long serv_guiFrame::ID_CHECKLISTBOX1 = wxNewId();
 const long serv_guiFrame::ID_BUTTON1 = wxNewId();
 const long serv_guiFrame::ID_BUTTON2 = wxNewId();
+const long serv_guiFrame::ID_Edit = wxNewId();
 const long serv_guiFrame::ID_BUTTON3 = wxNewId();
 const long serv_guiFrame::idMenuQuit = wxNewId();
 const long serv_guiFrame::idMenuAbout = wxNewId();
@@ -103,7 +115,9 @@ serv_guiFrame::serv_guiFrame(wxWindow* parent,wxWindowID id)
     BoxSizer1->Add(Button1, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     Button2 = new wxButton(this, ID_BUTTON2, _("Remove Selected"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_BUTTON2"));
     BoxSizer1->Add(Button2, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    BoxSizer1->Add(0,0,1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    Edit = new wxButton(this, ID_Edit, _("Edit Properties"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_Edit"));
+    BoxSizer1->Add(Edit, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    BoxSizer1->Add(-1,-1,1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     Button3 = new wxButton(this, ID_BUTTON3, _("Save"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_BUTTON3"));
     BoxSizer1->Add(Button3, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FlexGridSizer1->Add(BoxSizer1, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -131,6 +145,7 @@ serv_guiFrame::serv_guiFrame(wxWindow* parent,wxWindowID id)
     Connect(ID_CHECKLISTBOX1,wxEVT_COMMAND_CHECKLISTBOX_TOGGLED,(wxObjectEventFunction)&serv_guiFrame::OnCheckListBox1Toggled);
     Connect(ID_BUTTON1,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&serv_guiFrame::OnButton1Click);
     Connect(ID_BUTTON2,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&serv_guiFrame::OnButton2Click);
+    Connect(ID_Edit,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&serv_guiFrame::OnButton4Click);
     Connect(ID_BUTTON3,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&serv_guiFrame::OnButton3Click);
     Connect(idMenuQuit,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&serv_guiFrame::OnQuit);
     Connect(idMenuAbout,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&serv_guiFrame::OnAbout);
@@ -157,8 +172,11 @@ void serv_guiFrame::OnQuit(wxCommandEvent& event)
 
 void serv_guiFrame::OnAbout(wxCommandEvent& event)
 {
-    wxString msg = wxbuildinfo(long_f);
-    wxMessageBox(msg, _("Welcome to..."));
+    About dlg(this);
+
+    dlg.ShowModal();
+/*    wxString msg = wxbuildinfo(long_f);
+    wxMessageBox(msg, _("Welcome to..."));*/
 }
 
 void serv_guiFrame::OnCheckListBox1Toggled(wxCommandEvent& event)
@@ -214,14 +232,26 @@ void serv_guiFrame::OnButton1Click(wxCommandEvent& event)
     char hostname[NI_MAXHOST];
     res = PathSelection->ShowModal();
     if(res == wxID_OK) {
+        try {
+            VideoEntry newEntry;
 
-        GetPrimaryIp(buf, 1024);
-        GetNameToIp(buf, hostname, NI_MAXHOST);
+            GetPrimaryIp(buf, 1024);
+            GetNameToIp(buf, hostname, NI_MAXHOST);
 
-        wxString path = wxString("rtp://", wxConvUTF8) + wxString(hostname, wxConvUTF8) + PathSelection->GetPath();
+            wxString path = wxString("rtp://", wxConvUTF8) + wxString(hostname, wxConvUTF8) + PathSelection->GetPath();
 
-        CheckListBox1->InsertItems(1u, &path, 0u);
+            newEntry.URL = path;
+
+            this->ScanDirectory(PathSelection->GetPath(), newEntry);
+
+            this->videos.Add(newEntry);
+            CheckListBox1->InsertItems(1u, &path, CheckListBox1->GetCount());
+        } catch (std::exception &e) {
+            wxString message = wxString(e.what(), wxConvUTF8);
+            wxMessageBox(message, wxT("Error"), wxICON_ERROR);
+        }
     }
+    StatusBar1->PushStatusText(wxT("unsaved changes"));
 }
 
 void serv_guiFrame::OnButton2Click(wxCommandEvent& event)
@@ -230,10 +260,12 @@ void serv_guiFrame::OnButton2Click(wxCommandEvent& event)
     while(i < CheckListBox1->GetCount()) {
         if(CheckListBox1->IsChecked(i)) {
             CheckListBox1->Delete(i);
+            this->videos.RemoveAt(i);
         } else {
             i++;
         }
     }
+    StatusBar1->PushStatusText(wxT("unsaved changes"));
 }
 
 void serv_guiFrame::OnButton3Click(wxCommandEvent& event)
@@ -241,13 +273,13 @@ void serv_guiFrame::OnButton3Click(wxCommandEvent& event)
     wxTextFile settings(filename);
     settings.Clear();
     unsigned int i;
-    for(i = 0u; i < CheckListBox1->GetCount(); ++i) {
-        settings.AddLine(CheckListBox1->GetString(i));
+    for(i = 0u; i < this->videos.GetCount(); ++i) {
+        settings.AddLine(this->videos[i].Serialize());
     }
 
     settings.Write();
     settings.Close();
-    Close();
+    StatusBar1->PushStatusText(wxT("saved"));
 }
 
 void serv_guiFrame::LoadSettings(void)
@@ -259,8 +291,55 @@ void serv_guiFrame::LoadSettings(void)
 
     for ( str = settings.GetFirstLine(); !settings.Eof(); str = settings.GetNextLine() )
     {
-        CheckListBox1->InsertItems(1u, &str , CheckListBox1->GetCount());
+        VideoEntry newVideo(str);
+        this->videos.Add(newVideo);
+        CheckListBox1->InsertItems(1u, &newVideo.URL, CheckListBox1->GetCount());
     }
 
     settings.Close();
+}
+
+void serv_guiFrame::OnButton4Click(wxCommandEvent& event)
+{
+    for (int i = 0; i < CheckListBox1->GetCount(); ++i) {
+        if(CheckListBox1->IsChecked(i)) {
+            VideoProperties dlg(this);
+            dlg.FPSCtrl->SetValue(Utils::FromCDouble(this->videos[i].fps, 2));
+            dlg.Name->SetLabel(this->videos[i].URL);
+
+            if(dlg.ShowModal() == wxID_OK) {
+                wxString number = dlg.FPSCtrl->GetValue();
+                if(!number.ToDouble(&this->videos[i].fps)){ /* error! */ }
+            }
+        }
+    }
+
+    StatusBar1->PushStatusText(wxT("unsaved changes"));
+}
+
+void serv_guiFrame::ScanDirectory(wxString path, VideoEntry &entry)
+{
+    glob_t dir_listening;
+
+    entry.format = wxT("none");
+
+    for (int i = 0; i < possibleFileFormatsCount; ++i) {
+        std::string extension(possibleFileFormats[i]);
+        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+
+        wxString glob_pattern = path + wxT("/*.") + wxString(extension.c_str(), wxConvUTF8);
+
+        int ret = glob(glob_pattern.mb_str(), 0, NULL, &dir_listening);
+        if (ret) {
+            continue;
+        } else  {
+            entry.format = wxString(possibleFileFormats[i], wxConvUTF8);
+            entry.total_frames = dir_listening.gl_pathc;
+            break;
+        }
+    }
+
+    if(entry.format == wxT("none")) {
+        throw std::runtime_error("No image/video files found in directory");
+    }
 }

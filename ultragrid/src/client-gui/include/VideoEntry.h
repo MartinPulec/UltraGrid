@@ -4,11 +4,18 @@
 #include <wx/string.h>
 #include <wx/dynarray.h>
 
+extern const char *possibleFileFormats[];
+extern int possibleFileFormatsCount;
+
 struct VideoEntry
 {
     public:
         VideoEntry();
         virtual ~VideoEntry();
+
+        VideoEntry(wxString & encoded);
+
+        wxString Serialize();
 
         wxString URL;
         wxString format;

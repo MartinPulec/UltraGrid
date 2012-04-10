@@ -37,10 +37,15 @@
 		<Linker>
 			<Add option="`wx-config --libs`" />
 		</Linker>
+		<Unit filename="../client-gui/include/VideoEntry.h" />
+		<Unit filename="../client-gui/src/VideoEntry.cpp" />
+		<Unit filename="VideoProperties.cpp" />
+		<Unit filename="VideoProperties.h" />
 		<Unit filename="serv_guiApp.cpp" />
 		<Unit filename="serv_guiApp.h" />
 		<Unit filename="serv_guiMain.cpp" />
 		<Unit filename="serv_guiMain.h" />
+		<Unit filename="wxsmith/VideoProperties.wxs" />
 		<Unit filename="wxsmith/serv_guiframe.wxs" />
 		<Extensions>
 			<code_completion />
@@ -50,6 +55,7 @@
 				<gui name="wxWidgets" src="serv_guiApp.cpp" main="serv_guiFrame" init_handlers="necessary" language="CPP" />
 				<resources>
 					<wxFrame wxs="wxsmith/serv_guiframe.wxs" src="serv_guiMain.cpp" hdr="serv_guiMain.h" name="serv_guiFrame" language="CPP" />
+					<wxDialog wxs="wxsmith/VideoProperties.wxs" src="VideoProperties.cpp" hdr="VideoProperties.h" name="VideoProperties" language="CPP" />
 				</resources>
 			</wxsmith>
 		</Extensions>

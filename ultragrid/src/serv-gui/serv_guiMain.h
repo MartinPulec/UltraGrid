@@ -22,6 +22,8 @@
 #include <wx/stattext.h>
 //*)
 
+#include "../client-gui/include/VideoEntry.h"
+
 class serv_guiFrame: public wxFrame
 {
     public:
@@ -38,17 +40,22 @@ class serv_guiFrame: public wxFrame
         void OnButton1Click(wxCommandEvent& event);
         void OnButton2Click(wxCommandEvent& event);
         void OnButton3Click(wxCommandEvent& event);
+        void OnButton4Click(wxCommandEvent& event);
         //*)
 
         void LoadSettings(void);
 
+        void ScanDirectory(wxString path, VideoEntry &entry);
+
         wxString filename;
+        ArrayOfVideoEntries videos;
 
         //(*Identifiers(serv_guiFrame)
         static const long ID_STATICTEXT1;
         static const long ID_CHECKLISTBOX1;
         static const long ID_BUTTON1;
         static const long ID_BUTTON2;
+        static const long ID_Edit;
         static const long ID_BUTTON3;
         static const long idMenuQuit;
         static const long idMenuAbout;
@@ -63,6 +70,7 @@ class serv_guiFrame: public wxFrame
         wxDirDialog* PathSelection;
         wxStaticText* StaticText1;
         wxCheckListBox* CheckListBox1;
+        wxButton* Edit;
         //*)
 
         DECLARE_EVENT_TABLE()

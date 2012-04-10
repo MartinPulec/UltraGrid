@@ -283,7 +283,11 @@ SERVER_OBJ = src/server/sp_server.o \
 	     src/server/streaming_server_handlers.o
 
 SERVER_GUI_OBJ = src/serv-gui/serv_guiApp.o \
-		 src/serv-gui/serv_guiMain.o
+		 src/serv-gui/serv_guiMain.o \
+		 src/serv-gui/VideoProperties.o \
+		 src/client-gui/src/VideoEntry.o \
+	         src/client-gui/src/Utils.o \
+	     	 src/client-gui/About.o \
 
 # -------------------------------------------------------------------------------------------------
 all: client server server-gui modules ag-plugins configure-messages
