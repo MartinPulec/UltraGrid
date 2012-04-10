@@ -201,6 +201,7 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
         connection.play(start_frame);
         //connection.play();
     } catch (std::exception &e) {
+
         StopPlayback();
         wxString msg = wxString::FromUTF8(e.what());
         msg += wxT("(") + failedPart + wxT(")");

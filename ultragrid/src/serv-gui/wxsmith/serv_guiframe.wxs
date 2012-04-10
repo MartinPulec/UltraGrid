@@ -5,7 +5,7 @@
 		<object class="wxFlexGridSizer" variable="FlexGridSizer1" member="no">
 			<cols>1</cols>
 			<rows>3</rows>
-			<growablecols>0,1,2</growablecols>
+			<growablecols>0</growablecols>
 			<growablerows>1</growablerows>
 			<object class="sizeritem">
 				<object class="wxStaticText" name="ID_STATICTEXT1" variable="StaticText1" member="yes">

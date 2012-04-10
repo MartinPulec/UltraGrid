@@ -102,8 +102,6 @@ serv_guiFrame::serv_guiFrame(wxWindow* parent,wxWindowID id)
     Create(parent, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE, _T("wxID_ANY"));
     FlexGridSizer1 = new wxFlexGridSizer(3, 1, 0, 0);
     FlexGridSizer1->AddGrowableCol(0);
-    FlexGridSizer1->AddGrowableCol(1);
-    FlexGridSizer1->AddGrowableCol(2);
     FlexGridSizer1->AddGrowableRow(1);
     StaticText1 = new wxStaticText(this, ID_STATICTEXT1, _("Provided stream locations:"), wxDefaultPosition, wxDefaultSize, 0, _T("ID_STATICTEXT1"));
     FlexGridSizer1->Add(StaticText1, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -248,7 +246,7 @@ void serv_guiFrame::OnButton1Click(wxCommandEvent& event)
             CheckListBox1->InsertItems(1u, &path, CheckListBox1->GetCount());
         } catch (std::exception &e) {
             wxString message = wxString(e.what(), wxConvUTF8);
-            wxMessageBox(message, wxT("Error"), wxICON_ERROR);
+            wxMessageBox(message, wxT("Error"));
         }
     }
     StatusBar1->PushStatusText(wxT("unsaved changes"));
@@ -324,18 +322,21 @@ void serv_guiFrame::ScanDirectory(wxString path, VideoEntry &entry)
     entry.format = wxT("none");
 
     for (int i = 0; i < possibleFileFormatsCount; ++i) {
+
         std::string extension(possibleFileFormats[i]);
-        std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+        for (int j = 3; j <= extension.size(); ++j) {
+            std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
 
-        wxString glob_pattern = path + wxT("/*.") + wxString(extension.c_str(), wxConvUTF8);
+            wxString glob_pattern = path + wxT("/*.") + wxString(extension.c_str(), wxConvUTF8).substr(0, j);
 
-        int ret = glob(glob_pattern.mb_str(), 0, NULL, &dir_listening);
-        if (ret) {
-            continue;
-        } else  {
-            entry.format = wxString(possibleFileFormats[i], wxConvUTF8);
-            entry.total_frames = dir_listening.gl_pathc;
-            break;
+            int ret = glob(glob_pattern.mb_str(), 0, NULL, &dir_listening);
+            if (ret) {
+                continue;
+            } else  {
+                entry.format = wxString(possibleFileFormats[i], wxConvUTF8);
+                entry.total_frames = dir_listening.gl_pathc;
+                break;
+            }
         }
     }
 
