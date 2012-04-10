@@ -159,6 +159,9 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                 }
                 resp->send_response(&response);
         } else if(message->type == msg_play) {
+                response.code = 200;
+                response.message = "OK";
+                response.body_len = 0;
                 if(message->data[0] != '\0') {
                         int len;
                         char msg_text[40];
