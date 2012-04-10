@@ -71,6 +71,7 @@ class session_handler {
 
                 std::string compression;
                 std::string video_format;
+                std::string glob_ext;
                 std::string color_space;
                 pid_t pid;
                 int comm_fd;
