@@ -60,6 +60,7 @@ extern "C" {
 #include <pthread.h>
 #include <stdlib.h>
 #ifdef HAVE_MACOSX
+#include <GL/glew.h>
 #include "mac_gl_common.h"
 #else
 #include <GL/glew.h>
@@ -143,6 +144,8 @@ struct state_watermark * watermark_init(struct gl_context *context)
         s = (struct state_watermark *) malloc(sizeof(struct state_watermark));
         assert (s != NULL);
         s->context = context;
+
+        glewInit();
 
         glGenTextures(1, &s->logo);
         glBindTexture(GL_TEXTURE_2D, s->logo);

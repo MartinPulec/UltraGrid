@@ -60,6 +60,7 @@ extern "C" {
 #include <pthread.h>
 #include <stdlib.h>
 #ifdef HAVE_MACOSX
+#include <GL/glew.h>
 #include "mac_gl_common.h"
 #else
 #include <GL/glew.h>
@@ -276,6 +277,8 @@ struct state_color_transform * color_transform_init(struct gl_context *context)
         s->context = context;
 
         s->configured = FALSE;
+
+        glewInit();
 
         return s;
 }
