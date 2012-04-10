@@ -8,6 +8,7 @@
  **************************************************************/
 
 #include "client_guiMain.h"
+#include "About.h"
 #include "CompressionSetting.h"
 #include "ServerSelectionDialog.h"
 #include "KeyBindingsHelp.h"
@@ -287,8 +288,11 @@ void client_guiFrame::OnQuit(wxCommandEvent& event)
 
 void client_guiFrame::OnAbout(wxCommandEvent& event)
 {
-    wxString msg = wxbuildinfo(long_f);
-    wxMessageBox(msg, _("Welcome to..."));
+    About dlg(this);
+
+    dlg.ShowModal();
+    /*wxString msg = wxbuildinfo(long_f);
+    wxMessageBox(msg, _("Welcome to..."));*/
 }
 
 void client_guiFrame::OnListBox1Select1(wxCommandEvent& event)
