@@ -372,12 +372,15 @@ void client_guiFrame::Resize(wxCommandEvent& event)
 void client_guiFrame::OnSelectClick(wxCommandEvent& event)
 {
 
-    if(selectVideo->ShowModal() == wxOK) {
+    if(selectVideo->ShowModal() == wxID_OK ) {
+        this->Stop();
+        this->playList.Empty();
+        this->playList = selectVideo->GetSelectedVideo();
+        if(!this->playList.IsEmpty()) {
+            fps->SetValue(wxString::Format(wxT("%2.2f"), this->playList[0].fps));
+        }
     }
-    this->playList.Empty();
-    this->playList = selectVideo->GetSelectedVideo();
-    if(!this->playList.IsEmpty())
-        fps->SetValue(wxString::Format(wxT("%2.2f"), this->playList[0].fps));
+
     /*selectVideo->ListBox1->GetSelections(playListIndices);
 
     for (int i = 0; i < playListIndices.Count(); ++i) {
