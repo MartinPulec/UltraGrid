@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>English</string>
 	<key>CFBundleExecutable</key>
-	<string>uv</string>
+	<string>client</string>
 	<key>CFBundleIdentifier</key>
 	<string>cz.cesnet.UltraGrid</string>
 	<key>CFBundleInfoDictionaryVersion</key>
