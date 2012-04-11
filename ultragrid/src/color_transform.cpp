@@ -189,8 +189,10 @@ static void build_programs(struct state_color_transform *s)
 
                         for(int x = 0; x < 4; ++x) {
                                 for(int y = 0; y < 4; ++y) {
-                                        if(x == 3 || y == 3) {
+                                        if(x == 3) {
                                                 matrix[x + y * 4] = 0.0;
+                                        } else if(y == 3) {
+                                                matrix[x + y * 4] = 1.0;
                                         } else {
                                                 matrix[x + y * 4] = ((double *)s->luts_to_apply->lut)[x + y * 3];
                                         }
