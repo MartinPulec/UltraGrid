@@ -1,11 +1,10 @@
-#include <iostream>
-
 #include "config.h"
 #include "config_unix.h"
 
 #include "../include/VideoBuffer.h"
 #include "../include/GLView.h"
 
+#include <iostream>
 
 using namespace std::tr1;
 using namespace std;
