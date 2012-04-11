@@ -529,11 +529,27 @@ static void *sender_thread(void *arg)
 #endif
 #ifdef DUMP
                                 char filename[128];
+                                assert (tx_frame->tile_count == 1);
+
                                 snprintf(filename, 128, "%s/%06d.dump", path, tx_frame->frames);
                                 int fd = creat(filename, 0644);
                                 assert(fd != -1);
                                 ssize_t total = 0, ret;
 
+                                do {
+                                        ret = write(fd, (const char *) tx_frame + total, sizeof(struct video_frame) - total);
+                                        assert(ret > 0);
+                                        total += ret;
+                                } while(total < sizeof(struct video_frame));
+
+                                total = 0;
+                                do {
+                                        ret = write(fd, (const char *) tx_frame->tiles + total, sizeof(struct tile) - total);
+                                        assert(ret > 0);
+                                        total += ret;
+                                } while(total < sizeof(struct tile));
+
+                                total = 0;
                                 do {
                                         ret = write(fd, tx_frame->tiles[0].data + total, tx_frame->tiles[0].data_len - total);
                                         assert(ret > 0);
