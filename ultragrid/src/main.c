@@ -529,7 +529,7 @@ static void *sender_thread(void *arg)
 #endif
 #ifdef DUMP
                                 char filename[128];
-                                snprintf(filename, 128, "%s/%d.dump", path, tx_frame->frames);
+                                snprintf(filename, 128, "%s/%06d.dump", path, tx_frame->frames);
                                 int fd = creat(filename, 0644);
                                 assert(fd != -1);
                                 ssize_t total = 0, ret;
