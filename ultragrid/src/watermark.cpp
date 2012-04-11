@@ -71,6 +71,7 @@ extern "C" {
 
 #include "watermark.h"
 #include "client-gui/src/cesnet-logo-2.c"
+#include "fint-logo.c"
 
 #if defined HAVE_MACOSX && OS_VERSION_MAJOR < 11
 #define glGenFramebuffers glGenFramebuffersEXT
@@ -96,7 +97,7 @@ struct state_watermark {
 
         GLuint g_vao;
 
-        GLuint logo;
+        GLuint logo[2];
 
         bool configured;
 };
@@ -147,8 +148,8 @@ struct state_watermark * watermark_init(struct gl_context *context)
 
         glewInit();
 
-        glGenTextures(1, &s->logo);
-        glBindTexture(GL_TEXTURE_2D, s->logo);
+        glGenTextures(sizeof(s->logo) / sizeof(GLuint), s->logo);
+        glBindTexture(GL_TEXTURE_2D, s->logo[0]);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -157,9 +158,57 @@ struct state_watermark * watermark_init(struct gl_context *context)
 
         glBindTexture(GL_TEXTURE_2D, 0);
 
+        glGenTextures(1, &s->logo[1]);
+        glBindTexture(GL_TEXTURE_2D, s->logo[1]);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0 , GL_RGBA, fint_logo.width, fint_logo.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, fint_logo.pixel_data); 
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+
         s->configured = false;
 
         return s;
+}
+
+static void watermark_loga(struct state_watermark *s)
+{
+        int i;
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        GLdouble right_b_x = 0.98, right_b_y = 0.98,
+                 right_t_x = 0.98, right_t_y = 0.75;
+
+        for(i = sizeof(s->logo) / sizeof(GLuint) - 1; i >= 0; --i) {
+                GLdouble left_b_x, left_b_y,
+                         left_t_x, left_t_y;
+
+                int width = 0;
+                int height = 0;
+                glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
+                glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
+
+
+                left_b_y = right_b_y;
+                left_t_y = right_t_y;
+
+                left_t_x = right_t_x - (right_b_y - right_t_y) / height * width / (double) s->tile->width * s->tile->height;
+                left_b_x = left_t_x;
+
+                glBindTexture(GL_TEXTURE_2D, s->logo[i]);
+                glBegin(GL_QUADS);
+                glTexCoord2f(0.0, 0.0); glVertex2f(left_t_x, left_t_y);
+                glTexCoord2f(1.0, 0.0); glVertex2f(right_t_x, right_t_y);
+                glTexCoord2f(1.0, 1.0); glVertex2f(right_b_x, right_b_y);
+                glTexCoord2f(0.0, 1.0); glVertex2f(left_b_x ,left_b_y);
+                glEnd();
+
+                right_b_x = right_t_x = left_b_x - 0.05;
+        }
+        
+        glBlendFunc(GL_SRC_ALPHA, GL_ZERO);
 }
 
 struct video_frame * add_watermark(struct state_watermark *s, struct video_frame * tx)
@@ -204,15 +253,8 @@ struct video_frame * add_watermark(struct state_watermark *s, struct video_frame
                 glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
         glEnd();
 
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        
-        glBindTexture(GL_TEXTURE_2D, s->logo);
-        glBegin(GL_QUADS);
-        glTexCoord2f(0.0, 0.0); glVertex2f(0.65, 0.7);
-        glTexCoord2f(1.0, 0.0); glVertex2f(0.98, 0.7);
-        glTexCoord2f(1.0, 1.0); glVertex2f(0.98, 0.96);
-        glTexCoord2f(0.0, 1.0); glVertex2f(0.65 , 0.96);
-        glEnd();
+        watermark_loga(s);
+
 
         //glClear(GL_COLOR_BUFFER_BIT);
 
@@ -239,7 +281,6 @@ struct video_frame * add_watermark(struct state_watermark *s, struct video_frame
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glBindTexture(GL_TEXTURE_2D, 0);
 
-        glBlendFunc(GL_SRC_ALPHA, GL_ZERO);
 
         s->out->frames = tx->frames;
         s->tile->texture = s->tex_processed;
