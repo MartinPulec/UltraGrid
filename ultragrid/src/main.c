@@ -83,6 +83,14 @@
 #include "udt_transmit.h"
 #include "watermark.h"
 
+// ifdef DUMP
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+// endif DUMP
+
+
+
 #define EXIT_FAIL_USAGE		1
 #define EXIT_FAIL_UI   		2
 #define EXIT_FAIL_DISPLAY	3
@@ -452,6 +460,12 @@ static void *sender_thread(void *arg)
         //struct video_frame *splitted_frames = NULL;
         int tile_y_count;
 
+#ifdef DUMP
+        char path[20];
+        snprintf(path, 20, "dump.%d", (int) getpid());
+        mkdir(path, 0755);
+#endif
+
 
         struct state_color_transform *color_transform = NULL;
 
@@ -513,6 +527,21 @@ static void *sender_thread(void *arg)
 #else
                                 udt_send(uv->udt_transmit, tx_frame);
 #endif
+#ifdef DUMP
+                                char filename[128];
+                                snprintf(filename, 128, "%s/%d.dump", path, tx_frame->frames);
+                                int fd = creat(filename, 0644);
+                                assert(fd != -1);
+                                ssize_t total = 0, ret;
+
+                                do {
+                                        ret = write(fd, tx_frame->tiles[0].data + total, tx_frame->tiles[0].data_len - total);
+                                        assert(ret > 0);
+                                        total += ret;
+
+                                } while(total < tx_frame->tiles[0].data_len);
+                                close(fd);
+#endif /* DUMP */
                         } else { /* split */
                                 int i;
 
