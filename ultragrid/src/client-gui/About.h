@@ -17,6 +17,7 @@ class About: public wxDialog
 
 		//(*Declarations(About)
 		wxStaticText* StaticText1;
+		wxStaticBitmap* BitmapFINT;
 		wxStaticBitmap* StaticBitmap1;
 		//*)
 
@@ -24,6 +25,7 @@ class About: public wxDialog
 
 		//(*Identifiers(About)
 		static const long ID_STATICBITMAP1;
+		static const long ID_BITMAPFINT;
 		static const long ID_STATICTEXT1;
 		//*)
 

@@ -15,11 +15,29 @@
 					<growablecols>1</growablecols>
 					<growablerows>0</growablerows>
 					<object class="sizeritem">
-						<object class="wxStaticBitmap" name="ID_STATICBITMAP1" variable="StaticBitmap1" member="yes">
-							<size>128,59</size>
-							<extra_code>wxMemoryInputStream in((const unsigned char*) cesnet__logo__png, sizeof(cesnet__logo__png));&#x0A;&#x0A; wxImage cesnet__(in);&#x0A; StaticBitmap1-&gt;SetBitmap(wxBitmap(cesnet__));</extra_code>
+						<object class="wxFlexGridSizer" variable="FlexGridSizer3" member="no">
+							<cols>1</cols>
+							<rows>2</rows>
+							<object class="sizeritem">
+								<object class="wxStaticBitmap" name="ID_STATICBITMAP1" variable="StaticBitmap1" member="yes">
+									<size>128,59</size>
+									<extra_code>wxMemoryInputStream in((const unsigned char*) cesnet__logo__png, sizeof(cesnet__logo__png));&#x0A;&#x0A; wxImage cesnet__(in);&#x0A; StaticBitmap1-&gt;SetBitmap(wxBitmap(cesnet__));</extra_code>
+								</object>
+								<flag>wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+								<border>5</border>
+								<option>1</option>
+							</object>
+							<object class="sizeritem">
+								<object class="wxStaticBitmap" name="ID_BITMAPFINT" variable="BitmapFINT" member="yes">
+									<size>100,55</size>
+									<extra_code>wxMemoryInputStream in__fint((const unsigned char*) fint__logo__png, sizeof(fint__logo__png));&#x0A;&#x0A;wxImage fint__image(in__fint, wxBITMAP__TYPE__PNG);&#x0A;BitmapFINT-&gt;SetBitmap(wxBitmap(fint__image));</extra_code>
+								</object>
+								<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+								<border>5</border>
+								<option>1</option>
+							</object>
 						</object>
-						<flag>wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
 						<border>5</border>
 						<option>1</option>
 					</object>
