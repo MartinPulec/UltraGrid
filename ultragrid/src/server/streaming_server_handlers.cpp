@@ -46,6 +46,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <assert.h>
 #include <sstream>
 #include <cstdio>
 #include <iostream>
@@ -92,6 +93,12 @@ bool session_handler::informDied(pid_t pid)
 void session_handler::handle(struct msg *message, streaming_server* serv, responder * resp)
 {
         struct resp_msg response;
+
+        response.code = -1;
+        response.message = NULL;
+        response.body = NULL;
+        response.body_len = 0;
+
         if(message->type == msg_setup) {
                 if(state != Init) {
                         response.code = 455;
@@ -188,6 +195,10 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                 }
                 resp->send_response(&response);
         } else if(message->type == msg_pause) {
+                response.code = 200;
+                response.message = "OK";
+                response.body_len = 0;
+
                 if(message->data[0] != '\0') {
                         int len;
                         char msg_text[40];
@@ -233,6 +244,9 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                 response.body_len = 0;
                 resp->send_response(&response);
         } else if(message->type == msg_keepalive) {
+                response.code = 200;
+                response.message = "OK";
+                response.body_len = 0;
         } else if(message->type == msg_get) {
                 int bufsize = 1024 * 1024;
                 char * buf = new char [bufsize];
@@ -331,6 +345,12 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                 }
 
                 free(data);
+
+                assert(response.code != -1);
+                assert(response.message != NULL);
+                assert((response.body == NULL && response.body_len == 0) || 
+                                (response.body != NULL && response.body_len > 0));
+
                 resp->send_response(&response);
         }
 }
