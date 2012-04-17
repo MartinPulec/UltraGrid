@@ -237,11 +237,6 @@ double Player::GetSpeed()
     return speed;
 }
 
-void Player::ProcessIncomingData()
-{
-    connection.ProcessIncomingData();
-}
-
 void Player::JumpAndPlay(int frame)
 {
     current_frame = frame;

@@ -20,20 +20,9 @@ IMPLEMENT_APP(client_guiApp);
 
 static client_guiFrame *app = NULL;
 
-void handler(int signal)
-{
-    if(signal == SIGIO) {
-        if(app)
-            app->DataReceived();
-    } else if (signal == SIGPIPE) {
-        // SIGPIPE
-    }
-}
-
 bool client_guiApp::OnInit()
 {
-    signal(SIGPIPE, handler);
-    signal(SIGIO, handler);
+    signal(SIGPIPE, SIG_IGN);
 
     //(*AppInitialize
     bool wxsOK = true;

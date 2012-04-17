@@ -416,6 +416,7 @@ static void * reading_thread(void *args)
                 }
 
                 if(thread_pool_get_overall_count(s->pool) == THREADS || was_last) {
+                        fprintf(stderr, "POP\n\n\n\n\n\n");
                         struct job * res = thread_pool_pop(s->pool);
                         res->used = FALSE;
 

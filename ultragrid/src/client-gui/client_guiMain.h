@@ -43,7 +43,6 @@ class client_guiFrame: public wxFrame
 
         client_guiFrame(wxWindow* parent,wxWindowID id = -1);
         virtual ~client_guiFrame();
-        void DataReceived();
         void DoDisconnect();
         void UpdateTimer(int val);
 

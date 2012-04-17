@@ -16,6 +16,7 @@
 #include <sys/select.h>
 #include <sys/time.h>
 
+
 /* According to earlier standards */
 #include <sys/time.h>
 #include <sys/types.h>
@@ -26,12 +27,95 @@
 #include "config_unix.h"
 #endif
 
+#include "tv.h"
+
 #include "../include/sp_client.h"
 #include "../include/AsyncMsgHandler.h"
 #include "../include/ConnectionClosedException.h"
 #include "../include/Utils.h"
 
 #include "tv.h"
+
+struct payload;
+struct sp_thread_data;
+
+struct payload {
+    payload(int max_len) :
+        data(new char[max_len]),
+        len(0),
+        next(0)
+    {}
+    ~payload() {
+        delete [] data;
+    }
+
+    char *data;
+    int len;
+
+    struct payload *next;
+};
+
+void * sp_data_receiver_thread(void *args);
+
+void * sp_data_receiver_thread(void *args)
+{
+    struct sp_thread_data *state = (struct sp_thread_data *) args;
+    const int unit_len = 1024;
+
+    struct payload *buffer;
+
+    buffer = new payload(unit_len);
+
+    int rc;
+
+    while(!state->closed) {
+        rc = recv(state->fd, buffer->data, unit_len, 0);
+
+        pthread_mutex_lock(&state->lock);
+        if(rc == -1) {
+            if(state->closed == true) {
+                pthread_mutex_unlock(&state->lock);
+                goto end;
+            }
+
+            // timeout
+            if(state->recv_waiting) {
+                pthread_cond_signal(&state->recv_cv);
+            }
+        } else if (rc == 0) {
+            // closed
+            state->closed = true;
+            if(state->recv_waiting) {
+                pthread_cond_signal(&state->recv_cv);
+            }
+        } else {
+            buffer->len = rc;
+            if(state->head == 0) {
+                state->head = state->end = buffer;
+            } else {
+                state->end->next = buffer;
+                state->end = state->end->next;
+            }
+
+            buffer = new payload(unit_len);
+
+            if(state->recv_waiting) {
+                pthread_cond_signal(&state->recv_cv);
+            }
+        }
+
+        if(state->msgHandler) {
+            if(state->head || state->closed) {
+                state->parent->ProcessIncomingData();
+            }
+        }
+        pthread_mutex_unlock(&state->lock);
+    }
+
+end:
+    state->release();
+    return NULL;
+}
 
 static std::string valid_commands_str[] = {
     std::string("TEARDOWN")
@@ -44,7 +128,8 @@ sp_client::sp_client(bool aioH) :
     asyncIOHandle(aioH),
     expectingAsyncResponse(0),
     rtt(0),
-    rtt_measurments(0)
+    rtt_measurments(0),
+    thread_data(0)
 {
     buffer_len = 1024*1024;
     buffer = new char[buffer_len];
@@ -89,8 +174,8 @@ void sp_client::connect_to(std::string host, int port)
         }
 
         struct timeval tv;
-        tv.tv_sec = 5;  /* 5 Secs Timeout */
-        tv.tv_usec = 0;
+        tv.tv_sec = 0;  /* 5 Secs Timeout */
+        tv.tv_usec = 200 * 1000;
         setsockopt(this->fd, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
         setsockopt(this->fd, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
 
@@ -109,6 +194,21 @@ void sp_client::connect_to(std::string host, int port)
     }
 
     freeaddrinfo(res0);
+
+    pthread_t thread_id;
+
+    if(this->thread_data) {
+        this->thread_data->release();
+        this->thread_data = 0;
+    }
+
+    this->thread_data = new struct sp_thread_data(this, this->fd);
+
+    this->thread_data->acquire(); //for thread
+
+    pthread_create(&thread_id, NULL, sp_data_receiver_thread, (void *) this->thread_data);
+    pthread_detach(thread_id);
+
     if(asyncIOHandle) {
         setAsyncNotify();
     }
@@ -116,15 +216,22 @@ void sp_client::connect_to(std::string host, int port)
 
 void sp_client::setAsyncNotify()
 {
-        if(fcntl(this->fd, F_SETFL, fcntl(this->fd, F_GETFL) | O_ASYNC) == -1)
-            perror("");
-        fcntl(this->fd, F_SETOWN, getpid());
+    pthread_mutex_lock(&this->thread_data->lock);
+    this->thread_data->msgHandler = this->msgHandler;
+    if(this->thread_data->head) {
+        ProcessIncomingData();
+    }
+    pthread_mutex_unlock(&this->thread_data->lock);
 }
 
 void sp_client::unsetAsyncNotify()
 {
-        if(fcntl(this->fd, F_SETFL, fcntl(this->fd, F_GETFL) & ~O_ASYNC) == -1)
-            perror("");
+    pthread_mutex_lock(&this->thread_data->lock);
+    this->thread_data->msgHandler = 0;
+    if(this->thread_data->head) {
+        ProcessIncomingData();
+    }
+    pthread_mutex_unlock(&this->thread_data->lock);
 }
 
 void sp_client::disconnect()
@@ -138,6 +245,9 @@ void sp_client::disconnect()
 
     if(this->fd != -1) {
         close(this->fd);
+        this->thread_data->closed = true;
+        this->thread_data->release();
+        this->thread_data = 0;
         this->fd = -1;
     }
 }
@@ -177,7 +287,7 @@ bool sp_client::send(struct message *message, struct response *response, bool no
     if(nonblock) {
         expectingAsyncResponse++;
     } else {
-        rc = recv(this->fd, this->buffer, this->buffer_len, 0);
+        rc = recv_data(this->buffer, this->buffer_len, 3);
         if(rc == -1) {
             throw std::runtime_error(std::string("Timeout"));
         } else if (rc == 0) {
@@ -192,7 +302,7 @@ bool sp_client::send(struct message *message, struct response *response, bool no
 
             ++i;
             if(i == rc) {
-                int ret = recv(this->fd, this->buffer + rc, this->buffer_len - rc, 0);
+                int ret = recv_data(this->buffer + rc, this->buffer_len - rc, 3);
                 if (ret > 0) {
                     rc += ret;
                 } else if (ret == 0) {
@@ -218,7 +328,7 @@ bool sp_client::send(struct message *message, struct response *response, bool no
             int total_len = header_len + body_len;
             while(rc < total_len) {
                 ssize_t ret;
-                ret = recv(this->fd, this->buffer + rc, this->buffer_len - rc, 0);
+                ret = recv_data(this->buffer + rc, this->buffer_len - rc, 3);
                 if(ret == 0) {
                     throw std::runtime_error(std::string("Timeout"));
                 } else if(ret == 1) {
@@ -296,7 +406,7 @@ void sp_client::ProcessIncomingData()
     if(fcntl(this->fd, F_SETFL, flags | O_NONBLOCK) < 0)
         return;
 
-    rc = recv(this->fd, this->buffer, this->buffer_len, 0);
+    rc = recv_data(this->buffer, this->buffer_len, 3);
 
     //put socket back in blocking mode
     if(fcntl(this->fd, F_SETFL, flags) < 0)
@@ -420,3 +530,64 @@ int sp_client::GetRTTMs()
         return -1;
     }
 }
+
+int sp_client::recv_data(char *buffer, int len, int timeout_sec)
+{
+    int total = 0;
+
+    struct timeval t0;
+
+    gettimeofday(&t0, NULL);
+
+    pthread_mutex_lock(&this->thread_data->lock);
+    while(this->thread_data->head == 0 && !this->thread_data->closed) {
+        // check timeout
+        struct timeval t;
+        gettimeofday(&t, NULL);
+        if(tv_diff_usec(t, t0) > timeout_sec * 1000 * 1000) {
+            pthread_mutex_unlock(&this->thread_data->lock);
+            return -1;
+        }
+
+        this->thread_data->recv_waiting = true;
+        pthread_cond_wait(&this->thread_data->recv_cv, &this->thread_data->lock);
+        this->thread_data->recv_waiting = false;
+    }
+
+    if(this->thread_data->closed) {
+        pthread_mutex_unlock(&this->thread_data->lock);
+        return 0;
+    }
+
+    do {
+        if(this->thread_data->head->len < len) {
+            memcpy(buffer, this->thread_data->head->data, this->thread_data->head->len);
+
+            len -= this->thread_data->head->len;
+            buffer += this->thread_data->head->len;
+            total += this->thread_data->head->len;
+
+            struct payload * tmp = this->thread_data->head;
+
+            this->thread_data->head = this->thread_data->head->next;
+
+            delete tmp;
+        } else {
+            memcpy(buffer, this->thread_data->head->data, len);
+            memmove(this->thread_data->head->data, this->thread_data->head->data + len, this->thread_data->head->len - len);
+            this->thread_data->head->len = len;
+
+            total += len;
+
+            break;
+        }
+    } while (this->thread_data->head != 0);
+
+    if(this->thread_data->head == 0)
+        this->thread_data->end = 0;
+
+    pthread_mutex_unlock(&this->thread_data->lock);
+
+    return total;
+}
+

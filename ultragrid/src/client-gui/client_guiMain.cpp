@@ -411,11 +411,6 @@ void client_guiFrame::OnSelectClick(wxCommandEvent& event)
     }*/
 }
 
-void client_guiFrame::DataReceived()
-{
-    player.ProcessIncomingData();
-}
-
 void client_guiFrame::DoDisconnect()
 {
     StatusBar1->PushStatusText(wxT("interrupted by server"));

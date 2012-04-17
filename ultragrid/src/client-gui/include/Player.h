@@ -39,7 +39,6 @@ class Player : public wxTimer
         void StopPlayback();
 
         double GetSpeed();
-        void ProcessIncomingData();
 
         void JumpAndPlay(int frame);
         void JumpAndPause(int frame);
