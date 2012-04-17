@@ -11,6 +11,7 @@
 #include "About.h"
 #include "CompressionSetting.h"
 #include "ServerSelectionDialog.h"
+#include "OtherSettingsDialog.h"
 #include "KeyBindingsHelp.h"
 #include "include/ClientDataIntPair.h"
 #include "include/Utils.h"
@@ -72,6 +73,7 @@ const long client_guiFrame::ID_BUTTON1 = wxNewId();
 const long client_guiFrame::idMenuQuit = wxNewId();
 const long client_guiFrame::idServerSetting = wxNewId();
 const long client_guiFrame::idCompressionSetting = wxNewId();
+const long client_guiFrame::idOtherSettings = wxNewId();
 const long client_guiFrame::idMenuAbout = wxNewId();
 const long client_guiFrame::idKeyBindings = wxNewId();
 const long client_guiFrame::ID_STATUSBAR1 = wxNewId();
@@ -162,6 +164,8 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Menu3->Append(MenuItem3);
     MenuItem4 = new wxMenuItem(Menu3, idCompressionSetting, _("Compression"), _("Sets preferred compression"), wxITEM_NORMAL);
     Menu3->Append(MenuItem4);
+    MenuItem6 = new wxMenuItem(Menu3, idOtherSettings, _("Other Settings"), wxEmptyString, wxITEM_NORMAL);
+    Menu3->Append(MenuItem6);
     MenuBar1->Append(Menu3, _("&Settings"));
     Menu2 = new wxMenu();
     MenuItem2 = new wxMenuItem(Menu2, idMenuAbout, _("About\tF1"), _("Show info about this application"), wxITEM_NORMAL);
@@ -197,6 +201,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Connect(idServerSetting,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnServerSetting);
     Connect(idCompressionSetting,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnCompressSetting);
     Connect(idKeyBindings,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnKeyBindingsHelp);
+    Connect(idOtherSettings,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnOtherSettings);
 
     gl->Connect(wxEVT_PAINT,(wxObjectEventFunction)&GLView::OnPaint,0,gl);
     /*int GLCanvasAttributes_1[] = {
@@ -280,6 +285,22 @@ void client_guiFrame::OnCompressSetting(wxCommandEvent& event)
     }
 }
 
+void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
+{
+    OtherSettingsDialog dlg(this);
+    wxString useTCP = wxString(settings.GetValue(std::string("use_tcp"), std::string("false")).c_str(), wxConvUTF8);
+    if (useTCP == wxT("true")) {
+        dlg.UseTCP->SetValue(true);
+    } else {
+        dlg.UseTCP->SetValue(false);
+    }
+
+    if ( dlg.ShowModal() == wxID_OK ) {
+        settings.SetValue("use_tcp", dlg.UseTCP->GetValue() ? "true" : "false");
+    } else {
+        //else: dialog was cancelled or some another button pressed
+    }
+}
 
 void client_guiFrame::OnQuit(wxCommandEvent& event)
 {
@@ -373,7 +394,9 @@ void client_guiFrame::OnSelectClick(wxCommandEvent& event)
 {
 
     if(selectVideo->ShowModal() == wxID_OK ) {
-        this->Stop();
+        if(player.GetState() != sInit) {
+            this->Stop();
+        }
         this->playList.Empty();
         this->playList = selectVideo->GetSelectedVideo();
         if(!this->playList.IsEmpty()) {

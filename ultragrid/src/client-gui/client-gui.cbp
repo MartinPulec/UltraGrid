@@ -42,6 +42,8 @@
 		<Unit filename="About.h" />
 		<Unit filename="KeyBindingsHelp.cpp" />
 		<Unit filename="KeyBindingsHelp.h" />
+		<Unit filename="OtherSettingsDialog.cpp" />
+		<Unit filename="OtherSettingsDialog.h" />
 		<Unit filename="ServerSelectionDialog.cpp" />
 		<Unit filename="ServerSelectionDialog.h" />
 		<Unit filename="VideoSelection.cpp" />
@@ -76,7 +78,7 @@
 		<Unit filename="src/ProgressSlider.cpp" />
 		<Unit filename="src/Settings.cpp" />
 		<Unit filename="src/UGReceiver.cpp">
-			<Option virtualFolder="client-gui/include/" />
+			<Option virtualFolder="client-gui/src/" />
 		</Unit>
 		<Unit filename="src/Utils.cpp" />
 		<Unit filename="src/VideoBuffer.cpp" />
@@ -94,11 +96,16 @@
 		<Unit filename="../src/Player.cpp">
 			<Option virtualFolder="client-gui/src/" />
 		</Unit>
+		<Unit filename="../tcp_receive.cpp" />
+		<Unit filename="../tcp_receive.h" />
+		<Unit filename="../tcp_transmit.cpp" />
+		<Unit filename="../tcp_transmit.h" />
 		<Unit filename="../udt_receive.cpp" />
 		<Unit filename="../udt_receive.h" />
 		<Unit filename="../udt_transmit.cpp" />
 		<Unit filename="../udt_transmit.h" />
 		<Unit filename="../video_display/wxgl.cpp" />
+		<Unit filename="../x11_common.o" />
 		<Extensions>
 			<code_completion />
 			<envvars />
@@ -112,6 +119,7 @@
 					<wxDialog wxs="wxsmith/VideoSelection.wxs" src="VideoSelection.cpp" hdr="VideoSelection.h" name="VideoSelection" language="CPP" />
 					<wxDialog wxs="wxsmith/KeyBindingsHelp.wxs" src="KeyBindingsHelp.cpp" hdr="KeyBindingsHelp.h" name="KeyBindingsHelp" language="CPP" />
 					<wxDialog wxs="wxsmith/About.wxs" src="About.cpp" hdr="About.h" name="About" language="CPP" />
+					<wxDialog wxs="wxsmith/OtherSettingsDialog.wxs" src="OtherSettingsDialog.cpp" hdr="OtherSettingsDialog.h" name="OtherSettingsDialog" language="CPP" />
 				</resources>
 			</wxsmith>
 		</Extensions>

@@ -37,7 +37,15 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
     settings = settings_;
 
     buffer.SetGLView(view);
-    receiver = new UGReceiver((const char *) "wxgl", &buffer);
+    std::string use_tcp_str = settings->GetValue(std::string("use_tcp"), std::string("false"));
+    bool use_tcp;
+    if(use_tcp_str.compare(std::string("true")) == 0) {
+        use_tcp = true;
+    } else {
+        use_tcp = false;
+    }
+
+    receiver = new UGReceiver((const char *) "wxgl", &buffer, use_tcp);
 }
 
 //called upon refresh
@@ -182,8 +190,12 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
         this->connection.set_parameter(wxT("compression"), wxString(settings->GetValue(std::string("compression"), std::string("none")).c_str(), wxConvUTF8) << wxT(" ") +
                 wxString(settings->GetValue(std::string("jpeg_qual"), std::string("80")).c_str(), wxConvUTF8));
 
+        failedPart = wxT("TCP/UDP setting");
+        wxString use_tcp_str = wxString(settings->GetValue(std::string("use_tcp"), std::string("false")).c_str(), wxConvUTF8);
+        this->connection.set_parameter(wxT("use_tcp"), use_tcp_str);
+
         failedPart = wxT("setup");
-        this->connection.setup(wxT("/") + path);
+        int port = this->connection.setup(wxT("/") + path);
         failedPart = wxT("setting FPS");
         this->connection.set_parameter(wxT("fps"), Utils::FromCDouble(fps, 2));
         /*failedPart = wxT("setting loop");
@@ -193,8 +205,7 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
 
         failedPart = wxT("playing");
 
-
-        receiver->Accept();
+        receiver->Accept(hostname.mb_str(), port);
         this->fps = fps;
         SchedulePlay();
 

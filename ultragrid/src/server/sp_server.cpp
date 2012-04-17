@@ -96,6 +96,10 @@ sp_serv::sp_serv(uint16_t port, sp_state_change_t sp_state_change_callback, sp_r
         tv.tv_usec = 0;
         setsockopt(this->socket_fd, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
         setsockopt(this->socket_fd, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+        int reuse = 1;
+        setsockopt(this->socket_fd, SOL_SOCKET, SO_REUSEADDR, (char *)&reuse,
+             sizeof(reuse));
+
 
         s_in.sin_family = AF_INET;
         s_in.sin_addr.s_addr = INADDR_ANY;

@@ -1,6 +1,7 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <netinet/in.h>
 #include <wx/string.h>
 
 class Utils
@@ -10,6 +11,8 @@ class Utils
         virtual ~Utils();
 
         static wxString FromCDouble(double value, int precision);
+
+        static int conn_nonb(struct sockaddr_in sa, int sock, int timeout);
     protected:
     private:
 };

@@ -1,5 +1,5 @@
 /*
- * FILE:   udt_receive.h
+ * FILE:   transmit.h
  * AUTHOR: Colin Perkins <csp@isi.edu>
  *         Martin Benes     <martinbenesh@gmail.com>
  *         Lukas Hejtmanek  <xhejtman@ics.muni.cz>
@@ -52,14 +52,13 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
+struct tcp_transmit;
 struct video_frame;
 
-void               *udt_receive_init(const char *address, unsigned int port);
-void		        udt_receive_done(void *udt_receive);
-int                 udt_receive(void *udt_receive, char *buffer, int *len);
-int                 udt_receive_accept(void *udt_receive, const char *remote_host, int remote_port);
-int                 udt_receive_disconnect(void *udt_receive);
+void                *tcp_transmit_init(char *address, unsigned int *port);
+void	             tcp_transmit_accept(void *tcp_transmit);
+void		         tcp_transmit_done(void *tcp_transmit);
+void                 tcp_send(void *tcp_transmit, struct video_frame *frame);
 
 #ifdef __cplusplus
 }

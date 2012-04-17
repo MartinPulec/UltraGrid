@@ -190,6 +190,9 @@
 					<label>Compression</label>
 					<help>Sets preferred compression</help>
 				</object>
+				<object class="wxMenuItem" name="idOtherSettings" variable="MenuItem6" member="yes">
+					<label>Other Settings</label>
+				</object>
 			</object>
 			<object class="wxMenu" variable="Menu2" member="no">
 				<label>Help</label>

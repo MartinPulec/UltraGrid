@@ -52,13 +52,13 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-struct udt_transmit;
 struct video_frame;
 
-struct udt_transmit *udt_transmit_init(char *address, unsigned int port);
-void		 udt_transmit_done(struct udt_transmit *udt_transmit);
-void             udt_send(struct udt_transmit  *udt_transmit, struct video_frame *frame);
-void             udt_send_description(struct udt_transmit  *udt_transmit, struct video_frame *frame);
+void *udt_transmit_init(char *address, unsigned int *port);
+void		 udt_transmit_done(void *udt_transmit);
+void		 udt_transmit_accept(void *udt_transmit);
+void             udt_send(void *udt_transmit, struct video_frame *frame);
+void             udt_send_description(void *udt_transmit, struct video_frame *frame);
 
 #ifdef __cplusplus
 }

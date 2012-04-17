@@ -29,6 +29,7 @@
 #include "../include/sp_client.h"
 #include "../include/AsyncMsgHandler.h"
 #include "../include/ConnectionClosedException.h"
+#include "../include/Utils.h"
 
 #include "tv.h"
 
@@ -56,71 +57,6 @@ sp_client::~sp_client()
     }
 
     delete [] buffer;
-}
-
-//do a nonblocking connect
-//  return -1 on a system call error, 0 on success
-//  sa - host to connect to, filled by caller
-//  sock - the socket to connect
-//  timeout - how long to wait to connect
-inline int
-conn_nonb(struct sockaddr_in sa, int sock, int timeout)
-{
-    int flags = 0, error = 0, ret = 0;
-    fd_set  rset, wset;
-    socklen_t   len = sizeof(error);
-    struct timeval  ts;
-
-    ts.tv_sec = timeout;
-    ts.tv_usec = 0;
-
-    //clear out descriptor sets for select
-    //add socket to the descriptor sets
-    FD_ZERO(&rset);
-    FD_SET(sock, &rset);
-    wset = rset;    //structure assignment ok
-
-    //set socket nonblocking flag
-    if( (flags = fcntl(sock, F_GETFL, 0)) < 0)
-        return -1;
-
-    if(fcntl(sock, F_SETFL, flags | O_NONBLOCK) < 0)
-        return -1;
-
-    //initiate non-blocking connect
-    if( (ret = connect(sock, (struct sockaddr *)&sa, 16)) < 0 )
-        if (errno != EINPROGRESS)
-            return -1;
-
-    if(ret == 0)    //then connect succeeded right away
-        goto done;
-
-    //we are waiting for connect to complete now
-    if( (ret = select(sock + 1, &rset, &wset, NULL, (timeout) ? &ts : NULL)) < 0)
-        return -1;
-    if(ret == 0){   //we had a timeout
-        errno = ETIMEDOUT;
-        return -1;
-    }
-
-    //we had a positivite return so a descriptor is ready
-    if (FD_ISSET(sock, &rset) || FD_ISSET(sock, &wset)){
-        if(getsockopt(sock, SOL_SOCKET, SO_ERROR, &error, &len) < 0)
-            return -1;
-    }else
-        return -1;
-
-    if(error){  //check if we had a socket error
-        errno = error;
-        return -1;
-    }
-
-done:
-    //put socket back in blocking mode
-    if(fcntl(sock, F_SETFL, flags) < 0)
-        return -1;
-
-    return 0;
 }
 
 void sp_client::connect_to(std::string host, int port)
@@ -159,7 +95,7 @@ void sp_client::connect_to(std::string host, int port)
         setsockopt(this->fd, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
 
         //if(connect(this->fd, res->ai_addr, res->ai_addrlen) == -1) {
-        if(conn_nonb(* (struct sockaddr_in *) res->ai_addr, this->fd, 5)) {
+        if(Utils::conn_nonb(* (struct sockaddr_in *) res->ai_addr, this->fd, 5)) {
             this->fd = -1;
             what = std::string("connect failed: ") + strerror(errno);
             continue;
@@ -244,6 +180,8 @@ bool sp_client::send(struct message *message, struct response *response, bool no
         rc = recv(this->fd, this->buffer, this->buffer_len, 0);
         if(rc == -1) {
             throw std::runtime_error(std::string("Timeout"));
+        } else if (rc == 0) {
+            throw ConnectionClosedException();
         }
 
         int i = 0;
@@ -258,7 +196,7 @@ bool sp_client::send(struct message *message, struct response *response, bool no
                 if (ret > 0) {
                     rc += ret;
                 } else if (ret == 0) {
-                    throw std::runtime_error(std::string("Connection closed"));
+                    throw ConnectionClosedException();
                 } else {
                     throw std::runtime_error(std::string("Timeout"));
                 }
@@ -279,7 +217,15 @@ bool sp_client::send(struct message *message, struct response *response, bool no
             int header_len = ptr - this->buffer;
             int total_len = header_len + body_len;
             while(rc < total_len) {
-                rc += recv(this->fd, this->buffer + rc, this->buffer_len - rc, 0);
+                ssize_t ret;
+                ret = recv(this->fd, this->buffer + rc, this->buffer_len - rc, 0);
+                if(ret == 0) {
+                    throw std::runtime_error(std::string("Timeout"));
+                } else if(ret == 1) {
+                    throw ConnectionClosedException();
+                }
+
+                rc += ret;
             }
             res = ProcessResponse(this->buffer, total_len, response);
         }

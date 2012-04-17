@@ -23,7 +23,7 @@ VideoProperties::VideoProperties(wxWindow* parent,wxWindowID id,const wxPoint& p
 	wxFlexGridSizer* FlexGridSizer1;
 	wxFlexGridSizer* FlexGridSizer2;
 	wxStdDialogButtonSizer* StdDialogButtonSizer1;
-
+	
 	Create(parent, wxID_ANY, _("Video Properties"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE, _T("wxID_ANY"));
 	SetClientSize(wxSize(441,107));
 	FlexGridSizer1 = new wxFlexGridSizer(0, 1, 0, 0);

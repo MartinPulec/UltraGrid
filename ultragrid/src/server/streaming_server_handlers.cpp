@@ -69,7 +69,7 @@ extern char **uv_argv;
 
 //class UltraGrid
 session_handler::session_handler(const char *r)
-        : pid(0), state(Init), receiver(r)
+        : pid(0), state(Init), receiver(r), use_tcp(false)
 {
 }
 
@@ -93,6 +93,7 @@ bool session_handler::informDied(pid_t pid)
 void session_handler::handle(struct msg *message, streaming_server* serv, responder * resp)
 {
         struct resp_msg response;
+        char buffer[1000];
 
         response.code = -1;
         response.message = NULL;
@@ -129,25 +130,55 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                                         fcntl(fd[1], F_SETFD, FD_CLOEXEC);
                                         comm_fd = fd[1];
 
+                                        struct timeval tv;
+                                        tv.tv_sec = 1;  /* 5 Secs Timeout */
+                                        tv.tv_usec = 500 * 1000;
+                                        setsockopt(comm_fd, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+                                        setsockopt(comm_fd, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+
                                         snprintf(fd_str, 6, "%d", fd[0]);
 
                                         pid = fork();
                                         if(pid == 0) { /* a child */
+                                                char * args[100];
+
                                                 char dpx_arg[MAX_PATH_LEN + 1];
                                                 if(strcmp(color_space.c_str(), "file") == 0) {
                                                         snprintf(dpx_arg, MAX_PATH_LEN, "%s:files=%s/*.%s", video_format.c_str(), path.c_str(), glob_ext.c_str());
                                                 } else {
                                                         snprintf(dpx_arg, MAX_PATH_LEN, "%s:colorspace=%s:files=%s/*.%s", video_format.c_str(), color_space.c_str(), path.c_str(), glob_ext.c_str());
                                                 }
-                                                if(compression.empty()) {
-                                                        execlp(uv_argv[0], uv_argv[0], "-t", dpx_arg, "-m", "1500", "-C", fd_str, receiver.c_str(), (void *) 0);
-                                                } else {
-                                                        if(strncmp(compression.c_str(), "JPEG", 4) == 0) {
-                                                                execlp(uv_argv[0], uv_argv[0], "-t", dpx_arg, "-m", "1500", "-C", fd_str, "-c", compression.c_str(), receiver.c_str(), "-f", "mult:2", (void *) 0);
-                                                        } else {
-                                                                execlp(uv_argv[0], uv_argv[0], "-t", dpx_arg, "-m", "1500", "-C", fd_str, "-c", compression.c_str(), receiver.c_str(), (void *) 0);
-                                                        }
+                                                int index = 0;
+
+                                                args[index++] = uv_argv[0];
+                                                args[index++] = "-t";
+                                                args[index++] = dpx_arg;
+                                                args[index++] = "-m";
+                                                args[index++] = "1500";
+
+                                                if(!compression.empty()) {
+                                                        args[index++] = "-c";
+                                                        args[index++] = strdup(compression.c_str());
                                                 }
+
+                                                args[index++] = "-C";
+                                                args[index++] = fd_str;
+
+                                                if(strncmp(compression.c_str(), "JPEG", 4) == 0) {
+                                                        args[index++] = "-f";
+                                                        args[index++] = "mult:2";
+                                                }
+
+                                                if(this->use_tcp) {
+                                                        args[index++] = "-T";
+                                                }
+
+                                                args[index++] = strdup(receiver.c_str());
+
+                                                args[index] = 0;
+
+                                                execvp(uv_argv[0], args);
+
                                         } else { /* parent */
                                                 if(pid == -1) { /* cannot fork */
                                                         response.code = 500;
@@ -155,10 +186,37 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                                                         response.body = "Fork Failed";
                                                         response.body_len = strlen(response.body);
                                                 } else {
+                                                        close(fd[0]);
+                                                        int message_len;
+                                                        int ret;
+                                                        ssize_t total = 0;
+
+                                                        ret = read(fd[1], &message_len, sizeof(message_len));
+                                                        if(ret != sizeof(message_len))
+                                                                goto launch_err;
+                                                        do {
+                                                                ret = read(fd[1], buffer + total, message_len - total);
+                                                                if(ret <= 0) 
+                                                                        goto launch_err;
+                                                                total += ret;
+                                                        } while (total < message_len);
+
                                                         state = Ready;
                                                         response.code = 201;
+                                                        assert(total < sizeof(buffer));
+                                                        buffer[total] = '\0';
                                                         response.message = "Created";
-                                                        response.body_len = 0;
+                                                        response.body = buffer;
+                                                        response.body_len = sizeof(buffer);
+
+                                                        if(0) {
+launch_err:
+                                                                response.code = 500;
+                                                                response.message = "Internal Server Error";
+                                                                response.body = "Getting Port";
+                                                                response.body_len = strlen(response.body);
+                                                        }
+
                                                 }
                                         }
                                 }
@@ -323,6 +381,10 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                         if(color_space) {
                                 this->color_space = color_space;
                         }
+                } else if(strcmp(item, "use_tcp") == 0) {
+                        char *use_tcp_cstr = strtok_r(NULL, " ", &save_ptr);
+                        if(strcmp(use_tcp_cstr, "true") == 0)
+                                this->use_tcp = true;
                 } else if(strcmp(item, "loop") == 0) {
                         char *onOrOff = strtok_r(NULL, " ", &save_ptr);
                         char buff[20];

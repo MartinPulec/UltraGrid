@@ -8,9 +8,9 @@ struct state_uv;
 
 class UGReceiver {
     public:
-        UGReceiver(const char *display, VideoBuffer *gl);
+        UGReceiver(const char *display, VideoBuffer *gl, bool use_tcp);
         ~UGReceiver();
-        void Accept();
+        void Accept(const char *remote_host, int remote_port);
         void Disconnect();
     private:
         client_guiFrame *parent;

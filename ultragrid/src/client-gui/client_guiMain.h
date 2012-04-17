@@ -72,6 +72,7 @@ class client_guiFrame: public wxFrame
         void OnBackwardFastClick(wxCommandEvent& event);
         //*)
         void OnKeyBindingsHelp(wxCommandEvent& event);
+        void OnOtherSettings(wxCommandEvent& event);
 
         void Resize(wxCommandEvent&);
         void Scrolled(wxCommandEvent&);
@@ -116,6 +117,7 @@ class client_guiFrame: public wxFrame
         static const long idMenuQuit;
         static const long idServerSetting;
         static const long idCompressionSetting;
+        static const long idOtherSettings;
         static const long idMenuAbout;
         static const long idKeyBindings;
         static const long ID_STATUSBAR1;
@@ -136,6 +138,7 @@ class client_guiFrame: public wxFrame
         GLView* gl;
         ProgressSlider* Slider1;
         wxButton* StopBtn;
+        wxMenuItem* MenuItem6;
         wxMenuItem* MenuItem4;
         wxButton* Quicker;
         CustomGridBagSizer* FlexGridSizer1;

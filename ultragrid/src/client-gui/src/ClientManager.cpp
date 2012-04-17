@@ -1,5 +1,6 @@
 #include "../include/ClientManager.h"
 
+#include <iostream>
 #include <stdexcept>
 
 ClientManager::ClientManager() :
@@ -50,12 +51,14 @@ void ClientManager::set_parameter(wxString val, wxString param)
     }
 }
 
-void ClientManager::setup(wxString path)
+int ClientManager::setup(wxString path)
 {
     wxString msgstr;
     struct message msg;
     struct response resp;
     wxCharBuffer buf;
+
+    int port;
 
     msgstr = L"";
     msgstr << wxT("SETUP ") << path;
@@ -70,7 +73,13 @@ void ClientManager::setup(wxString path)
         wxString msg;
         msg << wxT("Media setup error: ") << resp.code << L" " << wxString::FromUTF8((resp.msg));
         throw std::runtime_error(std::string(msg.mb_str()));
+    } else {
+        assert(resp.body_len > 0);
+
+        port = atoi(resp.body);
     }
+
+    return port;
 }
 
 void ClientManager::play(int pos)

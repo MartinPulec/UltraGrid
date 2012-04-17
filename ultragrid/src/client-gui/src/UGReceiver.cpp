@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <sys/time.h>
 
+#include <string>
+
 #include "../client_guiMain.h"
 #include "../include/GLView.h"
 
@@ -23,9 +25,10 @@ extern "C" {
 #include "video_decompress.h"
 
 #include "udt_receive.h"
+#include "tcp_receive.h"
 };
 
-#define USE_UDT 1
+#define USE_CUSTOM_TRANSMIT
 
 enum cmd {
     CMD_ACCEPT,
@@ -42,11 +45,11 @@ enum state {
 
 
 struct state_uv {
-#ifndef USE_UDT
+#ifndef USE_CUSTOM_TRANSMIT
         struct rtp **network_devices;
         struct pdb *participants;
 #else
-        struct udt_recv *udt_receive;
+        void *receive_state;
 #endif
         unsigned int connections_count;
 
@@ -65,6 +68,17 @@ struct state_uv {
 
         uint32_t ts;
         struct display *display_device;
+
+        void * (* receive_init)(const char *address, unsigned int port);
+        void (*receive_done)(void *state);
+        int (*receive)(void *state, char *buffer, int *len);
+        int (*receive_accept)(void *state, const char *remote_host, int remote_port);
+        int (*receive_disconnect)(void *state);
+
+        char * remote_host;
+        int remote_port;
+
+        bool use_tcp;
 };
 
 volatile int should_exit = FALSE;
@@ -245,10 +259,6 @@ static void *receiver_thread(void *arg)
         struct timeval last_tile_received = {0, 0};
         struct pbuf_video_data pbuf_data;
 
-#ifdef USE_UDT
-        uv->udt_receive = udt_receive_init("localhost", 5004);
-#endif
-
         initialize_video_decompress();
         pbuf_data.decoder = decoder_init(uv->decoder_mode, uv->postprocess);
         if(!pbuf_data.decoder) {
@@ -262,7 +272,7 @@ static void *receiver_thread(void *arg)
         fr = 1;
 
         while (1) {
-#ifndef USE_UDT
+#ifndef USE_CUSTOM_TRANSMIT
                 abort();
 
                 /* Housekeeping and RTCP... */
@@ -354,7 +364,7 @@ static void *receiver_thread(void *arg)
                             uv->state = ST_EXIT;
                             break;
                         case CMD_DISCONNECT:
-                            ret = udt_receive_disconnect(uv->udt_receive);
+                            ret = uv->receive_disconnect(uv->receive_state);
                             std::cerr << "UGReceiver command: disconnect" << std::endl;
                             uv->state = ST_NONE;
                             break;
@@ -372,7 +382,7 @@ static void *receiver_thread(void *arg)
 
                 if(accept) {
                     while(uv->command == CMD_NONE) {
-                        ret = udt_receive_accept(uv->udt_receive);
+                        ret = uv->receive_accept(uv->receive_state, uv->remote_host, uv->remote_port);
 
                         if(!ret) {
                             fprintf(stderr, "Failed to accept\n");
@@ -392,40 +402,76 @@ static void *receiver_thread(void *arg)
                 }
                 // accepted
 
-                int res, data_len;
-                struct {
+                if(uv->use_tcp) {
+                    int res, data_len;
+                    int total_received;
                     video_payload_hdr_t header;
-                    char pad[8];
-                } a;
-                int len = sizeof(a) + 1;
-                char *buffer;
-                res = udt_receive(uv->udt_receive, (char *) &a.header, &len);
-                if(!res) {
-                    std::cerr << "(res: " << res << ", len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
-                    goto error;
-                }
-                if(len != sizeof(video_payload_hdr_t)) {
-                    std::cerr << "(len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
-                    goto error;
-                }
 
-                data_len = decoder_reconfigure((char *) &a.header, len, &pbuf_data);
-                decoder_get_buffer(&pbuf_data, &buffer, &len);
-                res = udt_receive(uv->udt_receive, buffer, &len);
-                if(!res) {
-                    std::cerr << "(res: " << res << ")" << std::endl;
-                    goto error;
+                    int len = sizeof(header);
+                    char *buffer;
+                    res = uv->receive(uv->receive_state, (char *) &header, &len);
+
+                    if(!res) {
+                        std::cerr << "(res: " << res << ", len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
+                        goto error;
+                    }
+
+                    data_len = decoder_reconfigure((char *) &header, len, &pbuf_data);
+                    decoder_get_buffer(&pbuf_data, &buffer, &len);
+
+
+                    total_received = 0;
+
+                    while(total_received < data_len) {
+                        len = data_len - total_received;
+
+                        res = uv->receive(uv->receive_state, buffer + total_received, &len);
+                        if(!res) {
+                            std::cerr << "(res: " << res << ")" << std::endl;
+                        }
+
+                        total_received += len;
+                    }
+
+                    decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, len, pbuf_data.frame_buffer);
+
+                    display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
+                    pbuf_data.frame_buffer = display_get_frame(uv->display_device);
+                } else { //UDT
+                    int res, data_len;
+                    struct {
+                        video_payload_hdr_t header;
+                        char pad[8];
+                    } a;
+                    int len = sizeof(a) + 1;
+                    char *buffer;
+                    res = uv->receive(uv->receive_state, (char *) &a.header, &len);
+                    if(!res) {
+                        std::cerr << "(res: " << res << ", len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
+                        goto error;
+                    }
+                    if(len != sizeof(video_payload_hdr_t)) {
+                        std::cerr << "(len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
+                        goto error;
+                    }
+
+                    data_len = decoder_reconfigure((char *) &a.header, len, &pbuf_data);
+                    decoder_get_buffer(&pbuf_data, &buffer, &len);
+                    res = uv->receive(uv->receive_state, buffer, &len);
+                    if(!res) {
+                        std::cerr << "(res: " << res << ")" << std::endl;
+                        goto error;
+                    }
+                    if(len != data_len) {
+                        std::cerr << "(len: " << len << ", data_len: " << data_len  << ")" << std::endl;
+                        goto error;
+                    }
+
+                    decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, len, pbuf_data.frame_buffer);
+
+                    display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
+                    pbuf_data.frame_buffer = display_get_frame(uv->display_device);
                 }
-                if(len != data_len) {
-                    std::cerr << "(len: " << len << ", data_len: " << data_len  << ")" << std::endl;
-                    goto error;
-                }
-
-                decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, len, pbuf_data.frame_buffer);
-
-                display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
-                pbuf_data.frame_buffer = display_get_frame(uv->display_device);
-
 error:
                 ;
 
@@ -439,7 +485,6 @@ quit:
         decoder_destroy(pbuf_data.decoder);
 
 
-
         std::cerr << "UGRECEIVER THREAD EXITED";
 
         return 0;
@@ -447,19 +492,42 @@ quit:
 
 
 
-UGReceiver::UGReceiver(const char *display, VideoBuffer *buffer)
+UGReceiver::UGReceiver(const char *display, VideoBuffer *buffer, bool use_tcp)
 {
     pthread_t receiver_thread_id;
 
     uv = (struct state_uv *) malloc(sizeof(struct state_uv));
-#ifndef USE_UDT
+#ifndef USE_CUSTOM_TRANSMIT
     uv->participants = pdb_init();
     uv->network_devices = initialize_network(strdup("localhost"), 5004, uv->participants);
 #endif
+
+    uv->use_tcp = use_tcp;
+    uv->receive_state = 0;
+
+    if(uv->use_tcp) {
+        std::cerr << "Tramnsmit: TCP" << std::endl;
+        uv->receive_init = tcp_receive_init;
+        uv->receive_done = tcp_receive_done;
+        uv->receive = tcp_receive;
+        uv->receive_accept = tcp_receive_accept;
+        uv->receive_disconnect = tcp_receive_disconnect;
+    } else {
+        std::cerr << "Tramnsmit: UDT" << std::endl;
+        uv->receive_init = udt_receive_init;
+        uv->receive_done = udt_receive_done;
+        uv->receive = udt_receive;
+        uv->receive_accept = udt_receive_accept;
+        uv->receive_disconnect = udt_receive_disconnect;
+    }
+
+    uv->receive_state = uv->receive_init("localhost", 5004);
+
     uv->connections_count = 1;
     gettimeofday(&uv->start_time, NULL);
     uv->decoder_mode = NULL;
     uv->postprocess = NULL;
+    uv->remote_host = NULL;
 
     pthread_mutex_init(&uv->lock, NULL);
     pthread_cond_init(&uv->boss_cv, NULL);
@@ -494,11 +562,15 @@ UGReceiver::UGReceiver(const char *display, VideoBuffer *buffer)
     pthread_sigmask(SIG_SETMASK, &oldmask, &mask);
 }
 
-void UGReceiver::Accept()
+void UGReceiver::Accept(const char *remote_host, int remote_port)
 {
     pthread_mutex_lock(&uv->lock);
 
     uv->command = CMD_ACCEPT;
+    free(uv->remote_host);
+
+    uv->remote_host = strdup(remote_host);
+    uv->remote_port = remote_port;
 
     uv->boss_waiting = true;
     pthread_mutex_unlock(&uv->lock);

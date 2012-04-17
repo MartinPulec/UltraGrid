@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
 <CodeBlocks_layout_file>
 	<ActiveTarget name="Debug" />
-	<File name="serv_guiMain.cpp" open="1" top="0" tabpos="3">
-		<Cursor position="8647" topLine="226" />
+	<File name="serv_guiMain.cpp" open="1" top="0" tabpos="5">
+		<Cursor position="11252" topLine="277" />
 	</File>
-	<File name="serv_guiMain.h" open="1" top="0" tabpos="4">
+	<File name="serv_guiMain.h" open="1" top="0" tabpos="6">
 		<Cursor position="1212" topLine="15" />
 	</File>
 </CodeBlocks_layout_file>

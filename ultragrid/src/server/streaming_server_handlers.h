@@ -68,6 +68,7 @@ class session_handler {
                 std::string path;
                 std::string receiver;
                 double fps;
+                bool use_tcp;
 
                 std::string compression;
                 std::string video_format;

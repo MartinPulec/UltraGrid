@@ -100,6 +100,8 @@ OBJS	      = @OBJS@ \
 		src/gl_context.o \
 		src/color_transform.o \
 		src/watermark.o \
+		src/tcp_receive.o \
+		src/tcp_transmit.o \
 		src/udt_transmit.o \
 		src/udt_receive.o \
 		src/client-gui/src/VideoBuffer.o \
@@ -262,6 +264,7 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 	     src/client-gui/client_guiMain.o \
 	     src/client-gui/KeyBindingsHelp.o \
 	     src/client-gui/About.o \
+	     src/client-gui/OtherSettingsDialog.o \
 	     src/client-gui/ServerSelectionDialog.o \
 	     src/client-gui/VideoSelection.o \
 	     src/client-gui/src/Settings.o \
@@ -280,7 +283,8 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 
 SERVER_OBJ = src/server/sp_server.o \
 	     src/server/streaming_server.o \
-	     src/server/streaming_server_handlers.o
+	     src/server/streaming_server_handlers.o \
+	     src/client-gui/src/Utils.o \
 
 SERVER_GUI_OBJ = src/serv-gui/serv_guiApp.o \
 		 src/serv-gui/serv_guiMain.o \

@@ -55,8 +55,12 @@
 #include <stdexcept>
 #include <iostream>
 
+#ifdef  HAVE_CONFIG_H
 #include "config.h"
 #include "config_unix.h"
+#endif
+
+#include "debug.h"
 #include "udt_receive.h"
 #include "video.h"
 
@@ -83,7 +87,6 @@ struct udt_recv {
                 //UDT::setsockopt(socket, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
                 //UDT::setsockopt(socket, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
 
-
                 sockaddr_in my_addr;
                 my_addr.sin_family = AF_INET;
                 my_addr.sin_port = htons(port);
@@ -107,7 +110,6 @@ struct udt_recv {
         {
                 int namelen;
                 sockaddr_in their_addr;
-
 
                 bool val = false;
                 UDT::setsockopt(socket, /* unused */ 0, UDT_RCVSYN, (const char *) &val, sizeof(bool));
@@ -177,33 +179,52 @@ struct udt_recv {
         int udt_epoll_id;
 };
 
-struct udt_recv *udt_receive_init(const char *address, unsigned int port)
+void *udt_receive_init(const char *address, unsigned int port)
 {
-        struct udt_recv *s = 0;
+    struct udt_recv *s = 0;
 
-        try {
-                s = new udt_recv(address, port);
-        } catch (std::exception &e) {
-                std::cerr << e.what() << std::endl;
-        }
+    try {
+            s = new udt_recv(address, port);
+    } catch (std::exception &e) {
+            std::cerr << e.what() << std::endl;
+    }
 
-        return s;
+    return (void *) s;
 }
 
-void udt_receive_done(struct udt_recv *s)
+void udt_receive_done(void *state)
 {
+    if(state == 0)
+        return;
+
+    udt_recv *s = (udt_recv *) state;
+
+    delete s;
 }
 
-int udt_receive(struct udt_recv  *udt_receive, char *buffer, int *len)
+int udt_receive(void *state, char *buffer, int *len)
 {
-        return udt_receive->receive(buffer, len);
+    if(state == 0)
+        return 0;
+
+    udt_recv *s = (udt_recv *) state;
+
+    return s->receive(buffer, len);
 }
 
-int udt_receive_accept(struct udt_recv  *udt_receive)
+int udt_receive_accept(void *state, const char *remote_host, int remote_port)
 {
+    if(state == 0)
+        return 0;
+
+    UNUSED(remote_host);
+    UNUSED(remote_port);
+
+    udt_recv *s = (udt_recv *) state;
+
     int ret = 1;
     try {
-        if(!udt_receive->accept()) {
+        if(!s->accept()) {
             ret = 0;
         }
     } catch (...) {
@@ -213,7 +234,14 @@ int udt_receive_accept(struct udt_recv  *udt_receive)
     return ret;
 }
 
-int udt_receive_disconnect(struct udt_recv  *udt_receive)
+int udt_receive_disconnect(void *state)
 {
-    udt_receive->disconnect();
+    if(state == 0)
+        return 0;
+
+    udt_recv *s = (udt_recv *) state;
+
+    s->disconnect();
+
+    return 1;
 }

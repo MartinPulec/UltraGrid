@@ -22,17 +22,17 @@
 	<File name="client_guiApp.cpp" open="0" top="0" tabpos="1">
 		<Cursor position="467" topLine="0" />
 	</File>
-	<File name="client_guiMain.cpp" open="0" top="0" tabpos="2">
-		<Cursor position="369" topLine="0" />
+	<File name="client_guiMain.cpp" open="1" top="0" tabpos="20">
+		<Cursor position="14849" topLine="239" />
 	</File>
-	<File name="client_guiMain.h" open="0" top="0" tabpos="3">
-		<Cursor position="2465" topLine="43" />
+	<File name="client_guiMain.h" open="1" top="0" tabpos="23">
+		<Cursor position="2518" topLine="31" />
 	</File>
 	<File name="include/AsyncMsgHandler.h" open="0" top="0" tabpos="16">
 		<Cursor position="0" topLine="0" />
 	</File>
-	<File name="include/ClientManager.h" open="0" top="0" tabpos="19">
-		<Cursor position="691" topLine="0" />
+	<File name="include/ClientManager.h" open="1" top="0" tabpos="10">
+		<Cursor position="402" topLine="0" />
 	</File>
 	<File name="include/ConnectionClosedException.h" open="0" top="0" tabpos="23">
 		<Cursor position="316" topLine="0" />
@@ -46,17 +46,20 @@
 	<File name="include/Observer.h" open="0" top="0" tabpos="29">
 		<Cursor position="148" topLine="0" />
 	</File>
-	<File name="include/Player.h" open="0" top="0" tabpos="15">
-		<Cursor position="503" topLine="0" />
+	<File name="include/Player.h" open="1" top="0" tabpos="8">
+		<Cursor position="1134" topLine="22" />
 	</File>
 	<File name="include/ProgressSlider.h" open="0" top="0" tabpos="18">
 		<Cursor position="215" topLine="0" />
 	</File>
-	<File name="include/Settings.h" open="0" top="0" tabpos="9">
+	<File name="include/Settings.h" open="1" top="0" tabpos="19">
 		<Cursor position="419" topLine="0" />
 	</File>
-	<File name="include/Utils.h" open="0" top="0" tabpos="30">
-		<Cursor position="200" topLine="0" />
+	<File name="include/UGReceiver.h" open="1" top="0" tabpos="7">
+		<Cursor position="238" topLine="0" />
+	</File>
+	<File name="include/Utils.h" open="1" top="0" tabpos="13">
+		<Cursor position="57" topLine="0" />
 	</File>
 	<File name="include/VideoBuffer.h" open="0" top="0" tabpos="26">
 		<Cursor position="820" topLine="0" />
@@ -67,14 +70,14 @@
 	<File name="include/VideoEntry.h" open="0" top="0" tabpos="17">
 		<Cursor position="94" topLine="0" />
 	</File>
-	<File name="include/sp_client.h" open="0" top="0" tabpos="10">
-		<Cursor position="843" topLine="0" />
+	<File name="include/sp_client.h" open="1" top="0" tabpos="12">
+		<Cursor position="76" topLine="0" />
 	</File>
 	<File name="src/AsyncMsgHandler.cpp" open="0" top="0" tabpos="20">
 		<Cursor position="39" topLine="0" />
 	</File>
-	<File name="src/ClientManager.cpp" open="0" top="0" tabpos="13">
-		<Cursor position="3699" topLine="96" />
+	<File name="src/ClientManager.cpp" open="1" top="0" tabpos="11">
+		<Cursor position="1791" topLine="42" />
 	</File>
 	<File name="src/ConnectionClosedException.cpp" open="0" top="0" tabpos="22">
 		<Cursor position="213" topLine="0" />
@@ -85,8 +88,8 @@
 	<File name="src/Observable.cpp" open="0" top="0" tabpos="28">
 		<Cursor position="546" topLine="0" />
 	</File>
-	<File name="src/Player.cpp" open="0" top="0" tabpos="14">
-		<Cursor position="1861" topLine="39" />
+	<File name="src/Player.cpp" open="1" top="0" tabpos="9">
+		<Cursor position="5296" topLine="155" />
 	</File>
 	<File name="src/ProgressSlider.cpp" open="0" top="0" tabpos="31">
 		<Cursor position="324" topLine="0" />
@@ -94,11 +97,11 @@
 	<File name="src/Settings.cpp" open="0" top="0" tabpos="11">
 		<Cursor position="327" topLine="0" />
 	</File>
-	<File name="src/UGReceiver.cpp" open="0" top="0" tabpos="12">
-		<Cursor position="9597" topLine="313" />
+	<File name="src/UGReceiver.cpp" open="1" top="0" tabpos="4">
+		<Cursor position="17094" topLine="424" />
 	</File>
-	<File name="src/Utils.cpp" open="0" top="0" tabpos="23">
-		<Cursor position="106" topLine="0" />
+	<File name="src/Utils.cpp" open="1" top="0" tabpos="15">
+		<Cursor position="15" topLine="0" />
 	</File>
 	<File name="src/VideoBuffer.cpp" open="0" top="0" tabpos="21">
 		<Cursor position="3013" topLine="78" />
@@ -109,14 +112,32 @@
 	<File name="src/VideoEntry.cpp" open="0" top="0" tabpos="21">
 		<Cursor position="0" topLine="0" />
 	</File>
-	<File name="src/sp_client.cpp" open="0" top="0" tabpos="9">
-		<Cursor position="0" topLine="0" />
+	<File name="src/sp_client.cpp" open="1" top="0" tabpos="14">
+		<Cursor position="5575" topLine="186" />
 	</File>
-	<File name="../udt_receive.cpp" open="0" top="0" tabpos="17">
-		<Cursor position="6036" topLine="89" />
+	<File name="../tcp_receive.cpp" open="1" top="0" tabpos="3">
+		<Cursor position="6696" topLine="152" />
 	</File>
-	<File name="../udt_receive.h" open="0" top="0" tabpos="18">
-		<Cursor position="2" topLine="0" />
+	<File name="../tcp_receive.h" open="1" top="0" tabpos="2">
+		<Cursor position="2734" topLine="1" />
+	</File>
+	<File name="../tcp_transmit.cpp" open="1" top="0" tabpos="1">
+		<Cursor position="4667" topLine="111" />
+	</File>
+	<File name="../tcp_transmit.h" open="1" top="0" tabpos="16">
+		<Cursor position="2481" topLine="0" />
+	</File>
+	<File name="../udt_receive.cpp" open="1" top="1" tabpos="6">
+		<Cursor position="7663" topLine="181" />
+	</File>
+	<File name="../udt_receive.h" open="1" top="0" tabpos="5">
+		<Cursor position="2748" topLine="1" />
+	</File>
+	<File name="../udt_transmit.cpp" open="1" top="0" tabpos="18">
+		<Cursor position="6480" topLine="127" />
+	</File>
+	<File name="../udt_transmit.h" open="1" top="0" tabpos="17">
+		<Cursor position="2573" topLine="0" />
 	</File>
 	<File name="../video_display/wxgl.cpp" open="0" top="0" tabpos="16">
 		<Cursor position="3384" topLine="57" />

@@ -80,6 +80,7 @@
 #include "compat/platform_semaphore.h"
 #include "audio/audio.h"
 #include "server/streaming_server.h"
+#include "tcp_transmit.h"
 #include "udt_transmit.h"
 #include "watermark.h"
 
@@ -103,16 +104,20 @@
 #define PORT_BASE               5004
 #define PORT_AUDIO              5006
 
-#define USE_UDT 1
+#define USE_CUSTOM_TRANSMIT 1
 
 struct state_uv {
-#ifndef USE_UDT
+#ifndef USE_CUSTOM_TRANSMIT
         struct rtp **network_devices;
 
         struct pdb *participants;
         struct tx *tx;
 #else
-        struct udt_transmit *udt_transmit;
+        void  *transmit_state;
+        void * (*transmit_init)(char *address, unsigned int *port);
+        void * (*transmit_accept)(void *state);
+        void * (*transmit_done)(void *state);
+        void (*transmit_send)(void *state, struct video_frame *frame);
 #endif
         int port_number;
         unsigned int connections_count;
@@ -133,8 +138,9 @@ struct state_uv {
 
         int use_ihdtv_protocol;
 
-        struct state_audio *audio;
+        volatile unsigned int sender_thread_ready:1;
 
+        struct state_audio *audio;
 
         int comm_fd;
 };
@@ -499,6 +505,8 @@ static void *sender_thread(void *arg)
                 splitted_frames = vf_alloc(tile_y_count);
         }
 
+        uv->sender_thread_ready = TRUE;
+
         while (!should_exit) {
                 /* Capture and transmit video... */
                 tx_frame = vidcap_grab(uv->capture_device, &audio);
@@ -521,11 +529,11 @@ static void *sender_thread(void *arg)
                         if(!tx_frame)
                                 continue;
                         if(uv->connections_count == 1) { /* normal case - only one connection */
-#ifndef USE_UDT
+#ifdef USE_CUSTOM_TRANSMIT
+                                uv->transmit_send(uv->transmit_state, tx_frame);
+#else
                                 tx_send(uv->tx, tx_frame,
                                                 uv->network_devices[0]);
-#else
-                                udt_send(uv->udt_transmit, tx_frame);
 #endif
 #ifdef DUMP
                                 char filename[128];
@@ -565,7 +573,7 @@ static void *sender_thread(void *arg)
                                 vf_split_horizontal(splitted_frames, tx_frame,
                                                tile_y_count);
                                 for (i = 0; i < tile_y_count; ++i) {
-#ifndef USE_UDT
+#ifndef USE_CUSTOM_TRANSMIT
                                         tx_send_tile(uv->tx, splitted_frames, i,
                                                         uv->network_devices[i], tx_frame->frames);
 #endif
@@ -574,8 +582,8 @@ static void *sender_thread(void *arg)
                 }
         }
 
-#ifdef USE_UDT
-        udt_transmit_done(uv->udt_transmit);
+#ifdef USE_CUSTOM_TRANSMIT
+        uv->transmit_done(uv->transmit_state);
 #endif
         vf_free(splitted_frames);
 
@@ -631,6 +639,9 @@ int main(int argc, char *argv[])
                 {"jack", required_argument, 0, 'j'},
                 {"fec", required_argument, 0, 'f'},
                 {"port", required_argument, 0, 'P'},
+#ifdef USE_CUSTOM_TRANSMIT
+                {"tcp", no_argument, 0, 'T'},
+#endif
                 {0, 0, 0, 0}
         };
         int option_index = 0;
@@ -650,19 +661,30 @@ int main(int argc, char *argv[])
         uv->postprocess = NULL;
         uv->requested_mtu = 0;
         uv->use_ihdtv_protocol = 0;
-#ifndef USE_UDT
+#ifdef USE_CUSTOM_TRANSMIT
+        uv->transmit_init = udt_transmit_init;
+        uv->transmit_accept = udt_transmit_accept;
+        uv->transmit_done = udt_transmit_done;
+        uv->transmit_send = udt_send;
+#else
         uv->participants = NULL;
         uv->tx = NULL;
         uv->network_devices = NULL;
 #endif
         uv->port_number = PORT_BASE;
 	uv->comm_fd = 0;
+        uv->sender_thread_ready = FALSE;
+
 
         perf_init();
         perf_record(UVP_INIT, 0);
 
         while ((ch =
-                getopt_long(argc, argv, "d:t:m:r:s:vc:ihj:M:p:f:P:C:", getopt_options,
+                getopt_long(argc, argv, "d:t:m:r:s:vc:ihj:M:p:f:P:C:"
+#ifdef USE_CUSTOM_TRANSMIT
+                        "T"
+#endif
+                        , getopt_options,
                             &option_index)) != -1) {
                 switch (ch) {
                 case 'd':
@@ -724,6 +746,14 @@ int main(int argc, char *argv[])
                 case 'C':
                         uv->comm_fd = atoi(optarg);
                         break;
+#ifdef USE_CUSTOM_TRANSMIT
+                case 'T':
+                        uv->transmit_init = tcp_transmit_init;
+                        uv->transmit_accept = tcp_transmit_accept;
+                        uv->transmit_done = tcp_transmit_done;
+                        uv->transmit_send = tcp_send;
+                        break;
+#endif
                 case '?':
                         break;
                 default:
@@ -893,7 +923,7 @@ int main(int argc, char *argv[])
                         uv->requested_mtu = 1500;       // the default value for rpt
                 }
 
-#ifndef USE_UDT
+#ifndef USE_CUSTOM_TRANSMIT
                 if ((uv->network_devices =
                      initialize_network(network_device, uv->port_number, uv->participants)) == NULL) {
                         printf("Unable to open network\n");
@@ -915,10 +945,10 @@ int main(int argc, char *argv[])
                 }
 #else
                 uv->connections_count = 1;
-                uv->udt_transmit = udt_transmit_init(network_device, uv->port_number);
-                if(!uv->udt_transmit) {
+                uv->transmit_state = uv->transmit_init(network_device, &uv->port_number);
+                if(!uv->transmit_state) {
                         exit_status = EXIT_FAILURE;
-                        fprintf(stderr, "Unable to connect to peer\n");
+                        fprintf(stderr, "Unable to connect to peer.\n");
                         goto cleanup;
                 }
 #endif
@@ -974,6 +1004,35 @@ int main(int argc, char *argv[])
         signal(SIGHUP, signal_handler);
         signal(SIGABRT, signal_handler);
 #endif
+        int len;
+        ssize_t ret;
+        ssize_t total = 0;
+
+        while(!uv->sender_thread_ready && !should_exit)
+                ;
+
+        char buff[1000];
+        snprintf(buff, sizeof(buff), "%d", uv->port_number);
+        len = strlen(buff);
+
+        do {
+                ret = write(uv->comm_fd, (void *) &len, sizeof(int));
+                assert(ret > 0);
+                total += ret;
+        } while (total < sizeof(int));
+
+        total = 0;
+        do {
+                ret = write(uv->comm_fd, (const char *) &buff + total, len - total);
+                assert(ret > 0);
+                total += ret;
+        } while (total < len);
+
+#ifdef DEBUG
+        fprintf(stderr, "Sent port\n");
+#endif
+
+        uv->transmit_accept(uv->transmit_state);
 
         /* FlashNET loop */
         while(!should_exit) {
@@ -1042,7 +1101,7 @@ cleanup:
                 vidcap_done(uv->capture_device);
         if(uv->display_device)
                 display_done(uv->display_device);
-#ifndef USE_UDT
+#ifndef USE_CUSTOM_TRANSMIT
         if(uv->tx)
                 tx_done(uv->tx);
 	if(uv->network_devices)

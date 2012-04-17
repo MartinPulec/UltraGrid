@@ -55,11 +55,11 @@ extern "C" {
 
 struct video_frame;
 
-void               *udt_receive_init(const char *address, unsigned int port);
-void		        udt_receive_done(void *udt_receive);
-int                 udt_receive(void *udt_receive, char *buffer, int *len);
-int                 udt_receive_accept(void *udt_receive, const char *remote_host, int remote_port);
-int                 udt_receive_disconnect(void *udt_receive);
+void *tcp_receive_init(const char *address, unsigned int port);
+void		        tcp_receive_done(void *tcp_receive);
+int                 tcp_receive(void *tcp_receive, char *buffer, int *len);
+int                 tcp_receive_accept(void *udt_receive, const char *remote_host, int remote_port);
+int                 tcp_receive_disconnect(void *tcp_receive);
 
 #ifdef __cplusplus
 }

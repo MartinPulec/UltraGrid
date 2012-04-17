@@ -50,86 +50,99 @@
  *
  */
 
-#include <udt.h>
 #include <stdexcept>
 #include <iostream>
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+
 
 #include "config.h"
 #include "config_unix.h"
 #include "rtp/rtp.h"
 #include "rtp/rtp_callback.h"
-#include "udt_transmit.h"
+#include "tcp_transmit.h"
 #include "video.h"
 #include "video_codec.h"
 
 using namespace std;
 
-#define TTL_MS 1000
-
-struct udt_transmit {
-        udt_transmit(char *address, unsigned int port)
+struct tcp_transmit {
+        tcp_transmit(char *address, unsigned int *port)
         {
-                this->address = strdup(address);
-                this->port = port;
+            if((this->socket_fd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+                perror("socket()");
+                throw std::runtime_error("socket");
+            }
 
-                UDT::startup();
-                socket = UDT::socket(AF_INET, SOCK_DGRAM, 0);
+            struct sockaddr_in s_in;
+
+            s_in.sin_family = AF_INET;
+            s_in.sin_addr.s_addr = INADDR_ANY;
+            s_in.sin_port = 0; // means random port
+
+            if (bind(this->socket_fd, (struct sockaddr *)&s_in, sizeof(s_in)) != 0) {
+                    perror("bind");
+                    throw std::runtime_error("bind");
+            }
+
+            socklen_t addrlen = sizeof(s_in);
+            getsockname(this->socket_fd, (sockaddr*) &s_in, &addrlen);
+            *port = ntohs(s_in.sin_port);
+            std::cerr << __FILE__ << ":" << __LINE__ << ": Bound port: " << *port << std::endl;
+
+            if (listen(this->socket_fd, 8)) {
+                    perror("listen()");
+                    throw std::runtime_error("listen");
+            }
         }
 
-        void accept() {
-                struct addrinfo hints, *res;
-                int err;
-
-                memset(&hints, 0, sizeof(hints));
-                hints.ai_family = AF_INET;
-                hints.ai_socktype = SOCK_DGRAM;
-                char port_str[6];
-                snprintf(port_str, 5, "%u", port);
-
-                err = getaddrinfo(address, port_str, &hints, &res);
-
-                if(err) {
-                        throw std::runtime_error(std::string("getaddrinfo: ") + gai_strerror(err) + " (" + address + ")");
-                }
-
-                std::string what;
-
-                err = UDT::ERROR;
-
-                int timeout = 3;
-                //UDT::setsockopt(socket, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
-                //UDT::setsockopt(socket, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
-
-                err = UDT::connect(socket, res->ai_addr, res->ai_addrlen);
-
-                if (err == UDT::ERROR) {
-                        throw std::runtime_error(std::string("connect: ") + UDT::getlasterror().getErrorMessage());
-                }
-
-
-                freeaddrinfo(res);
+        void Accept() {
+            struct sockaddr_in s_peer;
+            socklen_t addrlen = sizeof(s_peer);
+            this->data_socket_fd = accept(this->socket_fd, (struct sockaddr *)&s_peer, &addrlen);
+            std::cerr << __FILE__ << ":" << __LINE__ << ": " << "Accepted connection." << std::endl;
         }
 
-        ~udt_transmit() {
-                UDT::close(socket);
-                UDT::cleanup();
-
+        ~tcp_transmit() {
         }
 
-        void send(struct video_frame *frame)
+        bool send(struct video_frame *frame)
         {
-                send_description(frame);
+            bool rc;
+            rc = send_description(frame);
+            if(!rc)
+                return false;
 
-                int res = UDT::sendmsg(socket, frame->tiles[0].data, frame->tiles[0].data_len, TTL_MS, 0);
-                if(res == UDT::ERROR) {
-                        std::cerr << res << " " << UDT::getlasterror().getErrorMessage();
+
+            ssize_t res, total;
+
+            total = 0;
+
+            char *data = frame->tiles[0].data;
+            int data_len = frame->tiles[0].data_len;
+
+            do {
+                //std::cerr << __FILE__ << ":" << __LINE__ <<  std::endl;
+                res = write(this->data_socket_fd, (const char *) data + total, data_len - total);
+                //std::cerr << __FILE__ << ":" << __LINE__ << ": (total sent " << total << "/" << data_len << ")"<< std::endl;
+                if(res == -1) {
+                    std::cerr << __FILE__ << ":" << __LINE__ << ": Connection timeout" << std::endl;
+                    return false;
+                } else if (res == 0) {
+                    std::cerr << __FILE__ << ":" << __LINE__ << ": Connection closed (total sent " << total << "/" << data_len << ")"<< std::endl;
+                    return false;
+                } else {
+                    total += res;
                 }
-                if(res != frame->tiles[0].data_len) {
-                        std::cerr << "Sent only " << res << "B, " << frame->tiles[0].data_len << "B was scheduled!" << std::endl;
-                }
+            } while(total < data_len);
+
+
+            return true;
         }
 
-        void send_description(struct video_frame *frame)
+        bool send_description(struct video_frame *frame)
         {
                 assert(frame->tile_count == 1);
 
@@ -162,52 +175,63 @@ struct udt_transmit {
                 tmp |= fi << 13;
                 payload_hdr.il_fps = htonl(tmp);
 
-                int res = UDT::sendmsg(socket, (char *) &payload_hdr, sizeof(payload_hdr), TTL_MS, 0);
-                if(res == UDT::ERROR) {
-                        std::cerr << res << " " << UDT::getlasterror().getErrorMessage();
-                }
+                ssize_t res, total;
+
+                total = 0;
+
+                do {
+                    res = write(this->data_socket_fd, (const char *) &payload_hdr + total, sizeof(payload_hdr) - total);
+                    if(res == -1) {
+                        std::cerr << __FILE__ << ":" << __LINE__ << ": Connection timeout" << std::endl;
+                        return false;
+                    } else if (res == 0) {
+                        std::cerr << __FILE__ << ":" << __LINE__ << ": Connection closed" << std::endl;
+                        return false;
+                    } else {
+                        total += res;
+                    }
+                } while(total < sizeof(payload_hdr));
+
+                return true;
         }
 
         private:
 
-        char * address;
-        int port;
-
-        UDTSOCKET socket;
+        int socket_fd;
+        int data_socket_fd;
 };
 
-void *udt_transmit_init(char *address, unsigned int *port)
+void *tcp_transmit_init(char *address, unsigned int *port)
 {
-        udt_transmit *s = 0;
+        tcp_transmit *s = 0;
 
         try {
-            s = new udt_transmit(address, *port);
-        } catch (std::exception &e) {
-                std::cerr << "UDT: unable to initalize transmit: " << e.what() << std::endl;
+            s = new tcp_transmit(address, port);
+        } catch (...) {
         }
 
-        return s;
+        return (void *) s;
 }
 
-void udt_transmit_accept(void *state)
+void tcp_transmit_accept(void *state)
 {
-        udt_transmit *s = (udt_transmit *) state;
+    tcp_transmit *s = (tcp_transmit *) state;
 
-        try {
-            s->accept();
-        } catch (std::exception &e) {
-                std::cerr << "UDT: unable to accept: " << e.what() << std::endl;
-        }
+    s->Accept();
 }
 
-void udt_transmit_done(void *state)
+
+
+void tcp_transmit_done(void *state)
 {
-    udt_transmit *s = (udt_transmit *) state;
+    tcp_transmit *s = (tcp_transmit *) state;
+
     delete s;
 }
 
-void udt_send(void *state, struct video_frame *frame)
+void tcp_send(void *state, struct video_frame *frame)
 {
-    udt_transmit *s = (udt_transmit *) state;
+    tcp_transmit *s = (tcp_transmit *) state;
+
     s->send(frame);
 }
