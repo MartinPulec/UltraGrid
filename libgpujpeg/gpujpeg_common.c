@@ -38,9 +38,10 @@
 #       ifdef HAVE_MACOSX
 #               include <OpenGL/GL.h>
 #       else
-#               include <GL/gl.h>
+#               include <GL/GL.h>
 #       endif
 #endif
+
 
 /** Documented at declaration */
 struct gpujpeg_devices_info
@@ -101,8 +102,8 @@ gpujpeg_print_devices_info()
         printf("\nDevice %d: \"%s\"\n", device_info->id, device_info->name);
         printf("  Compute capability: %d.%d\n", device_info->cc_major, device_info->cc_minor);
         printf("  Total amount of global memory: %ld kB\n", device_info->global_memory / 1024);
-        printf("  Total amount of constant memory: %d kB\n", device_info->constant_memory / 1024); 
-        printf("  Total amount of shared memory per block: %d kB\n", device_info->shared_memory / 1024);
+        printf("  Total amount of constant memory: %ld kB\n", device_info->constant_memory / 1024); 
+        printf("  Total amount of shared memory per block: %ld kB\n", device_info->shared_memory / 1024);
         printf("  Total number of registers available per block: %d\n", device_info->register_count);
         printf("  Multiprocessors: %d\n", device_info->multiprocessor_count);
     }
@@ -553,8 +554,24 @@ gpujpeg_coder_init(struct gpujpeg_coder* coder)
 int
 gpujpeg_coder_deinit(struct gpujpeg_coder* coder)
 {
-    /*if ( coder->data_raw != NULL )
-        cudaFreeHost(coder->data_raw);*/
+    if ( coder->data_raw != NULL )
+        cudaFreeHost(coder->data_raw);
+    if ( coder->d_data_raw != NULL )
+        cudaFree(coder->d_data_raw);
+    if ( coder->d_data != NULL )
+        cudaFree(coder->d_data);
+    if ( coder->data_quantized != NULL )
+        cudaFreeHost(coder->data_quantized);    
+    if ( coder->d_data_quantized != NULL )
+        cudaFree(coder->d_data_quantized);    
+    if ( coder->data_compressed != NULL )
+        cudaFreeHost(coder->data_compressed);    
+    if ( coder->d_data_compressed != NULL )
+        cudaFree(coder->d_data_compressed);    
+    if ( coder->segment != NULL )
+        cudaFreeHost(coder->segment); 
+    if ( coder->d_segment != NULL )
+        cudaFree(coder->d_segment);
     return 0;
 }
 

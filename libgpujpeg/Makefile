@@ -71,7 +71,7 @@ LINK := g++ -fPIC
 NVCC := $(CUDA_INSTALL_PATH)/bin/nvcc -Xcompiler -fPIC
 
 # Common flags
-COMMONFLAGS += -I. -I$(CUDA_INSTALL_PATH)/include -O0 -g
+COMMONFLAGS += -I. -I$(CUDA_INSTALL_PATH)/include -O2
 
 # Ultragrid changes
 ARCH := $(shell uname -s)
