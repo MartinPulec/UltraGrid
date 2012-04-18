@@ -139,6 +139,7 @@ struct state_uv {
         int use_ihdtv_protocol;
 
         volatile unsigned int sender_thread_ready:1;
+        volatile unsigned int accepted:1;
 
         struct state_audio *audio;
 
@@ -506,6 +507,8 @@ static void *sender_thread(void *arg)
         }
 
         uv->sender_thread_ready = TRUE;
+        while(!uv->accepted && !should_exit)
+            ;
 
         while (!should_exit) {
                 /* Capture and transmit video... */
@@ -674,7 +677,7 @@ int main(int argc, char *argv[])
         uv->port_number = PORT_BASE;
 	uv->comm_fd = 0;
         uv->sender_thread_ready = FALSE;
-
+        uv->accepted = FALSE;
 
         perf_init();
         perf_record(UVP_INIT, 0);
@@ -1033,6 +1036,8 @@ int main(int argc, char *argv[])
 #endif
 
         uv->transmit_accept(uv->transmit_state);
+
+        uv->accepted = TRUE;
 
         /* FlashNET loop */
         while(!should_exit) {
