@@ -416,7 +416,6 @@ static void * reading_thread(void *args)
                 }
 
                 if(thread_pool_get_overall_count(s->pool) == THREADS || was_last) {
-                        fprintf(stderr, "POP\n\n\n\n\n\n");
                         struct job * res = thread_pool_pop(s->pool);
                         res->used = FALSE;
 
@@ -556,7 +555,6 @@ static void flush_pipeline(struct vidcap_exr_state *s)
 
 static void play_after_flush(struct vidcap_exr_state *s)
 {
-        s->finished = FALSE;
         s->should_jump = FALSE;
         pthread_cond_broadcast(&s->reader_cv);
         if(!s->should_pause)
@@ -577,14 +575,15 @@ static void clamp_indices(struct vidcap_exr_state *s)
 /* must be called locked !!!!! */
 static void setpos(struct vidcap_exr_state *s, int i)
 {
-                flush_pipeline(s);
+        flush_pipeline(s);
 
-                s->index = i;
-                clamp_indices(s);
-                fprintf(stderr, "New position: %d\n", s->index);
-                s->frame->frames = s->index - 1;
+        s->index = i;
+        clamp_indices(s);
+        fprintf(stderr, "New position: %d\n", s->index);
+        s->frame->frames = s->index - 1;
 
-                play_after_flush(s);
+        s->finished = FALSE;
+        play_after_flush(s);
 }
 
 
