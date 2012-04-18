@@ -1,6 +1,8 @@
 #include "../include/AsyncMsgHandler.h"
 #include "../client_guiMain.h"
 
+#include <wx/event.h>
+
 AsyncMsgHandler::AsyncMsgHandler(client_guiFrame *p) :
     parent(p)
 {
@@ -14,5 +16,6 @@ AsyncMsgHandler::~AsyncMsgHandler()
 
 void AsyncMsgHandler::DoDisconnect()
 {
-    parent->DoDisconnect();
+    wxCommandEvent event(wxEVT_DISCONNECT);
+    wxPostEvent(parent, event);
 }

@@ -79,10 +79,13 @@ const long client_guiFrame::idKeyBindings = wxNewId();
 const long client_guiFrame::ID_STATUSBAR1 = wxNewId();
 //*)
 
+DEFINE_EVENT_TYPE(wxEVT_DISCONNECT)
+
 BEGIN_EVENT_TABLE(client_guiFrame,wxFrame)
     //(*EventTable(client_guiFrame)
     //*)
     EVT_COMMAND  (wxID_ANY, wxEVT_RECONF, client_guiFrame::Resize)
+    EVT_COMMAND  (wxID_ANY, wxEVT_DISCONNECT, client_guiFrame::PushDisconnect)
     EVT_COMMAND  (wxID_ANY, wxEVT_TOGGLE_FULLSCREEN, client_guiFrame::ToggleFullscreen)
     EVT_COMMAND  (wxID_ANY, wxEVT_TOGGLE_PAUSE, client_guiFrame::TogglePause)
     EVT_COMMAND  (wxID_ANY, wxEVT_SCROLLED, client_guiFrame::Scrolled)
@@ -409,6 +412,11 @@ void client_guiFrame::OnSelectClick(wxCommandEvent& event)
     for (int i = 0; i < playListIndices.Count(); ++i) {
         this->playList.Insert(selectVideo->ListBox1->GetString(playListIndices[i]), i);
     }*/
+}
+
+void client_guiFrame::PushDisconnect(wxCommandEvent& event)
+{
+    DoDisconnect();
 }
 
 void client_guiFrame::DoDisconnect()

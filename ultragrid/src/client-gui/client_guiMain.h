@@ -37,6 +37,10 @@
 
 #include <wx/tglbtn.h>
 
+BEGIN_DECLARE_EVENT_TYPES()
+DECLARE_EVENT_TYPE(wxEVT_DISCONNECT, -1)
+END_DECLARE_EVENT_TYPES()
+
 class client_guiFrame: public wxFrame
 {
     public:
@@ -73,6 +77,7 @@ class client_guiFrame: public wxFrame
         void OnKeyBindingsHelp(wxCommandEvent& event);
         void OnOtherSettings(wxCommandEvent& event);
 
+        void PushDisconnect(wxCommandEvent& event);
         void Resize(wxCommandEvent&);
         void Scrolled(wxCommandEvent&);
         void ToggleFullscreen(wxCommandEvent&);

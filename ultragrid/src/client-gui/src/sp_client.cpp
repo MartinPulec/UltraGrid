@@ -216,6 +216,9 @@ void sp_client::connect_to(std::string host, int port)
 
 void sp_client::setAsyncNotify()
 {
+    if(!this->thread_data)
+        return;
+
     pthread_mutex_lock(&this->thread_data->lock);
     this->thread_data->msgHandler = this->msgHandler;
     if(this->thread_data->head) {
@@ -226,6 +229,9 @@ void sp_client::setAsyncNotify()
 
 void sp_client::unsetAsyncNotify()
 {
+    if(!this->thread_data)
+        return;
+
     pthread_mutex_lock(&this->thread_data->lock);
     this->thread_data->msgHandler = 0;
     if(this->thread_data->head) {

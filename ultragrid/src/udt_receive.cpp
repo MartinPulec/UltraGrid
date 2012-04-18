@@ -128,9 +128,9 @@ struct udt_recv {
                 val = true;
                 UDT::setsockopt(recver, /* unused */ 0, UDT_RCVSYN, (const char *) &val, sizeof(bool));
 
-                int timeout = 500; //ms
-                //UDT::setsockopt(recver, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
-                //UDT::setsockopt(recver, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
+                int timeout = 2000; //ms
+                UDT::setsockopt(recver, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
+                UDT::setsockopt(recver, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
 
                 UDT::epoll_add_usock(udt_epoll_id, recver);
 
