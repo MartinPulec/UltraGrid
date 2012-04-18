@@ -95,7 +95,7 @@ struct tcp_recv {
                     }
 
                     struct timeval tv;
-                    tv.tv_sec = 5;  /* 5 Secs Timeout */
+                    tv.tv_sec = 1;  /* 5 Secs Timeout */
                     tv.tv_usec = 0;
                     setsockopt(this->socket_fd, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
                     setsockopt(this->socket_fd, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
