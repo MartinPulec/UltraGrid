@@ -138,7 +138,6 @@ struct tcp_transmit {
                 }
             } while(total < data_len);
 
-
             return true;
         }
 

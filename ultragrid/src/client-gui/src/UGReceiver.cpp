@@ -422,18 +422,20 @@ static void *receiver_thread(void *arg)
 
                     total_received = 0;
 
-                    while(total_received < data_len) {
+                    do {
                         len = data_len - total_received;
 
                         res = uv->receive(uv->receive_state, buffer + total_received, &len);
-                        if(!res) {
+
+                        if(res <= 0) {
                             std::cerr << "(res: " << res << ")" << std::endl;
                         }
 
                         total_received += len;
-                    }
 
-                    decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, len, pbuf_data.frame_buffer);
+                    } while(total_received < data_len);
+
+                    decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, total_received, pbuf_data.frame_buffer);
 
                     display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
                     pbuf_data.frame_buffer = display_get_frame(uv->display_device);
