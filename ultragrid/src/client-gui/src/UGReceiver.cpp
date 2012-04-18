@@ -349,7 +349,7 @@ static void *receiver_thread(void *arg)
 
                 // cannot be while !!!
                 // TODO: figure out more cleaner way
-                if(uv->boss_waiting) {
+                if(uv->boss_waiting || (uv->command == CMD_NONE && uv->state == ST_NONE)) {
                     uv->worker_waiting = true;
                     pthread_cond_wait(&uv->worker_cv, &uv->lock);
                     uv->worker_waiting = false;
