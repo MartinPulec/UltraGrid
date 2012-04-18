@@ -68,7 +68,6 @@ GLView::GLView(wxFrame *p, wxWindowID id, const wxPoint &pos, const wxSize &size
     init(false),
     Frame(std::tr1::shared_ptr<char>())
 {
-    pthread_mutex_init(&lock, NULL);
     vpXMultiplier = vpYMultiplier = 1.0;
     xoffset = yoffset = 0.0;
 }
@@ -444,9 +443,6 @@ void GLView::dxt5_arb_init()
 GLView::~GLView()
 {
     //dtor
-    Frame = std::tr1::shared_ptr<char>();
-
-    pthread_mutex_destroy(&lock);
 }
 
 void GLView::reconfigure(int width, int height, int codec)
@@ -630,21 +626,6 @@ void GLView::LoadSplashScreen()
 
 void GLView::putframe(std::tr1::shared_ptr<char> data)
 {
-
-    pthread_mutex_lock(&lock);
-    // This is called  by wxgl video driver or buffer and we are responsible for deleting data from network
-
-    this->data = data.get();
-    this->Frame = data;
-
-    pthread_mutex_unlock(&lock);
-
-    wxCommandEvent event(wxEVT_PUTF, GetId());
-    wxPostEvent(this, event);
-}
-
-void GLView::Putf(wxCommandEvent&)
-{
     if(data_width != width || data_height != height || data_codec != codec) {
         width = data_width;
         height = data_height;
@@ -656,15 +637,19 @@ void GLView::Putf(wxCommandEvent&)
         Reconf(unused);
     }
 
+    this->data = data.get();
+    this->Frame = data;
+
     Render();
+}
+
+void GLView::Putf(wxCommandEvent&)
+{
 }
 
 void GLView::Render()
 {
-    pthread_mutex_lock(&lock);
-
     if (!data) {
-        pthread_mutex_unlock(&lock);
         return;
     }
 
@@ -781,9 +766,6 @@ void GLView::Render()
         glUseProgram(0);
 
         SwapBuffers();
-
-        pthread_mutex_unlock(&lock);
-
         //gl_check_error();
     }
 }

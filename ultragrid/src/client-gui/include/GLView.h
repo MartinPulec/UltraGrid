@@ -66,7 +66,6 @@ class GLView : public wxGLCanvas
         DECLARE_EVENT_TABLE()
 
     private:
-        pthread_mutex_t lock;
         void Reconf(wxCommandEvent&);
         void Putf(wxCommandEvent&);
         void Resized(wxSizeEvent& evt);

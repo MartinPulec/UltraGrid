@@ -135,11 +135,11 @@ struct tcp_recv {
 
             *len = ret;
             if(ret == 0) {
-                std::cerr << "tcp receive: timeout" << std::endl;
+                std::cerr << "tcp receive: closed" << std::endl;
 
                 return 0;
             } else if(ret == -1) {
-                std::cerr << "tcp receive: error" << std::endl;
+                std::cerr << "tcp receive: timeout" << std::endl;
 
                 return 0;
             }
