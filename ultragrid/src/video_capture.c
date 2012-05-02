@@ -66,7 +66,6 @@
 #include "video_capture/decklink.h"
 #include "video_capture/deltacast.h"
 #include "video_capture/quad.h"
-#include "video_capture/aggregate.h"
 
 #define VIDCAP_MAGIC	0x76ae98f0
 
@@ -107,18 +106,6 @@ struct vidcap_device_api {
 };
 
 struct vidcap_device_api vidcap_device_table[] = {
-        {
-         /* The aggregate capture card */
-         0,
-         NULL,
-         MK_STATIC(vidcap_aggregate_probe),
-         MK_STATIC(vidcap_aggregate_init),
-         MK_STATIC(vidcap_aggregate_finish),
-         MK_STATIC(vidcap_aggregate_done),
-         MK_STATIC(vidcap_aggregate_grab),
-         MK_STATIC(NULL),
-         NULL
-        },
         {
          0,
          NULL,
