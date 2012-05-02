@@ -94,15 +94,10 @@ void _exit_uv(int status) {
 
 void (*exit_uv)(int status) = _exit_uv;
 
-extern "C" {
-struct display *initialize_video_display(const char *requested_display,
-                                                char *fmt, unsigned int flags);
-
-
 struct vidcap *initialize_video_capture(const char *requested_capture,
                                                char *fmt, unsigned int flags);
 
-struct display *initialize_video_display(const char *requested_display,
+struct display *client_initialize_video_display(const char *requested_display,
                                                 char *fmt, unsigned int flags)
 {
         struct display *d;
@@ -113,13 +108,6 @@ struct display *initialize_video_display(const char *requested_display,
         if(!strcmp(requested_display, "none"))
                  id = display_get_null_device_id();
 
-        if (display_init_devices() != 0) {
-                printf("Unable to initialise devices\n");
-                abort();
-        } else {
-                debug_msg("Found %d display devices\n",
-                          display_get_device_count());
-        }
         for (i = 0; i < display_get_device_count(); i++) {
                 dt = display_get_device_details(i);
                 if (strcmp(requested_display, dt->name) == 0) {
@@ -136,7 +124,6 @@ struct display *initialize_video_display(const char *requested_display,
                         "was not found.\n", requested_display);
                 return NULL;
         }
-        display_free_devices();
 
         d = display_init(id, fmt, flags);
         return d;
@@ -169,8 +156,6 @@ struct vidcap *initialize_video_capture(const char *requested_capture,
 
         return vidcap_init(id, fmt, flags);
 }
-};
-
 
 static struct rtp **initialize_network(char *addrs, int port_base, struct pdb *participants)
 {
@@ -494,7 +479,7 @@ quit:
 
 
 
-UGReceiver::UGReceiver(const char *display, VideoBuffer *buffer, bool use_tcp)
+UGReceiver::UGReceiver(const char *display, Player *player, bool use_tcp)
 {
     pthread_t receiver_thread_id;
 
@@ -541,10 +526,10 @@ UGReceiver::UGReceiver(const char *display, VideoBuffer *buffer, bool use_tcp)
     uv->state = ST_NONE;
 
     if(strcmp(display, "wxgl") == 0) {
-        uv->display_device = initialize_video_display(display, (char *) buffer, 0 /*flags */);
+        uv->display_device = client_initialize_video_display(display, (char *) player, 0 /*flags */);
     } else {
         abort(); // is still supported ?
-        uv->display_device = initialize_video_display(display, NULL, 0 /*flags */);
+        uv->display_device = client_initialize_video_display(display, NULL, 0 /*flags */);
     }
 
     sigset_t mask;

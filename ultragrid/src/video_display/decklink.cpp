@@ -235,6 +235,70 @@ struct state_decklink {
         int                 output_audio_channel_count;
  };
 
+
+static struct display_device *get_devices(void);
+
+static struct display_device *get_devices(void)
+{
+        IDeckLinkIterator*              deckLinkIterator;
+        IDeckLink*                      deckLink;
+        int                             numDevices = 0;
+        HRESULT                         result;
+
+        struct display_device *ret = (struct display_device *) malloc(sizeof(struct display_device));
+
+        ret[numDevices].name = NULL;
+
+        // Create an IDeckLinkIterator object to enumerate all DeckLink cards in the system
+        deckLinkIterator = CreateDeckLinkIteratorInstance();
+        if (deckLinkIterator == NULL)
+        {
+		fprintf(stderr, "\nA DeckLink iterator could not be created. The DeckLink drivers may not be installed or are outdated.\n");
+		fprintf(stderr, "This UltraGrid version was compiled with DeckLink drivers %s. You should have at least this version.\n\n",
+                                BLACKMAGIC_DECKLINK_API_VERSION_STRING);
+                return ret;
+        }
+        
+        // Enumerate all cards in this system
+        while (deckLinkIterator->Next(&deckLink) == S_OK)
+        {
+                STRING          deviceNameString = NULL;
+
+                ret = (struct display_device *) realloc((void *) ret, sizeof(struct display_device) * (numDevices + 1));
+                
+                // *** Print the model name of the DeckLink card
+                result = deckLink->GetModelName((STRING *) &deviceNameString);
+#ifdef HAVE_MACOSX
+                ret[numDevices].name = (char *) malloc(128);
+                CFStringGetCString(deviceNameString, (char *) ret[numDevices].name, 128, kCFStringEncodingMacRoman);
+#else
+                ret[numDevices].name = deviceNameString;
+#endif
+                if (result == S_OK)
+                {
+                        char *tmp = (char *) malloc(128);
+                        snprintf(tmp, 128, "decklink:%u", (unsigned int) numDevices);
+                        ret[numDevices].driver_identifier = tmp;
+
+#ifdef HAVE_MACOSX
+                        CFRelease(deviceNameString);
+#endif
+                }
+                
+                // Increment the total number of DeckLink cards found
+                numDevices++;
+        
+                // Release the IDeckLink instance when we've finished with it to prevent leaks
+                deckLink->Release();
+        }
+        
+        deckLinkIterator->Release();
+
+        ret[numDevices].name = NULL;
+
+        return ret;
+}
+
 static void show_help(void);
 
 static void show_help(void)
@@ -242,7 +306,7 @@ static void show_help(void)
         IDeckLinkIterator*              deckLinkIterator;
         IDeckLink*                      deckLink;
         int                             numDevices = 0;
-        HRESULT                         result;
+                HRESULT                         result;
 
         printf("Decklink (output) options:\n");
         printf("\t-d decklink:<device_numbers>[:3D][:timecode] - coma-separated numbers of output devices\n");
@@ -746,6 +810,8 @@ display_type_t *display_decklink_probe(void)
                 dtype->id = DISPLAY_DECKLINK_ID;
                 dtype->name = "decklink";
                 dtype->description = "Blackmagick DeckLink card";
+
+                dtype->devices = get_devices();
         }
         return dtype;
 }

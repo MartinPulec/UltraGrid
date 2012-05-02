@@ -40,6 +40,7 @@
  *
  */
 
+
 extern "C" {
 #include "config.h"
 #include "config_unix.h"
@@ -53,14 +54,15 @@ extern "C" {
 #include <tr1/memory>
 
 #include "video_display/wxgl.h"
+
+#include "client-gui/include/Player.h"
 #include "client-gui/client_guiMain.h"
-#include "client-gui/include/VideoBuffer.h"
 
 #define MAGIC_WXGL	0x1f87bd3a
 
 struct state_wxgl {
         uint32_t magic;
-        VideoBuffer *buffer;
+        Player *player;
         struct video_frame *frame;
         struct tile *tile;
         std::tr1::shared_ptr<char> buffer_data;
@@ -74,7 +76,7 @@ void *display_wxgl_init(char *fmt, unsigned int flags)
     s = (struct state_wxgl *)calloc(1, sizeof(struct state_wxgl));
     if (s != NULL) {
         s->magic = MAGIC_WXGL;
-        s->buffer = (VideoBuffer *) fmt;
+        s->player = (Player *) fmt;
         s->frame = vf_alloc(1);
         s->tile = vf_get_tile(s->frame, 0);
         s->tile->data = NULL;
@@ -105,7 +107,7 @@ struct video_frame *display_wxgl_getf(void *state)
 {
     struct state_wxgl *s = (struct state_wxgl *)state;
     assert(s->magic == MAGIC_WXGL);
-    s->buffer_data = s->buffer->getframe();
+    s->buffer_data = s->player->getframe();
     s->tile->data = s->buffer_data.get();
     return s->frame;
 }
@@ -115,7 +117,7 @@ int display_wxgl_putf(void *state, char *frame)
     struct state_wxgl *s = (struct state_wxgl *)state;
     assert(s->magic == MAGIC_WXGL);
 
-    s->buffer->putframe(s->buffer_data, s->frame->frames);
+    s->player->putframe(s->buffer_data, s->frame->frames);
     s->buffer_data = std::tr1::shared_ptr<char>();
     return 0;
 }
@@ -129,6 +131,9 @@ display_type_t *display_wxgl_probe(void)
                 dt->id = DISPLAY_WXGL_ID;
                 dt->name = "wxgl";
                 dt->description = "Dummy WXGL device";
+
+                dt->devices = (struct display_device *) malloc(sizeof(struct display_device));
+                dt->devices->name = NULL;
         }
         return dt;
 }
@@ -187,7 +192,7 @@ int display_wxgl_reconfigure(void *state, struct video_desc desc)
             s->tile->data_len = desc.height;
         s->tile->data_len *= vc_get_linesize(desc.width, desc.color_spec);
 
-        s->buffer->reconfigure(desc.width, desc.height, (int) desc.color_spec, s->tile->data_len);
+        s->player->reconfigure(desc.width, desc.height, (int) desc.color_spec, s->tile->data_len);
 
         return TRUE;
 }

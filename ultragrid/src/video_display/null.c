@@ -110,6 +110,9 @@ display_type_t *display_null_probe(void)
                 dt->id = DISPLAY_NULL_ID;
                 dt->name = "none";
                 dt->description = "No display device";
+
+                dt->devices = malloc(sizeof(struct display_device));
+                dt->devices->name = NULL;
         }
         return dt;
 }

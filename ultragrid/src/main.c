@@ -61,15 +61,12 @@
 #include "debug.h"
 #include "gl_context.h"
 #include "perf.h"
-#include "rtp/decoders.h"
 #include "rtp/rtp.h"
 #include "rtp/rtp_callback.h"
 #include "rtp/pbuf.h"
 #include "tile.h"
 #include "video_codec.h"
 #include "video_capture.h"
-#include "video_display.h"
-#include "video_display/sdl.h"
 #include "video_compress.h"
 #include "video_decompress.h"
 #include "pdb.h"
@@ -94,12 +91,10 @@
 
 #define EXIT_FAIL_USAGE		1
 #define EXIT_FAIL_UI   		2
-#define EXIT_FAIL_DISPLAY	3
 #define EXIT_FAIL_CAPTURE	4
 #define EXIT_FAIL_NETWORK	5
 #define EXIT_FAIL_TRANSMIT	6
 #define EXIT_FAIL_COMPRESS	7
-#define EXIT_FAIL_DECODER	8
 
 #define PORT_BASE               5004
 #define PORT_AUDIO              5006
@@ -125,14 +120,11 @@ struct state_uv {
         struct vidcap *capture_device;
         struct timeval start_time, curr_time;
 
-        char *decoder_mode;
         char *postprocess;
 
         uint32_t ts;
-        struct display *display_device;
         char *compress_options;
         int requested_compression;
-        const char *requested_display;
         const char *requested_capture;
         unsigned requested_mtu;
 
@@ -162,10 +154,7 @@ int uv_argc;
 char **uv_argv;
 static struct state_uv *uv_state;
 
-void list_video_display_devices(void);
 void list_video_capture_devices(void);
-struct display *initialize_video_display(const char *requested_display,
-                                                char *fmt, unsigned int flags);
 struct vidcap *initialize_video_capture(const char *requested_capture,
                                                char *fmt, unsigned int flags);
 
@@ -187,8 +176,6 @@ void _exit_uv(int status) {
         if(!threads_joined) {
                 if(uv_state->capture_device)
                         vidcap_finish(uv_state->capture_device);
-                if(uv_state->display_device)
-                        display_finish(uv_state->display_device);
                 if(uv_state->audio)
                         audio_finish(uv_state->audio);
         }
@@ -235,60 +222,6 @@ static void usage(void)
         printf("\t                         \tis entered, video frames are split\n");
         printf("\t                         \tand chunks are sent/received independently.\n");
         printf("\n");
-}
-
-void list_video_display_devices()
-{
-        int i;
-        display_type_t *dt;
-
-        printf("Available display devices:\n");
-        display_init_devices();
-        for (i = 0; i < display_get_device_count(); i++) {
-                dt = display_get_device_details(i);
-                printf("\t%s\n", dt->name);
-        }
-        display_free_devices();
-}
-
-struct display *initialize_video_display(const char *requested_display,
-                                                char *fmt, unsigned int flags)
-{
-        struct display *d;
-        display_type_t *dt;
-        display_id_t id = 0;
-        int i;
-
-        if(!strcmp(requested_display, "none"))
-                 id = display_get_null_device_id();
-
-        if (display_init_devices() != 0) {
-                printf("Unable to initialise devices\n");
-                abort();
-        } else {
-                debug_msg("Found %d display devices\n",
-                          display_get_device_count());
-        }
-        for (i = 0; i < display_get_device_count(); i++) {
-                dt = display_get_device_details(i);
-                if (strcmp(requested_display, dt->name) == 0) {
-                        id = dt->id;
-                        debug_msg("Found device\n");
-                        break;
-                } else {
-                        debug_msg("Device %s does not match %s\n", dt->name,
-                                  requested_display);
-                }
-        }
-        if(i == display_get_device_count()) {
-                fprintf(stderr, "WARNING: Selected '%s' display card "
-                        "was not found.\n", requested_display);
-                return NULL;
-        }
-        display_free_devices();
-
-        d = display_init(id, fmt, flags);
-        return d;
 }
 
 void list_video_capture_devices()
@@ -418,16 +351,6 @@ static struct tx *initialize_transmit(unsigned requested_mtu, char *fec)
 static void *ihdtv_reciever_thread(void *arg)
 {
         ihdtv_connection *connection = (ihdtv_connection *) ((void **)arg)[0];
-        struct display *display_device = (struct display *)((void **)arg)[1];
-
-        while (!should_exit) {
-                if (ihdtv_recieve
-                    (connection, frame_buffer->tiles[0].data, frame_buffer->tiles[0].data_len))
-                        return 0;       // we've got some error. probably empty buffer
-                display_put_frame(display_device, frame_buffer->tiles[0].data);
-                frame_buffer = display_get_frame(display_device);
-        }
-        return 0;
 }
 
 static void *ihdtv_sender_thread(void *arg)
@@ -612,7 +535,6 @@ int main(int argc, char *argv[])
         char *network_device = NULL;
 
         char *capture_cfg = NULL;
-        char *display_cfg = NULL;
         char *audio_send = NULL;
         char *audio_recv = NULL;
         char *jack_cfg = NULL;
@@ -624,11 +546,9 @@ int main(int argc, char *argv[])
         int ch;
 
         pthread_t receiver_thread_id, sender_thread_id;
-        unsigned vidcap_flags = 0,
-                 display_flags = 0;
+        unsigned vidcap_flags = 0;
 
         static struct option getopt_options[] = {
-                {"display", required_argument, 0, 'd'},
                 {"communication", required_argument, 0, 'C'},
                 {"capture", required_argument, 0, 't'},
                 {"mtu", required_argument, 0, 'm'},
@@ -655,12 +575,9 @@ int main(int argc, char *argv[])
 
         uv->audio = NULL;
         uv->ts = 0;
-        uv->display_device = NULL;
-        uv->requested_display = "none";
         uv->requested_capture = "none";
         uv->requested_compression = TRUE;
         uv->compress_options = "none";
-        uv->decoder_mode = NULL;
         uv->postprocess = NULL;
         uv->requested_mtu = 0;
         uv->use_ihdtv_protocol = 0;
@@ -690,15 +607,6 @@ int main(int argc, char *argv[])
                         , getopt_options,
                             &option_index)) != -1) {
                 switch (ch) {
-                case 'd':
-                        if (!strcmp(optarg, "help")) {
-                                list_video_display_devices();
-                                return 0;
-                        }
-                        uv->requested_display = strtok_r(optarg, ":", &save_ptr);
-                        if(save_ptr && strlen(save_ptr) > 0)
-                                display_cfg = save_ptr;
-                        break;
                 case 't':
                         if (!strcmp(optarg, "help")) {
                                 list_video_capture_devices();
@@ -710,9 +618,6 @@ int main(int argc, char *argv[])
                         break;
                 case 'm':
                         uv->requested_mtu = atoi(optarg);
-                        break;
-                case 'M':
-                        uv->decoder_mode = optarg;
                         break;
                 case 'p':
                         uv->postprocess = optarg;
@@ -795,11 +700,8 @@ int main(int argc, char *argv[])
 
         if(audio_does_send_sdi(uv->audio))
                 vidcap_flags |= VIDCAP_FLAG_ENABLE_AUDIO;
-        if(audio_does_receive_sdi(uv->audio))
-                display_flags |= DISPLAY_FLAG_ENABLE_AUDIO;
 
         printf("%s\n", PACKAGE_STRING);
-        printf("Display device: %s\n", uv->requested_display);
         printf("Capture device: %s\n", uv->requested_capture);
         printf("MTU           : %d\n", uv->requested_mtu);
         /*printf("Compression   : ");
@@ -826,16 +728,6 @@ int main(int argc, char *argv[])
         }
         printf("Video capture initialized-%s\n", uv->requested_capture);
 
-        if ((uv->display_device =
-             initialize_video_display(uv->requested_display, display_cfg, display_flags)) == NULL) {
-                printf("Unable to open display device: %s\n",
-                       uv->requested_display);
-                exit_status = EXIT_FAIL_DISPLAY;
-                goto cleanup;
-        }
-
-        printf("Display initialized-%s\n", uv->requested_display);
-
 
 #ifdef USE_RT
 #ifdef HAVE_SCHED_SETSCHEDULER
@@ -849,77 +741,6 @@ int main(int argc, char *argv[])
 #endif /* USE_RT */
 
         if (uv->use_ihdtv_protocol) {
-                ihdtv_connection tx_connection, rx_connection;
-
-                printf("Initializing ihdtv protocol\n");
-
-                // we cannot act as both together, because parameter parsing whould have to be revamped
-                if ((strcmp("none", uv->requested_display) != 0)
-                    && (strcmp("none", uv->requested_capture) != 0)) {
-                        printf
-                            ("Error: cannot act as both sender and reciever together in ihdtv mode\n");
-                        return -1;
-                }
-
-                void *rx_connection_and_display[] =
-                    { (void *)&rx_connection, (void *)uv->display_device };
-                void *tx_connection_and_display[] =
-                    { (void *)&tx_connection, (void *)uv->capture_device };
-
-                if (uv->requested_mtu == 0)     // mtu not specified on command line
-                {
-                        uv->requested_mtu = 8112;       // not really a mtu, but a video-data payload per packet
-                }
-
-                if (strcmp("none", uv->requested_display) != 0) {
-                        if (ihdtv_init_rx_session
-                            (&rx_connection, (argc == 0) ? NULL : argv[0],
-                             (argc ==
-                              0) ? NULL : ((argc == 1) ? argv[0] : argv[1]),
-                             3000, 3001, uv->requested_mtu) != 0) {
-                                fprintf(stderr,
-                                        "Error initializing reciever session\n");
-                                return 1;
-                        }
-
-                        if (pthread_create
-                            (&receiver_thread_id, NULL, ihdtv_reciever_thread,
-                             rx_connection_and_display) != 0) {
-                                fprintf(stderr,
-                                        "Error creating reciever thread. Quitting\n");
-                                return 1;
-                        }
-                }
-
-                if (strcmp("none", uv->requested_capture) != 0) {
-                        if (argc == 0) {
-                                fprintf(stderr,
-                                        "Error: specify the destination address\n");
-                                usage();
-                                return EXIT_FAIL_USAGE;
-                        }
-
-                        if (ihdtv_init_tx_session
-                            (&tx_connection, argv[0],
-                             (argc == 2) ? argv[1] : argv[0],
-                             uv->requested_mtu) != 0) {
-                                fprintf(stderr,
-                                        "Error initializing sender session\n");
-                                return 1;
-                        }
-
-                        if (pthread_create
-                            (&sender_thread_id, NULL, ihdtv_sender_thread,
-                             tx_connection_and_display) != 0) {
-                                fprintf(stderr,
-                                        "Error creating sender thread. Quitting\n");
-                                return 1;
-                        }
-                }
-
-                while (!should_exit)
-                        sleep(1);
-
         } else {
                 if (uv->requested_mtu == 0)     // mtu wasn't specified on the command line
                 {
@@ -956,14 +777,6 @@ int main(int argc, char *argv[])
                 }
 #endif
 
-                /* following block only shows help (otherwise initialized in receiver thread */
-                if((uv->postprocess && strstr(uv->postprocess, "help") != NULL) ||
-                                (uv->decoder_mode && strstr(uv->decoder_mode, "help") != NULL)) {
-                        struct state_decoder *dec = decoder_init(uv->decoder_mode, uv->postprocess);
-                        decoder_destroy(dec);
-                        exit_status = EXIT_SUCCESS;
-                        goto cleanup;
-                }
                 /* following block only shows help (otherwise initialized in sender thread */
                 if(uv->requested_compression && strstr(uv->compress_options,"help") != NULL) {
                         struct compress_state *compression = compress_init(uv->compress_options, NULL);
@@ -972,15 +785,6 @@ int main(int argc, char *argv[])
                         goto cleanup;
                 }
 
-                if (strcmp("none", uv->requested_display) != 0) {
-                        if (pthread_create
-                            (&receiver_thread_id, NULL, receiver_thread,
-                             (void *)uv) != 0) {
-                                perror("Unable to create display thread!\n");
-                                exit_status = 1;
-                                goto cleanup;
-                        }
-                }
                 if (strcmp("none", uv->requested_capture) != 0) {
                         if (pthread_create
                             (&sender_thread_id, NULL, sender_thread,
@@ -990,13 +794,6 @@ int main(int argc, char *argv[])
                                 goto cleanup;
                         }
                 }
-        }
-
-        if(audio_does_receive_sdi(uv->audio)) {
-                audio_register_get_callback(uv->audio, (struct audio_frame * (*)(void *)) display_get_audio_frame, uv->display_device);
-                audio_register_put_callback(uv->audio, (void (*)(void *, struct audio_frame *)) display_put_audio_frame, uv->display_device);
-                audio_register_reconfigure_callback(uv->audio, (int (*)(void *, int, int,
-                                                        int)) display_reconfigure_audio, uv->display_device);
         }
 
         pthread_sigmask(SIG_UNBLOCK, &mask, NULL);
@@ -1086,9 +883,6 @@ int main(int argc, char *argv[])
                 }
         }
 
-        if (strcmp("none", uv->requested_display) != 0)
-                pthread_join(receiver_thread_id, NULL);
-
         if (strcmp("none", uv->requested_capture) != 0 || uv->requested_compression)
                 pthread_join(sender_thread_id, NULL);
 
@@ -1104,8 +898,6 @@ cleanup:
                 audio_done(uv->audio);
         if(uv->capture_device)
                 vidcap_done(uv->capture_device);
-        if(uv->display_device)
-                display_done(uv->display_device);
 #ifndef USE_CUSTOM_TRANSMIT
         if(uv->tx)
                 tx_done(uv->tx);

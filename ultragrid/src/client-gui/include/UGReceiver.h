@@ -3,12 +3,15 @@
 
 class client_guiFrame;
 class GLView;
-class VideoBuffer;
+class Player;
 struct state_uv;
+
+struct display *client_initialize_video_display(const char *requested_display,
+                                                char *fmt, unsigned int flags);
 
 class UGReceiver {
     public:
-        UGReceiver(const char *display, VideoBuffer *gl, bool use_tcp);
+        UGReceiver(const char *display, Player *player, bool use_tcp);
         ~UGReceiver();
         void Accept(const char *remote_host, int remote_port);
         void Disconnect();

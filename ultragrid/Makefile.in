@@ -45,7 +45,6 @@ OBJS	      = @OBJS@ \
 		src/tfrc.o \
 		src/rtp/xor.o \
 		src/rtp/pbuf.o \
-		src/rtp/decoders.o \
 		src/rtp/audio_decoders.o \
 		src/rtp/ptime.o \
 		src/rtp/net_udp.o \
@@ -80,21 +79,17 @@ OBJS	      = @OBJS@ \
 		@OPENEXR_OBJ@ \
 		src/video_capture/tiff.o \
 		src/video_capture/null.o \
-		src/video_capture/aggregate.o \
 		src/video_compress.o \
 		src/video_compress/none.o \
 		src/video_decompress.o \
 		src/video_decompress/null.o \
-		src/video_display.o \
-		src/video_display/aggregate.o \
-		src/video_display/null.o \
-		src/video_display/wxgl.o \
 		src/vo_postprocess.o \
 		src/vo_postprocess/3d-interlaced.o \
 		src/vo_postprocess/double-framerate.o \
 		src/vo_postprocess/split.o \
 	        src/client-gui/src/GLView.o \
 	     	src/client-gui/src/ClientDataIntPair.o \
+	     	src/client-gui/src/ClientDataCStr.o \
 		@X_OBJ@ \
 		src/utils/thread_pool.o \
 		src/gl_context.o \
@@ -261,6 +256,10 @@ JACK_PLAY_LIB_OBJ = @JACK_PLAY_OBJ@ \
 		   src/audio/utils.o
 
 CLIENT_OBJ = src/client-gui/client_guiApp.o \
+		src/video_display/wxgl.o \
+		src/video_display.o \
+		src/video_display/null.o \
+		src/rtp/decoders.o \
 	     src/client-gui/client_guiMain.o \
 	     src/client-gui/KeyBindingsHelp.o \
 	     src/client-gui/About.o \
@@ -300,7 +299,7 @@ client: $(OBJS) $(CLIENT_OBJ)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(CLIENT_OBJ) $(OBJS) $(LIBS) -DHAVE_CONFIG_H $(INC) `wx-config --libs` `wx-config --gl-libs` `wx-config --cxxflags` -o bin/client
 
 server: $(SERVER_OBJ) $(OBJS) src/main.o 
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -DHAVE_CONFIG_H $(INC) $(SERVER_OBJ) $(OBJS) $(LIBS) `wx-config --libs` `wx-config --gl-libs` src/main.o -o bin/server
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -DHAVE_CONFIG_H $(INC) $(OBJS) $(SERVER_OBJ) $(LIBS) `wx-config --libs` `wx-config --gl-libs` src/main.o -o bin/server
 
 server-gui: $(SERVER_GUI_OBJ)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -DHAVE_CONFIG_H $(INC) $(SERVER_GUI_OBJ) `wx-config --libs` `wx-config --gl-libs` `wx-config --cxxflags` -o bin/server-gui

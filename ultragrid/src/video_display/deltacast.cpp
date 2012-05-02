@@ -407,6 +407,9 @@ display_type_t *display_deltacast_probe(void)
                 dtype->id = DISPLAY_DELTACAST_ID;
                 dtype->name = "deltacast";
                 dtype->description = "DELTACAST card";
+
+                dtype->devices = (struct display_device *) malloc(sizeof(struct display_device));
+                dtype->devices->name = NULL;
         }
         return dtype;
 }

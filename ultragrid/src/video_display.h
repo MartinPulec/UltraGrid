@@ -55,6 +55,10 @@
 #ifndef _VIDEO_DISPLAY_H
 #define _VIDEO_DISPLAY_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 #include "video.h"
 
 #define DISPLAY_FLAG_ENABLE_AUDIO (1<<1)
@@ -68,10 +72,17 @@ struct audio_frame;
 
 typedef uint32_t	display_id_t;
 
+struct display_device {
+        const char *name;
+        const char *driver_identifier;
+};
+
 typedef struct {
 	display_id_t		 id;
 	const char		*name;		/* Single word name 		*/
 	const char		*description;
+
+        struct display_device   *devices;
 } display_type_t;
 
 #define DISPLAY_PROPERTY_CODECS  0 /* codec_t[] */
@@ -91,6 +102,7 @@ void		 display_free_devices(void);
 int		 display_get_device_count(void);
 display_type_t	*display_get_device_details(int index);
 display_id_t 	 display_get_null_device_id(void);
+
 
 /* 
  * Interface to initialize displays, and playout video
@@ -126,6 +138,10 @@ int              display_get_property(struct display *d, int property, void *val
 typedef void (*observer_callback_t)(void *udata);
  
 void display_register_properties_change_observer(struct display *d, observer_callback_t observer);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 
 #endif /* _VIDEO_DISPLAY_H */

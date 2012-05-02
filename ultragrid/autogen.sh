@@ -30,8 +30,8 @@ test -z "$srcdir" && srcdir=.
 ORIGDIR=`pwd`
 cd $srcdir
 
-udt_init
-libgpujpeg_init
+#udt_init
+#libgpujpeg_init
 
 aclocal && \
 autoheader && \

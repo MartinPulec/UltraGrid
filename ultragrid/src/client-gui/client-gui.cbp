@@ -53,6 +53,7 @@
 		<Unit filename="client_guiMain.cpp" />
 		<Unit filename="client_guiMain.h" />
 		<Unit filename="include/AsyncMsgHandler.h" />
+		<Unit filename="include/ClientDataCStr.h" />
 		<Unit filename="include/ClientManager.h" />
 		<Unit filename="include/ConnectionClosedException.h" />
 		<Unit filename="include/GLView.h" />
@@ -69,6 +70,7 @@
 		<Unit filename="include/VideoEntry.h" />
 		<Unit filename="include/sp_client.h" />
 		<Unit filename="src/AsyncMsgHandler.cpp" />
+		<Unit filename="src/ClientDataCStr.cpp" />
 		<Unit filename="src/ClientManager.cpp" />
 		<Unit filename="src/ConnectionClosedException.cpp" />
 		<Unit filename="src/GLView.cpp" />

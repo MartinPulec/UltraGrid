@@ -10,6 +10,8 @@
 #include "../include/VideoBuffer.h"
 #include "../include/VideoBufferOnFlyManager.h"
 
+#include "video_display.h"
+
 class GLView;
 class VideoBuffer;
 class ClientManager;
@@ -59,6 +61,10 @@ class Player : public wxTimer
 
         int GetCurrentFrame();
 
+        std::tr1::shared_ptr<char> getframe();
+        void reconfigure(int width, int height, int codec, int data_len);
+        void putframe(std::tr1::shared_ptr<char> data, unsigned int frames);
+
     protected:
     private:
         void SetCurrentFrame(int frame);
@@ -77,6 +83,8 @@ class Player : public wxTimer
         client_guiFrame *parent;
         UGReceiver *receiver;
         Settings *settings;
+
+        struct display  *hw_display;
 
         ClientManager connection;
 

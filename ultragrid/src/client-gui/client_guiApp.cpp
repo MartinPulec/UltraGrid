@@ -11,6 +11,8 @@
 #include <signal.h>
 #include <iostream>
 
+#include "video_display.h"
+
 //(*AppHeaders
 #include "client_guiMain.h"
 #include <wx/image.h>
@@ -23,6 +25,14 @@ static client_guiFrame *app = NULL;
 bool client_guiApp::OnInit()
 {
     signal(SIGPIPE, SIG_IGN);
+
+    if (display_init_devices() != 0) {
+        fprintf(stderr, "Unable to initialise devices\n");
+        abort();
+    } else {
+        printf("Found %d display devices\n",
+                  display_get_device_count());
+    }
 
     //(*AppInitialize
     bool wxsOK = true;
@@ -43,5 +53,7 @@ bool client_guiApp::OnInit()
 
 int client_guiApp::OnExit()
 {
+    display_free_devices();
+
     return 0;
 }

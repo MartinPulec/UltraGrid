@@ -1,5 +1,6 @@
 #include <iostream>
 #include <stdexcept>
+#include <string.h>
 
 #include "../include/Player.h"
 #include "../client_guiMain.h"
@@ -45,7 +46,7 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
         use_tcp = false;
     }
 
-    receiver = new UGReceiver((const char *) "wxgl", &buffer, use_tcp);
+    receiver = new UGReceiver((const char *) "wxgl", this, use_tcp);
 }
 
 //called upon refresh
@@ -170,6 +171,21 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
         wxString hostname;
         wxString path;
 
+        char *save_ptr = NULL;
+        char *dev_str = strdup(settings->GetValue(std::string("hw_display"), std::string("none")).c_str());
+        char *device = strtok_r(dev_str, ":", &save_ptr);
+
+        char *config = save_ptr;
+
+
+        this->hw_display = client_initialize_video_display(device,
+                                                    config, 0);
+        free(dev_str);
+
+        if(this->hw_display == NULL) {
+            this->hw_display = client_initialize_video_display("none", NULL, 0);
+        }
+
         total_frames = item.total_frames;
         SetCurrentFrame(start_frame);
 
@@ -226,6 +242,8 @@ void Player::StopPlayback()
     wxTimer::Stop();
     receiver->Disconnect();
     buffer.Reset();
+
+    display_done(this->hw_display);
 
     //connection.teardown();
     connection.disconnect();
@@ -345,4 +363,19 @@ void Player::SchedulePlay()
 {
     scheduledPlayone = false;
     wxTimer::Start(1000/fps, wxTIMER_CONTINUOUS);
+}
+
+std::tr1::shared_ptr<char> Player::getframe()
+{
+    return buffer.getframe();
+}
+
+void Player::reconfigure(int width, int height, int codec, int data_len)
+{
+    buffer.reconfigure(width, height, codec, data_len);
+}
+
+void Player::putframe(std::tr1::shared_ptr<char> data, unsigned int frames)
+{
+    buffer.putframe(data, frames);
 }

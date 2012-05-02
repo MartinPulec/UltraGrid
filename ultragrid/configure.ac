@@ -649,7 +649,7 @@ sdl=no
 AC_ARG_ENABLE(sdl, 
       AS_HELP_STRING([--enable-sdl], [enable SDL(default is enable)]), 
     [sdl_req=$enableval],
-    [sdl_req=no]
+    [sdl_req=yes]
     )
 #
 # version comparison function that works for "." delimited version numbers (no alpha please)

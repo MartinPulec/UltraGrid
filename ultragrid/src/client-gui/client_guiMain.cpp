@@ -14,7 +14,10 @@
 #include "OtherSettingsDialog.h"
 #include "KeyBindingsHelp.h"
 #include "include/ClientDataIntPair.h"
+#include "include/ClientDataCStr.h"
 #include "include/Utils.h"
+
+#include "video_display.h"
 
 #include <wx/msgdlg.h>
 #include <string>
@@ -298,8 +301,24 @@ void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
         dlg.UseTCP->SetValue(false);
     }
 
+    dlg.HwDevice->Append(wxT("none"), new ClientDataCStr("none"));
+    dlg.HwDevice->Select(0u);
+
+    for(int i = 0; i < display_get_device_count(); i++) {
+        display_type_t  *dev = display_get_device_details(i);
+        struct display_device *it = dev->devices;
+
+        while(it->name != NULL) {
+            ClientDataCStr *data = new ClientDataCStr(it->driver_identifier);
+            dlg.HwDevice->Append(wxString::FromUTF8(it->name), data);
+
+            ++it;
+        }
+    }
+
     if ( dlg.ShowModal() == wxID_OK ) {
         settings.SetValue("use_tcp", dlg.UseTCP->GetValue() ? "true" : "false");
+        settings.SetValue("hw_display", dynamic_cast<ClientDataCStr *>(dlg.HwDevice->GetClientObject(dlg.HwDevice->GetSelection()))->get());
     } else {
         //else: dialog was cancelled or some another button pressed
     }

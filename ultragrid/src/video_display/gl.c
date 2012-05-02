@@ -937,6 +937,9 @@ display_type_t *display_gl_probe(void)
                 dt->id          = DISPLAY_GL_ID;
                 dt->name        = "gl";
                 dt->description = "OpenGL";
+
+                dt->devices = malloc(sizeof(struct display_device));
+                dt->devices->name = NULL;
         }
         return dt;
 }

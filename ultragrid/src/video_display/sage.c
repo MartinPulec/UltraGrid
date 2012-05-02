@@ -267,6 +267,9 @@ display_type_t *display_sage_probe(void)
                 dt->id = DISPLAY_SAGE_ID;
                 dt->name = "sage";
                 dt->description = "SAGE";
+
+                dt->devices = malloc(sizeof(struct display_device));
+                dt->devices->name = NULL;
         }
         return dt;
 }

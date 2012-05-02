@@ -1014,6 +1014,9 @@ display_type_t *display_dvs_probe(void)
                 dtype->id = DISPLAY_DVS_ID;
                 dtype->name = "dvs";
                 dtype->description = "DVS card";
+
+                dt->devices = malloc(sizeof(struct display_device));
+                dt->devices->name = NULL;
         }
         return dtype;
 }

@@ -836,6 +836,9 @@ display_type_t *display_quicktime_probe(void)
                 dtype->id = DISPLAY_QUICKTIME_ID;
                 dtype->name = "quicktime";
                 dtype->description = "QuickTime display device";
+
+                dtype->devices = malloc(sizeof(struct display_device));
+                dtype->devices->name = NULL;
         }
         return dtype;
 }

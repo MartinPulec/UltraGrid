@@ -741,6 +741,11 @@ display_type_t *display_sdl_probe(void)
                 dt->id = DISPLAY_SDL_ID;
                 dt->name = "sdl";
                 dt->description = "SDL";
+
+                dt->devices = malloc(2 * sizeof(struct display_device));
+                dt->devices[0].name = "SDL";
+                dt->devices[0].driver_identifier = "sdl";
+                dt->devices[1].name = NULL;
         }
         return dt;
 }

@@ -416,6 +416,15 @@ void display_free_devices(void)
         int i;
 
         for (i = 0; i < available_device_count; i++) {
+                struct display_device *it = available_devices[i]->devices;
+                // TODO: deal with string literals
+                /*while(it->name) {
+                        free(it->name);
+                        free(it->driver_identifier);
+                        ++it;
+                }*/
+                free(available_devices[i]->devices);
+
                 free(available_devices[i]);
                 available_devices[i] = NULL;
         }
