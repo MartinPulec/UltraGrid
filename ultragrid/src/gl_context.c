@@ -23,7 +23,9 @@ void init_gl_context(struct gl_context *context) {
         x11_enter_thread();
         context->context = glx_init(OPENGL_VERSION_UNSPECIFIED);
         context->legacy = TRUE;
-        glx_validate(context->context);
+        if(context) {
+                glx_validate(context->context);
+        }
 #else
         context->context = NULL;
         context->context = mac_gl_init(MAC_GL_PROFILE_LEGACY);
