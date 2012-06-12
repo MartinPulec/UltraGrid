@@ -39,7 +39,7 @@ extern struct gpujpeg_table_huffman_decoder (*gpujpeg_decoder_table_huffman)[GPU
 #endif
 
 /** Natural order in constant memory */
-__constant__ int gpujpeg_huffman_gpu_decoder_order_natural[64];
+__constant__ int gpujpeg_huffman_gpu_decoder_order_natural[GPUJPEG_ORDER_NATURAL_SIZE];
 
 /**
  * Fill more bit to current get buffer
@@ -419,7 +419,7 @@ gpujpeg_huffman_gpu_decoder_init()
     cudaMemcpyToSymbol(
         (const char*)gpujpeg_huffman_gpu_decoder_order_natural,
         gpujpeg_order_natural, 
-        64 * sizeof(int),
+        GPUJPEG_ORDER_NATURAL_SIZE * sizeof(int),
         0,
         cudaMemcpyHostToDevice
     );
@@ -442,6 +442,9 @@ gpujpeg_huffman_gpu_decoder_decode(struct gpujpeg_decoder* decoder)
         comp_count = coder->param_image.comp_count;
     assert(comp_count >= 1 && comp_count <= GPUJPEG_MAX_COMPONENT_COUNT);
     
+    // Configure more L1 memory
+    cudaFuncSetCacheConfig(gpujpeg_huffman_decoder_decode_kernel, cudaFuncCachePreferL1);
+
     // Run kernel
     dim3 thread(32);
     dim3 grid(gpujpeg_div_and_round_up(decoder->segment_count, thread.x));
