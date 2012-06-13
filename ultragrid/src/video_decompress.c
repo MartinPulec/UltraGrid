@@ -122,6 +122,7 @@ struct decode_from_to decoders_for_codec[] = {
         { DXT1, UYVY, RTDXT_MAGIC },
         { DXT1_YUV, UYVY, RTDXT_MAGIC },
         { DXT5, UYVY, RTDXT_MAGIC },
+        { JPEG, RGBA, JPEG_MAGIC },
         { JPEG, RGB, JPEG_MAGIC },
         { JPEG, UYVY, JPEG_MAGIC },
         { (codec_t) -1, (codec_t) -1, NULL_MAGIC }

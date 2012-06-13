@@ -76,7 +76,7 @@ static int configure_with(struct state_decompress_jpeg *s, struct video_desc des
         if(!s->decoder) {
                 return FALSE;
         }
-        if(s->out_codec == RGB) {
+        if(s->out_codec == RGB || s->out_codec == RGBA) {
                 s->decoder->coder.param_image.color_space = GPUJPEG_RGB;
                 s->decoder->coder.param_image.sampling_factor = GPUJPEG_4_4_4;
                 s->compressed_len = desc.width * desc.height * 2;
@@ -105,7 +105,7 @@ int jpeg_decompress_reconfigure(void *state, struct video_desc desc,
         struct state_decompress_jpeg *s = (struct state_decompress_jpeg *) state;
         int ret;
 
-        assert(out_codec == RGB || out_codec == UYVY);
+        assert(out_codec == RGB || out_codec == RGBA || out_codec == UYVY);
 
         s->out_codec = out_codec;
         s->pitch = pitch;
@@ -132,7 +132,7 @@ void jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffer, uns
         struct gpujpeg_decoder_output decoder_output;
 
 
-        if(s->out_codec != RGB || (s->rshift == 0 && s->gshift == 8 && s->bshift == 16)) {
+        if(s->out_codec == UYVY || (s->out_codec == RGB && s->rshift == 0 && s->gshift == 8 && s->bshift == 16)) {
                 gpujpeg_decoder_output_set_default(&decoder_output);
                 decoder_output.type = GPUJPEG_DECODER_OUTPUT_CUSTOM_BUFFER;
                 decoder_output.data = dst;
@@ -154,7 +154,9 @@ void jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffer, uns
                 if (ret != 0) return;
                 if(s->out_codec == RGB) {
                         linesize = s->desc.width * 3;
-                } else {
+                } else if(s->out_codec == RGBA) {
+                        linesize = s->desc.width * 4;
+                } else if(s->out_codec == UYVY) {
                         linesize = s->desc.width * 2;
                 }
 
@@ -163,6 +165,9 @@ void jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffer, uns
                 for(i = 0u; i < s->desc.height; i++) {
                         if(s->out_codec == RGB) {
                                 vc_copylineRGB(line_dst, line_src, linesize,
+                                                s->rshift, s->gshift, s->bshift);
+                        } else if(s->out_codec == RGBA) {
+                                vc_copylineRGBtoRGBA(line_dst, line_src, linesize,
                                                 s->rshift, s->gshift, s->bshift);
                         } else {
                                 memcpy(line_dst, line_src, linesize);
