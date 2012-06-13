@@ -28,6 +28,7 @@ Player::Player() :
 Player::~Player()
 {
     //dtor
+    display_done(this->hw_display);
     delete receiver;
 }
 
@@ -44,6 +45,22 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
         use_tcp = true;
     } else {
         use_tcp = false;
+    }
+
+    char *save_ptr = NULL;
+
+    char *dev_str = strdup(settings->GetValue(std::string("hw_display"), std::string("none")).c_str());
+    char *device = strtok_r(dev_str, ":", &save_ptr);
+
+    char *config = save_ptr;
+
+
+    this->hw_display = client_initialize_video_display(device,
+                                                config, 0);
+    free(dev_str);
+
+    if(this->hw_display == NULL) {
+        this->hw_display = client_initialize_video_display("none", NULL, 0);
     }
 
     receiver = new UGReceiver((const char *) "wxgl", this, use_tcp);
@@ -95,6 +112,10 @@ void Player::Notify()
         if(res.get()) {
             view->putframe(res);
             parent->UpdateTimer(GetCurrentFrame() );
+            struct video_frame *frame = display_get_frame(this->hw_display);
+
+            memcpy(frame->tiles[0].data, res.get(), frame->tiles[0].data_len);
+            display_put_frame(this->hw_display, (char *) frame);
         }
 
         DropOutOfBoundFrames(20);
@@ -171,21 +192,6 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
         wxString hostname;
         wxString path;
 
-        char *save_ptr = NULL;
-        char *dev_str = strdup(settings->GetValue(std::string("hw_display"), std::string("none")).c_str());
-        char *device = strtok_r(dev_str, ":", &save_ptr);
-
-        char *config = save_ptr;
-
-
-        this->hw_display = client_initialize_video_display(device,
-                                                    config, 0);
-        free(dev_str);
-
-        if(this->hw_display == NULL) {
-            this->hw_display = client_initialize_video_display("none", NULL, 0);
-        }
-
         total_frames = item.total_frames;
         SetCurrentFrame(start_frame);
 
@@ -242,8 +248,6 @@ void Player::StopPlayback()
     wxTimer::Stop();
     receiver->Disconnect();
     buffer.Reset();
-
-    display_done(this->hw_display);
 
     //connection.teardown();
     connection.disconnect();
@@ -373,6 +377,17 @@ std::tr1::shared_ptr<char> Player::getframe()
 void Player::reconfigure(int width, int height, int codec, int data_len)
 {
     buffer.reconfigure(width, height, codec, data_len);
+    struct video_desc desc;
+
+    desc.width = width;
+    desc.height = height;
+    desc.color_spec = UYVY;
+    desc.fps = 25.0;
+    desc.interlacing = PROGRESSIVE;
+    desc.tile_count = 1;
+    //desc.colorspace;
+
+    display_reconfigure(this->hw_display, desc);
 }
 
 void Player::putframe(std::tr1::shared_ptr<char> data, unsigned int frames)
