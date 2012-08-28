@@ -141,7 +141,7 @@ display_type_t *display_wxgl_probe(void)
 int display_wxgl_get_property(void *state, int property, void *val, size_t *len)
 {
         struct state_wxgl *s = (struct state_wxgl *)state;
-        codec_t codecs[] = {UYVY, RGBA, RGB, DXT1, DXT1_YUV, DXT5};
+        codec_t codecs[] = { UYVY };
         // UYVY - currently not needed. perhaps also broken with GLView
 
         switch (property) {

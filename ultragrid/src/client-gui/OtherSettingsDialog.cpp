@@ -23,10 +23,10 @@ OtherSettingsDialog::OtherSettingsDialog(wxWindow* parent,wxWindowID id,const wx
 	wxFlexGridSizer* FlexGridSizer1;
 	wxFlexGridSizer* FlexGridSizer2;
 	wxStdDialogButtonSizer* StdDialogButtonSizer1;
-	
+
 	Create(parent, wxID_ANY, _("Other Settings"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE, _T("wxID_ANY"));
 	SetClientSize(wxSize(317,203));
-	FlexGridSizer1 = new wxFlexGridSizer(2, 1, 0, 0);
+	FlexGridSizer1 = new wxFlexGridSizer(3, 1, 0, 0);
 	FlexGridSizer2 = new wxFlexGridSizer(1, 2, 0, 0);
 	HwDeviceLabel = new wxStaticText(this, ID_HWDEVICELABEL, _("Output device:"), wxDefaultPosition, wxDefaultSize, 0, _T("ID_HWDEVICELABEL"));
 	FlexGridSizer2->Add(HwDeviceLabel, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);

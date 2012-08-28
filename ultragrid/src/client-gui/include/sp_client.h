@@ -1,10 +1,17 @@
 #ifndef SP_CLIENT_H
 #define SP_CLIENT_H
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#include "config_win32.h"
+#endif // HAVE_CONFIG_H
+
 #include <pthread.h>
 #include <tr1/memory>
 #include <string>
 #include <set>
+
 
 class AsyncMsgHandler;
 
@@ -40,7 +47,7 @@ struct sp_thread_data {
         pthread_mutexattr_t attr;
         pthread_mutexattr_init(&attr);
 
-        pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE_NP);
+        pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
 
         pthread_mutex_init(&lock, &attr);
         pthread_mutexattr_destroy(&attr);

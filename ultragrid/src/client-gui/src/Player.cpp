@@ -114,7 +114,9 @@ void Player::Notify()
             parent->UpdateTimer(GetCurrentFrame() );
             struct video_frame *frame = display_get_frame(this->hw_display);
 
-            memcpy(frame->tiles[0].data, res.get(), frame->tiles[0].data_len);
+            if(frame) {
+                memcpy(frame->tiles[0].data, res.get(), frame->tiles[0].data_len);
+            }
             display_put_frame(this->hw_display, (char *) frame);
         }
 

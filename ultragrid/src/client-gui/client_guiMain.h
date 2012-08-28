@@ -10,6 +10,12 @@
 #ifndef CLIENT_GUIMAIN_H
 #define CLIENT_GUIMAIN_H
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#include "config_win32.h"
+#endif // HAVE_CONFIG_H
+
 #include "include/Settings.h"
 #include "include/UGReceiver.h"
 #include "include/GLView.h"
