@@ -45,8 +45,11 @@
  *
  */
 
+#ifdef HAVE_CONFIG_H
 #include "config.h"
 #include "config_unix.h"
+#include "config_win32.h"
+#endif // HAVE_CONFIG_H
 #include "debug.h"
 #include "host.h"
 #include "video_compress/dxt_glsl.h"
@@ -141,39 +144,44 @@ void * none_compress_init(char * opts, struct gl_context *context)
         s->out = vf_alloc(1);
         s->tile = vf_get_tile(s->out, 0);
 
+        glewInit();
         s->context = context;
 
 
- const GLcharARB *VProgram, *FProgram;
+        const GLchar *VProgram, *FProgram;
         char            *log;
-GLhandleARB     VSHandle,FSHandle,PHandle;
+        GLuint     VSHandle,FSHandle,PHandle;
 
+        int len;
+        GLsizei gllen;
 
         
-        FProgram = (const GLcharARB*) fp_display_rgba_to_yuv422_legacy;
+        FProgram = (const GLchar *) fp_display_rgba_to_yuv422_legacy;
         /* Set up program objects. */
-        PHandle=glCreateProgramObjectARB();
-        FSHandle=glCreateShaderObjectARB(GL_FRAGMENT_SHADER_ARB);
+        s->program_rgba_to_yuv422 = glCreateProgram();
+        FSHandle=glCreateShader(GL_FRAGMENT_SHADER);
         
         /* Compile Shader */
-        glShaderSourceARB(FSHandle,1, &s->program_rgba_to_yuv422,NULL);
-        glCompileShaderARB(FSHandle);
+        len = strlen(FProgram);
+        glShaderSource(FSHandle, 1, &FProgram, &len);
+        glCompileShader(FSHandle);
         
         /* Print compile log */
-        log=calloc(32768,sizeof(char));
-        glGetInfoLogARB(FSHandle,32768,NULL,log);
+        log = calloc(32768,sizeof(char));
+        glGetShaderInfoLog(FSHandle, 32768, &gllen, log);
         printf("Compile Log: %s\n", log);
-
-        glShaderSourceARB(VSHandle,1, &VProgram,NULL);
+#if 0
+        glShaderSource(VSHandle,1, &VProgram,NULL);
         glCompileShaderARB(VSHandle);
         memset(log, 0, 32768);
-        glGetInfoLogARB(VSHandle,32768,NULL,log);
+        glGetInfoLogARB(VSHandle,32768, &gllen,log);
         printf("Compile Log: %s\n", log);
 
         /* Attach and link our program */
-        glAttachObjectARB(PHandle,FSHandle);
         glAttachObjectARB(PHandle,VSHandle);
-        glLinkProgramARB(PHandle);
+#endif
+        glAttachShader(PHandle, FSHandle);
+        glLinkProgram(PHandle);
         
         /* Print link log. */
         memset(log, 0, 32768);
