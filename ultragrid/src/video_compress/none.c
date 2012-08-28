@@ -67,57 +67,6 @@
 
 #include "gl_context.h"
 
-static const char fp_display_rgba_to_yuv422_legacy[] = 
-"#define GL_legacy 1\n"
-    "#if GL_legacy\n"
-    "#define TEXCOORD gl_TexCoord[0]\n"
-    "#else\n"
-    "#define TEXCOORD TEX0\n"
-    "#define texture2D texture\n"
-    "#endif\n"
-    "\n"
-    "#if GL_legacy\n"
-    "#define colorOut gl_FragColor\n"
-    "#else\n"
-    "out vec4 colorOut;\n"
-    "#endif\n"
-    "\n"
-    "#if ! GL_legacy\n"
-    "in vec4 TEX0;\n"
-    "#endif\n"
-    "\n"
-    "uniform sampler2D image;\n"
-    "uniform float imageWidth; // is original image width, it means twice as wide as ours\n"
-    "\n"
-    "void main()\n"
-    "{\n"
-    "        vec4 rgba1, rgba2;\n"
-    "        vec4 yuv1, yuv2;\n"
-    "        vec2 coor1, coor2;\n"
-    "        float U, V;\n"
-    "\n"
-    "        coor1 = TEXCOORD.xy - vec2(1.0 / (imageWidth * 2.0), 0.0);\n"
-    "        coor2 = TEXCOORD.xy + vec2(1.0 / (imageWidth * 2.0), 0.0);\n"
-    "\n"
-    "        rgba1  = texture2D(image, coor1);\n"
-    "        rgba2  = texture2D(image, coor2);\n"
-    "        \n"
-    "        yuv1.x = 1.0/16.0 + (rgba1.r * 0.2126 + rgba1.g * 0.7152 + rgba1.b * 0.0722) * 0.8588; // Y\n"
-    "        yuv1.y = 0.5 + (-rgba1.r * 0.1145 - rgba1.g * 0.3854 + rgba1.b * 0.5) * 0.8784;\n"
-    "        yuv1.z = 0.5 + (rgba1.r * 0.5 - rgba1.g * 0.4541 - rgba1.b * 0.0458) * 0.8784;\n"
-    "        \n"
-    "        yuv2.x = 1.0/16.0 + (rgba2.r * 0.2126 + rgba2.g * 0.7152 + rgba2.b * 0.0722) * 0.8588; // Y\n"
-    "        yuv2.y = 0.5 + (-rgba2.r * 0.1145 - rgba2.g * 0.3854 + rgba2.b * 0.5) * 0.8784;\n"
-    "        yuv2.z = 0.5 + (rgba2.r * 0.5 - rgba2.g * 0.4541 - rgba2.b * 0.0458) * 0.8784;\n"
-    "        \n"
-    "        U = mix(yuv1.y, yuv2.y, 0.5);\n"
-    "        V = mix(yuv1.z, yuv2.z, 0.5);\n"
-    "        \n"
-    "        colorOut = vec4(U,yuv1.x, V, yuv2.x);\n"
-    "}\n"
-;
-
-
 struct none_video_compress {
         struct video_frame *out;
         struct tile *tile;
@@ -125,10 +74,6 @@ struct none_video_compress {
 
         struct gl_context *context;
 
-        GLuint program_rgba_to_yuv422;
-
-        GLuint fbo_rgba;
-        GLuint texture_rgba;
         GLuint fbo;
         GLuint texture;
 };
@@ -143,45 +88,6 @@ void * none_compress_init(char * opts, struct gl_context *context)
 
         s->context = context;
 
-
- const GLcharARB *VProgram, *FProgram;
-        char            *log;
-GLhandleARB     VSHandle,FSHandle,PHandle;
-
-
-        
-        FProgram = (const GLcharARB*) fp_display_rgba_to_yuv422_legacy;
-        /* Set up program objects. */
-        PHandle=glCreateProgramObjectARB();
-        FSHandle=glCreateShaderObjectARB(GL_FRAGMENT_SHADER_ARB);
-        
-        /* Compile Shader */
-        glShaderSourceARB(FSHandle,1, &s->program_rgba_to_yuv422,NULL);
-        glCompileShaderARB(FSHandle);
-        
-        /* Print compile log */
-        log=calloc(32768,sizeof(char));
-        glGetInfoLogARB(FSHandle,32768,NULL,log);
-        printf("Compile Log: %s\n", log);
-
-        glShaderSourceARB(VSHandle,1, &VProgram,NULL);
-        glCompileShaderARB(VSHandle);
-        memset(log, 0, 32768);
-        glGetInfoLogARB(VSHandle,32768,NULL,log);
-        printf("Compile Log: %s\n", log);
-
-        /* Attach and link our program */
-        glAttachObjectARB(PHandle,FSHandle);
-        glAttachObjectARB(PHandle,VSHandle);
-        glLinkProgramARB(PHandle);
-        
-        /* Print link log. */
-        memset(log, 0, 32768);
-        glGetInfoLogARB(PHandle,32768,NULL,log);
-        printf("Link Log: %s\n", log);
-        free(log);
-
-
         s->configured = FALSE;
 
         return s;
@@ -189,35 +95,25 @@ GLhandleARB     VSHandle,FSHandle,PHandle;
 
 int none_configure_with(struct none_video_compress *s, struct video_frame *tx)
 {
-        s->out->color_spec = UYVY;
+        s->out->color_spec = RGBA;
         s->out->interlacing = tx->interlacing;
         s->out->fps = tx->fps;
 
         s->tile->width = tx->tiles[0].width;
         s->tile->height = tx->tiles[0].height;
-        s->tile->data_len = 2 * s->tile->width * s->tile->height; /* RGBA */
+        s->tile->data_len = 4 * s->tile->width * s->tile->height; /* RGBA */
         s->tile->data = malloc(s->tile->data_len);
 
         glEnable(GL_TEXTURE_2D);
 
         glGenFramebuffers(1, &s->fbo);
-        glGenFramebuffers(1, &s->fbo_rgba);
-
-        glGenTextures(1, &s->texture_rgba); 
-        glBindTexture(GL_TEXTURE_2D, s->texture); 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexImage2D(GL_TEXTURE_2D, 0 , GL_RGBA, s->tile->width, s->tile->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0); 
-
         glGenTextures(1, &s->texture); 
         glBindTexture(GL_TEXTURE_2D, s->texture); 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexImage2D(GL_TEXTURE_2D, 0 , GL_RGBA, s->tile->width / 2, s->tile->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0); 
+        glTexImage2D(GL_TEXTURE_2D, 0 , GL_RGBA, s->tile->width, s->tile->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0); 
 
         glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -271,27 +167,9 @@ struct video_frame * none_compress(void *arg, struct video_frame * tx)
         glEnd();
         //glClear(GL_COLOR_BUFFER_BIT);
 
-
-        glBindFramebuffer(GL_FRAMEBUFFER, s->fbo);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, s->texture, 0);
-
-        glBindTexture(GL_TEXTURE_2D, s->texture_rgba); /* to texturing unit 0 */
-
-        glPushAttrib(GL_VIEWPORT_BIT);
-        glViewport( 0, 0, s->tile->width / 2, s->tile->height);
-
-        glUseProgram(s->program_rgba_to_yuv422);
-
-        glBegin(GL_QUADS);
-        glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0);
-        glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0);
-        glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0);
-        glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
-        glEnd();
-
         // Read back
         glReadBuffer(GL_COLOR_ATTACHMENT0);
-        glReadPixels(0, 0, s->tile->width / 2, s->tile->height, GL_RGBA, GL_UNSIGNED_BYTE, s->tile->data);
+        glReadPixels(0, 0, s->tile->width, s->tile->height, GL_RGBA, GL_UNSIGNED_BYTE, s->tile->data);
 
         glPopAttrib();
         glMatrixMode( GL_PROJECTION );
@@ -299,13 +177,6 @@ struct video_frame * none_compress(void *arg, struct video_frame * tx)
         glMatrixMode( GL_MODELVIEW );
         glPopMatrix();
 
-        glPopAttrib();
-        glMatrixMode( GL_PROJECTION );
-        glPopMatrix();
-        glMatrixMode( GL_MODELVIEW );
-        glPopMatrix();
-
-        glUseProgram(0);
         glBindTexture(GL_TEXTURE_2D, 0);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 

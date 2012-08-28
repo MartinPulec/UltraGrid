@@ -87,7 +87,6 @@ OBJS	      = @OBJS@ \
 		src/vo_postprocess/3d-interlaced.o \
 		src/vo_postprocess/double-framerate.o \
 		src/vo_postprocess/split.o \
-	        src/client-gui/src/GLView.o \
 	     	src/client-gui/src/ClientDataIntPair.o \
 	     	src/client-gui/src/ClientDataCStr.o \
 		@X_OBJ@ \
@@ -99,7 +98,6 @@ OBJS	      = @OBJS@ \
 		src/tcp_transmit.o \
 		src/udt_transmit.o \
 		src/udt_receive.o \
-		src/client-gui/src/VideoBuffer.o \
 	     	src/client-gui/src/Observable.o \
 
 
@@ -277,8 +275,10 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 	     src/client-gui/src/CustomGridBagSizer.o \
 	     src/client-gui/src/Utils.o \
 	     src/client-gui/src/Player.o \
+	     src/client-gui/src/GLView.o \
 	     src/client-gui/src/ConnectionClosedException.o \
 	     src/client-gui/src/VideoBufferOnFlyManager.o \
+             src/client-gui/src/VideoBuffer.o \
 
 SERVER_OBJ = src/server/sp_server.o \
 	     src/server/streaming_server.o \

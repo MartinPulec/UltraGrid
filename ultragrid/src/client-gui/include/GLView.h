@@ -8,6 +8,8 @@
 
 #include <pthread.h>
 
+#include "video_display.h"
+
 #include <tr1/memory>
 
 #include "../include/ClientDataIntPair.h"
@@ -41,7 +43,7 @@ class GLView : public wxGLCanvas
          * @returns buffer size
          */
         void reconfigure(int width, int height, int codec);
-        void putframe(std::tr1::shared_ptr<char> data);
+        void putframe(std::tr1::shared_ptr<char> data, bool outputToHWDisplay);
         void PostInit(wxWindowCreateEvent&);
 
         void OnPaint( wxPaintEvent& WXUNUSED(event) );
@@ -61,6 +63,7 @@ class GLView : public wxGLCanvas
         void GoPixels(int x, int y);
 
         void ResetDefaults();
+        void setHWDisplay(struct display* hw_display);
 
     protected:
         DECLARE_EVENT_TABLE()
@@ -77,6 +80,10 @@ class GLView : public wxGLCanvas
         void Recompute();
 
         void resize();
+        void RenderScrollbars();
+
+        struct display *hw_display;
+        bool useHWDisplay;
 
         ClientDataIntPair sizeIncrement;
         wxGLContext *context;
@@ -107,6 +114,8 @@ class GLView : public wxGLCanvas
         GLuint		texture_uyvy;
         GLuint		texture_final;
 
+        GLuint		texture_device, fbo_device, program_rgba_to_yuv422;
+
         std::tr1::shared_ptr<char> Frame;
 
         double vpXMultiplier, vpYMultiplier;
@@ -122,6 +131,8 @@ class GLView : public wxGLCanvas
 
         void gl_bind_texture();
         void dxt_bind_texture();
+
+        void init_device_shaders();
 };
 
 #endif // GLVIEW_H

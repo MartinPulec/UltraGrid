@@ -28,6 +28,57 @@ extern "C" {
 
 #include "cesnet-logo-2.c"
 
+static char fp_display_rgba_to_yuv422_legacy[] =
+"#define GL_legacy 1\n"
+    "#if GL_legacy\n"
+    "#define TEXCOORD gl_TexCoord[0]\n"
+    "#else\n"
+    "#define TEXCOORD TEX0\n"
+    "#define texture2D texture\n"
+    "#endif\n"
+    "\n"
+    "#if GL_legacy\n"
+    "#define colorOut gl_FragColor\n"
+    "#else\n"
+    "out vec4 colorOut;\n"
+    "#endif\n"
+    "\n"
+    "#if ! GL_legacy\n"
+    "in vec4 TEX0;\n"
+    "#endif\n"
+    "\n"
+    "uniform sampler2D image;\n"
+    "uniform float imageWidth; // is original image width, it means twice as wide as ours\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "        vec4 rgba1, rgba2;\n"
+    "        vec4 yuv1, yuv2;\n"
+    "        vec2 coor1, coor2;\n"
+    "        float U, V;\n"
+    "\n"
+    "        coor1 = TEXCOORD.xy - vec2(1.0 / (imageWidth * 2.0), 0.0);\n"
+    "        coor2 = TEXCOORD.xy + vec2(1.0 / (imageWidth * 2.0), 0.0);\n"
+    "\n"
+    "        rgba1  = texture2D(image, coor1);\n"
+    "        rgba2  = texture2D(image, coor2);\n"
+    "        \n"
+    "        yuv1.x = 1.0/16.0 + (rgba1.r * 0.2126 + rgba1.g * 0.7152 + rgba1.b * 0.0722) * 0.8588; // Y\n"
+    "        yuv1.y = 0.5 + (-rgba1.r * 0.1145 - rgba1.g * 0.3854 + rgba1.b * 0.5) * 0.8784;\n"
+    "        yuv1.z = 0.5 + (rgba1.r * 0.5 - rgba1.g * 0.4541 - rgba1.b * 0.0458) * 0.8784;\n"
+    "        \n"
+    "        yuv2.x = 1.0/16.0 + (rgba2.r * 0.2126 + rgba2.g * 0.7152 + rgba2.b * 0.0722) * 0.8588; // Y\n"
+    "        yuv2.y = 0.5 + (-rgba2.r * 0.1145 - rgba2.g * 0.3854 + rgba2.b * 0.5) * 0.8784;\n"
+    "        yuv2.z = 0.5 + (rgba2.r * 0.5 - rgba2.g * 0.4541 - rgba2.b * 0.0458) * 0.8784;\n"
+    "        \n"
+    "        U = mix(yuv1.y, yuv2.y, 0.5);\n"
+    "        V = mix(yuv1.z, yuv2.z, 0.5);\n"
+    "        \n"
+    "        colorOut = vec4(U,yuv1.x, V, yuv2.x);\n"
+    "}\n"
+;
+
+
 
 DEFINE_EVENT_TYPE(wxEVT_RECONF)
 DEFINE_EVENT_TYPE(wxEVT_PUTF)
@@ -66,7 +117,8 @@ GLView::GLView(wxFrame *p, wxWindowID id, const wxPoint &pos, const wxSize &size
 #endif
     parent(p),
     init(false),
-    Frame(std::tr1::shared_ptr<char>())
+    Frame(std::tr1::shared_ptr<char>()),
+    useHWDisplay(false)
 {
     vpXMultiplier = vpYMultiplier = 1.0;
     xoffset = yoffset = 0.0;
@@ -264,6 +316,7 @@ void GLView::PostInit(wxWindowCreateEvent&)
     dxt_arb_init();
     dxt5_arb_init();
     prepare_filters();
+    init_device_shaders();
 
     CurrentFilterIdx = 0;
     CurrentFilter = Filters[CurrentFilterIdx];
@@ -542,6 +595,15 @@ void GLView::Reconf(wxCommandEvent& event)
     glGenFramebuffersEXT(1, &fbo_display_id);
     glBindTexture(GL_TEXTURE_2D, 0);
 
+    glBindTexture(GL_TEXTURE_2D, texture_device);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0 , GL_RGBA, width / 2, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+
     resize();
 
     //wxPostEvent(parent, event);
@@ -624,7 +686,7 @@ void GLView::LoadSplashScreen()
 }
 
 
-void GLView::putframe(std::tr1::shared_ptr<char> data)
+void GLView::putframe(std::tr1::shared_ptr<char> data, bool outputToHWDisplay)
 {
     if(data_width != width || data_height != height || data_codec != codec) {
         width = data_width;
@@ -639,6 +701,7 @@ void GLView::putframe(std::tr1::shared_ptr<char> data)
 
     this->data = data.get();
     this->Frame = data;
+    this->useHWDisplay = outputToHWDisplay;
 
     Render();
 }
@@ -647,10 +710,65 @@ void GLView::Putf(wxCommandEvent&)
 {
 }
 
+void GLView::RenderScrollbars()
+{
+    glMatrixMode( GL_PROJECTION );
+    glPushMatrix();
+    glLoadIdentity();
+    glMatrixMode( GL_MODELVIEW );
+    glPushMatrix();
+    glLoadIdentity();
+
+    glUseProgram(0);
+
+    glDisable(GL_TEXTURE_2D);
+
+    if(vpXMultiplier > 1.0) {
+        float linewidth = 1.92 / vpXMultiplier;
+        float line_x_left = (-1 + (xoffset - -(vpXMultiplier - 1) /vpXMultiplier)) * 0.96;
+        float line_x_right = line_x_left + linewidth;
+
+        glBegin(GL_QUADS);
+       glColor4f(0.3,0.3,0.3,1.0);
+            glVertex3f(line_x_left, -0.98, 1);
+            glVertex3f(line_x_right, -0.98, 1);
+            glVertex3f(line_x_right, -0.96, 1);
+            glVertex3f(line_x_left, -0.96, 1);
+        glEnd();
+        glColor4f(1.0, 1.0, 1.0, 1.0);
+    }
+    if(vpYMultiplier > 1.0) {
+        float linewidth = 1.92 / vpYMultiplier;
+        float line_y_top = 0.96 - ( (yoffset - -(vpYMultiplier - 1) /vpYMultiplier / aspect) ) * aspect * 0.96;
+        float line_y_bottom = line_y_top - linewidth;
+
+        glBegin(GL_QUADS);
+       glColor4f(0.3,0.3,0.3,1.0);
+            glVertex3f(0.96,line_y_top, 1);
+            glVertex3f(0.96 + 0.02 / aspect,line_y_top, 1);
+            glVertex3f(0.96 + 0.02 / aspect,line_y_bottom, 1);
+            glVertex3f(0.96,line_y_bottom, 1);
+        glEnd();
+       glColor3f(1,1,1);
+    }
+
+    glMatrixMode( GL_PROJECTION );
+    glPopMatrix();
+    glMatrixMode( GL_MODELVIEW );
+    glPopMatrix();
+
+    glEnable(GL_TEXTURE_2D);
+}
+
 void GLView::Render()
 {
     if (!data) {
         return;
+    }
+
+    struct video_frame *frame = NULL;
+    if(useHWDisplay) {
+        frame = display_get_frame(this->hw_display);
     }
 
     wxGLCanvas::SetCurrent(*context);
@@ -720,6 +838,7 @@ void GLView::Render()
             glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_display_id);
             glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_final, 0);
 
+
             glMatrixMode( GL_PROJECTION );
             glPushMatrix();
             glLoadIdentity( );
@@ -729,6 +848,8 @@ void GLView::Render()
             glLoadIdentity( );
             glPushAttrib(GL_VIEWPORT_BIT);
             glViewport( 0, 0, width, height);
+
+            glUseProgram(CurrentFilter);
 
             glBegin(GL_QUADS);
             glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0/aspect);
@@ -747,7 +868,7 @@ void GLView::Render()
             glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
             glBindTexture(GL_TEXTURE_2D, texture_final);
 
-            glUseProgram(CurrentFilter);
+            glUseProgram(0);
         } else {
         }
 
@@ -762,6 +883,57 @@ void GLView::Render()
           /* Top Left Of The Texture and Quad */
           glTexCoord2f( 0.0f, 0.0f ); glVertex2f( -1.0f,  1/aspect);
         glEnd( );
+
+        RenderScrollbars();
+
+        if(frame) {
+            glDisable(GL_BLEND);
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_device);
+            glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_device, 0);
+
+            glPushAttrib(GL_VIEWPORT_BIT);
+            glViewport( 0, 0, width / 2, height);
+
+            glMatrixMode( GL_PROJECTION );
+            glPushMatrix();
+            glLoadIdentity( );
+
+            glScalef(vpXMultiplier, vpYMultiplier, 1);
+
+            glOrtho(-1 + xoffset, 1 + xoffset,-1 + yoffset * aspect, 1 +  yoffset * aspect,10,-10);
+            //glOrtho(-1,1,-1,1,10,-10);
+
+            glMatrixMode( GL_MODELVIEW );
+            glPushMatrix();
+            glLoadIdentity( );
+
+            glUseProgram(program_rgba_to_yuv422);
+            glUniform1f(glGetUniformLocation(program_rgba_to_yuv422, "imageWidth"),
+                        (GLfloat) width * vpXMultiplier);
+
+            glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT);
+
+            glBegin(GL_QUADS);
+                glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0);
+                glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0);
+                glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0);
+                glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
+            glEnd();
+
+            glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
+            glReadPixels(0, 0, width / 2, height, GL_RGBA, GL_UNSIGNED_BYTE, frame->tiles[0].data);
+            glMatrixMode( GL_PROJECTION );
+            glPopMatrix();
+            glMatrixMode( GL_MODELVIEW );
+            glPopMatrix();
+
+            glPopAttrib();
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+
+            glEnable(GL_BLEND);
+            //memcpy(frame->tiles[0].data, data, frame->tiles[0].data_len);
+            display_put_frame(this->hw_display, (char *) frame);
+        }
 
         glUseProgram(0);
 
@@ -976,4 +1148,43 @@ void GLView::GoPixels(int xdelta, int ydelta)
     yoffset += (double) ydelta / GetSize().y / vpYMultiplier;
     Recompute();
     resize();
+}
+
+void GLView::setHWDisplay(struct display* hw_display)
+{
+    this->hw_display = hw_display;
+}
+
+void GLView::init_device_shaders()
+{
+    glGenFramebuffersEXT(1, &fbo_device);
+
+    glGenTextures(1, &texture_device);
+
+    GLsizei log_len;
+    program_rgba_to_yuv422 = glCreateProgram();
+    GLuint     VSHandle,FSHandle,PHandle;
+    FSHandle = glCreateShader(GL_FRAGMENT_SHADER);
+
+    char *shader_program = strdup(fp_display_rgba_to_yuv422_legacy);
+    glShaderSource(FSHandle, 1,  (const GLchar **) &shader_program, NULL);
+    glCompileShader(FSHandle);
+
+    char *log = (char *) calloc(32768,sizeof(char));
+    glGetShaderInfoLog(FSHandle, 32768, &log_len, log);
+    printf("Compile Log: %s\n", log);
+
+    glAttachShader(program_rgba_to_yuv422, FSHandle);
+    glLinkProgram(program_rgba_to_yuv422);
+
+    memset(log, 0, 32768);
+    glGetProgramInfoLog(program_rgba_to_yuv422, 32768, &log_len, log);
+    printf("Link Log: %s\n", log);
+
+    glUseProgram(program_rgba_to_yuv422);
+    glUniform1i(glGetUniformLocation(program_rgba_to_yuv422, "image"), 0);
+    glUseProgram(0);
+
+    free(log);
+    free(shader_program);
 }

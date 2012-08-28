@@ -85,12 +85,14 @@ class Player : public wxTimer
         Settings *settings;
 
         struct display  *hw_display;
+        bool display_configured;
 
         ClientManager connection;
 
         VideoBufferOnFlyManager onFlyManager;
 
         double fps;
+        VideoEntry *currentVideo;
         double speed;
         int total_frames;
         bool loop;

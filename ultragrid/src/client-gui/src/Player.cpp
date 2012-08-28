@@ -20,7 +20,8 @@ Player::Player() :
     buffer(),
     connection(),
     onFlyManager(connection, buffer),
-    scheduledPlayone(false)
+    scheduledPlayone(false),
+    display_configured(false)
 {
     //ctor
 }
@@ -62,6 +63,8 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
     if(this->hw_display == NULL) {
         this->hw_display = client_initialize_video_display("none", NULL, 0);
     }
+
+    view->setHWDisplay(this->hw_display);
 
     receiver = new UGReceiver((const char *) "wxgl", this, use_tcp);
 }
@@ -110,12 +113,15 @@ void Player::Notify()
         }
 
         if(res.get()) {
-            view->putframe(res);
+            view->putframe(res, display_configured);
             parent->UpdateTimer(GetCurrentFrame() );
+#if 0
             struct video_frame *frame = display_get_frame(this->hw_display);
-
-            memcpy(frame->tiles[0].data, res.get(), frame->tiles[0].data_len);
-            display_put_frame(this->hw_display, (char *) frame);
+            if(frame) {
+                memcpy(frame->tiles[0].data, res.get(), frame->tiles[0].data_len);
+            }
+            display_put_frame(this->hw_display);
+#endif
         }
 
         DropOutOfBoundFrames(20);
@@ -145,7 +151,7 @@ bool Player::Playone()
 
     res = buffer.GetFrame(GetCurrentFrame());
     if(res.get()) { // not empty
-        view->putframe(res);
+        view->putframe(res, display_configured);
 
         DropOutOfBoundFrames(20);
 
@@ -186,6 +192,8 @@ void Player::DropOutOfBoundFrames(int interval)
 void Player::Play(VideoEntry &item, double fps, int start_frame)
 {
     wxString failedPart;
+
+    currentVideo = &item;
 
     try {
         wxString tmp;
@@ -382,12 +390,16 @@ void Player::reconfigure(int width, int height, int codec, int data_len)
     desc.width = width;
     desc.height = height;
     desc.color_spec = UYVY;
-    desc.fps = 25.0;
+    desc.fps = currentVideo->fps;
     desc.interlacing = PROGRESSIVE;
     desc.tile_count = 1;
     //desc.colorspace;
 
-    display_reconfigure(this->hw_display, desc);
+    if(display_reconfigure(this->hw_display, desc)) {
+        display_configured = true;
+    } else {
+        display_configured = false;
+    }
 }
 
 void Player::putframe(std::tr1::shared_ptr<char> data, unsigned int frames)

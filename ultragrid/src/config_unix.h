@@ -185,5 +185,7 @@ typedef int     fd_t;
 #define max(a, b)	(((a) > (b))? (a): (b))
 #define min(a, b)	(((a) < (b))? (a): (b))
 
+#define PTHREAD_MUTEX_RECURSIVE_NP PTHREAD_MUTEX_RECURSIVE
+
 #endif /* _CONFIG_UNIX_H */
 #endif /* NDEF WIN32 */
