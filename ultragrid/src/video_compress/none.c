@@ -126,7 +126,10 @@ struct video_frame * none_compress(void *arg, struct video_frame * tx)
 {
         struct none_video_compress *s = (struct none_video_compress *) arg;
 
-        assert(tx->tiles[0].storage == OPENGL_TEXTURE);
+        if(tx->tiles[0].storage != OPENGL_TEXTURE)
+        {
+                return tx;
+        }
 
         GLuint tex_source = tx->tiles[0].texture;
         
