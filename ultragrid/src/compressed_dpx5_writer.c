@@ -206,9 +206,7 @@ int main(int argc, char **argv) {
         int in_fd = open(in_filename, O_RDONLY);
         int out_fd = open(out_filename, O_WRONLY | O_CREAT | O_EXCL, 0666);
 
-        perror("");
         assert(in_fd != -1 && out_fd != -1);
-
 
         write_all(out_fd, (char *) &file_information, sizeof(file_information));
         write_all(out_fd, (char *) &image_information, sizeof(image_information));

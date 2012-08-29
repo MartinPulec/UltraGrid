@@ -213,7 +213,9 @@ static void watermark_loga(struct state_watermark *s)
 
 struct video_frame * add_watermark(struct state_watermark *s, struct video_frame * tx)
 {
-        assert(tx->tiles[0].storage == OPENGL_TEXTURE);
+        if(tx->tiles[0].storage != OPENGL_TEXTURE) {
+                return tx;
+        }
 
         glUseProgram(0);
 
