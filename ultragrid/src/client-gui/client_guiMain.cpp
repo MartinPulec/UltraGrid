@@ -304,13 +304,20 @@ void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
     dlg.HwDevice->Append(wxT("none"), new ClientDataCStr("none"));
     dlg.HwDevice->Select(0u);
 
+    const char *currentDevice = settings.GetValue(std::string("hw_display"), std::string("none")).c_str();
+    int deviceIndex = 0u;
+
     for(int i = 0; i < display_get_device_count(); i++) {
         display_type_t  *dev = display_get_device_details(i);
         struct display_device *it = dev->devices;
 
         while(it->name != NULL) {
+            deviceIndex += 1;
             ClientDataCStr *data = new ClientDataCStr(it->driver_identifier);
             dlg.HwDevice->Append(wxString::FromUTF8(it->name), data);
+            if(strcmp(it->driver_identifier, currentDevice) == 0) {
+                dlg.HwDevice->Select(deviceIndex);
+            }
 
             ++it;
         }
