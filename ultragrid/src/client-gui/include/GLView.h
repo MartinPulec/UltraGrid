@@ -110,6 +110,9 @@ class GLView : public wxGLCanvas
         GLuint fbo_id;
         GLuint fbo_display_id;
 
+        GLuint fbo_uncompressed;
+        GLuint texture_uncompressed;
+
         GLuint		texture_display;
         GLuint		texture_uyvy;
         GLuint		texture_final;

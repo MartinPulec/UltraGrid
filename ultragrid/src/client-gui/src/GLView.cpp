@@ -318,6 +318,14 @@ void GLView::PostInit(wxWindowCreateEvent&)
     prepare_filters();
     init_device_shaders();
 
+    glGenFramebuffersEXT(1, &fbo_uncompressed);
+    glGenTextures(1, &texture_uncompressed);
+    glBindTexture(GL_TEXTURE_2D, texture_uncompressed);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
     CurrentFilterIdx = 0;
     CurrentFilter = Filters[CurrentFilterIdx];
 
@@ -592,6 +600,13 @@ void GLView::Reconf(wxCommandEvent& event)
                         GL_RGBA, GL_UNSIGNED_BYTE,
                         NULL);
 
+    glBindTexture(GL_TEXTURE_2D,texture_uncompressed);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                        width, height, 0,
+                        GL_RGBA, GL_UNSIGNED_BYTE,
+                        NULL);
+
+
     glGenFramebuffersEXT(1, &fbo_display_id);
     glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -814,12 +829,48 @@ void GLView::Render()
             //exit_uv(128);
             return;
     }
-
     {
-        float bottom;
+        {
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_uncompressed);
+            glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_uncompressed, 0);
 
-        /* Clear the screen */
-        glClear(GL_COLOR_BUFFER_BIT);
+            /* Clear the screen */
+            glClear(GL_COLOR_BUFFER_BIT);
+
+            glMatrixMode( GL_PROJECTION );
+            glPushMatrix();
+            glLoadIdentity( );
+            glOrtho(-1,1,-1,1,10,-10);
+            glMatrixMode( GL_MODELVIEW );
+            glPushMatrix();
+            glLoadIdentity( );
+            glPushAttrib(GL_VIEWPORT_BIT);
+            glViewport( 0, 0, width, height);
+
+            glBindTexture(GL_TEXTURE_2D, texture_display);
+
+            glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT);
+            glBegin(GL_QUADS);
+            glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0);
+            glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0);
+            glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0);
+            glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
+            glEnd( );
+
+            glPopAttrib();
+            glMatrixMode( GL_PROJECTION );
+            glPopMatrix();
+            glMatrixMode( GL_MODELVIEW );
+            glPopMatrix();
+
+
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+            glBindTexture(GL_TEXTURE_2D, texture_uncompressed);
+
+            glUseProgram(0);
+        }
+
+        float bottom;
 
         glLoadIdentity( );
         glTranslatef( 0.0f, 0.0f, -1.35f );
