@@ -221,6 +221,7 @@ struct vidcap_dpx_state {
         struct timeval      prev_time, cur_time;
 
         unsigned            big_endian:1;
+        unsigned            dxt5_ycocg:1;
 
         unsigned int        should_jump:1;
         volatile unsigned int        grab_waiting:1;
@@ -432,45 +433,55 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         read(fd, &s->motion_header, sizeof(s->motion_header));
         read(fd, &s->television_header, sizeof(s->television_header));
 
-        if(s->file_information.magic_num == 'XPDS')
+        s->dxt5_ycocg = FALSE;
+
+        if(s->file_information.magic_num == 'XPDS') {
                 s->big_endian = TRUE;
-        else if(s->file_information.magic_num == 'SDPX')
+        } else if(s->file_information.magic_num == 'SDPX') {
                 s->big_endian = FALSE;
-        else {
+        } else if(s->file_information.magic_num == 'DXT5') {
+                s->dxt5_ycocg = TRUE;
+                s->big_endian = FALSE;
+        } else {
                 fprintf(stderr, "[DPX] corrupted file %s. "
                         "Not recognised as DPX.", filename);
                 free(s);
                 return NULL;
         }
 
-        switch (s->image_information.image_element[0].bit_size)
-        {
-                case 8:
-                        s->frame->color_spec = RGBA;
-                        s->lut_func = apply_lut_8b;
-                        break;
-                case 10:
-                        s->frame->color_spec = DPX10;
-                        if(s->big_endian)
-                                s->lut_func = apply_lut_10b_be;
-                        else
-                                s->lut_func = apply_lut_10b;
-                        break;
-                default:
-                        fprintf(stderr, "[DPX] Currently no support for %d-bit images.",
-                                        s->image_information.image_element[0].bit_size);
-                        free(s);
-                        return NULL;
-        }
+        if(!s->dxt5_ycocg) {
+                switch (s->image_information.image_element[0].bit_size)
+                {
+                        case 8:
+                                s->frame->color_spec = RGBA;
+                                s->lut_func = apply_lut_8b;
+                                break;
+                        case 10:
+                                s->frame->color_spec = DPX10;
+                                if(s->big_endian)
+                                        s->lut_func = apply_lut_10b_be;
+                                else
+                                        s->lut_func = apply_lut_10b;
+                                break;
+                        default:
+                                fprintf(stderr, "[DPX] Currently no support for %d-bit images.",
+                                                s->image_information.image_element[0].bit_size);
+                                free(s);
+                                return NULL;
+                }
 
-        create_lut(s);
+                create_lut(s);
+        } else {
+                s->frame->color_spec = DXT5;
+                s->lut_func = NULL;
+        }
 
         s->frame->interlacing = PROGRESSIVE;
         s->tile = vf_get_tile(s->frame, 0);
         s->tile->width = to_native_order(s, s->image_information.pixels_per_line);
         s->tile->height = to_native_order(s, s->image_information.lines_per_image_ele);
 
-        s->tile->data_len = s->tile->width * s->tile->height * 4;
+        s->tile->data_len = vc_get_linesize(s->tile->width, s->frame->color_spec) * s->tile->height;
 
         for (i = 0; i < BUFFER_LEN; ++i) {
                 s->buffer_read[i] = malloc(s->tile->data_len);
@@ -635,8 +646,13 @@ static void * processing_thread(void *args)
 
                 pthread_mutex_unlock(&s->lock);
 
-                s->lut_func(s->lut, s->buffer_processed[s->buffer_processed_end],
-                                s->buffer_read[s->buffer_read_start], s->tile->data_len);
+                if(s->lut_func) {
+                        s->lut_func(s->lut, s->buffer_processed[s->buffer_processed_end],
+                                        s->buffer_read[s->buffer_read_start], s->tile->data_len);
+                } else {
+                        memcpy(s->buffer_processed[s->buffer_processed_end],
+                                        s->buffer_read[s->buffer_read_start], s->tile->data_len);
+                }
 
                 pthread_mutex_lock(&s->lock);
                 s->buffer_read_start = (s->buffer_read_start + 1) % BUFFER_LEN; /* and we will read next one */
