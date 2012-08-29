@@ -7,11 +7,11 @@
 	<key>CFBundleExecutable</key>
 	<string>client</string>
 	<key>CFBundleIdentifier</key>
-	<string>cz.cesnet.UltraGrid</string>
+	<string>cz.cesnet.FlashNET</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>UltraGrid</string>
+	<string>FlashNET</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
