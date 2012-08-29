@@ -308,7 +308,7 @@ struct video_frame * color_transform_transform(struct state_color_transform *s, 
                         type = GL_UNSIGNED_INT_10_10_10_2;
                         break;
                 default:
-                        fprintf(stderr, "%s:%d: Unsupported video codec %d.\n", __FILE__, __LINE__, tx->color_spec);
+                        //fprintf(stderr, "%s:%d: Unsupported video codec %d.\n", __FILE__, __LINE__, tx->color_spec);
                         return tx;
         }
 
