@@ -318,6 +318,8 @@ void GLView::PostInit(wxWindowCreateEvent&)
     prepare_filters();
     init_device_shaders();
 
+    glGenFramebuffersEXT(1, &fbo_uncompressed);
+
     CurrentFilterIdx = 0;
     CurrentFilter = Filters[CurrentFilterIdx];
 
@@ -592,6 +594,13 @@ void GLView::Reconf(wxCommandEvent& event)
                         GL_RGBA, GL_UNSIGNED_BYTE,
                         NULL);
 
+    glBindTexture(GL_TEXTURE_2D,texture_uncompressed);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+                        width, height, 0,
+                        GL_RGBA, GL_UNSIGNED_BYTE,
+                        NULL);
+
+
     glGenFramebuffersEXT(1, &fbo_display_id);
     glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -813,9 +822,41 @@ void GLView::Render()
             //fprintf(stderr, "[GL] Fatal error - received unsupported codec.\n");
             //exit_uv(128);
             return;
-    }
 
-    {
+        {
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_uncompressed);
+            glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_uncompressed, 0);
+
+            glMatrixMode( GL_PROJECTION );
+            glPushMatrix();
+            glLoadIdentity( );
+            glOrtho(-1,1,-1,1,10,-10);
+            glMatrixMode( GL_MODELVIEW );
+            glPushMatrix();
+            glLoadIdentity( );
+            glPushAttrib(GL_VIEWPORT_BIT);
+            glViewport( 0, 0, width, height);
+
+            glBegin(GL_QUADS);
+            glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0);
+            glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0);
+            glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0);
+            glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
+            glEnd( );
+
+            glPopAttrib();
+            glMatrixMode( GL_PROJECTION );
+            glPopMatrix();
+            glMatrixMode( GL_MODELVIEW );
+            glPopMatrix();
+
+
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+            glBindTexture(GL_TEXTURE_2D, texture_uncompressed);
+
+            glUseProgram(0);
+        }
+
         float bottom;
 
         /* Clear the screen */
