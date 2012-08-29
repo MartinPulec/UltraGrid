@@ -32,6 +32,9 @@ datadir = @datadir@
 datarootdir = @datarootdir@
 uv_datadir = @datadir@/ultragrid/
 
+WX_MINOR=$(shell wx-config --version)
+WX_BUGFIX=$(shell wx-config --version | sed 's/\.[0-9][0-9]*$$//')
+
 
 OBJS	      = @OBJS@ \
 	        src/bitstream.o \
@@ -542,9 +545,9 @@ bundle: all
 	cp bin/client client.app/Contents/MacOS
 	#for n in `otool -L client.app/Contents/MacOS/client |grep -E '/(usr|opt)/local/lib' |cut -f 1 -d\ `; do cp $$n client.app/Contents/Frameworks; install_name_tool -change $$n @executable_path/../Frameworks/`basename $$n` client.app/Contents/MacOS/client; done
 	dylibbundler -od -b -x client.app/Contents/MacOS/client -d client.app/Contents/libs/
-	for n in client.app/Contents/libs/*2.9.3*; do cp $$n $${n/2.9.3.0.0/2.9}; done
-	rm -rf client.app/Contents/libs/*2.9.3*
-	for n in client.app/Contents/MacOS/client client.app/Contents/libs/*; do for m in `otool -L $$n | grep 2.9.3 | cut -f 1 -d \ `; do install_name_tool -change $$m $${m/2.9.3.0.0/2.9} $$n; done; done
+	for n in client.app/Contents/libs/*$(WX_MINOR)*; do cp $$n $${n/$(WX_MINOR).0.0/$(WX_BUGFIX)}; done
+	rm -rf client.app/Contents/libs/*$(WX_MINOR)*
+	for n in client.app/Contents/MacOS/client client.app/Contents/libs/*; do for m in `otool -L $$n | grep $(WX_MINOR) | cut -f 1 -d \ `; do install_name_tool -change $$m $${m/$(WX_MINOR).0.0/$(WX_BUGFIX)} $$n; done; done
 	install_name_tool -change @rpath/libcudart.dylib @executable_path/../libs/libcudart.dylib client.app/Contents/MacOS/client
 	install_name_tool -change @rpath/libnpp.dylib @executable_path/../libs/libnpp.dylib client.app/Contents/MacOS/client
 	install_name_tool -change @rpath/libcudart.dylib @executable_path/../libs/libcudart.dylib client.app/Contents/libs/libnpp.dylib
@@ -554,9 +557,9 @@ bundle: all
 	mkdir -p server.app/Contents/MacOS
 	cp bin/server server.app/Contents/MacOS
 	dylibbundler -od -b -x server.app/Contents/MacOS/server -d server.app/Contents/libs/
-	for n in server.app/Contents/libs/*2.9.3*; do cp $$n $${n/2.9.3.0.0/2.9}; done
-	rm -rf server.app/Contents/libs/*2.9.3*
-	for n in server.app/Contents/MacOS/server server.app/Contents/libs/*; do for m in `otool -L $$n | grep 2.9.3 | cut -f 1 -d \ `; do install_name_tool -change $$m $${m/2.9.3.0.0/2.9} $$n; done; done
+	for n in server.app/Contents/libs/*$(WX_MINOR)*; do cp $$n $${n/$(WX_MINOR).0.0/$(WX_BUGFIX)}; done
+	rm -rf server.app/Contents/libs/*$(WX_MINOR)*
+	for n in server.app/Contents/MacOS/server server.app/Contents/libs/*; do for m in `otool -L $$n | grep $(WX_MINOR) | cut -f 1 -d \ `; do install_name_tool -change $$m $${m/$(WX_MINOR).0.0/$(WX_BUGFIX)} $$n; done; done
 	install_name_tool -change @rpath/libcudart.dylib @executable_path/../libs/libcudart.dylib server.app/Contents/MacOS/server
 	install_name_tool -change @rpath/libnpp.dylib @executable_path/../libs/libnpp.dylib server.app/Contents/MacOS/server
 	install_name_tool -change @rpath/libcudart.dylib @executable_path/../libs/libcudart.dylib server.app/Contents/libs/libnpp.dylib
