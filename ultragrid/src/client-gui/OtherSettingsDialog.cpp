@@ -10,6 +10,7 @@
 const long OtherSettingsDialog::ID_HWDEVICELABEL = wxNewId();
 const long OtherSettingsDialog::ID_HWDEV = wxNewId();
 const long OtherSettingsDialog::ID_USETCP = wxNewId();
+const long OtherSettingsDialog::ID_STATICTEXT1 = wxNewId();
 //*)
 
 BEGIN_EVENT_TABLE(OtherSettingsDialog,wxDialog)
@@ -26,7 +27,7 @@ OtherSettingsDialog::OtherSettingsDialog(wxWindow* parent,wxWindowID id,const wx
 
 	Create(parent, wxID_ANY, _("Other Settings"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE, _T("wxID_ANY"));
 	SetClientSize(wxSize(317,203));
-	FlexGridSizer1 = new wxFlexGridSizer(3, 1, 0, 0);
+	FlexGridSizer1 = new wxFlexGridSizer(4, 1, 0, 0);
 	FlexGridSizer2 = new wxFlexGridSizer(1, 2, 0, 0);
 	HwDeviceLabel = new wxStaticText(this, ID_HWDEVICELABEL, _("Output device:"), wxDefaultPosition, wxDefaultSize, 0, _T("ID_HWDEVICELABEL"));
 	FlexGridSizer2->Add(HwDeviceLabel, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -42,6 +43,8 @@ OtherSettingsDialog::OtherSettingsDialog(wxWindow* parent,wxWindowID id,const wx
 	StdDialogButtonSizer1->AddButton(new wxButton(this, wxID_CANCEL, wxEmptyString));
 	StdDialogButtonSizer1->Realize();
 	FlexGridSizer1->Add(StdDialogButtonSizer1, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+	StaticText1 = new wxStaticText(this, ID_STATICTEXT1, _("Note that changing these options requires program restart."), wxDefaultPosition, wxDefaultSize, 0, _T("ID_STATICTEXT1"));
+	FlexGridSizer1->Add(StaticText1, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
 	SetSizer(FlexGridSizer1);
 	FlexGridSizer1->SetSizeHints(this);
 	//*)

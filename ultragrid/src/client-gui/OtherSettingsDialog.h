@@ -18,6 +18,7 @@ class OtherSettingsDialog: public wxDialog
 
 		//(*Declarations(OtherSettingsDialog)
 		wxChoice* HwDevice;
+		wxStaticText* StaticText1;
 		wxCheckBox* UseTCP;
 		wxStaticText* HwDeviceLabel;
 		//*)
@@ -28,6 +29,7 @@ class OtherSettingsDialog: public wxDialog
 		static const long ID_HWDEVICELABEL;
 		static const long ID_HWDEV;
 		static const long ID_USETCP;
+		static const long ID_STATICTEXT1;
 		//*)
 
 	private:
