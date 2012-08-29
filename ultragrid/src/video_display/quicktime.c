@@ -243,6 +243,62 @@ static int find_mode(ComponentInstance *ci, int width, int height,
                 const char * codec_name, double fps);
 void display_quicktime_audio_init(struct state_quicktime *s);
 
+static struct display_device *get_devices(void);
+
+static struct display_device *get_devices()
+{
+        struct display_device *ret;
+        int num_devices = 0;
+
+        ret = malloc(sizeof(struct display_device));
+
+
+        ComponentDescription cd;
+        Component c = 0;
+
+        cd.componentType = QTVideoOutputComponentType;
+        cd.componentSubType = 0;
+        cd.componentManufacturer = 0;
+        cd.componentFlags = 0;
+        cd.componentFlagsMask = kQTVideoOutputDontDisplayToUser;
+
+        //fprintf(stdout, "Number of Quicktime Vido Display components %d\n", CountComponents (&cd));
+
+        fprintf(stdout, "Available playback devices:\n");
+        /* Print relevant video output components */
+        while ((c = FindNextComponent(c, &cd))) {
+                ComponentDescription exportCD;
+
+                Handle componentNameHandle = NewHandle(0);
+                GetComponentInfo(c, &exportCD, componentNameHandle, NULL, NULL);
+                HLock(componentNameHandle);
+                char *cName = *componentNameHandle;
+
+                num_devices += 1;
+
+                ret = realloc(ret, (num_devices + 1) * sizeof(struct display_device));
+                char *driver_identifier = malloc(128);
+                snprintf(driver_identifier, 128, "quicktime:%u", (unsigned int) c);
+                ret[num_devices - 1].driver_identifier = driver_identifier;
+                char *name = malloc(cName[0] + 1);
+                strncpy(name, cName + 1, cName[0]);
+                name[(int) cName[0]] = '\0';
+                ret[num_devices - 1].name = name;
+#if 0
+                nprintf(cName);
+                fprintf(stdout, "\n");
+#endif
+
+                HUnlock(componentNameHandle);
+                DisposeHandle(componentNameHandle);
+        }
+
+        ret[num_devices].name = NULL;
+        ret[num_devices].driver_identifier = NULL;
+
+        return ret;
+}
+
 static void
 nprintf(char *str)
 {
@@ -724,11 +780,11 @@ void *display_quicktime_init(char *fmt, unsigned int flags)
 
         platform_sem_init((void *) &s->semaphore, 0, 0);
 
-        /*if (pthread_create
-            (&(s->thread_id), NULL, display_thread_quicktime, (void *)s) != 0) {
+        if (pthread_create
+            (&(s->thread_id), NULL, display_quicktime_run, (void *)s) != 0) {
                 perror("Unable to create display thread\n");
                 return NULL;
-        }*/
+        }
 
         return (void *)s;
 }
@@ -837,8 +893,7 @@ display_type_t *display_quicktime_probe(void)
                 dtype->name = "quicktime";
                 dtype->description = "QuickTime display device";
 
-                dtype->devices = malloc(sizeof(struct display_device));
-                dtype->devices->name = NULL;
+                dtype->devices = get_devices();
         }
         return dtype;
 }
