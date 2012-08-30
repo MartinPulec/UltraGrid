@@ -110,8 +110,10 @@ void Player::Notify()
         return;
 
 
-        while(tv_diff(t, next_frame) < 1/fps)
+        while(tv_diff(t, last_frame) < 1/fps)
             gettimeofday(&t, NULL);
+
+        last_frame = t;
 
         res = buffer.GetFrame(GetCurrentFrame());
         while(!res.get()) { // not empty
