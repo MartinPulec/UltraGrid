@@ -326,6 +326,10 @@ void GLView::PostInit(wxWindowCreateEvent&)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
+#ifdef USE_PBO
+    glGenBuffersARB(1, &pbo);
+#endif
+
     CurrentFilterIdx = 0;
     CurrentFilter = Filters[CurrentFilterIdx];
 
@@ -618,6 +622,11 @@ void GLView::Reconf(wxCommandEvent& event)
     glTexImage2D(GL_TEXTURE_2D, 0 , GL_RGBA, width / 2, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
     glBindTexture(GL_TEXTURE_2D, 0);
+
+     glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pbo);
+     glBufferDataARB(GL_PIXEL_PACK_BUFFER_ARB, width * 2 /* UYVY */, 0, GL_STREAM_READ_ARB);
+     glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, 0);
+
 
     resize();
 
@@ -975,7 +984,27 @@ void GLView::Render()
             glEnd();
 
             glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
+#ifdef USE_PBO
+            // glReadPixels() should return immediately.
+            glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pbo);
+            glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
+            glReadPixels(0, 0, width / 2, height, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, 0);
+
+            // map the PBO to process its data by CPU
+            glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pbo);
+            ptr = (GLubyte*)glMapBufferARB(GL_PIXEL_PACK_BUFFER_ARB,
+                            GL_READ_ONLY_ARB);
+            if(ptr)
+            {
+                    memcpy(frame->tiles[0].data, ptr, decoder->width * decoder->height * 2);
+                    glUnmapBufferARB(GL_PIXEL_PACK_BUFFER_ARB);
+            }
+
+            // back to conventional pixel operation
+            glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, 0);
+#else
             glReadPixels(0, 0, width / 2, height, GL_RGBA, GL_UNSIGNED_BYTE, frame->tiles[0].data);
+#endif
             glMatrixMode( GL_PROJECTION );
             glPopMatrix();
             glMatrixMode( GL_MODELVIEW );

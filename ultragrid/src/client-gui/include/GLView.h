@@ -136,6 +136,10 @@ class GLView : public wxGLCanvas
         void dxt_bind_texture();
 
         void init_device_shaders();
+
+#ifdef USE_PBO
+        GLuint pbo;
+#endif
 };
 
 #endif // GLVIEW_H
