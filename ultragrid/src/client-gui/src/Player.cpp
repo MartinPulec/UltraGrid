@@ -76,7 +76,7 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
 void Player::Notify()
 {
     struct timeval t;
-    gettimeofday(&next_frame, NULL);
+
 
     if(scheduledPlayone) {
         if(!Playone()) {
