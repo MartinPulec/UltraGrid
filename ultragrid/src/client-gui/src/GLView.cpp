@@ -994,7 +994,7 @@ void GLView::Render()
 
             // map the PBO to process its data by CPU
             glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pbo);
-            ptr = glMapBufferARB(GL_PIXEL_PACK_BUFFER_ARB,
+            ptr = (char *) glMapBufferARB(GL_PIXEL_PACK_BUFFER_ARB,
                             GL_READ_ONLY_ARB);
             if(ptr)
             {
