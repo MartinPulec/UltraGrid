@@ -108,8 +108,9 @@ void Player::Notify()
             }
             if(SIGN(speed) == 1 && buffer.GetLastReceivedFrame() > GetCurrentFrame()
                || SIGN(speed) == -1 && buffer.GetLastReceivedFrame() < GetCurrentFrame()
-               )
-                SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
+               ) {
+                    //SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
+                }
 
             if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
                 goto update_state;
