@@ -103,6 +103,7 @@ void Player::Notify()
 
         res = buffer.GetFrame(GetCurrentFrame());
         while(!res.get()) { // not empty
+            usleep(100);
             SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
 
             if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
@@ -139,7 +140,7 @@ void Player::Notify()
                         Pause();
                         DropOutOfBoundFrames();
                         JumpAndPlay(GetSpeed() > 0.0  ? 0 : total_frames - 1);
-                        SetCurrentFrame(GetSpeed() > 0.0  ? 0 : total_frames - 1);
+                        //SetCurrentFrame(GetSpeed() > 0.0  ? 0 : total_frames - 1);
                         //Play();
                     }
         }
