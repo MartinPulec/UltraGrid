@@ -359,7 +359,9 @@ enum playerState Player::GetState()
 void Player::SetCurrentFrame(int frame)
 {
     current_frame = frame;
+#ifdef DEBUG
     std::cerr << "Player::SetCurrentFrame(int frame)" << frame << std::endl;
+#endif
 }
 
 int Player::GetCurrentFrame()
