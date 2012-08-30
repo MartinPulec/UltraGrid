@@ -126,7 +126,7 @@ void Player::Notify()
 
         DropOutOfBoundFrames(20);
 
-        //SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
+        SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
 
 
     update_state:
@@ -139,7 +139,7 @@ void Player::Notify()
                         Pause();
                         DropOutOfBoundFrames();
                         JumpAndPlay(GetSpeed() > 0.0  ? 0 : total_frames - 1);
-                        //SetCurrentFrame(GetSpeed() > 0.0  ? 0 : total_frames - 1);
+                        SetCurrentFrame(GetSpeed() > 0.0  ? 0 : total_frames - 1);
                         //Play();
                     }
         }
