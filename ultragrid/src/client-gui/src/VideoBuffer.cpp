@@ -22,6 +22,7 @@ VideoBuffer::VideoBuffer()
 {
     //ctor
     pthread_mutex_init(&lock, NULL);
+    last_frame = -1;
 }
 
 VideoBuffer::~VideoBuffer()
@@ -44,6 +45,7 @@ void VideoBuffer::putframe(shared_ptr<char> data, unsigned int frames)
 
 
     buffered_frames.insert(std::pair<int, std::tr1::shared_ptr<char> >(frames, data));
+    last_frame = frames;
 
     pthread_mutex_unlock(&lock);
 
@@ -60,7 +62,7 @@ void VideoBuffer::reconfigure(int width, int height, int codec, int data_len)
     pthread_mutex_lock(&lock);
     this->data_len = data_len;
 
-    buffered_frames.clear();
+    Reset();
 
     this->view->reconfigure(width, height, codec);
     pthread_mutex_unlock(&lock);
@@ -135,9 +137,15 @@ int VideoBuffer::GetUpperBound()
 void VideoBuffer::Reset()
 {
     buffered_frames.clear();
+    last_frame = -1;
 }
 
 bool VideoBuffer::HasFrame(int number)
 {
     return buffered_frames.find(number) != buffered_frames.end();
+}
+
+int VideoBuffer::GetLastReceivedFrame()
+{
+    return last_frame;
 }

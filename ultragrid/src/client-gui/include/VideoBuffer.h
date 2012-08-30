@@ -30,6 +30,7 @@ class VideoBuffer: public Observable
         std::tr1::shared_ptr<char> GetFrame(int frame);
         int GetUpperBound();
         int GetLowerBound();
+        int GetLastReceivedFrame();
         bool HasFrame(int number);
         void DropFrames(int low, int high);
 
@@ -43,6 +44,7 @@ class VideoBuffer: public Observable
         pthread_mutex_t lock;
 
         int data_len;
+        int last_frame;
 
         void DropUnusedFrames();
 };

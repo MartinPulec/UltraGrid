@@ -103,8 +103,13 @@ void Player::Notify()
 
         res = buffer.GetFrame(GetCurrentFrame());
         while(!res.get()) { // not empty
-            usleep(80000);
-            SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
+            if(buffer.GetLastReceivedFrame() == -1) {
+                return;
+            }
+            if(SIGN(speed) == 1 && buffer.GetLastReceivedFrame() > GetCurrentFrame()
+               || SIGN(speed) == -1 && buffer.GetLastReceivedFrame() < GetCurrentFrame()
+               )
+                SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
 
             if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
                 goto update_state;
@@ -187,7 +192,7 @@ void Player::DropOutOfBoundFrames(int interval)
             buffer.DropFrames(val, total_frames);
         }
     } else {
-        buffer.DropFrames(0, total_frames);
+        buffer.Reset();
     }
 }
 
