@@ -107,7 +107,7 @@ void Player::Notify()
         }
 
         if(GetCurrentFrame() > buffer.GetUpperBound() - 10 && GetCurrentFrame() == 0)
-        return;
+            return;
 
 
         while(tv_diff(t, last_frame) < 1/fps)
@@ -126,6 +126,7 @@ void Player::Notify()
                     //SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
                 }
 
+            fprintf(stderr, "%d %d %d\n", GetCurrentFrame(), GetCurrentFrame(), buffer.GetLowerBound(), buffer.GetUpperBound()  );
             if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
                 goto update_state;
             }
