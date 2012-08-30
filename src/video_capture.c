@@ -58,6 +58,7 @@
 #include "video_capture/aggregate.h"
 #include "video_capture/decklink.h"
 #include "video_capture/deltacast.h"
+#include "video_capture/dpx.h"
 #include "video_capture/dvs.h"
 #include "video_capture/linsys.h"
 #include "video_capture/null.h"
@@ -104,6 +105,17 @@ struct vidcap_device_api {
 };
 
 struct vidcap_device_api vidcap_device_table[] = {
+        {
+         /* The aggregate capture card */
+         0,
+         NULL,
+         MK_STATIC(vidcap_dpx_probe),
+         MK_STATIC(vidcap_dpx_init),
+         MK_STATIC(vidcap_dpx_finish),
+         MK_STATIC(vidcap_dpx_done),
+         MK_STATIC(vidcap_dpx_grab),
+         NULL
+        },
         {
          /* The aggregate capture card */
          0,
