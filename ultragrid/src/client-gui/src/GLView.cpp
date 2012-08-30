@@ -623,10 +623,11 @@ void GLView::Reconf(wxCommandEvent& event)
 
     glBindTexture(GL_TEXTURE_2D, 0);
 
+#ifdef USE_PBO
      glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pbo);
      glBufferDataARB(GL_PIXEL_PACK_BUFFER_ARB, width * 2 /* UYVY */, 0, GL_STREAM_READ_ARB);
      glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, 0);
-
+#endif
 
     resize();
 
