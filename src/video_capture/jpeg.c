@@ -252,9 +252,9 @@ vidcap_jpeg_init(char *fmt, unsigned int flags)
                 } else if(strncmp("loop", item, strlen("loop")) == 0) {
                         s->loop = TRUE;
                 } else if(strncmp("width=", item, strlen("width=")) == 0) {
-                        s->gamma = atof(item + strlen("width="));
+                        width = atof(item + strlen("width="));
                 } else if(strncmp("height=", item, strlen("height=")) == 0) {
-                        s->gamma = atof(item + strlen("height="));
+                        height = atof(item + strlen("height="));
                 }
                 
                 item = strtok_r(NULL, ":", &save_ptr);
