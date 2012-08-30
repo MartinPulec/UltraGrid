@@ -126,7 +126,7 @@ void Player::Notify()
                     //SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
                 }
 
-            fprintf(stderr, "%d %d %d\n", GetCurrentFrame(), buffer.GetLowerBound(), buffer.GetUpperBound()  );
+            fprintf(stderr, "%d %d %d %d\n", GetCurrentFrame(), buffer.GetLowerBound(), buffer.GetUpperBound(),  HasFrame(GetCurrentFrame()))  ;
             if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
                 goto update_state;
             }
