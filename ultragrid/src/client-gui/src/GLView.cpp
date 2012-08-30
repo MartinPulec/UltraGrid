@@ -834,6 +834,9 @@ void GLView::Render()
             glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_uncompressed);
             glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_uncompressed, 0);
 
+            /* Clear the screen */
+            glClear(GL_COLOR_BUFFER_BIT);
+
             glMatrixMode( GL_PROJECTION );
             glPushMatrix();
             glLoadIdentity( );
@@ -868,9 +871,6 @@ void GLView::Render()
         }
 
         float bottom;
-
-        /* Clear the screen */
-        glClear(GL_COLOR_BUFFER_BIT);
 
         glLoadIdentity( );
         glTranslatef( 0.0f, 0.0f, -1.35f );
