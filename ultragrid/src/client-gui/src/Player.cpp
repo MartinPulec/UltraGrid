@@ -102,7 +102,7 @@ void Player::Notify()
         }
 
         if(GetCurrentFrame() > buffer.GetUpperBound() - 5)
-        return
+        return;
 
         res = buffer.GetFrame(GetCurrentFrame());
         while(!res.get()) { // not empty
