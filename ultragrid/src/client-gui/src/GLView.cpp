@@ -625,7 +625,7 @@ void GLView::Reconf(wxCommandEvent& event)
 
 #ifdef USE_PBO
      glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pbo);
-     glBufferDataARB(GL_PIXEL_PACK_BUFFER_ARB, width * 2 /* UYVY */, 0, GL_STREAM_READ_ARB);
+     glBufferDataARB(GL_PIXEL_PACK_BUFFER_ARB, width * 2 /* UYVY */ * height, 0, GL_STREAM_READ_ARB);
      glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, 0);
 #endif
 
@@ -990,7 +990,7 @@ void GLView::Render()
             // glReadPixels() should return immediately.
             glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pbo);
             glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
-            glReadPixels(0, 0, width / 2, height, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, 0);
+            glReadPixels(0, 0, width / 2, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
             // map the PBO to process its data by CPU
             glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pbo);
