@@ -83,6 +83,7 @@ OBJS	      = @OBJS@ \
 		src/video_codec.o \
 		src/video_capture.o \
 		src/video_capture/dpx.o \
+		src/video_capture/jpeg.o \
 		src/video_capture/null.o \
 		src/video_capture/aggregate.o \
 		src/video_compress.o \
