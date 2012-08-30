@@ -145,7 +145,7 @@ void Player::Notify()
 #endif
         }
 
-        DropOutOfBoundFrames(20);
+        DropOutOfBoundFrames(60);
 
         SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
 
