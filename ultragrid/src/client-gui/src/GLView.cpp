@@ -986,6 +986,7 @@ void GLView::Render()
 
             glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
 #ifdef USE_PBO
+            char *ptr;
             // glReadPixels() should return immediately.
             glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pbo);
             glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
@@ -997,7 +998,7 @@ void GLView::Render()
                             GL_READ_ONLY_ARB);
             if(ptr)
             {
-                    memcpy(frame->tiles[0].data, ptr, decoder->width * decoder->height * 2);
+                    memcpy(frame->tiles[0].data, ptr, width * height * 2);
                     glUnmapBufferARB(GL_PIXEL_PACK_BUFFER_ARB);
             }
 
