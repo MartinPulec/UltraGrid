@@ -40,7 +40,7 @@ void VideoBuffer::SetGLView(GLView *view)
 void VideoBuffer::putframe(shared_ptr<char> data, unsigned int frames)
 {
     pthread_mutex_lock(&lock);
-#ifdef DEBUG
+#if 1
     std::cerr << "Buffer: Received frame " << frames << std::endl;
 #endif
 
@@ -61,30 +61,33 @@ shared_ptr<char> VideoBuffer::getframe()
 void VideoBuffer::reconfigure(int width, int height, int codec, int data_len)
 {
     pthread_mutex_lock(&lock);
-    this->data_len = data_len;
+    {
+        this->data_len = data_len;
 
-    buffered_frames.clear();
-    last_frame = -1;
+        buffered_frames.clear();
+        last_frame = -1;
 
-    this->view->reconfigure(width, height, codec);
+        this->view->reconfigure(width, height, codec);
+    }
     pthread_mutex_unlock(&lock);
 }
 
 void VideoBuffer::DropFrames(int low, int high)
 {
     pthread_mutex_lock(&lock);
-    map<int, shared_frame>::iterator low_it, high_it;
+    {
+        map<int, shared_frame>::iterator low_it, high_it;
 
-    low_it = buffered_frames.lower_bound (low);
-    high_it = buffered_frames.upper_bound (high);
+        low_it = buffered_frames.lower_bound (low);
+        high_it = buffered_frames.upper_bound (high);
 
-    //buffered_frames.erase(buffered_frames.begin(), low_it);
-    //buffered_frames.erase(high_it, buffered_frames.end());
-    buffered_frames.erase(low_it, high_it);
+        //buffered_frames.erase(buffered_frames.begin(), low_it);
+        //buffered_frames.erase(high_it, buffered_frames.end());
+        buffered_frames.erase(low_it, high_it);
 
-    //before_min = (before_min > low ? before_min : low);
-    //after_max = (after_max < high ? after_max : high);
-
+        //before_min = (before_min > low ? before_min : low);
+        //after_max = (after_max < high ? after_max : high);
+    }
     pthread_mutex_unlock(&lock);
 }
 
@@ -94,13 +97,14 @@ std::tr1::shared_ptr<char> VideoBuffer::GetFrame(int frame)
     std::tr1::shared_ptr<char>    res;
 
     pthread_mutex_lock(&lock);
-    std::map<int, std::tr1::shared_ptr<char> >::iterator it = buffered_frames.find(frame);
-    if(it == buffered_frames.end()) {
-        res = std::tr1::shared_ptr<char>();
-    } else {
-        res = it->second;
+    {
+        std::map<int, std::tr1::shared_ptr<char> >::iterator it = buffered_frames.find(frame);
+        if(it == buffered_frames.end()) {
+            res = std::tr1::shared_ptr<char>();
+        } else {
+            res = it->second;
+        }
     }
-
     pthread_mutex_unlock(&lock);
 
     return res;
@@ -111,10 +115,12 @@ int VideoBuffer::GetLowerBound()
     int before_min;
 
     pthread_mutex_lock(&lock);
-    if(buffered_frames.begin() != buffered_frames.end()) {
-        before_min = buffered_frames.begin()->first - 1;
-    } else {
-        before_min = -1;
+    {
+        if(buffered_frames.begin() != buffered_frames.end()) {
+            before_min = buffered_frames.begin()->first - 1;
+        } else {
+            before_min = -1;
+        }
     }
     pthread_mutex_unlock(&lock);
 
@@ -126,10 +132,12 @@ int VideoBuffer::GetUpperBound()
     int after_max;
 
     pthread_mutex_lock(&lock);
-    if(buffered_frames.begin() != buffered_frames.end()) {
-        after_max = buffered_frames.rbegin()->first + 1;
-    } else {
-        after_max = 0;
+    {
+        if(buffered_frames.begin() != buffered_frames.end()) {
+            after_max = buffered_frames.rbegin()->first + 1;
+        } else {
+            after_max = 0;
+        }
     }
     pthread_mutex_unlock(&lock);
 
@@ -139,15 +147,19 @@ int VideoBuffer::GetUpperBound()
 void VideoBuffer::Reset()
 {
     pthread_mutex_lock(&lock);
-    buffered_frames.clear();
-    last_frame = -1;
+    {
+        buffered_frames.clear();
+        last_frame = -1;
+    }
     pthread_mutex_unlock(&lock);
 }
 
 // Currently unused?
 bool VideoBuffer::HasFrame(int number)
 {
+    abort();
     pthread_mutex_lock(&lock);
+    // FOLLOWING LINE IS FREEZING. WHY??????
     return buffered_frames.find(number) != buffered_frames.end();
     pthread_mutex_unlock(&lock);
 }

@@ -1,6 +1,8 @@
 #ifndef PLAYER_H
 #define PLAYER_H
 
+#include <sys/time.h>
+
 #include <wx/string.h>
 #include <wx/timer.h>
 
@@ -99,6 +101,10 @@ class Player : public wxTimer
         int current_frame;
         enum playerState state;
         bool scheduledPlayone;
+        struct timeval last_frame;
+        int last_wanted;
+
+        int speed_status;
 };
 
 #endif // PLAYER_H

@@ -1,6 +1,14 @@
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#include "config_win32.h"
+#endif // HAVE_CONFIG_H
+
 #include <iostream>
 #include <stdexcept>
 #include <string.h>
+
+#include "tv.h"
 
 #include "../include/Player.h"
 #include "../client_guiMain.h"
@@ -11,6 +19,8 @@
 #define SIGN(x) ((int) (x / fabs(x)))
 #define ROUND_FROM_ZERO(x) (ceil(fabs(x)) * SIGN(x))
 
+// number of frames in every direction
+#define OOB_FRAMES 128
 
 Player::Player() :
     receiver(0),
@@ -88,7 +98,7 @@ void Player::Notify()
         if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
             goto update_state;
         }
-
+/*
         // there is no frame beyond our buffer
         if(speed > 0.0) {
             if(GetCurrentFrame() >= buffer.GetUpperBound()) {
@@ -100,25 +110,69 @@ void Player::Notify()
                 return;
             }
         }
+*/
+
+        // prefatching
+        if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES / 2 && GetCurrentFrame() == 0) {
+            goto schedule_next;
+        }
+
+
+        // ZRYCHLI
+        //fprintf(stderr, "%d, %d\n",GetCurrentFrame(), buffer.GetUpperBound() - OOB_FRAMES / 2);
+
+        if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES / 2 // nacetli jsme vice nez pol bufferu
+            && speed_status != 1
+           ) {
+               connection.set_parameter(wxT("speed"), Utils::FromCDouble(speed * 1.01, 2));
+               speed_status = 1;
+        } else if(GetCurrentFrame() < buffer.GetUpperBound() - OOB_FRAMES
+            && speed_status != -1
+           ) {
+               connection.set_parameter(wxT("speed"), Utils::FromCDouble(speed / 1.01, 2));
+               speed_status = -1;
+        }
 
         res = buffer.GetFrame(GetCurrentFrame());
-        while(!res.get()) { // not empty
+        if(!res.get()) { // not empty
+/*
             if(buffer.GetLastReceivedFrame() == -1) {
-                return;
+                goto schedule_next;
             }
             if(SIGN(speed) == 1 && buffer.GetLastReceivedFrame() > GetCurrentFrame()
                || SIGN(speed) == -1 && buffer.GetLastReceivedFrame() < GetCurrentFrame()
-               )
-                SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
+               ) {
+                    //SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
+                }
 
+            //fprintf(stderr, "%d %d %d %d\n", GetCurrentFrame(), buffer.GetLowerBound(), buffer.GetUpperBound(),  HasFrame(GetCurrentFrame()))  ;
             if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
                 goto update_state;
             }
 
             res = buffer.GetFrame(GetCurrentFrame());
+            */
+fprintf(stderr,"N");
+            goto schedule_next;
         }
 
+
         if(res.get()) {
+            {
+                struct timeval t;
+
+                gettimeofday(&t, NULL);
+                double fps = this->fps;
+
+                while(tv_diff(t, last_frame) < 1/fps) {
+                    gettimeofday(&t, NULL);
+                }
+                if(tv_diff(t, last_frame) > 1/fps + 0.001) {
+                    fprintf(stderr, "Frame delayed more than 1 ms\n");
+                }
+                last_frame = t;
+            }
+
             view->putframe(res, display_configured);
             parent->UpdateTimer(GetCurrentFrame() );
 #if 0
@@ -130,7 +184,7 @@ void Player::Notify()
 #endif
         }
 
-        DropOutOfBoundFrames(20);
+        DropOutOfBoundFrames(OOB_FRAMES);
 
         SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
 
@@ -150,6 +204,9 @@ void Player::Notify()
                     }
         }
     }
+
+schedule_next:
+    wxTimer::Start(1, wxTIMER_ONE_SHOT);
 }
 
 bool Player::Playone()
@@ -160,7 +217,7 @@ bool Player::Playone()
     if(res.get()) { // not empty
         view->putframe(res, display_configured);
 
-        DropOutOfBoundFrames(20);
+        DropOutOfBoundFrames(OOB_FRAMES);
 
         parent->UpdateTimer(GetCurrentFrame() );
 
@@ -185,10 +242,10 @@ void Player::DropOutOfBoundFrames(int interval)
 
             buffer.DropFrames(min, max);
         } else {
-            int val = GetCurrentFrame() - 20;
+            int val = GetCurrentFrame() - OOB_FRAMES;
             buffer.DropFrames(0, val);
 
-            val = GetCurrentFrame() + 20;
+            val = GetCurrentFrame() + OOB_FRAMES;
             buffer.DropFrames(val, total_frames);
         }
     } else {
@@ -201,6 +258,10 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
     wxString failedPart;
 
     currentVideo = &item;
+
+    last_wanted = 0;
+    speed_status = 0;
+    gettimeofday(&this->last_frame, NULL);
 
     try {
         wxString tmp;
@@ -383,7 +444,7 @@ void Player::ScheduleOneFrame()
 void Player::SchedulePlay()
 {
     scheduledPlayone = false;
-    wxTimer::Start(1000/fps, wxTIMER_CONTINUOUS);
+    wxTimer::Start(1, wxTIMER_ONE_SHOT);
 }
 
 std::tr1::shared_ptr<char> Player::getframe()
