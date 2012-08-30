@@ -21,7 +21,9 @@ struct CharPtrDeleter
 VideoBuffer::VideoBuffer()
 {
     //ctor
-    pthread_mutex_init(&lock, NULL);
+    int ret = pthread_mutex_init(&lock, NULL);
+    assert(ret == 0);
+    last_frame = -1;
 }
 
 VideoBuffer::~VideoBuffer()
@@ -44,10 +46,11 @@ void VideoBuffer::putframe(shared_ptr<char> data, unsigned int frames)
 
 
     buffered_frames.insert(std::pair<int, std::tr1::shared_ptr<char> >(frames, data));
+    last_frame = frames;
 
     pthread_mutex_unlock(&lock);
 
-    Observable::notifyObservers();
+    //Observable::notifyObservers();
 }
 
 shared_ptr<char> VideoBuffer::getframe()
@@ -61,6 +64,7 @@ void VideoBuffer::reconfigure(int width, int height, int codec, int data_len)
     this->data_len = data_len;
 
     buffered_frames.clear();
+    last_frame = -1;
 
     this->view->reconfigure(width, height, codec);
     pthread_mutex_unlock(&lock);
@@ -134,10 +138,21 @@ int VideoBuffer::GetUpperBound()
 
 void VideoBuffer::Reset()
 {
+    pthread_mutex_lock(&lock);
     buffered_frames.clear();
+    last_frame = -1;
+    pthread_mutex_unlock(&lock);
 }
 
+// Currently unused?
 bool VideoBuffer::HasFrame(int number)
 {
+    pthread_mutex_lock(&lock);
     return buffered_frames.find(number) != buffered_frames.end();
+    pthread_mutex_unlock(&lock);
+}
+
+int VideoBuffer::GetLastReceivedFrame()
+{
+    return last_frame;
 }

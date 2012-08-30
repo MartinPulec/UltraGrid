@@ -103,7 +103,13 @@ void Player::Notify()
 
         res = buffer.GetFrame(GetCurrentFrame());
         while(!res.get()) { // not empty
-            SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
+            if(buffer.GetLastReceivedFrame() == -1) {
+                return;
+            }
+            if(SIGN(speed) == 1 && buffer.GetLastReceivedFrame() > GetCurrentFrame()
+               || SIGN(speed) == -1 && buffer.GetLastReceivedFrame() < GetCurrentFrame()
+               )
+                SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
 
             if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
                 goto update_state;
@@ -139,6 +145,7 @@ void Player::Notify()
                         Pause();
                         DropOutOfBoundFrames();
                         JumpAndPlay(GetSpeed() > 0.0  ? 0 : total_frames - 1);
+                        //SetCurrentFrame(GetSpeed() > 0.0  ? 0 : total_frames - 1);
                         //Play();
                     }
         }
@@ -185,7 +192,7 @@ void Player::DropOutOfBoundFrames(int interval)
             buffer.DropFrames(val, total_frames);
         }
     } else {
-        buffer.DropFrames(0, total_frames);
+        buffer.Reset();
     }
 }
 
@@ -352,7 +359,9 @@ enum playerState Player::GetState()
 void Player::SetCurrentFrame(int frame)
 {
     current_frame = frame;
+#ifdef DEBUG
     std::cerr << "Player::SetCurrentFrame(int frame)" << frame << std::endl;
+#endif
 }
 
 int Player::GetCurrentFrame()
