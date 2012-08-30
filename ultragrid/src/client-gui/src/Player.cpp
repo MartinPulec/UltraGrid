@@ -2,6 +2,8 @@
 #include <stdexcept>
 #include <string.h>
 
+#include "tv.h"
+
 #include "../include/Player.h"
 #include "../client_guiMain.h"
 #include "../include/UGReceiver.h"
@@ -73,6 +75,9 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
 // overloaded wxTimer::Notify
 void Player::Notify()
 {
+    struct timeval t;
+    gettimeofday(&next_frame, NULL);
+
     if(scheduledPlayone) {
         if(!Playone()) {
             if(onFlyManager.LastRequestIsDue(this->fps)) {
@@ -101,8 +106,12 @@ void Player::Notify()
             }
         }
 
-        if(GetCurrentFrame() > buffer.GetUpperBound() - 5 && GetCurrentFrame() == 0)
+        if(GetCurrentFrame() > buffer.GetUpperBound() - 10 && GetCurrentFrame() == 0)
         return;
+
+
+        while(tv_diff(t, next_frame) < 1/fps)
+            gettimeofday(&t, NULL);
 
         res = buffer.GetFrame(GetCurrentFrame());
         while(!res.get()) { // not empty
@@ -387,7 +396,7 @@ void Player::ScheduleOneFrame()
 void Player::SchedulePlay()
 {
     scheduledPlayone = false;
-    wxTimer::Start(1000/fps, wxTIMER_CONTINUOUS);
+    wxTimer::Start(1000/fps*3/4, wxTIMER_CONTINUOUS);
 }
 
 std::tr1::shared_ptr<char> Player::getframe()
