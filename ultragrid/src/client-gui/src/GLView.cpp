@@ -870,6 +870,9 @@ void GLView::Render()
             glUseProgram(0);
         }
 
+        /* Clear the screen */
+        glClear(GL_COLOR_BUFFER_BIT);
+
         float bottom;
 
         glLoadIdentity( );

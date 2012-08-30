@@ -103,7 +103,7 @@ void Player::Notify()
 
         res = buffer.GetFrame(GetCurrentFrame());
         while(!res.get()) { // not empty
-            usleep(40000);
+            usleep(80000);
             SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
 
             if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
