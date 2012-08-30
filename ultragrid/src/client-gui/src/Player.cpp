@@ -101,6 +101,9 @@ void Player::Notify()
             }
         }
 
+        if(GetCurrentFrame() > buffer.GetUpperBound() - 5)
+        return
+
         res = buffer.GetFrame(GetCurrentFrame());
         while(!res.get()) { // not empty
             if(buffer.GetLastReceivedFrame() == -1) {
