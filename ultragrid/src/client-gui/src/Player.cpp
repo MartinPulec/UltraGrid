@@ -114,7 +114,7 @@ void Player::Notify()
             }
         }
 
-        if(GetCurrentFrame() > buffer.GetUpperBound() - 10 && GetCurrentFrame() == 0)
+        if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES && GetCurrentFrame() == 0)
             return;
 
         if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES / 2 && // nacetli jsme vice nez pol bufferu
