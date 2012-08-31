@@ -582,14 +582,9 @@ static void * reading_thread(void *args)
                 ssize_t bytes_read = 0;
                 unsigned int file_offset = to_native_order(s, s->file_information.offset);
                 do {
-                        off_t seek_ret = lseek(fd, file_offset, SEEK_SET);
-                        assert(seek_ret != -1);
-
-                        ssize_t ret;
-                        ret += read(fd, s->buffer_read[s->buffer_read_end] + bytes_read,
-                                        s->tile->data_len - bytes_read);
-                        assert(ret > 0);
-                        bytes_read += ret;
+                        bytes_read += pread(fd, s->buffer_read[s->buffer_read_end] + bytes_read,
+                                        s->tile->data_len - bytes_read,
+                                        file_offset + bytes_read);
                 } while(bytes_read < s->tile->data_len);
 
                 close(fd);

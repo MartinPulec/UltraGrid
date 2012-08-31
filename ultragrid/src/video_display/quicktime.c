@@ -225,7 +225,8 @@ struct state_quicktime {
         pthread_t thread_id;
         sem_t semaphore;
 
-        struct video_frame *frame;
+        struct video_frame * volatile frame;
+        struct video_desc desc;
 
         struct audio_frame audio;
         int audio_packet_size;
@@ -244,6 +245,22 @@ static int find_mode(ComponentInstance *ci, int width, int height,
 void display_quicktime_audio_init(struct state_quicktime *s);
 
 static struct display_device *get_devices(void);
+
+void frame_complete_proc(OSErr result, short flags, long refcon);
+
+void frame_complete_proc(OSErr result, short flags, long refcon)
+{
+        UNUSED(result);
+        UNUSED(flags);
+        struct video_frame *frame = (struct video_frame *) refcon;
+
+        assert(frame != NULL);
+        unsigned int i;
+        for(i = 0; i < frame->tile_count; ++i) {
+                free(frame->tiles[i].data);
+        }
+        vf_free(frame);
+}
 
 static struct display_device *get_devices()
 {
@@ -340,7 +357,6 @@ static void reconf_common(struct state_quicktime *s)
         
         for (i = 0; i < s->devices_cnt; ++i)
         {
-                struct tile *tile = vf_get_tile(s->frame, i);
                 ImageDescriptionHandle imageDesc;
                 OSErr ret;
         
@@ -356,18 +372,19 @@ static void reconf_common(struct state_quicktime *s)
                  * bytes_per_luma_instant to 8/3. 
                  * See http://developer.apple.com/quicktime/icefloe/dispatch019.html#v210
                  */       
-                (**(ImageDescriptionHandle) imageDesc).dataSize = tile->data_len;
+                (**(ImageDescriptionHandle) imageDesc).dataSize = vc_get_linesize(s->desc.width,
+                                s->desc.color_spec) * s->desc.height;
                 /* 
                  * Beware: must be a multiple of horiz_align_pixels which is 2 for 2Vuy
                  * and 48 for v210. hd_size_x=1920 is a multiple of both. TODO: needs 
                  * further investigation for 2K!
                  */
-                (**(ImageDescriptionHandle) imageDesc).width = get_haligned(tile->width, s->frame->color_spec);
-                (**(ImageDescriptionHandle) imageDesc).height = tile->height;
-        
-                ret = DecompressSequenceBeginS(&(s->seqID[i]), imageDesc, tile->data, 
+                (**(ImageDescriptionHandle) imageDesc).width = get_haligned(s->desc.width, s->desc.color_spec);
+                (**(ImageDescriptionHandle) imageDesc).height = s->desc.height;
+
+                ret = DecompressSequenceBeginS(&(s->seqID[i]), imageDesc, NULL, 
                                                // Size of the buffer, not size of the actual frame data inside
-                                               tile->data_len,    
+                                               (**(ImageDescriptionHandle) imageDesc).dataSize,    
                                                s->gworld[i],
                                                NULL,
                                                NULL,
@@ -392,9 +409,16 @@ void display_quicktime_run(void *arg)
         int frames = 0;
         struct timeval t, t0;
 
+        ICMCompletionProcRecord completion_rec;
+        ICMCompletionProcRecordPtr completion_ptr = &completion_rec;
+        
+        completion_rec.completionProc = frame_complete_proc;
+
         while (!should_exit) {
                 int i;
                 platform_sem_wait((void *) &s->semaphore);
+
+                completion_rec.completionRefCon = (long) s->frame;
 
                 for (i = 0; i < s->devices_cnt; ++i) {
                         struct tile *tile = vf_get_tile(s->frame, i);
@@ -408,7 +432,7 @@ void display_quicktime_run(void *arg)
                                                         * the decompressor does not call the completion 
                                                         * function. 
                                                         */
-                                                       0, &ignore, (void *) -1,       
+                                                       0, &ignore, completion_ptr,       
                                                           NULL);
                         if (ret != noErr) {
                                 fprintf(stderr,
@@ -436,7 +460,25 @@ display_quicktime_getf(void *state)
 {
         struct state_quicktime *s = (struct state_quicktime *)state;
         assert(s->magic == MAGIC_QT_DISPLAY);
-        return &s->frame[0];
+        struct video_frame *frame = NULL;
+        
+        if(s->desc.tile_count) {
+                unsigned int i;
+                frame = vf_alloc(s->desc.tile_count);
+                frame->fps = s->desc.fps;
+                frame->interlacing = s->desc.interlacing;
+                frame->color_spec = s->desc.color_spec;
+                for(i = 0; i < s->desc.tile_count; ++i) {
+                        struct tile *tile = &frame->tiles[i];
+                        tile->width = s->desc.width;
+                        tile->height = s->desc.height;
+                        tile->linesize = vc_get_linesize(s->desc.width, s->desc.color_spec);
+                        tile->data_len = tile->linesize * tile->height;
+                        tile->data = malloc(tile->linesize * tile->height);
+                }
+        }
+
+        return frame;
 }
 
 int display_quicktime_putf(void *state, char *frame)
@@ -447,7 +489,11 @@ int display_quicktime_putf(void *state, char *frame)
         assert(s->magic == MAGIC_QT_DISPLAY);
 
         /* ...and signal the worker */
-        platform_sem_post((void *) &s->semaphore);
+        s->frame = (struct video_frame *)frame;
+        if(frame) platform_sem_post((void *) &s->semaphore);
+        //while(s->frame) // wait for worker to signal us that it is ok
+        //        ;
+
         return 0;
 }
 
@@ -617,6 +663,9 @@ void *display_quicktime_init(char *fmt, unsigned int flags)
         /* Parse fmt input */
         s = (struct state_quicktime *)calloc(1, sizeof(struct state_quicktime));
         s->magic = MAGIC_QT_DISPLAY;
+
+        memset(&s->desc, 0, sizeof(s->desc));
+        s->frame = NULL;
 
         if (fmt != NULL) {
                 if (strcmp(fmt, "help") == 0) {
@@ -965,28 +1014,15 @@ int display_quicktime_reconfigure(void *state, struct video_desc desc)
                 
         fprintf(stdout, "Selected mode: %dx%d, %fbpp\n", desc.width,
                         desc.height, s->cinfo->bpp);
-        s->frame->color_spec = desc.color_spec;
-        s->frame->fps = desc.fps;
-        s->frame->interlacing = desc.interlacing;
+        s->desc = desc;
+
+        s->frame = NULL;
 
         for(i = 0; i < s->devices_cnt; ++i) {
 
                 int tile_width = desc.width;
                 int tile_height = desc.height;
 
-                struct tile * tile = vf_get_tile(s->frame, i);
-                
-                tile->width = tile_width;
-                tile->height = tile_height;
-                tile->linesize = vc_get_linesize(tile_width, desc.color_spec);
-                tile->data_len = tile->linesize * tile->height;
-                
-                if(tile->data != NULL) {
-                        free(tile->data);
-                }
-                
-                tile->data = calloc(1, tile->data_len);
-                
                 s->videoDisplayComponentInstance[i] = OpenComponent((Component) s->device[i]);
                 
                 if(!s->mode_set_manually)
