@@ -120,7 +120,7 @@ void Player::Notify()
         if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES / 2 && // nacetli jsme vice nez pol bufferu
            GetCurrentFrame() < total_frames - OOB_FRAMES) {// nejsme u konce
                int request_frame = GetCurrentFrame() + OOB_FRAMES / 4;
-               fprint("Chceme: %d\d", request_frame);
+               fprint("Chceme: %d\n", request_frame);
                connection.play(request_frame);
         }
 
