@@ -152,7 +152,7 @@ void Player::Notify()
 
             res = buffer.GetFrame(GetCurrentFrame());
             */
-fprintf(stderr,"N");
+            fprintf(stderr,"frame missing ");
             goto schedule_next;
         }
 
