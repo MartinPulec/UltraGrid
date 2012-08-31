@@ -20,7 +20,7 @@
 #define ROUND_FROM_ZERO(x) (ceil(fabs(x)) * SIGN(x))
 
 // number of frames in every direction
-#define OOB_FRAMES 64
+#define OOB_FRAMES 128
 
 Player::Player() :
     receiver(0),
@@ -113,23 +113,28 @@ void Player::Notify()
 */
 
         // prefatching
-        if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES / 2 && GetCurrentFrame() == 0)
+        if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES / 2 && GetCurrentFrame() == 0) {
             goto schedule_next;
-
-        if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES / 2 // nacetli jsme vice nez pol bufferu
-           && GetCurrentFrame() < total_frames - OOB_FRAMES // nejsme u konce
-           && last_wanted < GetCurrentFrame()
-           ) {
-               int requested_frame = GetCurrentFrame() + OOB_FRAMES / 2;
-               fprintf(stderr,"Chceme: %d (current: %d, buffer: (%d, %d))\n", requested_frame,
-                       GetCurrentFrame(), buffer.GetLowerBound(), buffer.GetUpperBound());
-               last_wanted = requested_frame;
-               connection.play(requested_frame);
         }
 
 
+        // ZRYCHLI
+        //fprintf(stderr, "%d, %d\n",GetCurrentFrame(), buffer.GetUpperBound() - OOB_FRAMES / 2);
+
+        if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES / 2 // nacetli jsme vice nez pol bufferu
+            && speed_status != 0
+           ) {
+               connection.set_parameter(wxT("speed"), Utils::FromCDouble(speed * 1.01, 2));
+               speed_status = 1;
+        } else if(GetCurrentFrame() < buffer.GetUpperBound() - OOB_FRAMES
+            && speed_status != -1
+           ) {
+               connection.set_parameter(wxT("speed"), Utils::FromCDouble(speed / 1.01, 2));
+               speed_status = -1;
+        }
+
         res = buffer.GetFrame(GetCurrentFrame());
-        while(!res.get()) { // not empty
+        if(!res.get()) { // not empty
 /*
             if(buffer.GetLastReceivedFrame() == -1) {
                 goto schedule_next;
@@ -147,7 +152,7 @@ void Player::Notify()
 
             res = buffer.GetFrame(GetCurrentFrame());
             */
-
+fprintf(stderr,"N");
             goto schedule_next;
         }
 
@@ -255,6 +260,8 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
     currentVideo = &item;
 
     last_wanted = 0;
+    speed_status = 0;
+    gettimeofday(&this->last_frame, NULL);
 
     try {
         wxString tmp;
