@@ -1,3 +1,9 @@
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#include "config_win32.h"
+#endif // HAVE_CONFIG_H
+
 #include <iostream>
 #include <stdexcept>
 #include <string.h>
@@ -13,6 +19,8 @@
 #define SIGN(x) ((int) (x / fabs(x)))
 #define ROUND_FROM_ZERO(x) (ceil(fabs(x)) * SIGN(x))
 
+// number of frames in every direction
+#define OOB_FRAMES 64
 
 Player::Player() :
     receiver(0),
@@ -109,11 +117,11 @@ void Player::Notify()
         if(GetCurrentFrame() > buffer.GetUpperBound() - 10 && GetCurrentFrame() == 0)
             return;
 
+        if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES / 2 && // nacetli jsme vice nez pol bufferu
+           GetCurrentFrame() < total_frames - OOB_FRAMES) {// nejsme u konce
+            JumpAndPlay(buffer.GetUpperBound() - OOB_FRAMES / 4 );
+        }
 
-        while(tv_diff(t, last_frame) < 1/fps)
-            gettimeofday(&t, NULL);
-
-        last_frame = t;
 
         res = buffer.GetFrame(GetCurrentFrame());
         while(!res.get()) { // not empty
@@ -126,7 +134,7 @@ void Player::Notify()
                     //SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
                 }
 
-            fprintf(stderr, "%d %d %d %d\n", GetCurrentFrame(), buffer.GetLowerBound(), buffer.GetUpperBound(),  HasFrame(GetCurrentFrame()))  ;
+            //fprintf(stderr, "%d %d %d %d\n", GetCurrentFrame(), buffer.GetLowerBound(), buffer.GetUpperBound(),  HasFrame(GetCurrentFrame()))  ;
             if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
                 goto update_state;
             }
@@ -134,7 +142,13 @@ void Player::Notify()
             res = buffer.GetFrame(GetCurrentFrame());
         }
 
+
         if(res.get()) {
+            while(tv_diff(t, last_frame) < 1/fps) {
+                gettimeofday(&t, NULL);
+            }
+            last_frame = t;
+
             view->putframe(res, display_configured);
             parent->UpdateTimer(GetCurrentFrame() );
 #if 0
@@ -146,7 +160,7 @@ void Player::Notify()
 #endif
         }
 
-        DropOutOfBoundFrames(60);
+        DropOutOfBoundFrames(OOB_FRAMES);
 
         SetCurrentFrame(GetCurrentFrame() + SIGN(speed));
 
@@ -176,7 +190,7 @@ bool Player::Playone()
     if(res.get()) { // not empty
         view->putframe(res, display_configured);
 
-        DropOutOfBoundFrames(20);
+        DropOutOfBoundFrames(OOB_FRAMES);
 
         parent->UpdateTimer(GetCurrentFrame() );
 
@@ -201,10 +215,10 @@ void Player::DropOutOfBoundFrames(int interval)
 
             buffer.DropFrames(min, max);
         } else {
-            int val = GetCurrentFrame() - 20;
+            int val = GetCurrentFrame() - OOB_FRAMES;
             buffer.DropFrames(0, val);
 
-            val = GetCurrentFrame() + 20;
+            val = GetCurrentFrame() + OOB_FRAMES;
             buffer.DropFrames(val, total_frames);
         }
     } else {
