@@ -83,9 +83,6 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
 // overloaded wxTimer::Notify
 void Player::Notify()
 {
-    struct timeval t;
-
-
     if(scheduledPlayone) {
         if(!Playone()) {
             if(onFlyManager.LastRequestIsDue(this->fps)) {
@@ -101,7 +98,7 @@ void Player::Notify()
         if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
             goto update_state;
         }
-
+/*
         // there is no frame beyond our buffer
         if(speed > 0.0) {
             if(GetCurrentFrame() >= buffer.GetUpperBound()) {
@@ -113,22 +110,29 @@ void Player::Notify()
                 return;
             }
         }
+*/
 
-        if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES && GetCurrentFrame() == 0)
-            return;
+        // prefatching
+        if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES / 2 && GetCurrentFrame() == 0)
+            goto schedule_next;
 
-        if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES / 2 && // nacetli jsme vice nez pol bufferu
-           GetCurrentFrame() < total_frames - OOB_FRAMES) {// nejsme u konce
-               int request_frame = GetCurrentFrame() + OOB_FRAMES / 4;
-               fprintf(stderr,"Chceme: %d\n", request_frame);
-               connection.play(request_frame);
+        if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES / 2 // nacetli jsme vice nez pol bufferu
+           && GetCurrentFrame() < total_frames - OOB_FRAMES // nejsme u konce
+           && last_wanted < GetCurrentFrame()
+           ) {
+               int requested_frame = GetCurrentFrame() + OOB_FRAMES / 2;
+               fprintf(stderr,"Chceme: %d (current: %d, buffer: (%d, %d))\n", requested_frame,
+                       GetCurrentFrame(), buffer.GetLowerBound(), buffer.GetUpperBound());
+               last_wanted = requested_frame;
+               connection.play(requested_frame);
         }
 
 
         res = buffer.GetFrame(GetCurrentFrame());
         while(!res.get()) { // not empty
+/*
             if(buffer.GetLastReceivedFrame() == -1) {
-                return;
+                goto schedule_next;
             }
             if(SIGN(speed) == 1 && buffer.GetLastReceivedFrame() > GetCurrentFrame()
                || SIGN(speed) == -1 && buffer.GetLastReceivedFrame() < GetCurrentFrame()
@@ -142,14 +146,27 @@ void Player::Notify()
             }
 
             res = buffer.GetFrame(GetCurrentFrame());
+            */
+
+            goto schedule_next;
         }
 
 
         if(res.get()) {
-            while(tv_diff(t, last_frame) < 1/fps) {
+            {
+                struct timeval t;
+
                 gettimeofday(&t, NULL);
+                double fps = this->fps;
+
+                while(tv_diff(t, last_frame) < 1/fps) {
+                    gettimeofday(&t, NULL);
+                }
+                if(tv_diff(t, last_frame) > 1/fps + 0.001) {
+                    fprintf(stderr, "Frame delayed more than 1 ms\n");
+                }
+                last_frame = t;
             }
-            last_frame = t;
 
             view->putframe(res, display_configured);
             parent->UpdateTimer(GetCurrentFrame() );
@@ -182,6 +199,9 @@ void Player::Notify()
                     }
         }
     }
+
+schedule_next:
+    wxTimer::Start(1, wxTIMER_ONE_SHOT);
 }
 
 bool Player::Playone()
@@ -233,6 +253,8 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
     wxString failedPart;
 
     currentVideo = &item;
+
+    last_wanted = 0;
 
     try {
         wxString tmp;
@@ -415,7 +437,7 @@ void Player::ScheduleOneFrame()
 void Player::SchedulePlay()
 {
     scheduledPlayone = false;
-    wxTimer::Start(1000/fps*3/4, wxTIMER_CONTINUOUS);
+    wxTimer::Start(1, wxTIMER_ONE_SHOT);
 }
 
 std::tr1::shared_ptr<char> Player::getframe()

@@ -102,6 +102,9 @@ class Player : public wxTimer
         enum playerState state;
         bool scheduledPlayone;
         struct timeval last_frame;
+        int last_wanted;
+
+        int speed_status;
 };
 
 #endif // PLAYER_H

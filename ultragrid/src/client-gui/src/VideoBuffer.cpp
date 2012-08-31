@@ -40,7 +40,7 @@ void VideoBuffer::SetGLView(GLView *view)
 void VideoBuffer::putframe(shared_ptr<char> data, unsigned int frames)
 {
     pthread_mutex_lock(&lock);
-#ifdef DEBUG
+#if 1
     std::cerr << "Buffer: Received frame " << frames << std::endl;
 #endif
 
