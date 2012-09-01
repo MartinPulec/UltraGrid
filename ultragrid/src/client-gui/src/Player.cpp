@@ -122,7 +122,7 @@ void Player::Notify()
         //fprintf(stderr, "%d, %d\n",GetCurrentFrame(), buffer.GetUpperBound() - OOB_FRAMES / 2);
 
         if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES / 2 // nacetli jsme vice nez pol bufferu
-            && speed_status != 0
+            && speed_status != 1
            ) {
                connection.set_parameter(wxT("speed"), Utils::FromCDouble(speed * 1.01, 2));
                speed_status = 1;
