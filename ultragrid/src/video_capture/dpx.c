@@ -564,16 +564,16 @@ static void * reading_thread(void *args)
                 pthread_mutex_unlock(&s->lock);
 
                 char *filename = s->glob.gl_pathv[s->index];
-                s->index += ROUND_FROM_ZERO(s->speed);
+                s->index += SIGN(s->speed);
 
                 if(s->index >= (int) s->glob.gl_pathc) {
-                        if(s->index != (int) s->glob.gl_pathc - 1 + ROUND_FROM_ZERO(s->speed)) {
+                        if(s->index != (int) s->glob.gl_pathc - 1 + SIGN(s->speed)) {
                                 s->index = (int) s->glob.gl_pathc - 1;
                         }
                 }
 
                 if(s->index < 0) {
-                        if(s->index != ROUND_FROM_ZERO(s->speed)) {
+                        if(s->index != SIGN(s->speed)) {
                                 s->index = 0;
                         }
                 }
@@ -685,10 +685,10 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
                 if(s->loop) {
                         if(s->speed > 0.0) {
                                 s->index =  0;
-                                s->frame->frames = - ROUND_FROM_ZERO(s->speed);
+                                s->frame->frames = - SIGN(s->speed);
                         } else {
                                 s->index = s->glob.gl_pathc - 1;
-                                s->frame->frames = s->index; - ROUND_FROM_ZERO(s->speed);
+                                s->frame->frames = s->index; - SIGN(s->speed);
                         }
 
                         s->finished = FALSE;
@@ -735,7 +735,7 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
 
         s->frames++;
 
-        s->frame->frames += ROUND_FROM_ZERO(s->speed);
+        s->frame->frames += SIGN(s->speed);
         if( s->frame->frames >= (int) s->glob.gl_pathc) {
                 s->frame->frames = s->glob.gl_pathc - 1;
         }
@@ -825,7 +825,7 @@ void vidcap_dpx_command(struct vidcap *state, int command, void *data)
                 s->index = *(int *) data;
                 clamp_indices(s);
                 fprintf(stderr, "[DPX] New position: %d\n", s->index);
-                s->frame->frames = s->index - ROUND_FROM_ZERO(s->speed);
+                s->frame->frames = s->index - SIGN(s->speed);
                 play_after_flush(s);
                 pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_LOOP) {
@@ -839,7 +839,7 @@ void vidcap_dpx_command(struct vidcap *state, int command, void *data)
                 flush_pipeline(s);
                 clamp_indices(s);
                 //s->frame->frames  = s->index - ROUND_FROM_ZERO(s->speed);
-                s->index = s->frame->frames + ROUND_FROM_ZERO(s->speed);
+                s->index = s->frame->frames + SIGN(s->speed);
                 s->speed = *(float *) data;
                 play_after_flush(s);
                 pthread_mutex_unlock(&s->lock);
