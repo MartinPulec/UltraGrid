@@ -418,10 +418,11 @@ void display_quicktime_run(void *arg)
                 int i;
                 platform_sem_wait((void *) &s->semaphore);
 
+
                 completion_rec.completionRefCon = (long) s->frame;
 
-                for (i = 0; i < s->devices_cnt; ++i) {
-                        struct tile *tile = vf_get_tile(s->frame, i);
+
+                        struct tile *tile = vf_get_tile(s->frame, 0);
                         /* TODO: Running DecompressSequenceFrameWhen asynchronously 
                          * in this way introduces a possible race condition! 
                          */
@@ -439,7 +440,8 @@ void display_quicktime_run(void *arg)
                                         "Failed DecompressSequenceFrameWhen: %d\n",
                                         ret);
                         }
-                }
+
+                s->frame = 0;
 
                 frames++;
                 gettimeofday(&t, NULL);
@@ -458,6 +460,7 @@ void display_quicktime_run(void *arg)
 struct video_frame *
 display_quicktime_getf(void *state)
 {
+                //struct timeval t0, t1; gettimeofday(&t0, NULL);
         struct state_quicktime *s = (struct state_quicktime *)state;
         assert(s->magic == MAGIC_QT_DISPLAY);
         struct video_frame *frame = NULL;
@@ -477,6 +480,7 @@ display_quicktime_getf(void *state)
                         tile->data = malloc(tile->linesize * tile->height);
                 }
         }
+                //gettimeofday(&t1, NULL); printf("%f ", tv_diff(t1, t0));
 
         return frame;
 }
@@ -488,11 +492,12 @@ int display_quicktime_putf(void *state, char *frame)
         UNUSED(frame);
         assert(s->magic == MAGIC_QT_DISPLAY);
 
+        while(s->frame) // wait for worker to signal us that it is ok
+                ;
+
         /* ...and signal the worker */
         s->frame = (struct video_frame *)frame;
         if(frame) platform_sem_post((void *) &s->semaphore);
-        //while(s->frame) // wait for worker to signal us that it is ok
-        //        ;
 
         return 0;
 }
