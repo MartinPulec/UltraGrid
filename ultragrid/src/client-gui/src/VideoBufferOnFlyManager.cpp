@@ -98,7 +98,7 @@ bool VideoBufferOnFlyManager::LastRequestIsDue(double fps)
     struct timeval current_time;
     bool ret;
 
-    platform_spin_unlock(&this->lock_);
+    platform_spin_lock(&this->lock_);
 
     gettimeofday(&current_time, NULL);
 
