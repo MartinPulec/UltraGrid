@@ -40,7 +40,7 @@ void VideoBuffer::SetGLView(GLView *view)
 void VideoBuffer::putframe(shared_ptr<char> data, unsigned int frames)
 {
     pthread_mutex_lock(&lock);
-#if 1
+#ifdef DEBUG
     std::cerr << "Buffer: Received frame " << frames << std::endl;
 #endif
 
@@ -157,11 +157,15 @@ void VideoBuffer::Reset()
 // Currently unused?
 bool VideoBuffer::HasFrame(int number)
 {
-    abort();
+    bool ret;
+
     pthread_mutex_lock(&lock);
-    // FOLLOWING LINE IS FREEZING. WHY??????
-    return buffered_frames.find(number) != buffered_frames.end();
+    {
+        ret = buffered_frames.find(number) != buffered_frames.end();
+    }
     pthread_mutex_unlock(&lock);
+
+    return ret;
 }
 
 int VideoBuffer::GetLastReceivedFrame()
