@@ -202,6 +202,15 @@ const quicktime_mode_t quicktime_modes[] = {
         {NULL, NULL, 0, 0, 0, 0},
 };        
 
+struct frame_list;
+
+struct frame_list {
+        struct video_frame * volatile frame;
+        struct frame_list * volatile next;
+};
+
+static struct state_quicktime *state;
+
 /* for audio see TN2091 (among others) */
 struct state_quicktime {
         ComponentInstance videoDisplayComponentInstance[MAX_DEVICES];
@@ -226,6 +235,13 @@ struct state_quicktime {
         sem_t semaphore;
 
         struct video_frame * volatile frame;
+
+        volatile struct frame_list * volatile ready_frame_list;
+        pthread_mutex_t             ready_frame_list_lock;
+        volatile struct frame_list * volatile ready_frame_list_tail;
+        volatile struct frame_list * volatile free_frame_list;
+        pthread_mutex_t             free_frame_list_lock;
+
         struct video_desc desc;
 
         struct audio_frame audio;
@@ -255,11 +271,14 @@ void frame_complete_proc(OSErr result, short flags, long refcon)
         struct video_frame *frame = (struct video_frame *) refcon;
 
         assert(frame != NULL);
-        unsigned int i;
-        for(i = 0; i < frame->tile_count; ++i) {
-                free(frame->tiles[i].data);
+        pthread_mutex_lock(&state->free_frame_list_lock);
+        {
+                struct frame_list *tmp = malloc(sizeof(struct frame_list));
+                tmp->frame = frame;
+                tmp->next = state->free_frame_list;
+                state->free_frame_list = tmp;
         }
-        vf_free(frame);
+        pthread_mutex_unlock(&state->free_frame_list_lock);
 }
 
 static struct display_device *get_devices()
@@ -415,33 +434,47 @@ void display_quicktime_run(void *arg)
         completion_rec.completionProc = frame_complete_proc;
 
         while (!should_exit) {
-                int i;
                 platform_sem_wait((void *) &s->semaphore);
 
+                struct video_frame *frame;
 
-                completion_rec.completionRefCon = (long) s->frame;
+                pthread_mutex_lock(&s->ready_frame_list_lock);
+                {
+                        assert(s->ready_frame_list != NULL);
+                        frame = s->ready_frame_list->frame;
+
+                        struct frame_list *tmp = s->ready_frame_list->next;
+
+                        free(s->ready_frame_list);
+                        s->ready_frame_list = tmp;
+                        if(!tmp) {
+                                s->ready_frame_list_tail = tmp;
+                        }
+
+                }
+                pthread_mutex_unlock(&s->ready_frame_list_lock);
 
 
-                        struct tile *tile = vf_get_tile(s->frame, 0);
+                completion_rec.completionRefCon = (long) frame;
+
+
+                        struct tile *tile = vf_get_tile(frame, 0);
                         /* TODO: Running DecompressSequenceFrameWhen asynchronously 
                          * in this way introduces a possible race condition! 
                          */
-                        ret = DecompressSequenceFrameWhen(s->seqID[i], tile->data, 
+                        ret = DecompressSequenceFrameS(s->seqID[0], tile->data, 
                                                         tile->data_len,
                                                        /* If you set asyncCompletionProc to -1, 
                                                         *  the operation is performed asynchronously but 
                                                         * the decompressor does not call the completion 
                                                         * function. 
                                                         */
-                                                       0, &ignore, completion_ptr,       
-                                                          NULL);
+                                                       0, &ignore, completion_ptr);
                         if (ret != noErr) {
                                 fprintf(stderr,
                                         "Failed DecompressSequenceFrameWhen: %d\n",
                                         ret);
                         }
-
-                s->frame = 0;
 
                 frames++;
                 gettimeofday(&t, NULL);
@@ -464,8 +497,20 @@ display_quicktime_getf(void *state)
         struct state_quicktime *s = (struct state_quicktime *)state;
         assert(s->magic == MAGIC_QT_DISPLAY);
         struct video_frame *frame = NULL;
+
+        pthread_mutex_lock(&s->free_frame_list_lock);
+        {
+                if(s->free_frame_list) {
+                        frame = s->free_frame_list->frame;
+                        struct frame_list *tmp = s->free_frame_list;
+                        s->free_frame_list = s->free_frame_list->next;
+                        free(tmp);
+                }
+        }
+        pthread_mutex_unlock(&s->free_frame_list_lock);
+
         
-        if(s->desc.tile_count) {
+        if(!frame && s->desc.tile_count) {
                 unsigned int i;
                 frame = vf_alloc(s->desc.tile_count);
                 frame->fps = s->desc.fps;
@@ -492,12 +537,26 @@ int display_quicktime_putf(void *state, char *frame)
         UNUSED(frame);
         assert(s->magic == MAGIC_QT_DISPLAY);
 
-        while(s->frame) // wait for worker to signal us that it is ok
-                ;
+        if(!frame)
+                return;
 
-        /* ...and signal the worker */
-        s->frame = (struct video_frame *)frame;
-        if(frame) platform_sem_post((void *) &s->semaphore);
+        pthread_mutex_lock(&s->ready_frame_list_lock);
+        {
+                struct frame_list *tmp = malloc(sizeof(struct frame_list));
+                tmp->frame = frame;
+                tmp->next = NULL;
+
+                if(s->ready_frame_list) {
+                        s->ready_frame_list_tail->next = tmp;
+                } else {
+                        s->ready_frame_list =
+                                s->ready_frame_list_tail =
+                                tmp;
+                }
+        }
+        pthread_mutex_unlock(&s->ready_frame_list_lock);
+
+        platform_sem_post((void *) &s->semaphore);
 
         return 0;
 }
@@ -667,10 +726,17 @@ void *display_quicktime_init(char *fmt, unsigned int flags)
 
         /* Parse fmt input */
         s = (struct state_quicktime *)calloc(1, sizeof(struct state_quicktime));
+        state = s;
         s->magic = MAGIC_QT_DISPLAY;
 
         memset(&s->desc, 0, sizeof(s->desc));
         s->frame = NULL;
+
+        pthread_mutex_init(&s->free_frame_list_lock, NULL);
+        s->free_frame_list = NULL;
+        pthread_mutex_init(&s->ready_frame_list_lock, NULL);
+        s->ready_frame_list = s->ready_frame_list_tail = NULL;
+
 
         if (fmt != NULL) {
                 if (strcmp(fmt, "help") == 0) {
