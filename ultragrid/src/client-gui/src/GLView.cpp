@@ -707,7 +707,7 @@ void GLView::LoadSplashScreen()
 
     Reconf(unused);
     this->data = (char *) cesnet_logo.pixel_data;
-    Render();
+    Render(false);
 }
 
 
@@ -728,7 +728,7 @@ void GLView::putframe(std::tr1::shared_ptr<char> data, bool outputToHWDisplay)
     this->Frame = data;
     this->useHWDisplay = outputToHWDisplay;
 
-    Render();
+    Render(true);
 }
 
 void GLView::Putf(wxCommandEvent&)
@@ -785,14 +785,14 @@ void GLView::RenderScrollbars()
     glEnable(GL_TEXTURE_2D);
 }
 
-void GLView::Render()
+void GLView::Render(bool toHW)
 {
     if (!data) {
         return;
     }
 
     struct video_frame *frame = NULL;
-    if(useHWDisplay) {
+    if(useHWDisplay && toHW) {
         frame = display_get_frame(this->hw_display);
     }
 
@@ -1118,7 +1118,7 @@ void GLView::OnPaint( wxPaintEvent& WXUNUSED(event) )
 {
     if(this->init) {
         wxPaintDC(this);
-        Render();
+        Render(false);
     }
 }
 
@@ -1157,7 +1157,7 @@ void GLView::ShowOnlyChannel(int val)
     }
     CurrentFilter = Filters[CurrentFilterIdx];
 
-    Render();
+    Render(true);
 }
 
 void GLView::HideChannel(int val)
@@ -1175,7 +1175,7 @@ void GLView::HideChannel(int val)
     }
     CurrentFilter = Filters[CurrentFilterIdx];
 
-    Render();
+    Render(true);
 }
 
 void GLView::Zoom(double ratio)

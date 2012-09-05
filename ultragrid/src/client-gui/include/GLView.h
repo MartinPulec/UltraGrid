@@ -47,7 +47,7 @@ class GLView : public wxGLCanvas
         void PostInit(wxWindowCreateEvent&);
 
         void OnPaint( wxPaintEvent& WXUNUSED(event) );
-        void Render();
+        void Render(bool toHW);
         void LoadSplashScreen();
         void KeyDown(wxKeyEvent& evt);
 

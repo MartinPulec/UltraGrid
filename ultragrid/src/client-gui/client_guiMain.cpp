@@ -699,7 +699,7 @@ void client_guiFrame::KeyDown(wxKeyEvent& evt)
             case 'C':
                 gl->ToggleLightness();
                 if(player.GetState() == sReady)
-                    gl->Render();
+                    gl->Render(true);
                 break;
             case 'R':
             case 'G':
@@ -717,7 +717,7 @@ void client_guiFrame::KeyDown(wxKeyEvent& evt)
                     LastColorModifiingModifiers = evt.GetModifiers();
                 }
                 if(player.GetState() == sReady)
-                    gl->Render();
+                    gl->Render(true);
 
                 break;
             case 'P':
