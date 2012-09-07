@@ -298,13 +298,17 @@ SERVER_GUI_OBJ = src/serv-gui/serv_guiApp.o \
 # -------------------------------------------------------------------------------------------------
 all: client server server-gui modules ag-plugins configure-messages
 
-client: $(OBJS) $(CLIENT_OBJ)
+client: bin/client
+server: bin/server
+server-gui: bin/server-gui
+
+bin/client: $(OBJS) $(CLIENT_OBJ)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(CLIENT_OBJ) $(OBJS) $(LIBS) -DHAVE_CONFIG_H $(INC) `wx-config --libs` `wx-config --gl-libs` `wx-config --cxxflags` -o bin/client
 
-server: $(SERVER_OBJ) $(OBJS) src/main.o 
+bin/server: $(SERVER_OBJ) $(OBJS) src/main.o 
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -DHAVE_CONFIG_H $(INC) $(OBJS) $(SERVER_OBJ) $(LIBS) `wx-config --libs` `wx-config --gl-libs` src/main.o -o bin/server
 
-server-gui: $(SERVER_GUI_OBJ)
+bin/server-gui: $(SERVER_GUI_OBJ)
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) -DHAVE_CONFIG_H $(INC) $(SERVER_GUI_OBJ) `wx-config --libs` `wx-config --gl-libs` `wx-config --cxxflags` -o bin/server-gui
 
 modules: @LIB_TARGETS@
@@ -534,10 +538,13 @@ ctags:
 release:
 	cvs tag release-`cat VERSION | sed "s/\./-/g"`
 
-bundle: all
-	mkdir -p $(BUNDLE)/Contents/MacOS
-	#cp $(TARGET) $(BUNDLE)/Contents/MacOS/
-	echo -n "UltraGrid" > $(BUNDLE)/Contents/PkgInfo
+bundle: bundle_client bundle_server bundle_server_gui
+
+bundle_client: client.app/Contents/MacOS/client
+bundle_server: server.app/Contents/MacOS/server
+bundle_server_gui: server-gui.app/Contents/MacOS/server-gui
+
+client.app/Contents/MacOS/client: bin/client
 	#
 	# CLIENT
 	#
@@ -548,9 +555,11 @@ bundle: all
 	for n in client.app/Contents/libs/*$(WX_MINOR)*; do cp $$n $${n/$(WX_MINOR).0.0/$(WX_BUGFIX)}; done
 	rm -rf client.app/Contents/libs/*$(WX_MINOR)*
 	for n in client.app/Contents/MacOS/client client.app/Contents/libs/*; do for m in `otool -L $$n | grep $(WX_MINOR) | cut -f 1 -d \ `; do install_name_tool -change $$m $${m/$(WX_MINOR).0.0/$(WX_BUGFIX)} $$n; done; done
-	install_name_tool -change @rpath/libcudart.dylib @executable_path/../libs/libcudart.dylib client.app/Contents/MacOS/client
-	install_name_tool -change @rpath/libnpp.dylib @executable_path/../libs/libnpp.dylib client.app/Contents/MacOS/client
-	install_name_tool -change @rpath/libcudart.dylib @executable_path/../libs/libcudart.dylib client.app/Contents/libs/libnpp.dylib
+	if otool -L bin/client | grep -q libcudart; then install_name_tool -change @rpath/libcudart.dylib @executable_path/../libs/libcudart.dylib client.app/Contents/MacOS/client; fi
+	if otool -L bin/client | grep -q libnpp; then install_name_tool -change @rpath/libnpp.dylib @executable_path/../libs/libnpp.dylib client.app/Contents/MacOS/client; fi
+	if otool -L client.app/Contents/libs/libnpp.dylib | grep -q libcudart; then install_name_tool -change @rpath/libcudart.dylib @executable_path/../libs/libcudart.dylib client.app/Contents/libs/libnpp.dylib; fi
+
+server.app/Contents/MacOS/server: bin/server
 	#
 	# SERVER
 	#
@@ -560,10 +569,20 @@ bundle: all
 	for n in server.app/Contents/libs/*$(WX_MINOR)*; do cp $$n $${n/$(WX_MINOR).0.0/$(WX_BUGFIX)}; done
 	rm -rf server.app/Contents/libs/*$(WX_MINOR)*
 	for n in server.app/Contents/MacOS/server server.app/Contents/libs/*; do for m in `otool -L $$n | grep $(WX_MINOR) | cut -f 1 -d \ `; do install_name_tool -change $$m $${m/$(WX_MINOR).0.0/$(WX_BUGFIX)} $$n; done; done
-	install_name_tool -change @rpath/libcudart.dylib @executable_path/../libs/libcudart.dylib server.app/Contents/MacOS/server
-	install_name_tool -change @rpath/libnpp.dylib @executable_path/../libs/libnpp.dylib server.app/Contents/MacOS/server
-	install_name_tool -change @rpath/libcudart.dylib @executable_path/../libs/libcudart.dylib server.app/Contents/libs/libnpp.dylib
+	if otool -L bin/client | grep -q libcudart; then install_name_tool -change @rpath/libcudart.dylib @executable_path/../libs/libcudart.dylib client.app/Contents/MacOS/client; fi
+	if otool -L bin/client | grep -q libnpp; then install_name_tool -change @rpath/libnpp.dylib @executable_path/../libs/libnpp.dylib client.app/Contents/MacOS/client; fi
+	if otool -L client.app/Contents/libs/libnpp.dylib | grep -q libcudart; then install_name_tool -change @rpath/libcudart.dylib @executable_path/../libs/libcudart.dylib client.app/Contents/libs/libnpp.dylib; fi
 
+server-gui.app/Contents/MacOS/server-gui: bin/server-gui
+	#
+	# SERVER GUI
+	#
+	mkdir -p server-gui.app/Contents/MacOS
+	cp bin/server-gui server-gui.app/Contents/MacOS
+	dylibbundler -od -b -x server-gui.app/Contents/MacOS/server-gui -d server-gui.app/Contents/libs/
+	for n in server-gui.app/Contents/libs/*$(WX_MINOR)*; do cp $$n $${n/$(WX_MINOR).0.0/$(WX_BUGFIX)}; done
+	rm -rf server-gui.app/Contents/libs/*$(WX_MINOR)*
+	for n in server-gui.app/Contents/MacOS/server-gui server-gui.app/Contents/libs/*; do for m in `otool -L $$n | grep $(WX_MINOR) | cut -f 1 -d \ `; do install_name_tool -change $$m $${m/$(WX_MINOR).0.0/$(WX_BUGFIX)} $$n; done; done
 
 perf: src/tv.o src/crypto/random.o
 	$(CC) $(CFLAGS) -DPERF src/uv_perf.c src/crypto/random.o src/tv.o -o $(PERF)
