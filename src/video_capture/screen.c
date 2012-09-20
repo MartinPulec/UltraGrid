@@ -76,10 +76,18 @@
 #include <OpenGL/gl.h>
 #include <Carbon/Carbon.h>
 #else
+#include <GL/glew.h>
+#include <GL/glx.h>
+#include <X11/extensions/Xcomposite.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include "x11_common.h"
+#include "gl_context.h"
 #endif
+
+#define GL 1
+typedef void glXBindTexImageEXTProc_t (Display *dpy, GLXDrawable drawable, int buffer, const int *attrib_list);
+glXBindTexImageEXTProc_t (*glXBindTexImageEXTProc) = NULL;
 
 /* prototypes of functions defined in this module */
 static void show_help(void);
@@ -126,6 +134,14 @@ struct vidcap_screen_state {
         volatile bool should_exit_worker;
 
         pthread_t worker_id;
+
+        Pixmap pixmap;
+        GLXPixmap glxpixmap;
+        struct gl_context context;
+        GLuint tex;
+        GLuint tex_out;
+        GLuint fbo;
+        double top, bottom;
 #endif
 
         struct timeval prev_time;
@@ -145,6 +161,8 @@ static void initialize() {
 
 #ifndef HAVE_MACOSX
         XWindowAttributes wa;
+
+        x11_enter_thread();
 
         x11_lock();
 
@@ -169,6 +187,111 @@ static void initialize() {
 
         s->should_exit_worker = false;
 
+
+        if(!init_gl_context(&s->context, GL_CONTEXT_ANY)) {
+                abort();
+        }
+
+        GLenum err = glewInit();
+        if (GLEW_OK != err)
+        {
+                /* Problem: glewInit failed, something is seriously wrong. */
+                fprintf(stderr, "GLEW Error: %s\n", glewGetErrorString(err));
+                abort();
+        }
+
+        glEnable(GL_TEXTURE_2D);
+
+        glGenTextures(1, &state->tex);
+        glBindTexture(GL_TEXTURE_2D, state->tex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, state->tile->width, state->tile->height,
+                        0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+        glGenTextures(1, &state->tex_out);
+        glBindTexture(GL_TEXTURE_2D, state->tex_out);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, state->tile->width, state->tile->height,
+                        0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glGenFramebuffersEXT(1, &state->fbo);
+
+        VisualID visualid = XVisualIDFromVisual (wa.visual);
+        int nfbconfigs;
+        int i;
+        XVisualInfo *visinfo;
+        int value;
+        GLXFBConfig *fbconfigs = glXGetFBConfigs (s->dpy, DefaultScreen(s->dpy), &nfbconfigs);
+        for (i = 0; i < nfbconfigs; i++)
+        {
+                visinfo = glXGetVisualFromFBConfig (s->dpy, fbconfigs[i]);
+                if (!visinfo || visinfo->visualid != visualid)
+                        continue;
+
+                glXGetFBConfigAttrib (s->dpy, fbconfigs[i], GLX_DRAWABLE_TYPE, &value);
+                if (!(value & GLX_PIXMAP_BIT))
+                        continue;
+
+                glXGetFBConfigAttrib (s->dpy, fbconfigs[i],
+                                GLX_BIND_TO_TEXTURE_TARGETS_EXT,
+                                &value);
+                if (!(value & GLX_TEXTURE_2D_BIT_EXT))
+                        continue;
+
+                glXGetFBConfigAttrib (s->dpy, fbconfigs[i],
+                                GLX_BIND_TO_TEXTURE_RGBA_EXT,
+                                &value);
+                if (value == FALSE)
+                {
+                        glXGetFBConfigAttrib (s->dpy, fbconfigs[i],
+                                        GLX_BIND_TO_TEXTURE_RGB_EXT,
+                                        &value);
+                        if (value == FALSE)
+                                continue;
+                }
+
+                glXGetFBConfigAttrib (s->dpy, fbconfigs[i],
+                                GLX_Y_INVERTED_EXT,
+                                &value);
+                if (value == TRUE)
+                {
+                        s->top = 0.0f;
+                        s->bottom = 1.0f;
+                }
+                else
+                {
+                        s->top = 1.0f;
+                        s->bottom = 0.0f;
+                }
+
+                break;
+        }
+
+        if (i == nfbconfigs) {
+                abort();
+        }
+
+        s->pixmap = XCompositeNameWindowPixmap (s->dpy, s->root);
+        const int pixmapAttribs[] = { GLX_TEXTURE_TARGET_EXT, GLX_TEXTURE_2D_EXT,
+                GLX_TEXTURE_FORMAT_EXT, GLX_TEXTURE_FORMAT_RGBA_EXT,
+                None };
+        s->glxpixmap = glXCreatePixmap (s->dpy, fbconfigs[i], s->pixmap, pixmapAttribs);
+
+        glXBindTexImageEXTProc = glXGetProcAddressARB( (const GLubyte *) "glXBindTexImageEXT");
+        assert(glXBindTexImageEXTProc != NULL);
+
+        glBindTexture (GL_TEXTURE_2D, s->tex);
+
+        glXBindTexImageEXTProc (s->dpy, s->glxpixmap, GLX_FRONT_LEFT_EXT, NULL);
+        abort();
+
 #else
         s->display = CGMainDisplayID();
         CGImageRef image = CGDisplayCreateImage(s->display);
@@ -188,10 +311,12 @@ static void initialize() {
         s->tile->data_len = vc_get_linesize(s->tile->width, s->frame->color_spec) * s->tile->height;
 
 #ifndef HAVE_MACOSX
+#ifndef GL
         s->buffer[0] = (char *) malloc(s->tile->data_len);
         s->buffer[1] = (char *) malloc(s->tile->data_len);
 
         pthread_create(&s->worker_id, NULL, grab_thread, s);
+#endif // ! GL
 #else
         s->tile->data = (char *) malloc(s->tile->data_len);
 #endif
@@ -321,7 +446,7 @@ void vidcap_screen_finish(void *state)
         }
 
         pthread_mutex_unlock(&s->lock);
-#endif HAVE_LINUX
+#endif // HAVE_LINUX
 }
 
 void vidcap_screen_done(void *state)
@@ -356,6 +481,8 @@ struct video_frame * vidcap_screen_grab(void *state, struct audio_frame **audio)
         *audio = NULL;
 
 #ifndef HAVE_MACOSX
+#ifdef GL
+#else // GL
         pthread_mutex_lock(&s->lock);
 
         if(should_exit) {
@@ -376,7 +503,7 @@ struct video_frame * vidcap_screen_grab(void *state, struct audio_frame **audio)
         if(s->worker_waiting)
                 pthread_cond_signal(&s->worker_cv);
         pthread_mutex_unlock(&s->lock);
-
+#endif // GL
 #else
         CGImageRef image = CGDisplayCreateImage(s->display);
         CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(image));

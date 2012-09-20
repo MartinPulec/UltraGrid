@@ -211,7 +211,7 @@ static struct state_gl *gl;
 static void gl_draw(double ratio);
 static void gl_show_help(void);
 
-static void gl_check_error(void);
+void gl_check_error(void);
 static void gl_resize(int width, int height);
 static void glsl_arb_init(void *arg);
 static void dxt_arb_init(void *arg);
@@ -242,7 +242,7 @@ static void gl_show_help(void) {
         printf("\t\taspect=<w>/<h>\trequested video aspect (eg. 16/9). Leave unset if PAR = 1.\n");
 }
 
-static void gl_check_error()
+void gl_check_error()
 {
 	GLenum msg;
 	int flag=0;

@@ -1114,6 +1114,7 @@ SCREEN_CAP_OBJ=
 SCREEN_CAP_LIB=
 screen_cap=no
 
+
 AC_ARG_ENABLE(screen,
       AS_HELP_STRING([--disable-screen], [disable screen capture (default is auto)]),
     [screen_cap_req=$enableval],
@@ -1141,13 +1142,19 @@ case "$host_os" in
                 AC_CHECK_HEADER(X11/Xlib.h)
                 AC_CHECK_HEADER(X11/Xutil.h)
                 AC_CHECK_LIB(X11, XGetImage)
+                PKG_CHECK_MODULES([XCOMPOSITE], [xcomposite], [FOUND_XCOMPOSITE=yes], [FOUND_XCOMPOSITE=no])
+                AC_CHECK_LIB(GL, glBindTexture)
+                AC_CHECK_HEADER(GL/glx.h)
                 LIBS=$SAVED_LIBS
 
 		if test $screen_cap_req = yes -a $ac_cv_lib_X11_XGetImage = yes -a \
-                         $ac_cv_header_X11_Xlib_h = yes -a $ac_cv_header_X11_Xutil_h = yes
+                         $ac_cv_header_X11_Xlib_h = yes -a $ac_cv_header_X11_Xutil_h = yes -a \
+                         $ac_cv_header_GL_glx_h = yes -a $ac_cv_lib_GL_glBindTexture = yes -a \
+                         $FOUND_XCOMPOSITE = yes
 		then
                         screen_cap=yes
-                        SCREEN_CAP_LIB="$SCREEN_CAP_LIB -lX11"
+                        SCREEN_CAP_LIB="$SCREEN_CAP_LIB -lX11 $XCOMPOSITE_LIBS"
+                        SCREEN_CAP_CFLASG="$XCOMPOSITE_CFLAGS"
 		else
                         screen_cap=no
 		fi
