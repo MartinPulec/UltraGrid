@@ -53,7 +53,7 @@ extern "C" {
 #include "host.h"
 }
 
-void *initSage(const char *confName, int appID, int nodeID, int width,
+void *initSage(const char *confName, int appID, int nodeID, int nodes, int width,
                 int height, codec_t codec)
 {
         sail *sageInf; // sage sail object
@@ -62,13 +62,16 @@ void *initSage(const char *confName, int appID, int nodeID, int width,
         sailConfig sailCfg;
         sailCfg.init((char *) confName);
         sailCfg.setAppName("ultragrid");
-        sailCfg.rank = nodeID;
         sailCfg.resX = width;
         sailCfg.resY = height;
+
+        sailCfg.rank = nodeID;
+        sailCfg.master = (nodeID == 0 ? true : false);
+        sailCfg.nodeNum = nodes;
         
         sageRect renderImageMap;
-        renderImageMap.left = 0.0;
-        renderImageMap.right = 1.0;
+        renderImageMap.left = 1.0 / nodes * nodeID;
+        renderImageMap.right = 1.0 / nodes * (1 + nodeID);
         renderImageMap.bottom = 0.0;
         renderImageMap.top = 1.0;
         
@@ -90,7 +93,6 @@ void *initSage(const char *confName, int appID, int nodeID, int width,
 
         //sailCfg.rowOrd = BOTTOM_TO_TOP;
         sailCfg.rowOrd = TOP_TO_BOTTOM;
-        sailCfg.master = true;
         
         sageInf->init(sailCfg);
         

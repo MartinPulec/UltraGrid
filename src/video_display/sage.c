@@ -91,7 +91,7 @@ struct state_sage {
 
         /* For debugging... */
         uint32_t magic;
-        int appID, nodeID;
+        int appID, nodeID, nodes;
         
         void *sage_state;
 
@@ -156,14 +156,21 @@ void *display_sage_init(char *fmt, unsigned int flags)
 
         s->confName = "ultragrid.conf";
         s->requestedDisplayCodec = (codec_t) -1;
+        /* sage init */
+        //FIXME sem se musi propasovat ty spravne parametry argc argv
+        s->appID = 0;
+        s->nodeID = 0;
+        s->nodes = 1;
 
         if(fmt) {
                 if(strcmp(fmt, "help") == 0) {
                         printf("SAGE usage:\n");
-                        printf("\tuv -t sage:[config=<config_file>][:codec=<fcc>]\n");
+                        printf("\tuv -t sage:[config=<config_file>][:codec=<fcc>][:node=<ID>/<total>]\n");
                         printf("\t                      <config_file> - SAGE app config file, default \"ultragrid.conf\"\n");
                         printf("\t                      <fcc> - FourCC of codec that will be used to transmit to SAGE\n");
                         printf("\t                              Supported options are UYVY, RGBA, RGB or DXT1\n");
+                        printf("\t                      <ID>/<total>  - node identification and total number of nodes (distributed rendering)\"\n");
+                        printf("\t                                      node 0 is the master node\"\n");
                         return NULL;
                 } else {
                         char *save_ptr = NULL;
@@ -171,7 +178,18 @@ void *display_sage_init(char *fmt, unsigned int flags)
 
                         while((item = strtok_r(fmt, ":", &save_ptr))) {
                                 fmt = NULL;
-                                if(strncmp(item, "config=", strlen("config=")) == 0) {
+                                if(strncmp(item, "node=", strlen("node=")) == 0) {
+                                        char *ptr = item + strlen("node=");
+                                        s->nodeID = atoi(ptr);
+                                        ptr = strchr(ptr, '/');
+                                        if(!ptr) {
+                                                fprintf(stderr, "[SAGE] Malformed config string (missing total number of nodes).\n");
+                                                free(s);
+                                                return NULL;
+                                        }
+                                        ptr += 1;
+                                        s->nodes = atoi(ptr);
+                                } else if(strncmp(item, "config=", strlen("config=")) == 0) {
                                         s->confName = item + strlen("config=");
                                 } else if(strncmp(item, "codec=", strlen("codec=")) == 0) {
                                          strlen("codec=");
@@ -213,11 +231,6 @@ void *display_sage_init(char *fmt, unsigned int flags)
         s->frame = vf_alloc(1);
         s->tile = vf_get_tile(s->frame, 0);
         
-        /* sage init */
-        //FIXME sem se musi propasovat ty spravne parametry argc argv
-        s->appID = 0;
-        s->nodeID = 1;
-
         s->sage_state = NULL;
 
         /* thread init */
@@ -328,7 +341,7 @@ int display_sage_reconfigure(void *state, struct video_desc desc)
                 sage_shutdown(s->sage_state);
         }
 
-        s->sage_state = initSage(s->confName, s->appID, s->nodeID,
+        s->sage_state = initSage(s->confName, s->appID, s->nodeID, s->nodes,
                         s->tile->width, s->tile->height, desc.color_spec);
 
         s->tile->data = (char *) sage_getBuffer(s->sage_state);
