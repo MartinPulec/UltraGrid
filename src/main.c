@@ -67,6 +67,7 @@
 #include "rtp/rtp.h"
 #include "rtp/rtp_callback.h"
 #include "rtp/pbuf.h"
+#include "sync_manager.h"
 #include "video_codec.h"
 #include "video_capture.h"
 #include "video_display.h"
@@ -111,6 +112,8 @@
 #define OPT_MCAST_IF (('M' << 8) | 'I')
 #define OPT_EXPORT (('E' << 8) | 'X')
 #define OPT_IMPORT (('I' << 8) | 'M')
+#define OPT_SLAVE (('S' << 8) | 'L')
+#define OPT_MASTER (('M' << 8) | 'A')
 
 #ifdef HAVE_MACOSX
 #define INITIAL_VIDEO_RECV_BUFFER_SIZE  5944320
@@ -124,6 +127,7 @@ struct state_uv {
         struct rtp **network_devices;
         unsigned int connections_count;
         
+        struct sync_manager *sm;
         struct vidcap *capture_device;
         struct timeval start_time, curr_time;
         struct pdb *participants;
@@ -771,6 +775,7 @@ static void *sender_thread(void *arg) {
 
 
                 if(uv->connections_count == 1) { /* normal case - only one connection */
+                        sync_wait(uv->sm);
                         tx_send(uv->tx, tx_frame, 
                                         uv->network_devices[0]);
                 } else { /* split */
@@ -847,7 +852,6 @@ static void *compress_thread(void *arg)
                         i = (i + 1) % 2;
 
                         video_export(uv->video_exporter, tx_frame);
-
 
                         /* when sending uncompressed video, we simply post it for send
                          * and wait until done */
@@ -978,6 +982,8 @@ int main(int argc, char *argv[])
                   ihdtv_sender_thread_id = 0;
         unsigned vidcap_flags = 0,
                  display_flags = 0;
+        bool slave = false,
+             master = false;
 
 #if defined DEBUG && defined HAVE_LINUX
         mtrace();
@@ -1015,6 +1021,8 @@ int main(int argc, char *argv[])
                 {"mcast-if", required_argument, 0, OPT_MCAST_IF},
                 {"export", optional_argument, 0, OPT_EXPORT},
                 {"import", required_argument, 0, OPT_IMPORT},
+                {"slave", no_argument, 0, OPT_SLAVE},
+                {"master", no_argument, 0, OPT_MASTER},
                 {0, 0, 0, 0}
         };
         int option_index = 0;
@@ -1040,6 +1048,7 @@ int main(int argc, char *argv[])
         uv->recv_port_number =
                 uv->send_port_number =
                 PORT_BASE;
+        uv->sm = NULL;
 
         pthread_mutex_init(&uv->master_lock, NULL);
 
@@ -1184,6 +1193,12 @@ int main(int argc, char *argv[])
                         audio_send = "embedded";
                         capture_cfg = optarg;
                         break;
+                case OPT_SLAVE:
+                        slave = true;
+                        break;
+                case OPT_MASTER:
+                        master = true;
+                        break;
                 default:
                         usage();
                         return EXIT_FAIL_USAGE;
@@ -1202,6 +1217,15 @@ int main(int argc, char *argv[])
         printf("Capture device: %s\n", uv->requested_capture);
         printf("MTU           : %d\n", uv->requested_mtu);
         printf("Compression   : %s\n", uv->requested_compression);
+
+        if(master || slave) {
+                if(master && slave) {
+                        fprintf(stderr, "Do not set concurrently master and slave flag.");
+                        return EXIT_FAIL_USAGE;
+                }
+                uv->sm = sync_init(master);
+        }
+
         if (uv->use_ihdtv_protocol)
                 printf("Network protocol: ihdtv\n");
         else
@@ -1502,6 +1526,8 @@ cleanup:
         pthread_mutex_unlock(&uv->master_lock); 
 
         pthread_mutex_destroy(&uv->master_lock);
+
+        sync_destroy(uv->sm);
 
         free(uv);
         free(export_dir);
