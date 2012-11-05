@@ -33,9 +33,26 @@
 				<option>1</option>
 			</object>
 			<object class="sizeritem">
-				<object class="wxCheckBox" name="ID_USETCP" variable="UseTCP" member="yes">
-					<label>Use TCP</label>
-					<help>Use TCP for data transmit (slow in most circumstances)</help>
+				<object class="wxFlexGridSizer" variable="FlexGridSizer3" member="no">
+					<cols>2</cols>
+					<rows>1</rows>
+					<object class="sizeritem">
+						<object class="wxCheckBox" name="ID_USETCP" variable="UseTCP" member="yes">
+							<label>Use TCP</label>
+							<help>Use TCP for data transmit (slow in most circumstances)</help>
+						</object>
+						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+						<border>5</border>
+						<option>1</option>
+					</object>
+					<object class="sizeritem">
+						<object class="wxCheckBox" name="ID_CHECKBOX1" variable="DisableGL" member="yes">
+							<label>Disable GL Preview</label>
+						</object>
+						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+						<border>5</border>
+						<option>1</option>
+					</object>
 				</object>
 				<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
 				<border>5</border>
@@ -60,7 +77,7 @@
 			</object>
 			<object class="sizeritem">
 				<object class="wxStaticText" name="ID_STATICTEXT1" variable="StaticText1" member="yes">
-					<label>Note that changing these options requires program restart.</label>
+					<label>Note that changing these options may require program restart.</label>
 				</object>
 				<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
 				<border>5</border>

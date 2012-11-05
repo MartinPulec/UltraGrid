@@ -1,11 +1,14 @@
 #include <errno.h>
 #include <fcntl.h>
+#include <string>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #include "../include/Utils.h"
 
+
+using namespace std;
 
 Utils::Utils()
 {
@@ -90,4 +93,13 @@ done:
         return -1;
 
     return 0;
+}
+
+bool Utils::boolFromString(string str)
+{
+    if (str.compare(std::string("true")) == 0) {
+        return true;
+    } else {
+        return false;
+    }
 }

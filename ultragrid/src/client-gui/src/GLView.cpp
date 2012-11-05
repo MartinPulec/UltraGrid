@@ -118,7 +118,8 @@ GLView::GLView(wxFrame *p, wxWindowID id, const wxPoint &pos, const wxSize &size
     parent(p),
     init(false),
     Frame(std::tr1::shared_ptr<char>()),
-    useHWDisplay(false)
+    useHWDisplay(false),
+    displayGL(true)
 {
     vpXMultiplier = vpYMultiplier = 1.0;
     xoffset = yoffset = 0.0;
@@ -936,17 +937,19 @@ void GLView::Render(bool toHW)
         } else {
         }
 
-        glBegin(GL_QUADS);
-          /* Front Face */
-          /* Bottom Left Of The Texture and Quad */
-          glTexCoord2f( 0.0f, bottom ); glVertex2f( -1.0f, -1/aspect);
-          /* Bottom Right Of The Texture and Quad */
-          glTexCoord2f( 1.0f, bottom ); glVertex2f(  1.0f, -1/aspect);
-          /* Top Right Of The Texture and Quad */
-          glTexCoord2f( 1.0f, 0.0f ); glVertex2f(  1.0f,  1/aspect);
-          /* Top Left Of The Texture and Quad */
-          glTexCoord2f( 0.0f, 0.0f ); glVertex2f( -1.0f,  1/aspect);
-        glEnd( );
+        if(this->displayGL) {
+            glBegin(GL_QUADS);
+              /* Front Face */
+              /* Bottom Left Of The Texture and Quad */
+              glTexCoord2f( 0.0f, bottom ); glVertex2f( -1.0f, -1/aspect);
+              /* Bottom Right Of The Texture and Quad */
+              glTexCoord2f( 1.0f, bottom ); glVertex2f(  1.0f, -1/aspect);
+              /* Top Right Of The Texture and Quad */
+              glTexCoord2f( 1.0f, 0.0f ); glVertex2f(  1.0f,  1/aspect);
+              /* Top Left Of The Texture and Quad */
+              glTexCoord2f( 0.0f, 0.0f ); glVertex2f( -1.0f,  1/aspect);
+            glEnd( );
+        }
 
         RenderScrollbars();
 
@@ -1272,4 +1275,9 @@ void GLView::init_device_shaders()
 
     free(log);
     free(shader_program);
+}
+
+void GLView::SetGLDisplay(bool requestedState)
+{
+    this->displayGL = requestedState;
 }

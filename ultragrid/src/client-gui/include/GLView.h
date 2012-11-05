@@ -65,6 +65,8 @@ class GLView : public wxGLCanvas
         void ResetDefaults();
         void setHWDisplay(struct display* hw_display);
 
+        void SetGLDisplay(bool requestedState);
+
     protected:
         DECLARE_EVENT_TABLE()
 
@@ -125,6 +127,8 @@ class GLView : public wxGLCanvas
         double xoffset, yoffset;
 
         bool init;
+
+        bool displayGL;
 
         void prepare_filters();
 

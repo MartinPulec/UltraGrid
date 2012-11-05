@@ -17,6 +17,7 @@ class OtherSettingsDialog: public wxDialog
 		virtual ~OtherSettingsDialog();
 
 		//(*Declarations(OtherSettingsDialog)
+		wxCheckBox* DisableGL;
 		wxChoice* HwDevice;
 		wxStaticText* StaticText1;
 		wxCheckBox* UseTCP;
@@ -29,6 +30,7 @@ class OtherSettingsDialog: public wxDialog
 		static const long ID_HWDEVICELABEL;
 		static const long ID_HWDEV;
 		static const long ID_USETCP;
+		static const long ID_CHECKBOX1;
 		static const long ID_STATICTEXT1;
 		//*)
 

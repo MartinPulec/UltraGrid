@@ -31,6 +31,8 @@
 
 wxCommandEvent defaultCommandEvent;
 
+using namespace std;
+
 //helper functions
 enum wxbuildinfoformat {
     short_f, long_f };
@@ -294,12 +296,11 @@ void client_guiFrame::OnCompressSetting(wxCommandEvent& event)
 void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
 {
     OtherSettingsDialog dlg(this);
-    wxString useTCP = wxString(settings.GetValue(std::string("use_tcp"), std::string("false")).c_str(), wxConvUTF8);
-    if (useTCP == wxT("true")) {
-        dlg.UseTCP->SetValue(true);
-    } else {
-        dlg.UseTCP->SetValue(false);
-    }
+    string useTCP = settings.GetValue(std::string("use_tcp"), std::string("false"));
+    dlg.UseTCP->SetValue(Utils::boolFromString(useTCP));
+
+    string disableGL = settings.GetValue(std::string("disable_gl_preview"), std::string("false"));
+    dlg.DisableGL->SetValue(Utils::boolFromString(disableGL));
 
     dlg.HwDevice->Append(wxT("none"), new ClientDataCStr("none"));
     dlg.HwDevice->Select(0u);
@@ -326,6 +327,7 @@ void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
     if ( dlg.ShowModal() == wxID_OK ) {
         settings.SetValue("use_tcp", dlg.UseTCP->GetValue() ? "true" : "false");
         settings.SetValue("hw_display", dynamic_cast<ClientDataCStr *>(dlg.HwDevice->GetClientObject(dlg.HwDevice->GetSelection()))->get());
+        settings.SetValue("disable_gl_preview", dlg.DisableGL->GetValue() ? "true" : "false");
     } else {
         //else: dialog was cancelled or some another button pressed
     }

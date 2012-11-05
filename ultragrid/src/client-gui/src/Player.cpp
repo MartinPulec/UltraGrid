@@ -51,12 +51,10 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
 
     buffer.SetGLView(view);
     std::string use_tcp_str = settings->GetValue(std::string("use_tcp"), std::string("false"));
-    bool use_tcp;
-    if(use_tcp_str.compare(std::string("true")) == 0) {
-        use_tcp = true;
-    } else {
-        use_tcp = false;
-    }
+    bool use_tcp = Utils::boolFromString(use_tcp_str);
+
+    std::string DisableGLPreviewStr = settings->GetValue(std::string("disable_gl_preview"), std::string("false"));
+    bool DisableGLPreview = Utils::boolFromString(DisableGLPreviewStr);
 
     char *save_ptr = NULL;
 
@@ -75,6 +73,7 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
     }
 
     view->setHWDisplay(this->hw_display);
+    view->SetGLDisplay(DisableGLPreview);
 
     receiver = new UGReceiver((const char *) "wxgl", this, use_tcp);
 }
