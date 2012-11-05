@@ -74,6 +74,11 @@ extern "C" {
 } // END of extern "C"
 #endif
 
+#include <list>
+#include <map>
+#include <string>
+#include <utility>
+
 // defined int video_capture/decklink.cpp
 void print_output_modes(IDeckLink *);
 
@@ -84,6 +89,8 @@ void print_output_modes(IDeckLink *);
 #endif
 
 #define MAX_DEVICES 4
+
+using namespace std;
 
 class PlaybackDelegate : public IDeckLinkVideoOutputCallback // , public IDeckLinkAudioOutputCallback
 {
@@ -224,6 +231,7 @@ struct state_decklink {
 
         struct audio_frame  audio;
         struct video_frame *frame;
+        struct tile        *tile;
 
         unsigned long int   frames;
         unsigned long int   frames_last;
@@ -234,6 +242,8 @@ struct state_decklink {
         unsigned int        play_audio:1;
         int                 output_audio_channel_count;
         BMDPixelFormat                    pixelFormat;
+
+        int                 dev_x, dev_y;
  };
 
 
@@ -245,6 +255,9 @@ static struct display_device *get_devices(void)
         IDeckLink*                      deckLink;
         int                             numDevices = 0;
         HRESULT                         result;
+
+        typedef map<string, list<int> > group_map;
+        group_map                       groups; // device prefix, indices
 
         struct display_device *ret = (struct display_device *) malloc(sizeof(struct display_device));
 
@@ -264,17 +277,32 @@ static struct display_device *get_devices(void)
         while (deckLinkIterator->Next(&deckLink) == S_OK)
         {
                 STRING          deviceNameString = NULL;
+                const char     *name;
 
                 ret = (struct display_device *) realloc((void *) ret, sizeof(struct display_device) * (numDevices + 1));
                 
                 // *** Print the model name of the DeckLink card
-                result = deckLink->GetModelName((STRING *) &deviceNameString);
+                result = deckLink->GetDisplayName((STRING *) &deviceNameString);
 #ifdef HAVE_MACOSX
-                ret[numDevices].name = (char *) malloc(128);
+                name = ret[numDevices].name = (char *) malloc(128);
                 CFStringGetCString(deviceNameString, (char *) ret[numDevices].name, 128, kCFStringEncodingMacRoman);
 #else
-                ret[numDevices].name = deviceNameString;
+                name = ret[numDevices].name = deviceNameString;
 #endif
+
+                if(strchr(ret[numDevices].name, '(')) {
+                        size_t len = strchr(ret[numDevices].name, '(') - ret[numDevices].name;
+                        group_map::iterator it = groups.find(string(name, len));
+                        if(it == groups.end()) {
+                                pair<string, list<int> > new_item(string(name, len),
+                                                        list<int>());
+                                new_item.second.push_front(numDevices);
+                                groups.insert(new_item);
+                        } else {
+                                it->second.push_back(numDevices);
+                        }
+                }
+
                 if (result == S_OK)
                 {
                         char *tmp = (char *) malloc(128);
@@ -294,6 +322,28 @@ static struct display_device *get_devices(void)
         }
         
         deckLinkIterator->Release();
+
+        for(group_map::iterator it = groups.begin(); it != groups.end(); ++it) {
+                ret = (struct display_device *) realloc((void *) ret, sizeof(struct display_device) * (numDevices + 1));
+                ret[numDevices].name = (char *) malloc(it->first.size() + strlen("(groupped)") + 1);
+                strcpy((char *) ret[numDevices].name, it->first.c_str());
+                strcat((char *) ret[numDevices].name, "(groupped)");
+
+                ret[numDevices].driver_identifier = (char *) malloc(128); 
+                strcpy((char *) ret[numDevices].driver_identifier, "decklink:");
+
+                for(list<int>::iterator device_index = it->second.begin();
+                                device_index != it->second.end();
+                                ++device_index) {
+                        char index_str[8];
+                        snprintf(index_str, sizeof(index_str), "%s%d",
+                                        (device_index != it->second.begin() ? "," : ""),
+                                        *device_index);
+                        strcat((char *) ret[numDevices].driver_identifier, index_str);
+                }
+
+                numDevices++;
+        }
 
         ret[numDevices].name = NULL;
 
@@ -386,8 +436,6 @@ display_decklink_getf(void *state)
                         for(int i = 0; i < s->devices_cnt; ++i) {
                                 s->state[i].deckLinkFrame = DeckLinkFrame::Create(s->frame->tiles[0].width, s->frame->tiles[0].height,
                                                 s->frame->tiles[0].linesize, s->pixelFormat);
-                                
-                                s->state[i].deckLinkFrame->GetBytes((void **) &s->frame->tiles[i].data);
                         }
                 }
         }
@@ -456,6 +504,22 @@ int display_decklink_putf(void *state, char *frame)
         if (0) 
                 fprintf(stderr, "Frame dropped!\n");
         else {
+                for(int x = 0; x < s->dev_x; ++x) {
+                        for(int y = 0; y < s->dev_y; ++y) {
+                                char *data;
+                                s->state[x + y * s->dev_x].deckLinkFrame->GetBytes((void **) &data);
+                                for (int line = y * (s->tile->width / s->dev_x);
+                                                line < (y + 1) * (s->tile->width / s->dev_x);
+                                                ++line) {
+                                        int linesize = s->tile->linesize / s->dev_x;
+                                        char *src = data + line * s->tile->linesize;
+                                        src += x * linesize;
+                                        memcpy(data, src, linesize);
+                                        data += linesize;
+                                }
+                        }
+                }
+
                 for (int j = 0; j < s->devices_cnt; ++j) {
                         if(s->emit_timecode) {
                                 s->state[j].deckLinkFrame->SetTimecode(bmdVideoOutputRP188, s->timecode);
@@ -463,6 +527,7 @@ int display_decklink_putf(void *state, char *frame)
                         s->state[j].deckLinkOutput->ScheduleVideoFrame(s->state[j].deckLinkFrame,
                                         s->frames * s->frameRateDuration, s->frameRateDuration, s->frameRateScale);
                 }
+
                 s->frames++;
                 if(s->emit_timecode) {
                         update_timecode(s->timecode, s->frame->fps);
@@ -601,16 +666,25 @@ display_decklink_reconfigure(void *state, struct video_desc desc)
                         goto error;
                 }
 
+                s->dev_x = s->dev_y = 1;
+
+                if(s->devices_cnt == 4) {
+                        s->dev_x = s->dev_y = 2;
+                }
+
+                s->tile->width = desc.width;
+                s->tile->height = desc.height;
+                s->tile->linesize = vc_get_linesize(s->tile->width, s->frame->color_spec);
+                s->tile->data_len = s->tile->linesize * s->tile->height;
+                s->tile->data = (char *) malloc(s->tile->data_len);
+
 	        for(int i = 0; i < s->devices_cnt; ++i) {
                         BMDVideoOutputFlags outputFlags= bmdVideoOutputFlagDefault;
-	                struct tile  *tile = vf_get_tile(s->frame, i);
 	                
-	                tile->width = desc.width;
-	                tile->height = desc.height;
-	                tile->linesize = vc_get_linesize(tile->width, s->frame->color_spec);
-	                tile->data_len = tile->linesize * tile->height;
-	                
-	                displayMode = get_mode(s->state[i].deckLinkOutput, desc, &s->frameRateDuration,
+                        struct video_desc device_desc = desc;
+                        desc.width /= s->dev_x;
+                        desc.height /= s->dev_y;
+	                displayMode = get_mode(s->state[i].deckLinkOutput, device_desc, &s->frameRateDuration,
                                                 &s->frameRateScale, i);
                         if(displayMode == (BMDDisplayMode) -1)
                                 goto error;
@@ -625,7 +699,7 @@ display_decklink_reconfigure(void *state, struct video_desc desc)
 	                {
                                 fprintf(stderr, "[decklink] Requested parameters "
                                                 "combination not supported - %d * %dx%d@%f, timecode %s.\n",
-                                                desc.tile_count, tile->width, tile->height, desc.fps,
+                                                desc.tile_count, s->tile->width, s->tile->height, desc.fps,
                                                 (outputFlags & bmdVideoOutputRP188 ? "ON": "OFF"));
 	                        goto error;
 	                }
@@ -749,8 +823,10 @@ void *display_decklink_init(char *fmt, unsigned int flags)
         if(s->stereo) {
         	s->frame = vf_alloc(2);
 	} else {
-		s->frame = vf_alloc(s->devices_cnt);
-	}
+		s->frame = vf_alloc(1);
+        }
+        s->tile = &s->frame->tiles[0];
+	
 
         if(s->emit_timecode) {
                 s->timecode = new DeckLinkTimecode;
