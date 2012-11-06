@@ -288,6 +288,7 @@ static struct display_device *get_devices()
                 strncpy(name, cName + 1, cName[0]);
                 name[(int) cName[0]] = '\0';
                 ret[num_devices - 1].name = name;
+                ret[num_devices - 1].device_formats = NULL;
 #if 0
                 nprintf(cName);
                 fprintf(stdout, "\n");

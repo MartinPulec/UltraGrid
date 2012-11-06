@@ -249,6 +249,62 @@ struct state_decklink {
 
 static struct display_device *get_devices(void);
 
+static struct video_desc *get_mode_list(IDeckLink *deckLink)
+{	
+        struct video_desc *ret;
+        int numModes = 0;
+
+        IDeckLinkOutput *deckLinkOutput;
+        if (deckLink->QueryInterface(IID_IDeckLinkOutput, (void**)&deckLinkOutput) != S_OK) {
+                if(deckLinkOutput != NULL)
+                        deckLinkOutput->Release();
+                return NULL;
+        }
+
+        IDeckLinkDisplayModeIterator     *displayModeIterator;
+        IDeckLinkDisplayMode*             deckLinkDisplayMode;
+        BMDDisplayMode			  displayMode = bmdModeUnknown;
+
+        
+        // Populate the display mode combo with a list of display modes supported by the installed DeckLink card
+        if (FAILED(deckLinkOutput->GetDisplayModeIterator(&displayModeIterator)))
+        {
+                fprintf(stderr, "Fatal: cannot create display mode iterator [decklink].\n");
+                return NULL;
+        }
+
+        ret = (struct video_desc *) calloc(1, sizeof(struct video_desc));
+        numModes = 0;
+
+        while (displayModeIterator->Next(&deckLinkDisplayMode) == S_OK)
+        {
+                int curMode = numModes;
+                numModes += 1;
+
+                ret = (struct video_desc *) realloc(ret, (numModes + 1) * sizeof(struct video_desc));
+                memset(&ret[curMode + 1], 0, sizeof(struct video_desc));
+
+                ret[curMode].width = deckLinkDisplayMode->GetWidth();
+                ret[curMode].height = deckLinkDisplayMode->GetHeight();
+                BMDTimeValue        frameRateDuration;
+                BMDTimeScale        frameRateScale;
+                deckLinkDisplayMode->GetFrameRate(&frameRateDuration,
+                                &frameRateScale);
+                ret[curMode].fps = (double) frameRateScale / frameRateDuration;
+                ret[curMode].interlacing = 
+                                (deckLinkDisplayMode->GetFieldDominance() == bmdLowerFieldFirst ||
+                                 deckLinkDisplayMode->GetFieldDominance() == bmdUpperFieldFirst ?
+                                 INTERLACED_MERGED : PROGRESSIVE);
+                ret[curMode].tile_count = 0;
+        }
+        displayModeIterator->Release();
+
+        deckLinkOutput->Release();
+        
+        return ret;
+
+}
+
 static struct display_device *get_devices(void)
 {
         IDeckLinkIterator*              deckLinkIterator;
@@ -313,6 +369,8 @@ static struct display_device *get_devices(void)
                         CFRelease(deviceNameString);
 #endif
                 }
+
+                ret[numDevices].device_formats = get_mode_list(deckLink);
                 
                 // Increment the total number of DeckLink cards found
                 numDevices++;
