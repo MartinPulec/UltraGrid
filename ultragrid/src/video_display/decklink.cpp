@@ -247,12 +247,12 @@ struct state_decklink {
  };
 
 
-static struct display_device *get_devices(void);
+static struct display_device *get_devices();
 
-static struct video_desc *get_mode_list(IDeckLink *deckLink)
+static struct video_desc *get_mode_list(IDeckLink *deckLink, ssize_t *count)
 {	
+        *count = -1;
         struct video_desc *ret;
-        int numModes = 0;
 
         IDeckLinkOutput *deckLinkOutput;
         if (deckLink->QueryInterface(IID_IDeckLinkOutput, (void**)&deckLinkOutput) != S_OK) {
@@ -273,15 +273,15 @@ static struct video_desc *get_mode_list(IDeckLink *deckLink)
                 return NULL;
         }
 
-        ret = (struct video_desc *) calloc(1, sizeof(struct video_desc));
-        numModes = 0;
+        ret = NULL;
+        *count = 0;
 
         while (displayModeIterator->Next(&deckLinkDisplayMode) == S_OK)
         {
-                int curMode = numModes;
-                numModes += 1;
+                int curMode = *count;
+                *count += 1;
 
-                ret = (struct video_desc *) realloc(ret, (numModes + 1) * sizeof(struct video_desc));
+                ret = (struct video_desc *) realloc(ret, *count * sizeof(struct video_desc));
                 memset(&ret[curMode + 1], 0, sizeof(struct video_desc));
 
                 ret[curMode].width = deckLinkDisplayMode->GetWidth();
@@ -370,7 +370,9 @@ static struct display_device *get_devices(void)
 #endif
                 }
 
-                ret[numDevices].device_formats = get_mode_list(deckLink);
+                ssize_t count = -1;
+                ret[numDevices].modes = get_mode_list(deckLink, &count);
+                ret[numDevices].modes_count = count;
                 
                 // Increment the total number of DeckLink cards found
                 numDevices++;

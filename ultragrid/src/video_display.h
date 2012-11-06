@@ -73,10 +73,12 @@ struct audio_frame;
 typedef uint32_t	display_id_t;
 
 struct display_device {
-        const char *name;
-        const char *driver_identifier;
+        const char              *name;
+        const char              *driver_identifier;
 
-        struct video_desc *device_formats;
+        struct video_desc       *modes;
+        // -1 means that driver doesnt provide modes
+        ssize_t                  modes_count;
 };
 
 typedef struct {
