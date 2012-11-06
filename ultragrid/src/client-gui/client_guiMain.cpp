@@ -15,6 +15,7 @@
 #include "KeyBindingsHelp.h"
 #include "include/ClientDataIntPair.h"
 #include "include/ClientDataCStr.h"
+#include "include/ClientDataHWDisplay.h"
 #include "include/Utils.h"
 
 #include "video_display.h"
@@ -302,7 +303,7 @@ void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
     string disableGL = settings.GetValue(std::string("disable_gl_preview"), std::string("false"));
     dlg.DisableGL->SetValue(Utils::boolFromString(disableGL));
 
-    dlg.HwDevice->Append(wxT("none"), new ClientDataCStr("none"));
+    dlg.HwDevice->Append(wxT("none"), new ClientDataHWDisplay("none", NULL, -1));
     dlg.HwDevice->Select(0u);
 
     const char *currentDevice = settings.GetValue(std::string("hw_display"), std::string("none")).c_str();
@@ -314,7 +315,7 @@ void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
 
         while(it->name != NULL) {
             deviceIndex += 1;
-            ClientDataCStr *data = new ClientDataCStr(it->driver_identifier);
+            ClientDataHWDisplay *data = new ClientDataHWDisplay(it->driver_identifier, it->modes, it->modes_count);
             dlg.HwDevice->Append(wxString::FromUTF8(it->name), data);
             if(strcmp(it->driver_identifier, currentDevice) == 0) {
                 dlg.HwDevice->Select(deviceIndex);
@@ -326,7 +327,7 @@ void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
 
     if ( dlg.ShowModal() == wxID_OK ) {
         settings.SetValue("use_tcp", dlg.UseTCP->GetValue() ? "true" : "false");
-        settings.SetValue("hw_display", dynamic_cast<ClientDataCStr *>(dlg.HwDevice->GetClientObject(dlg.HwDevice->GetSelection()))->get());
+        settings.SetValue("hw_display", dynamic_cast<ClientDataHWDisplay *>(dlg.HwDevice->GetClientObject(dlg.HwDevice->GetSelection()))->identifier);
         settings.SetValue("disable_gl_preview", dlg.DisableGL->GetValue() ? "true" : "false");
     } else {
         //else: dialog was cancelled or some another button pressed

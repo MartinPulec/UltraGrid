@@ -19,7 +19,9 @@ class OtherSettingsDialog: public wxDialog
 		//(*Declarations(OtherSettingsDialog)
 		wxCheckBox* DisableGL;
 		wxChoice* HwDevice;
+		wxChoice* HwFormat;
 		wxStaticText* StaticText1;
+		wxStaticText* VideoFormatForce;
 		wxCheckBox* UseTCP;
 		wxStaticText* HwDeviceLabel;
 		//*)
@@ -29,6 +31,8 @@ class OtherSettingsDialog: public wxDialog
 		//(*Identifiers(OtherSettingsDialog)
 		static const long ID_HWDEVICELABEL;
 		static const long ID_HWDEV;
+		static const long ID_STATICTEXT2;
+		static const long ID_HWMODE;
 		static const long ID_USETCP;
 		static const long ID_CHECKBOX1;
 		static const long ID_STATICTEXT1;

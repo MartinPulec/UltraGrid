@@ -282,7 +282,6 @@ static struct video_desc *get_mode_list(IDeckLink *deckLink, ssize_t *count)
                 *count += 1;
 
                 ret = (struct video_desc *) realloc(ret, *count * sizeof(struct video_desc));
-                memset(&ret[curMode + 1], 0, sizeof(struct video_desc));
 
                 ret[curMode].width = deckLinkDisplayMode->GetWidth();
                 ret[curMode].height = deckLinkDisplayMode->GetHeight();
