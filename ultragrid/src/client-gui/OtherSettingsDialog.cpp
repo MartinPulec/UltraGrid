@@ -17,7 +17,7 @@ const long OtherSettingsDialog::ID_STATICTEXT2 = wxNewId();
 const long OtherSettingsDialog::ID_HWMODE = wxNewId();
 const long OtherSettingsDialog::ID_USETCP = wxNewId();
 const long OtherSettingsDialog::ID_CHECKBOX1 = wxNewId();
-const long OtherSettingsDialog::ID_STATICTEXT1 = wxNewId();
+const long OtherSettingsDialog::ID_PROGRESET = wxNewId();
 //*)
 
 BEGIN_EVENT_TABLE(OtherSettingsDialog,wxDialog)
@@ -38,22 +38,22 @@ OtherSettingsDialog::OtherSettingsDialog(wxWindow* parent,wxWindowID id,const wx
 	SetClientSize(wxSize(317,203));
 	FlexGridSizer1 = new wxFlexGridSizer(4, 1, 0, 0);
 	FlexGridSizer2 = new wxFlexGridSizer(2, 2, 0, 0);
-	HwDeviceLabel = new wxStaticText(this, ID_HWDEVICELABEL, _("Output device:"), wxDefaultPosition, wxDefaultSize, 0, _T("ID_HWDEVICELABEL"));
+	HwDeviceLabel = new wxStaticText(this, ID_HWDEVICELABEL, _("Output device*:"), wxDefaultPosition, wxDefaultSize, 0, _T("ID_HWDEVICELABEL"));
 	FlexGridSizer2->Add(HwDeviceLabel, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
 	HwDevice = new wxChoice(this, ID_HWDEV, wxDefaultPosition, wxSize(214,29), 0, 0, 0, wxDefaultValidator, _T("ID_HWDEV"));
 	FlexGridSizer2->Add(HwDevice, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-	VideoFormatForce = new wxStaticText(this, ID_STATICTEXT2, _("Force video format:"), wxDefaultPosition, wxDefaultSize, 0, _T("ID_STATICTEXT2"));
+	VideoFormatForce = new wxStaticText(this, ID_STATICTEXT2, _("Force video format*:"), wxDefaultPosition, wxDefaultSize, 0, _T("ID_STATICTEXT2"));
 	FlexGridSizer2->Add(VideoFormatForce, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
 	HwFormat = new wxChoice(this, ID_HWMODE, wxDefaultPosition, wxSize(214,29), 0, 0, 0, wxDefaultValidator, _T("ID_HWMODE"));
 	HwFormat->SetSelection( HwFormat->Append(_("auto")) );
 	FlexGridSizer2->Add(HwFormat, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
 	FlexGridSizer1->Add(FlexGridSizer2, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
 	FlexGridSizer3 = new wxFlexGridSizer(1, 2, 0, 0);
-	UseTCP = new wxCheckBox(this, ID_USETCP, _("Use TCP"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_USETCP"));
+	UseTCP = new wxCheckBox(this, ID_USETCP, _("Use TCP*"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_USETCP"));
 	UseTCP->SetValue(false);
 	UseTCP->SetHelpText(_("Use TCP for data transmit (slow in most circumstances)"));
 	FlexGridSizer3->Add(UseTCP, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-	DisableGL = new wxCheckBox(this, ID_CHECKBOX1, _("Disable GL Preview"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_CHECKBOX1"));
+	DisableGL = new wxCheckBox(this, ID_CHECKBOX1, _("Disable GL Preview*"), wxDefaultPosition, wxDefaultSize, 0, wxDefaultValidator, _T("ID_CHECKBOX1"));
 	DisableGL->SetValue(false);
 	FlexGridSizer3->Add(DisableGL, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
 	FlexGridSizer1->Add(FlexGridSizer3, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -62,8 +62,8 @@ OtherSettingsDialog::OtherSettingsDialog(wxWindow* parent,wxWindowID id,const wx
 	StdDialogButtonSizer1->AddButton(new wxButton(this, wxID_CANCEL, wxEmptyString));
 	StdDialogButtonSizer1->Realize();
 	FlexGridSizer1->Add(StdDialogButtonSizer1, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-	StaticText1 = new wxStaticText(this, ID_STATICTEXT1, _("Note that changing these options may require program restart."), wxDefaultPosition, wxDefaultSize, 0, _T("ID_STATICTEXT1"));
-	FlexGridSizer1->Add(StaticText1, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+	ProgReset = new wxStaticText(this, ID_PROGRESET, _("*Note that changing this option requires program restart."), wxDefaultPosition, wxDefaultSize, 0, _T("ID_PROGRESET"));
+	FlexGridSizer1->Add(ProgReset, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
 	SetSizer(FlexGridSizer1);
 	FlexGridSizer1->SetSizeHints(this);
 	//*)

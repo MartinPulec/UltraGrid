@@ -13,7 +13,7 @@
 					<rows>2</rows>
 					<object class="sizeritem">
 						<object class="wxStaticText" name="ID_HWDEVICELABEL" variable="HwDeviceLabel" member="yes">
-							<label>Output device:</label>
+							<label>Output device*:</label>
 						</object>
 						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
 						<border>5</border>
@@ -29,7 +29,7 @@
 					</object>
 					<object class="sizeritem">
 						<object class="wxStaticText" name="ID_STATICTEXT2" variable="VideoFormatForce" member="yes">
-							<label>Force video format:</label>
+							<label>Force video format*:</label>
 						</object>
 						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
 						<border>5</border>
@@ -58,7 +58,7 @@
 					<rows>1</rows>
 					<object class="sizeritem">
 						<object class="wxCheckBox" name="ID_USETCP" variable="UseTCP" member="yes">
-							<label>Use TCP</label>
+							<label>Use TCP*</label>
 							<help>Use TCP for data transmit (slow in most circumstances)</help>
 						</object>
 						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
@@ -67,7 +67,7 @@
 					</object>
 					<object class="sizeritem">
 						<object class="wxCheckBox" name="ID_CHECKBOX1" variable="DisableGL" member="yes">
-							<label>Disable GL Preview</label>
+							<label>Disable GL Preview*</label>
 						</object>
 						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
 						<border>5</border>
@@ -96,8 +96,8 @@
 				<option>1</option>
 			</object>
 			<object class="sizeritem">
-				<object class="wxStaticText" name="ID_STATICTEXT1" variable="StaticText1" member="yes">
-					<label>Note that changing these options may require program restart.</label>
+				<object class="wxStaticText" name="ID_PROGRESET" variable="ProgReset" member="yes">
+					<label>*Note that changing this option requires program restart.</label>
 				</object>
 				<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
 				<border>5</border>

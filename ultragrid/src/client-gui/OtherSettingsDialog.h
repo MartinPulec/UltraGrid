@@ -20,8 +20,8 @@ class OtherSettingsDialog: public wxDialog
 		wxCheckBox* DisableGL;
 		wxChoice* HwDevice;
 		wxChoice* HwFormat;
-		wxStaticText* StaticText1;
 		wxStaticText* VideoFormatForce;
+		wxStaticText* ProgReset;
 		wxCheckBox* UseTCP;
 		wxStaticText* HwDeviceLabel;
 		//*)
@@ -35,7 +35,7 @@ class OtherSettingsDialog: public wxDialog
 		static const long ID_HWMODE;
 		static const long ID_USETCP;
 		static const long ID_CHECKBOX1;
-		static const long ID_STATICTEXT1;
+		static const long ID_PROGRESET;
 		//*)
 
 	private:
