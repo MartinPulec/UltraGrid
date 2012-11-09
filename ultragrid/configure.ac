@@ -23,6 +23,10 @@ AC_CHECK_HEADERS(stropts.h sys/filio.h sys/wait.h)
 AC_SUBST(PATH)
 
 # -------------------------------------------------------------------------------------------------
+# Preferences
+AC_DEFINE([USE_CUSTOM_TRANSPORT], [1], [Do not use RTP stack])
+
+# -------------------------------------------------------------------------------------------------
 POST_COMPILE_MSG=""
 AC_SUBST(LIBS)
 AC_SUBST(OBJS)

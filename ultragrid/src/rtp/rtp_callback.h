@@ -61,6 +61,42 @@ typedef struct {
 } payload_hdr_t;
 #endif
 
+/* VIDEO PART */
+#define PCKT_LENGTH             0
+#define PCKT_HRES_VRES          1       /* bits 0 - 15 - horizontal resolution
+                                           bits 15 - 31 - vertical resolution */
+#define PCKT_FOURCC             2
+#define PCKT_IL_FPS             3       /* bits 0 - 2 interlace flag
+                                           bits 3 - 12 FPS
+                                           bits 13 - 16 FPSd
+                                           bit 17 Fd
+                                           bit 18 Fi */
+#define PCKT_SEQ_NEXT_HDR       4       /* bits 0 - 30 packet seq
+                                           bit 31 next header */
+
+#define PCKT_HDR_BASE_LEN       5
+
+/* EXTENSIONS */
+#define PCKT_EXT_INFO           0       /* bits 0 - 4 type
+                                           bits 5 - 20 ext hdr length
+                                           bit 31 next header */
+#define PCKT_EXT_INFO_LEN       1
+
+/* AUDIO */
+#define PCKT_EXT_AUDIO_TYPE     0x1
+
+#define PCKT_EXT_AUDIO_LENGTH   0
+#define PCKT_EXT_AUDIO_QUANT_SAMPLE_RATE   1 /* bits 0 - 5 audio quant.
+                                                 bits 6 - 31 audio sample rate */
+#define PCKT_EXT_AUDIO_CHANNEL_COUNT  2
+#define PCKT_EXT_AUDIO_TAG      3
+
+#define PCKT_HDR_AUDIO_LEN      4
+ 
+
+#define PCKT_HDR_MAX_LEN        (PCKT_HDR_BASE_LEN + PCKT_EXT_INFO_LEN + PCKT_HDR_AUDIO_LEN)
+
+
 typedef struct {
         /* first word */
         uint32_t substream_bufnum; /* bits 0 - 9 substream

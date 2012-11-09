@@ -57,6 +57,12 @@
 
 struct state_audio;
 
+struct audio_desc {
+        int bps;
+        int sample_rate;
+        int ch_count;
+};
+
 typedef struct audio_frame
 {
         int bps;                /* bytes per sample */

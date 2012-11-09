@@ -50,35 +50,39 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#include "config_win32.h"
+#endif /* HAVE_CONFIG_H */
 
 #include <string.h>
 #include <stdlib.h>
 #include <getopt.h>
+
+#include "audio/audio.h"
+#include "audio_source.h"
 #include "color_transform.h"
-#include "config.h"
-#include "config_unix.h"
-#include "config_win32.h"
+#include "compat/platform_semaphore.h"
 #include "debug.h"
 #include "gl_context.h"
+#include "ihdtv/ihdtv.h"
+#include "pdb.h"
 #include "perf.h"
 #include "rtp/rtp.h"
 #include "rtp/rtp_callback.h"
 #include "rtp/pbuf.h"
+#include "server/streaming_server.h"
+#include "tcp_transmit.h"
+#include "tfrc.h"
 #include "tile.h"
+#include "transmit.h"
+#include "tv.h"
+#include "udt_transmit.h"
 #include "video_codec.h"
 #include "video_capture.h"
 #include "video_compress.h"
 #include "video_decompress.h"
-#include "pdb.h"
-#include "tv.h"
-#include "transmit.h"
-#include "tfrc.h"
-#include "ihdtv/ihdtv.h"
-#include "compat/platform_semaphore.h"
-#include "audio/audio.h"
-#include "server/streaming_server.h"
-#include "tcp_transmit.h"
-#include "udt_transmit.h"
 #include "watermark.h"
 
 // ifdef DUMP
@@ -112,7 +116,7 @@ struct state_uv {
         void * (*transmit_init)(char *address, unsigned int *port);
         void * (*transmit_accept)(void *state);
         void * (*transmit_done)(void *state);
-        void (*transmit_send)(void *state, struct video_frame *frame);
+        void (*transmit_send)(void *state, struct video_frame *frame, struct audio_frame *);
 #endif
         int port_number;
         unsigned int connections_count;
@@ -134,6 +138,7 @@ struct state_uv {
         volatile unsigned int accepted:1;
 
         struct state_audio *audio;
+        struct audio_source *audio_source;
 
         int comm_fd;
 };
@@ -456,7 +461,8 @@ static void *sender_thread(void *arg)
                                 continue;
                         if(uv->connections_count == 1) { /* normal case - only one connection */
 #ifdef USE_CUSTOM_TRANSMIT
-                                uv->transmit_send(uv->transmit_state, tx_frame);
+                                struct audio_frame *audio = audio_source_read(uv->audio_source, tx_frame->frames);
+                                uv->transmit_send(uv->transmit_state, tx_frame, audio);
 #else
                                 tx_send(uv->tx, tx_frame,
                                                 uv->network_devices[0]);
@@ -541,6 +547,7 @@ int main(int argc, char *argv[])
         char *requested_fec = NULL;
         char *save_ptr = NULL;
         sigset_t mask;
+        char *audio_source = NULL;
 
         struct state_uv *uv;
         int ch;
@@ -595,12 +602,13 @@ int main(int argc, char *argv[])
 	uv->comm_fd = 0;
         uv->sender_thread_ready = FALSE;
         uv->accepted = FALSE;
+        uv->audio = FALSE;
 
         perf_init();
         perf_record(UVP_INIT, 0);
 
         while ((ch =
-                getopt_long(argc, argv, "d:t:m:r:s:vc:ihj:M:p:f:P:C:"
+                getopt_long(argc, argv, "d:t:m:r:s:vc:ihj:M:p:f:P:C:a:"
 #ifdef USE_CUSTOM_TRANSMIT
                         "T"
 #endif
@@ -618,6 +626,9 @@ int main(int argc, char *argv[])
                         break;
                 case 'm':
                         uv->requested_mtu = atoi(optarg);
+                        break;
+                case 'a':
+                        audio_source = optarg;
                         break;
                 case 'p':
                         uv->postprocess = optarg;
@@ -692,6 +703,13 @@ int main(int argc, char *argv[])
                 } else {
                         network_device = (char *) argv[0];
                 }
+        }
+
+        uv->audio_source = audio_source_init(audio_source);
+        
+        if(audio_source && !uv->audio_source) {
+                fprintf(stderr, "Unable to initialize audio source.\n");
+                return EXIT_FAILURE;
         }
 
         uv->audio = audio_cfg_init (network_device, uv->port_number + 2, audio_send, audio_recv, jack_cfg);
@@ -865,6 +883,9 @@ int main(int argc, char *argv[])
                                 } else if(strncmp(buff, "FPS", strlen("FPS")) == 0) {
                                         float fps = atof(buff + strlen("FPS") + 1);
                                         vidcap_command(uv->capture_device, VIDCAP_FPS, (void *) &fps);
+                                        double fps_dbl = fps;
+                                        audio_source_set_property(uv->audio_source,
+                                                        AUDIO_SOURCE_PROPERTY_FPS, (void *) &fps_dbl, sizeof(fps_dbl));
                                 } else if(strncmp(buff, "SETPOS", strlen("SETOPS")) == 0) {
                                         int pos = atoi(buff + strlen("SETPOS") + 1);
                                         vidcap_command(uv->capture_device, VIDCAP_POS, (void *) &pos);

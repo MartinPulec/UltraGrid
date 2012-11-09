@@ -1001,62 +1001,30 @@ cleanup:
         return ret;
 }
 
-int decoder_reconfigure(char *header, int len, void *decode_data)
+void decoder_reconfigure(struct video_desc desc, void *decoder_data)
 {
-        struct pbuf_video_data *pbuf_data = (struct pbuf_video_data *) decode_data;
+        struct pbuf_video_data *pbuf_data = (struct pbuf_video_data *) decoder_data;
         struct video_frame *frame = pbuf_data->frame_buffer;
         struct state_decoder *decoder = pbuf_data->decoder;
 
-        assert(len == sizeof(video_payload_hdr_t));
-        video_payload_hdr_t *hdr = (video_payload_hdr_t *) header;
-
-        uint32_t width;
-        uint32_t height;
-        uint32_t offset;
-        uint32_t length;
-        enum interlacing_t interlacing;
-        codec_t color_spec;
-        double fps;
-        uint32_t tmp;
-        uint32_t frame_seq;
-        int fps_pt, fpsd, fd, fi;
-
-
-        width = ntohs(hdr->hres);
-        height = ntohs(hdr->vres);
-        length = ntohl(hdr->length);
-        color_spec = get_codec_from_fcc(ntohl(hdr->fourcc));
-        frame_seq = ntohl(hdr->frame);
-
-        tmp = ntohl(hdr->il_fps);
-        interlacing = (enum interlacing_t) (tmp >> 29);
-        fps_pt = (tmp >> 19) & 0x3ff;
-        fpsd = (tmp >> 15) & 0xf;
-        fd = (tmp >> 14) & 0x1;
-        fi = (tmp >> 13) & 0x1;
-
-        fps = compute_fps(fps_pt, fpsd, fd, fi);
-
-        if (!(decoder->received_vid_desc.width == width &&
-              decoder->received_vid_desc.height == height &&
-              decoder->received_vid_desc.color_spec == color_spec &&
-              decoder->received_vid_desc.interlacing == interlacing  &&
+        if (!(decoder->received_vid_desc.width == desc.width &&
+              decoder->received_vid_desc.height == desc.height &&
+              decoder->received_vid_desc.color_spec == desc.color_spec &&
+              decoder->received_vid_desc.interlacing == desc.interlacing  &&
               //decoder->received_vid_desc.video_type == video_type &&
-              decoder->received_vid_desc.fps == fps
+              decoder->received_vid_desc.fps == desc.fps
               )) {
-                decoder->received_vid_desc.width = width;
-                decoder->received_vid_desc.height = height;
-                decoder->received_vid_desc.color_spec = color_spec;
-                decoder->received_vid_desc.interlacing = interlacing;
-                decoder->received_vid_desc.fps = fps;
+                decoder->received_vid_desc.width = desc.width;
+                decoder->received_vid_desc.height = desc.height;
+                decoder->received_vid_desc.color_spec = desc.color_spec;
+                decoder->received_vid_desc.interlacing = desc.interlacing;
+                decoder->received_vid_desc.fps = desc.fps;
 
                 pbuf_data->frame_buffer = frame = reconfigure_decoder(decoder, decoder->received_vid_desc,
                                 frame);
         }
 
-        pbuf_data->frame_buffer->frames = frame_seq;
-
-        return length;
+        pbuf_data->frame_buffer->frames = desc.seq_num;
 }
 
 void decoder_get_buffer(void *decode_data, char **buffer, int *len)

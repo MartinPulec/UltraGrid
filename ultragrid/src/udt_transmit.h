@@ -53,12 +53,12 @@
 extern "C" {
 #endif
 struct video_frame;
+struct audio_frame;
 
 void *udt_transmit_init(char *address, unsigned int *port);
 void		 udt_transmit_done(void *udt_transmit);
 void		 udt_transmit_accept(void *udt_transmit);
-void             udt_send(void *udt_transmit, struct video_frame *frame);
-void             udt_send_description(void *udt_transmit, struct video_frame *frame);
+void             udt_send(void *udt_transmit, struct video_frame *frame, struct audio_frame *audio);
 
 #ifdef __cplusplus
 }

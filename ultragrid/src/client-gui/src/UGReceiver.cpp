@@ -43,6 +43,7 @@ enum state {
     ST_EXIT
 };
 
+using namespace std;
 
 struct state_uv {
 #ifndef USE_CUSTOM_TRANSMIT
@@ -388,6 +389,7 @@ static void *receiver_thread(void *arg)
                 // accepted
 
                 if(uv->use_tcp) {
+#if 0
                     int res, data_len;
                     int total_received;
                     video_payload_hdr_t header;
@@ -403,7 +405,6 @@ static void *receiver_thread(void *arg)
 
                     data_len = decoder_reconfigure((char *) &header, len, &pbuf_data);
                     decoder_get_buffer(&pbuf_data, &buffer, &len);
-
 
                     total_received = 0;
 
@@ -424,37 +425,49 @@ static void *receiver_thread(void *arg)
 
                     display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
                     pbuf_data.frame_buffer = display_get_frame(uv->display_device);
+#endif
                 } else { //UDT
-                    int res, data_len;
+                    int res;
+
                     struct {
-                        video_payload_hdr_t header;
+                        uint32_t header[PCKT_HDR_MAX_LEN];
                         char pad[8];
                     } a;
                     int len = sizeof(a) + 1;
                     char *buffer;
                     res = uv->receive(uv->receive_state, (char *) &a.header, &len);
                     if(!res) {
-                        std::cerr << "(res: " << res << ", len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
+                        std::cerr << "(res: " << res << ", len: " << len << ")"  << std::endl;
                         goto error;
                     }
-                    if(len != sizeof(video_payload_hdr_t)) {
+                    if(len < sizeof(video_payload_hdr_t) || len > PCKT_HDR_MAX_LEN) {
                         std::cerr << "(len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
                         goto error;
                     }
 
-                    data_len = decoder_reconfigure((char *) &a.header, len, &pbuf_data);
+                    struct audio_desc audio_desc;
+                    struct video_desc video_desc;
+
+                    size_t audio_len, video_len;
+
+                    if(!UGReceiver::ParseHeader(a.header, len, &video_desc, &video_len, &audio_desc, &audio_len)) {
+                        cerr << "Failed parsing packet header" << endl;
+                        goto error;
+                    }
+
+                    decoder_reconfigure(video_desc, &pbuf_data);
                     decoder_get_buffer(&pbuf_data, &buffer, &len);
                     res = uv->receive(uv->receive_state, buffer, &len);
                     if(!res) {
                         std::cerr << "(res: " << res << ")" << std::endl;
                         goto error;
                     }
-                    if(len != data_len) {
-                        std::cerr << "(len: " << len << ", data_len: " << data_len  << ")" << std::endl;
+                    if(len != audio_len + video_len) {
+                        std::cerr << "(len: " << len << ", data_len: " << audio_len + video_len << ")" << std::endl;
                         goto error;
                     }
 
-                    decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, len, pbuf_data.frame_buffer);
+                    decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, video_len, pbuf_data.frame_buffer);
 
                     display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
                     pbuf_data.frame_buffer = display_get_frame(uv->display_device);
@@ -633,4 +646,71 @@ UGReceiver::~UGReceiver()
 #ifdef DEBUG
     std::cerr << "UGRECEIVER SHOULD HAVE EXITED" << std::endl;
 #endif
+}
+
+bool UGReceiver::ParseHeader(uint32_t *hdr, size_t hdr_len,
+                             struct video_desc *video_desc, size_t *video_length,
+                             struct audio_desc *audio_desc, size_t *audio_length)
+{
+    if(hdr_len  < PCKT_HDR_BASE_LEN * sizeof(uint32_t))
+    {
+        return false;
+    }
+
+    uint32_t tmp;
+    int fps_pt, fpsd, fd, fi;
+
+    *video_length = ntohl(hdr[PCKT_LENGTH]);
+
+    tmp = ntohl(hdr[PCKT_HRES_VRES]);
+
+    video_desc->width = tmp >> 16;
+    video_desc->width = tmp & 0xffff;
+
+    video_desc->color_spec = get_codec_from_fcc(ntohl(hdr[PCKT_FOURCC]));
+
+    tmp = ntohl(PCKT_IL_FPS);
+    video_desc->interlacing = (enum interlacing_t) (tmp >> 29);
+    fps_pt = (tmp >> 19) & 0x3ff;
+    fpsd = (tmp >> 15) & 0xf;
+    fd = (tmp >> 14) & 0x1;
+    fi = (tmp >> 13) & 0x1;
+
+    video_desc->fps = compute_fps(fps_pt, fpsd, fd, fi);
+
+    tmp = ntohl(hdr[PCKT_SEQ_NEXT_HDR]);
+    video_desc->seq_num = ntohl(tmp) >> 1;
+
+    bool next_header = tmp & 0x1;
+
+    if(next_header) {
+        uint32_t *extension_header = hdr + PCKT_HDR_BASE_LEN;
+
+        tmp = ntohl(*extension_header);
+
+        int type = tmp >> 28;
+        size_t lenght = tmp;
+        bool have_next_header = tmp & 0x1;
+        int ext_hdr_len = (tmp >> 12) & 0xffff;
+
+        assert(have_next_header == false);
+        assert(type = PCKT_EXT_AUDIO_TYPE);
+
+        if(type == PCKT_EXT_AUDIO_TYPE) {
+            assert(lenght == PCKT_HDR_AUDIO_LEN);
+
+            uint32_t *audio_header = extension_header + 1;
+
+            *audio_length = ntohl(audio_header[PCKT_EXT_AUDIO_LENGTH]);
+            tmp = ntohl(PCKT_EXT_AUDIO_QUANT_SAMPLE_RATE);
+            audio_desc->bps = (tmp >> 26) / 8;
+            audio_desc->sample_rate = tmp & 0x3ffffff;
+            // unused audio tag - expecting pcm
+            audio_desc->ch_count = ntohl(PCKT_EXT_AUDIO_CHANNEL_COUNT);
+        }
+    } else {
+        *audio_length = 0;
+    }
+
+    return true;
 }

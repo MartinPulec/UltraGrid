@@ -58,6 +58,6 @@ void decoder_destroy(struct state_decoder *decoder);
 
 void decoder_register_video_display(struct state_decoder *decoder, struct display *display);
 
-int decoder_reconfigure(char *header, int len, void *decode_data);
+void decoder_reconfigure(struct video_desc desc, void *decoder_data);
 void decoder_get_buffer(void *decoder_data, char **buffer, int *len);
 void decoder_decode(struct state_decoder *decoder, void *decode_data, char *buffer, int len, struct video_frame *frame);

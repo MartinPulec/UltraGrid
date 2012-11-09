@@ -131,6 +131,8 @@ struct video_desc {
         unsigned int         tile_count;
 
         enum color_space     colorspace;
+        
+        uint32_t             seq_num;
 };
 
 struct video_frame 
