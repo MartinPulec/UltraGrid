@@ -49,10 +49,14 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #include "config_unix.h"
+#include "config_win32.h"
 #endif
-#include "audio/playback/none.h" 
-#include "debug.h"
+
 #include <stdlib.h>
+
+#include "audio/playback/none.h"
+#include "audio/audio_playback.h"
+#include "debug.h"
 
 #define AUDIO_PLAYBACK_NONE_MAGIC 0x3bcf376au
 
@@ -61,8 +65,15 @@ struct state_audio_playback_none
         uint32_t magic;
 };
 
-void audio_play_none_help(void)
+struct audio_playback_type *audio_play_none_probe(void)
 {
+        struct audio_playback_type *ret = malloc(2 * sizeof(struct audio_playback_type));
+        ret[0].name = "No audio output";
+        ret[0].driver_identifier = "none";
+        ret[1].name = NULL;
+        ret[1].driver_identifier = NULL;
+
+        return ret;
 }
 
 void * audio_play_none_init(char *cfg)

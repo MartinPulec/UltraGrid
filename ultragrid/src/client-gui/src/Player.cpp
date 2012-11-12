@@ -22,6 +22,8 @@
 // number of frames in every direction
 #define OOB_FRAMES 128
 
+using namespace std;
+
 Player::Player() :
     receiver(0),
     speed(1.0),
@@ -73,7 +75,7 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
     }
 
     view->setHWDisplay(this->hw_display);
-    view->SetGLDisplay(DisableGLPreview);
+    view->SetGLDisplay(!DisableGLPreview);
 
     receiver = new UGReceiver((const char *) "wxgl", this, use_tcp);
 }

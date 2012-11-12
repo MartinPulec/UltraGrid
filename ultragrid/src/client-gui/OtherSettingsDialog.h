@@ -21,8 +21,10 @@ class OtherSettingsDialog: public wxDialog
 		wxChoice* HwDevice;
 		wxChoice* HwFormat;
 		wxStaticText* VideoFormatForce;
+		wxStaticText* AudioDeviceText;
 		wxStaticText* ProgReset;
 		wxCheckBox* UseTCP;
+		wxChoice* AudioDevice;
 		wxStaticText* HwDeviceLabel;
 		//*)
 
@@ -33,6 +35,8 @@ class OtherSettingsDialog: public wxDialog
 		static const long ID_HWDEV;
 		static const long ID_STATICTEXT2;
 		static const long ID_HWMODE;
+		static const long ID_STATICTEXT1;
+		static const long ID_AUDIODEVICE;
 		static const long ID_USETCP;
 		static const long ID_CHECKBOX1;
 		static const long ID_PROGRESET;

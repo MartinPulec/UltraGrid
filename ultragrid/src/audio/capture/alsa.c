@@ -68,7 +68,10 @@ struct state_alsa_capture {
 void audio_play_alsa_help(void);
 void audio_cap_alsa_help(void)
 {
+        // TODO: remove
+#if 0
         audio_play_alsa_help();
+#endif
 }
 
 void * audio_cap_alsa_init(char *cfg)

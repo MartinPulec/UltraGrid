@@ -19,6 +19,7 @@
 #include "include/Utils.h"
 
 #include "video_display.h"
+#include "audio/audio_playback.h"
 
 #include <wx/msgdlg.h>
 #include <string>
@@ -306,7 +307,8 @@ void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
     dlg.HwDevice->Append(wxT("none"), new ClientDataHWDisplay("none", NULL, -1));
     dlg.HwDevice->Select(0u);
 
-    const char *currentDevice = settings.GetValue(std::string("hw_display"), std::string("none")).c_str();
+    string currentHWDevice = settings.GetValue(std::string("hw_display"), std::string("none"));
+    string currentAudioDevice = settings.GetValue(std::string("audio_playback"), std::string("none"));
     int deviceIndex = 0u;
 
     for(int i = 0; i < display_get_device_count(); i++) {
@@ -317,10 +319,29 @@ void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
             deviceIndex += 1;
             ClientDataHWDisplay *data = new ClientDataHWDisplay(it->driver_identifier, it->modes, it->modes_count);
             dlg.HwDevice->Append(wxString::FromUTF8(it->name), data);
-            if(strcmp(it->driver_identifier, currentDevice) == 0) {
+            if(strcmp(it->driver_identifier, currentHWDevice.c_str()) == 0) {
                 dlg.HwDevice->Select(deviceIndex);
             }
 
+            ++it;
+        }
+    }
+
+    audio_playback_init_devices();
+
+    deviceIndex = 0u;
+    for(int i = 0; i < audio_playback_get_device_count(); ++i) {
+        audio_playback_type *it = audio_playback_get_device_details(i);;
+
+        while(it->name != NULL) {
+            ClientDataCStr *data = new ClientDataCStr(it->driver_identifier);
+            dlg.AudioDevice->Append(wxString::FromUTF8(it->name), data);
+
+            if(strcmp(it->driver_identifier, currentAudioDevice.c_str()) == 0) {
+                dlg.AudioDevice->Select(deviceIndex);
+            }
+
+            deviceIndex += 1;
             ++it;
         }
     }
@@ -329,6 +350,7 @@ void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
         settings.SetValue("use_tcp", dlg.UseTCP->GetValue() ? "true" : "false");
         settings.SetValue("hw_display", dynamic_cast<ClientDataHWDisplay *>(dlg.HwDevice->GetClientObject(dlg.HwDevice->GetSelection()))->identifier);
         settings.SetValue("disable_gl_preview", dlg.DisableGL->GetValue() ? "true" : "false");
+        settings.SetValue("audio_playback", dynamic_cast<ClientDataCStr *>(dlg.AudioDevice->GetClientObject(dlg.AudioDevice->GetSelection()))->get());
     } else {
         //else: dialog was cancelled or some another button pressed
     }

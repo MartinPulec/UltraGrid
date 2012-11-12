@@ -90,13 +90,12 @@ typedef void (*audio_done_t)(void *state);
 typedef int (*audio_reconfigure_t)(void *state, int quant_samples, int channels,
                 int sample_rate);
 typedef void (*audio_playback_done_t)(void *s);
+typedef struct audio_playback_type * (*audio_playback_probe_t)(void);
 
 struct audio_playback_t {
         const char              *name;
 
         const char              *library_name;
-        audio_device_help_t      audio_help;
-        const char              *audio_help_str;
         audio_init_t             audio_init;
         const char              *audio_init_str;
         audio_get_frame_t        audio_get_frame;
@@ -107,6 +106,8 @@ struct audio_playback_t {
         const char              *audio_playback_done_str;
         audio_reconfigure_t      audio_reconfigure;
         const char              *audio_reconfigure_str;
+        audio_playback_probe_t   audio_probe;
+        const char              *audio_probe_str;
 
         void *handle;
 };
@@ -114,26 +115,27 @@ struct audio_playback_t {
 static struct audio_playback_t audio_playback_table[] = {
         { "embedded",
                NULL,
-               MK_STATIC(sdi_playback_help),
                MK_STATIC(sdi_playback_init),
                MK_STATIC(sdi_get_frame),
                MK_STATIC(sdi_put_frame),
                MK_STATIC(sdi_playback_done),
                MK_STATIC(sdi_reconfigure),
+               MK_STATIC(sdi_probe),
                NULL
         },
 #if defined HAVE_ALSA || defined BUILD_LIBRARIES
         { "alsa",
                 "alsa",
-                MK_NAME(audio_play_alsa_help),
                 MK_NAME(audio_play_alsa_init),
                 MK_NAME(audio_play_alsa_get_frame),
                 MK_NAME(audio_play_alsa_put_frame),
                 MK_NAME(audio_play_alsa_done),
                 MK_NAME(audio_play_alsa_reconfigure),
+                MK_NAME(audio_play_alsa_probe),
                 NULL
         },
 #endif
+#if 0
 #if defined HAVE_COREAUDIO
         { "coreaudio",
                 NULL,
@@ -143,9 +145,12 @@ static struct audio_playback_t audio_playback_table[] = {
                 MK_STATIC(audio_play_ca_put_frame),
                 MK_STATIC(audio_play_ca_done),
                 MK_STATIC(audio_play_ca_reconfigure),
+                MK_STATIC(audio_play_ca_probe),
                 NULL
         },
 #endif
+#endif
+#if 0
 #if defined HAVE_JACK || defined BUILD_LIBRARIES
         { "jack",
                 "jack",
@@ -158,26 +163,15 @@ static struct audio_playback_t audio_playback_table[] = {
                 NULL
         },
 #endif
-#if defined HAVE_PORTAUDIO || defined BUILD_LIBRARIES
-        { "portaudio",
-                "portaudio",
-                MK_NAME(portaudio_playback_help),
-                MK_NAME(portaudio_playback_init),
-                MK_NAME(portaudio_get_frame),
-                MK_NAME(portaudio_put_frame),
-                MK_NAME(portaudio_close_playback),
-                MK_NAME(portaudio_reconfigure),
-                NULL
-        },
 #endif
         { "none",
                 NULL,
-                MK_STATIC(audio_play_none_help),
                 MK_STATIC(audio_play_none_init),
                 MK_STATIC(audio_play_none_get_frame),
                 MK_STATIC(audio_play_none_put_frame),
                 MK_STATIC(audio_play_none_done),
                 MK_STATIC(audio_play_none_reconfigure),
+                MK_STATIC(audio_play_none_probe),
                 NULL
         }
 };
@@ -247,14 +241,27 @@ void audio_playback_init_devices()
         }
 }
 
+/* TODO: to remove */
 void audio_playback_help()
 {
+#if 0
         int i;
         printf("Available audio playback devices:\n");
         for (i = 0; i < available_audio_playback_count; ++i) {
                 available_audio_playback[i]->audio_help();
                 printf("\n");
         }
+#endif
+}
+
+int audio_playback_get_device_count()
+{
+        return available_audio_playback_count;
+}
+
+struct audio_playback_type *audio_playback_get_device_details(int index)
+{
+        return available_audio_playback[index]->audio_probe();
 }
 
 struct state_audio_playback * audio_playback_init(char *device, char *cfg)

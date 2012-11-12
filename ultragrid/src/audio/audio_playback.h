@@ -47,7 +47,16 @@
  */
 
 
+struct audio_playback_type {
+        const char *name;
+        const char *driver_identifier;
+};
+
 struct state_audio_playback;
+
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
 
 void                            audio_playback_help(void);
 void                            audio_playback_init_devices(void);
@@ -73,7 +82,14 @@ void audio_register_reconfigure_callback(struct state_audio *s, int (*callback)(
  * @returns directly state of audio capture device. Little bit silly, but it is needed for
  * SDI (embedded sound).
  */
-void                       *audio_playback_get_state_pointer(struct state_audio_playback *s);
+void                           *audio_playback_get_state_pointer(struct state_audio_playback *s);
+
+int                             audio_playback_get_device_count();
+struct audio_playback_type     *audio_playback_get_device_details(int index);
+
+#ifdef __cplusplus
+} /* extern C */
+#endif /* __cplusplus */
 
 /* vim: set expandtab: sw=8 */
 

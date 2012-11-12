@@ -46,15 +46,19 @@
  *
  */
 
-#include "audio/audio.h" 
-#include "audio/playback/sdi.h" 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #include "config_unix.h"
+#include "config_win32.h"
 #endif
-#include "debug.h"
 
 #include <stdlib.h>
+
+#include "audio/audio.h" 
+#include "audio/audio_playback.h" 
+#include "audio/playback/sdi.h" 
+#include "debug.h"
+
 
 struct state_sdi_playback {
         struct audio_frame * (*get_callback)(void *);
@@ -66,10 +70,14 @@ struct state_sdi_playback {
         void *reconfigure_udata;
 };
 
+struct audio_playback_type *sdi_probe(void) {
+        struct audio_playback_type *probe = malloc(2 * sizeof(struct audio_playback_type));
+        probe[0].name = "Embedded SDI audio";
+        probe[0].driver_identifier = "embedded";
+        probe[1].name = NULL;
+        probe[1].driver_identifier = NULL;
 
-void sdi_playback_help(void)
-{
-        printf("\tembedded : SDI audio (if available)\n");
+        return probe;
 }
 
 void * sdi_playback_init(char *cfg)

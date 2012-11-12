@@ -47,25 +47,79 @@
  */
 
 #include "audio/audio.h"
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#include "config_win32.h"
+#endif // HAVE_CONFIG_H
+
+
 #include "audio/utils.h" 
 #include <assert.h>
-#include <string.h>
 #include <limits.h>
+#include <math.h>
+#include <stdio.h>
+#include <string.h>
+
+#ifdef WORDS_BIGENDIAN
+#error "This code will not run with a big-endian machine. Please report a bug to " PACKAGE_BUGREPORT " if you reach here."
+#endif // WORDS_BIGENDIAN
+
+static inline int32_t format_from_in_bps(const char *in, int bps);
+static inline void format_to_out_bps(char *out, int bps, int32_t out_value);
+
+static inline int32_t format_from_in_bps(const char * in, int bps) {
+        int32_t in_value = 0;
+        memcpy(&in_value, in, bps);
+
+        if(in_value >> (bps * 8 - 1) && bps != 4) { //negative
+                in_value |= ((1<<(32 - bps * 8)) - 1) << (bps * 8);
+        }
+
+        return in_value;
+}
+
+static inline void format_to_out_bps(char *out, int bps, int32_t out_value) {
+        uint32_t mask;
+        if(bps == sizeof(uint32_t)) {
+                mask = 0xffffffffu - 1;
+        } else {
+                mask = ((1 << (bps * 8)) - 1);
+        }
+
+        if(out_value > (1 << (bps * 8 - 1)) -1) {
+                out_value = (1 << (bps * 8 - 1)) -1;
+        }
+
+        if(out_value < -(1 << (bps * 8 - 1))) {
+                out_value = -(1 << (bps * 8 - 1));
+        }
+
+        uint32_t out_value_formatted = (1 * (0x1 & (out_value >> 31))) << (bps * 8 - 1) | (out_value & mask);
+
+        memcpy(out, &out_value_formatted, bps);
+}
 
 void change_bps(char *out, int out_bps, const char *in, int in_bps, int in_len /* bytes */)
 {
-        int pattern = 0xffff << (out_bps * 8);
         int i;
 
-        assert (out_bps <= 4);
-        if(out_bps == 4) /* take care of 32b shifts ! */
-                pattern = 0;
+        assert ((unsigned int) out_bps <= sizeof(int32_t));
+
         for(i = 0; i < in_len / in_bps; i++) {
-                *((unsigned int *) out) &= pattern;
-                if(in_bps > out_bps)
-                        *((int *) out) |= *((const int *) in) >> (in_bps * 8 - out_bps * 8);
-                else
-                        *((int *) out) |= *((const int *) in) << (out_bps * 8 - in_bps * 8);
+                int32_t in_value = format_from_in_bps(in, in_bps);
+
+                int32_t out_value;
+
+                if(in_bps > out_bps) {
+                        out_value = in_value >> (in_bps * 8 - out_bps * 8);
+                } else {
+                        out_value = in_value << (out_bps * 8 - in_bps * 8);
+                }
+
+                format_to_out_bps(out, out_bps, out_value);
+
                 in += in_bps;
                 out += out_bps;
         }
@@ -103,7 +157,9 @@ void demux_channel(char *out, char *in, int bps, int in_len, int in_stream_chann
 {
         int samples = in_len / (in_stream_channels * bps);
         int i;
-        
+
+        assert (bps <= 4);
+
         in += pos_in_stream * bps;
 
         for (i = 0; i < samples; ++i) {
@@ -115,20 +171,79 @@ void demux_channel(char *out, char *in, int bps, int in_len, int in_stream_chann
         }
 }
 
-void mux_channel(char *out, char *in, int bps, int in_len, int out_stream_channels, int pos_in_stream)
+void mux_channel(char *out, char *in, int bps, int in_len, int out_stream_channels, int pos_in_stream, double scale)
 {
         int samples = in_len / bps;
         int i;
         
+        assert (bps <= 4);
+
         out += pos_in_stream * bps;
 
-        for (i = 0; i < samples; ++i) {
-                memcpy(out, in, bps);
+        if(scale == 1.0) {
+                for (i = 0; i < samples; ++i) {
+                        memcpy(out, in, bps);
+
+                        in += bps;
+                        out += out_stream_channels * bps;
+
+                }
+        } else {
+                for (i = 0; i < samples; ++i) {
+                        int32_t in_value = format_from_in_bps(in, bps);
+
+                        in_value *= scale;
+
+                        format_to_out_bps(out, bps, in_value);
+
+                        in += bps;
+                        out += out_stream_channels * bps;
+                }
+        }
+}
+
+void mux_and_mix_channel(char *out, char *in, int bps, int in_len, int out_stream_channels, int pos_in_stream, double scale)
+{
+        int i;
+
+        assert (bps <= 4);
+
+        out += pos_in_stream * bps;
+
+        for(i = 0; i < in_len / bps; i++) {
+                int32_t in_value = format_from_in_bps(in, bps);
+                int32_t out_value = format_from_in_bps(out, bps);
+
+                int32_t new_value = (double)in_value * scale + out_value;
+
+                format_to_out_bps(out, bps, new_value);
 
                 in += bps;
                 out += out_stream_channels * bps;
-
         }
+}
+
+double get_avg_volume(char *data, int bps, int in_len, int stream_channels, int pos_in_stream)
+{
+        float average_vol = 0;
+        int i;
+
+        assert ((unsigned int) bps <= sizeof(int32_t));
+
+        data += pos_in_stream * bps;
+
+        for(i = 0; i < in_len / bps; i++) {
+                int32_t in_value = format_from_in_bps(data, bps);
+
+                //if(pos_in_stream) fprintf(stderr, "%d-%d ", pos_in_stream, data);
+
+                average_vol = average_vol * (i / ((double) i + 1)) + 
+                        fabs(((double) in_value / ((1 << (bps * 8 - 1)) - 1)) / (i + 1));
+
+                data += bps * stream_channels;
+        }
+
+        return average_vol;
 }
 
 void float2int(char *out, char *in, int len)
@@ -163,3 +278,17 @@ void short_int2float(char *out, char *in, int in_len)
                 *outf++ = (float) *ini++ / SHRT_MAX;
         }
 }
+
+void signed2unsigned(char *out, char *in, int in_len)
+{
+        int8_t *inch = (int8_t *) in;
+        uint8_t *outch = (uint8_t *) out;
+        int items = in_len / sizeof(int8_t);
+
+        while(items-- > 0) {
+                int8_t in_value = *inch++;
+                uint8_t out_value = (int) 128 + in_value;
+                *outch++ = out_value;
+        }
+}
+

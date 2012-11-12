@@ -49,8 +49,9 @@
 #include "config.h"
 
 struct audio_frame;
+struct audio_playback_type;
 
-void audio_play_alsa_help(void);
+struct audio_playback_type *audio_play_alsa_probe(void);
 void * audio_play_alsa_init(char *cfg);
 struct audio_frame *audio_play_alsa_get_frame(void *state);
 void audio_play_alsa_put_frame(void *state, struct audio_frame *frame);

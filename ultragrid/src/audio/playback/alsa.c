@@ -57,18 +57,29 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #include "config_unix.h"
+#include "config_win32.h"
 #endif
-#include "debug.h"
+
 #ifdef HAVE_ALSA
-#include "audio/audio.h"
+
 #include <alsa/asoundlib.h>
-#include "audio/playback/alsa.h" 
-#include "debug.h"
 #include <stdlib.h>
+#include <string.h>
+
+#include "audio/audio.h"
+#include "audio/utils.h"
+#include "audio/audio_playback.h"
+#include "audio/playback/alsa.h"
+#include "debug.h"
+
+#define BUFFER_MIN 41
+#define BUFFER_MAX 100
 
 struct state_alsa_playback {
         snd_pcm_t *handle;
         struct audio_frame frame;
+
+        unsigned int min_device_channels;
 };
 
 int audio_play_alsa_reconfigure(void *state, int quant_samples, int channels,
@@ -83,7 +94,7 @@ int audio_play_alsa_reconfigure(void *state, int quant_samples, int channels,
         snd_pcm_uframes_t frames;
 
         s->frame.bps = quant_samples / 8;
-        s->frame.ch_count = channels;
+        s->min_device_channels = s->frame.ch_count = channels;
         s->frame.sample_rate = sample_rate;
 
 
@@ -91,13 +102,23 @@ int audio_play_alsa_reconfigure(void *state, int quant_samples, int channels,
         snd_pcm_hw_params_alloca(&params);
 
         /* Fill it in with default values. */
-        snd_pcm_hw_params_any(s->handle, params);
+        rc = snd_pcm_hw_params_any(s->handle, params);
+        if (rc < 0) {
+                fprintf(stderr, "cannot obtain default hw parameters: %s\n",
+                        snd_strerror(rc));
+                return FALSE;
+        }
 
         /* Set the desired hardware parameters. */
 
         /* Interleaved mode */
-        snd_pcm_hw_params_set_access(s->handle, params,
+        rc = snd_pcm_hw_params_set_access(s->handle, params,
                         SND_PCM_ACCESS_RW_INTERLEAVED);
+        if (rc < 0) {
+                fprintf(stderr, "cannot set interleaved hw access: %s\n",
+                        snd_strerror(rc));
+                return FALSE;
+        }
 
         switch(quant_samples) {
                 case 8:
@@ -117,21 +138,67 @@ int audio_play_alsa_reconfigure(void *state, int quant_samples, int channels,
                         return FALSE;
         }
         /* Signed 16-bit little-endian format */
-        snd_pcm_hw_params_set_format(s->handle, params,
+        rc = snd_pcm_hw_params_set_format(s->handle, params,
                         format);
+        if (rc < 0) {
+                fprintf(stderr, "cannot set format: %s\n",
+                        snd_strerror(rc));
+                return FALSE;
+        }
 
         /* Two channels (stereo) */
-        snd_pcm_hw_params_set_channels(s->handle, params, channels);
+        rc = snd_pcm_hw_params_set_channels(s->handle, params, channels);
+        if (rc < 0) {
+                if(channels == 1) {
+                        snd_pcm_hw_params_set_channels_first(s->handle, params, &s->min_device_channels);
+                } else {
+                        fprintf(stderr, "cannot set requested channel count: %s\n",
+                                        snd_strerror(rc));
+                        return FALSE;
+                }
+        }
 
         /* 44100 bits/second sampling rate (CD quality) */
         val = sample_rate;
-        snd_pcm_hw_params_set_rate_near(s->handle, params,
+        dir = 0;
+        rc = snd_pcm_hw_params_set_rate_near(s->handle, params,
                         &val, &dir);
+        if (rc < 0) {
+                fprintf(stderr, "cannot set requested sample rate: %s\n",
+                        snd_strerror(rc));
+                return FALSE;
+        }
 
         /* Set period size to 1 frame. */
         frames = 1;
-        snd_pcm_hw_params_set_period_size_near(s->handle,
+        dir = 1;
+        rc = snd_pcm_hw_params_set_period_size_near(s->handle,
                         params, &frames, &dir);
+        if (rc < 0) {
+                fprintf(stderr, "cannot set period time: %s\n",
+                        snd_strerror(rc));
+                return FALSE;
+        }
+
+
+        val = BUFFER_MIN * 1000;
+        dir = 1;
+        rc = snd_pcm_hw_params_set_buffer_time_min(s->handle, params,
+                        &val, &dir); 
+        if (rc < 0) {
+                fprintf(stderr, "Warining - unable to set minimal buffer size: %s\n",
+                        snd_strerror(rc));
+        }
+
+        val = BUFFER_MAX * 1000;
+        dir = -1;
+        rc = snd_pcm_hw_params_set_buffer_time_max(s->handle, params,
+                        &val, &dir); 
+        if (rc < 0) {
+                fprintf(stderr, "Warining - unable to set maximal buffer size: %s\n",
+                        snd_strerror(rc));
+        }
+
 
         /* Write the parameters to the driver */
         rc = snd_pcm_hw_params(s->handle, params);
@@ -151,43 +218,51 @@ int audio_play_alsa_reconfigure(void *state, int quant_samples, int channels,
         return TRUE;
 }
 
-void audio_play_alsa_help(void)
+struct audio_playback_type *audio_play_alsa_probe(void)
 {
+        struct audio_playback_type *ret = malloc(sizeof(struct audio_playback_type));
+        int count = 0;
         void **hints;
 
-        printf("\talsa : default ALSA device (same as \"alsa:default\")\n");
+        //printf("\talsa %27s default ALSA device (same as \"alsa:default\")\n", ":");
         snd_device_name_hint(-1, "pcm", &hints); 
         while(*hints != NULL) {
                 char *tmp = strdup(*(char **) hints);
                 char *save_ptr = NULL;
                 char *name_part;
-                char *name;
                 char *desc;
-                char *details;
+                char *desc_short;
+                char *desc_long;
+                char *name;
 
 
                 name_part = strtok_r(tmp + 4, "|", &save_ptr);
                 desc = strtok_r(NULL, "|", &save_ptr);
-                char *character;
-                while((character = strchr(desc, '\n'))) {
-                        *character = ' ';
-                }
-                name = strtok_r(name_part, ":", &save_ptr);
-                details = strtok_r(NULL, ":", &save_ptr);
-                if(details) {
-                        char * index = strstr(details, "DEV");
-			if(index) {
-                                index += 4;
-				printf("\talsa:%s:%s : %s\n", name, index, desc + 4);
-			} else {
-				printf("\talsa:%s : %s\n", name, desc + 4);
-                        }
-                } else {
-                        printf("\talsa:%s : %s\n", name, desc + 4);
-                }
+                desc_short = strtok_r(desc + 4, "\n", &save_ptr);
+                desc_long = strtok_r(NULL, "\n", &save_ptr);
+
+                name = malloc(strlen("alsa:") + strlen(name_part) + 1);
+                strcpy(name, "alsa:");
+                strcat(name, name_part);
+
+                int cur_index = count;
+                count += 1;
+                ret = realloc(ret, (count + 1) * sizeof(struct audio_playback_type));
+
+                ret[cur_index].name = name;
+                ret[cur_index].driver_identifier = strdup(desc_short);
+
+                /* if(desc_long) {
+                        printf(" - %s", desc_long);
+                } */
+                UNUSED(desc_long);
                 hints++;
                 free(tmp);
         }
+
+        ret[count].name = ret[count].driver_identifier = NULL;
+
+        return ret;
 }
 
 void * audio_play_alsa_init(char *cfg)
@@ -197,10 +272,11 @@ void * audio_play_alsa_init(char *cfg)
         char *name;
 
         s = calloc(1, sizeof(struct state_alsa_playback));
-        if(cfg)
+        if(cfg && strlen(cfg) > 0) {
                 name = cfg;
-        else
+        } else {
                 name = "default";
+        }
         rc = snd_pcm_open(&s->handle, name,
                                             SND_PCM_STREAM_PLAYBACK, 0);
 
@@ -229,16 +305,43 @@ void audio_play_alsa_put_frame(void *state, struct audio_frame *frame)
 {
         struct state_alsa_playback *s = (struct state_alsa_playback *) state;
         int rc;
+        char *data = frame->data;
         int frames = frame->data_len / (frame->bps * frame->ch_count);
 
-        rc = snd_pcm_writei(s->handle, frame->data, frames);
+#ifdef DEBUG
+        snd_pcm_sframes_t delay;
+        snd_pcm_delay(s->handle, &delay);
+        //fprintf(stderr, "Alsa delay: %d samples (%u Hz)\n", (int)delay, (unsigned int) s->frame.sample_rate);
+#endif
+
+        if(frame->bps == 1) { // convert to unsigned
+                signed2unsigned(frame->data, frame->data, frame->data_len);
+        }
+
+        if((int) s->min_device_channels > frame->ch_count && frame->ch_count == 1) {
+                if(s->frame.data_len * s->min_device_channels < frame->max_size) {
+                        audio_frame_multiply_channel(frame, s->min_device_channels);
+                }
+        }
+    
+        rc = snd_pcm_writei(s->handle, data, frames);
         if (rc == -EPIPE) {
                 /* EPIPE means underrun */
                 fprintf(stderr, "underrun occurred\n");
                 snd_pcm_prepare(s->handle);
-                /* duplicate last data into stream */
-                snd_pcm_writei(s->handle, frame->data, frames);
-                snd_pcm_writei(s->handle, frame->data, frames);
+                /* fill the stream with some sasmples */
+                for (double sec = 0.0; sec < BUFFER_MIN / 1000.0; sec += (double) frames / frame->sample_rate) {
+                        int frames_to_write = frames;
+                        if(sec + (double) frames/frame->sample_rate > BUFFER_MIN / 1000.0) {
+                                frames = (BUFFER_MIN / 1000.0 - sec) * frame->sample_rate;
+                        }
+                        int rc = snd_pcm_writei(s->handle, data, frames_to_write);
+                        if(rc < 0) {
+                                fprintf(stderr, "error from writei: %s\n",
+                                                snd_strerror(rc));
+                                break;
+                        }
+                }
         } else if (rc < 0) {
                 fprintf(stderr, "error from writei: %s\n",
                         snd_strerror(rc));

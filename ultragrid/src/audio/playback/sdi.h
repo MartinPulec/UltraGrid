@@ -47,8 +47,9 @@
  */
 
 struct audio_frame;
+struct audio_playback_type;
 
-void                     sdi_playback_help(void);
+struct audio_playback_type *sdi_probe(void);
 void                    *sdi_playback_init(char *cfg);
 struct audio_frame      *sdi_get_frame(void *state);
 void                     sdi_put_frame(void *state, struct audio_frame *frame);
