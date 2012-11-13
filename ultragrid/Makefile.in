@@ -49,14 +49,11 @@ OBJS	      = @OBJS@ \
 		src/tfrc.o \
 		src/rtp/xor.o \
 		src/rtp/pbuf.o \
-		src/rtp/audio_decoders.o \
 		src/rtp/ptime.o \
 		src/rtp/net_udp.o \
 		src/rtp/rtp.o \
 		src/rtp/rtp_callback.o \
 		src/audio_source.o \
-		src/audio/audio.o \
-		src/audio/audio_capture.o \
 		src/audio/audio_playback.o \
 		src/audio/capture/none.o \
 		src/audio/capture/sdi.o \
@@ -106,6 +103,9 @@ OBJS	      = @OBJS@ \
 		src/udt_transmit.o \
 		src/udt_receive.o \
 	     	src/client-gui/src/Observable.o \
+		#src/audio/audio.o \
+		#src/audio/audio_capture.o \
+		#src/rtp/audio_decoders.o \
 
 
 SDL_LIB_OBJ  = \
@@ -264,7 +264,6 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 		src/video_display/wxgl.o \
 		src/video_display.o \
 		src/video_display/null.o \
-		src/rtp/decoders.o \
 	     src/client-gui/client_guiMain.o \
 	     src/client-gui/KeyBindingsHelp.o \
 	     src/client-gui/About.o \
@@ -286,6 +285,7 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 	     src/client-gui/src/ConnectionClosedException.o \
 	     src/client-gui/src/VideoBufferOnFlyManager.o \
              src/client-gui/src/VideoBuffer.o \
+		#src/rtp/decoders.o \
 
 SERVER_OBJ = src/server/sp_server.o \
 	     src/server/streaming_server.o \

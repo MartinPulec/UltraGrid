@@ -23,6 +23,7 @@ extern "C" {
 #include "video_capture.h"
 #include "video_display.h"
 #include "video_decompress.h"
+#include "video_decompress/jpeg.h"
 
 #include "udt_receive.h"
 #include "tcp_receive.h"
@@ -68,7 +69,6 @@ struct state_uv {
         enum state state;
 
         uint32_t ts;
-        struct display *display_device;
 
         void * (* receive_init)(const char *address, unsigned int port);
         void (*receive_done)(void *state);
@@ -80,6 +80,16 @@ struct state_uv {
         int remote_port;
 
         bool use_tcp;
+
+        Player *player;
+
+        struct video_desc savedVideoDesc;
+        struct {
+            struct state_decompress *ext_decoder;
+            char *ext_recv_buffer;
+            unsigned int ext_buf_size;
+            codec_t out_codec;
+        };
 };
 
 volatile int should_exit = FALSE;
@@ -246,14 +256,6 @@ static void *receiver_thread(void *arg)
         struct pbuf_video_data pbuf_data;
 
         initialize_video_decompress();
-        pbuf_data.decoder = decoder_init(uv->decoder_mode, uv->postprocess);
-        if(!pbuf_data.decoder) {
-                fprintf(stderr, "Error initializing decoder ('-M' option).\n");
-                exit_uv(1);
-        } else {
-                decoder_register_video_display(pbuf_data.decoder, uv->display_device);
-        }
-        pbuf_data.frame_buffer = frame_buffer;
 
         fr = 1;
 
@@ -455,8 +457,16 @@ static void *receiver_thread(void *arg)
                         goto error;
                     }
 
-                    decoder_reconfigure(video_desc, &pbuf_data);
-                    decoder_get_buffer(&pbuf_data, &buffer, &len);
+                    std::tr1::shared_ptr<char> buffer_data = uv->player->getframe();
+
+                    ///decoder_reconfigure(video_desc, &pbuf_data);
+                    //decoder_get_buffer(&pbuf_data, &buffer, &len);
+                    if(uv->ext_recv_buffer) {
+                        buffer = uv->ext_recv_buffer;
+                    } else {
+                        buffer = buffer_data.get();
+                    }
+
                     res = uv->receive(uv->receive_state, buffer, &len);
                     if(!res) {
                         std::cerr << "(res: " << res << ")" << std::endl;
@@ -467,10 +477,18 @@ static void *receiver_thread(void *arg)
                         goto error;
                     }
 
-                    decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, video_len, pbuf_data.frame_buffer);
+                    if(uv->ext_decoder) {
+                        decompress_frame(uv->ext_decoder,
+                                (unsigned char *) buffer_data.get(),
+                                (unsigned char *) uv->ext_recv_buffer,
+                                len);
+                    }
 
-                    display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
-                    pbuf_data.frame_buffer = display_get_frame(uv->display_device);
+                    //decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, video_len, s->buffer_data.get());
+
+                    uv->player->putframe(buffer_data, video_desc.seq_num);
+                    //display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
+                    //pbuf_data.frame_buffer = display_get_frame(uv->display_device);
                 }
 error:
                 ;
@@ -482,8 +500,7 @@ no_err:
 
 quit:
 
-        decoder_destroy(pbuf_data.decoder);
-
+        decompress_done(uv->ext_decoder);
 
         std::cerr << "UGRECEIVER THREAD EXITED";
 
@@ -492,7 +509,7 @@ quit:
 
 
 
-UGReceiver::UGReceiver(const char *display, Player *player, bool use_tcp)
+UGReceiver::UGReceiver(const char *display, Player *player_, bool use_tcp)
 {
     pthread_t receiver_thread_id;
 
@@ -504,6 +521,9 @@ UGReceiver::UGReceiver(const char *display, Player *player, bool use_tcp)
 
     uv->use_tcp = use_tcp;
     uv->receive_state = 0;
+    uv->player = player_;
+
+    memset(&uv->savedVideoDesc,0, sizeof(uv->savedVideoDesc));
 
     if(uv->use_tcp) {
         std::cerr << "Tramnsmit: TCP" << std::endl;
@@ -537,13 +557,6 @@ UGReceiver::UGReceiver(const char *display, Player *player, bool use_tcp)
 
     uv->command = CMD_NONE;
     uv->state = ST_NONE;
-
-    if(strcmp(display, "wxgl") == 0) {
-        uv->display_device = client_initialize_video_display(display, (char *) player, 0 /*flags */);
-    } else {
-        abort(); // is still supported ?
-        uv->display_device = client_initialize_video_display(display, NULL, 0 /*flags */);
-    }
 
     sigset_t mask;
     sigset_t oldmask;
@@ -713,4 +726,40 @@ bool UGReceiver::ParseHeader(uint32_t *hdr, size_t hdr_len,
     }
 
     return true;
+}
+
+void UGReceiver::Reconfigure(struct state_uv *uv, struct video_desc desc)
+{
+    if (!(uv->savedVideoDesc.width == desc.width &&
+              uv->savedVideoDesc.height == desc.height &&
+              uv->savedVideoDesc.color_spec == desc.color_spec &&
+              uv->savedVideoDesc.interlacing == desc.interlacing  &&
+              //savedVideoDesc.video_type == video_type &&
+              uv->savedVideoDesc.fps == desc.fps
+              )) {
+                uv->savedVideoDesc.width = desc.width;
+                uv->savedVideoDesc.height = desc.height;
+                uv->savedVideoDesc.color_spec = desc.color_spec;
+                uv->savedVideoDesc.interlacing = desc.interlacing;
+                uv->savedVideoDesc.fps = desc.fps;
+
+                decompress_done(uv->ext_decoder);
+                uv->ext_decoder = NULL;
+                free(uv->ext_recv_buffer);
+                uv->ext_recv_buffer = NULL;
+
+                if(desc.color_spec == JPEG) {
+                    uv->ext_decoder = decompress_init(JPEG_MAGIC);
+                    if(!uv->ext_decoder) {
+                        abort();
+                    }
+                    uv->out_codec = RGB;
+                    uv->ext_buf_size = decompress_reconfigure(uv->ext_decoder, desc, 0, 8, 16, 3*desc.width, uv->out_codec);
+                    uv->ext_recv_buffer = (char *) malloc(uv->ext_buf_size);
+                } else {
+                    uv->out_codec = desc.color_spec;
+                }
+
+                uv->player->reconfigure(desc.width, desc.height, (int) uv->out_codec, vc_get_linesize(desc.width, uv->out_codec));
+        }
 }

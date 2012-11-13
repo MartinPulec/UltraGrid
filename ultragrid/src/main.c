@@ -60,7 +60,6 @@
 #include <stdlib.h>
 #include <getopt.h>
 
-#include "audio/audio.h"
 #include "audio_source.h"
 #include "color_transform.h"
 #include "compat/platform_semaphore.h"
@@ -137,7 +136,6 @@ struct state_uv {
         volatile unsigned int sender_thread_ready:1;
         volatile unsigned int accepted:1;
 
-        struct state_audio *audio;
         struct audio_source *audio_source;
 
         int comm_fd;
@@ -181,8 +179,6 @@ void _exit_uv(int status) {
         if(!threads_joined) {
                 if(uv_state->capture_device)
                         vidcap_finish(uv_state->capture_device);
-                if(uv_state->audio)
-                        audio_finish(uv_state->audio);
         }
         wait_to_finish = FALSE;
         close(uv_state->comm_fd);
@@ -446,9 +442,6 @@ static void *sender_thread(void *arg)
 
                         after_transform = color_transform_transform(color_transform, tx_frame);
                         with_watermark = add_watermark(watermark, after_transform);
-                        if(audio) {
-                                audio_sdi_send(uv->audio, audio);
-                        }
                         //TODO: Unghetto this
                         if (uv->requested_compression) {
                                 tx_frame = compress_frame(compression, with_watermark);
@@ -541,8 +534,6 @@ int main(int argc, char *argv[])
         char *network_device = NULL;
 
         char *capture_cfg = NULL;
-        char *audio_send = NULL;
-        char *audio_recv = NULL;
         char *jack_cfg = NULL;
         char *requested_fec = NULL;
         char *save_ptr = NULL;
@@ -580,7 +571,6 @@ int main(int argc, char *argv[])
         uv = (struct state_uv *)malloc(sizeof(struct state_uv));
         uv_state = uv;
 
-        uv->audio = NULL;
         uv->ts = 0;
         uv->requested_capture = "none";
         uv->requested_compression = TRUE;
@@ -602,7 +592,6 @@ int main(int argc, char *argv[])
 	uv->comm_fd = 0;
         uv->sender_thread_ready = FALSE;
         uv->accepted = FALSE;
-        uv->audio = FALSE;
 
         perf_init();
         perf_record(UVP_INIT, 0);
@@ -643,12 +632,6 @@ int main(int argc, char *argv[])
                 case 'i':
                         uv->use_ihdtv_protocol = 1;
                         printf("setting ihdtv protocol\n");
-                        break;
-                case 'r':
-                        audio_recv = optarg;
-                        break;
-                case 's':
-                        audio_send = optarg;
                         break;
                 case 'j':
                         jack_cfg = optarg;
@@ -711,13 +694,6 @@ int main(int argc, char *argv[])
                 fprintf(stderr, "Unable to initialize audio source.\n");
                 return EXIT_FAILURE;
         }
-
-        uv->audio = audio_cfg_init (network_device, uv->port_number + 2, audio_send, audio_recv, jack_cfg);
-        if(!uv->audio)
-                goto cleanup;
-
-        if(audio_does_send_sdi(uv->audio))
-                vidcap_flags |= VIDCAP_FLAG_ENABLE_AUDIO;
 
         printf("%s\n", PACKAGE_STRING);
         printf("Capture device: %s\n", uv->requested_capture);
@@ -908,15 +884,12 @@ int main(int argc, char *argv[])
                 pthread_join(sender_thread_id, NULL);
 
         /* also wait for audio threads */
-        audio_join(uv->audio);
 
 cleanup:
         while(wait_to_finish)
                 ;
         threads_joined = TRUE;
 
-        if(uv->audio)
-                audio_done(uv->audio);
         if(uv->capture_device)
                 vidcap_done(uv->capture_device);
 #ifndef USE_CUSTOM_TRANSMIT

@@ -201,9 +201,9 @@ void decompress_frame(struct state_decompress *s, unsigned char *dst, unsigned c
 
 void decompress_done(struct state_decompress *s)
 {
-        assert(s->magic == DECOMPRESS_MAGIC);
-
-        s->functions->done(s->state);
-        free(s);
+        if(s) {
+                s->functions->done(s->state);
+                free(s);
+        }
 }
 
