@@ -493,6 +493,9 @@ void display_finish(struct display *d)
 
 void display_done(struct display *d)
 {
+        if(!d) {
+                return;
+        }
         assert(d->magic == DISPLAY_MAGIC);
         display_device_table[d->index].func_done(d->state);
 }

@@ -24,6 +24,7 @@ static client_guiFrame *app = NULL;
 
 bool client_guiApp::OnInit()
 {
+    audio_playback_init_devices();
     signal(SIGPIPE, SIG_IGN);
 
     if (display_init_devices() != 0) {

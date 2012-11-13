@@ -46,6 +46,9 @@
  *
  */
 
+#ifndef _audio_playback_h_
+#define _audio_playback_h_
+
 
 struct audio_playback_type {
         const char *name;
@@ -60,7 +63,7 @@ extern "C" {
 
 void                            audio_playback_help(void);
 void                            audio_playback_init_devices(void);
-struct state_audio_playback    *audio_playback_init(char *device, char *cfg);
+struct state_audio_playback    *audio_playback_init(const char *config);
 struct state_audio_playback    *audio_playback_init_null_device(void);
 int                             audio_playback_reconfigure(struct state_audio_playback *state,
                 int quant_samples, int channels,
@@ -90,6 +93,8 @@ struct audio_playback_type     *audio_playback_get_device_details(int index);
 #ifdef __cplusplus
 } /* extern C */
 #endif /* __cplusplus */
+
+#endif /* _audio_playback_h_ */
 
 /* vim: set expandtab: sw=8 */
 

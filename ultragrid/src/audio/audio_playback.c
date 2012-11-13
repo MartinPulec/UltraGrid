@@ -45,6 +45,11 @@
  *
  *
  */
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#include "config_win32.h"
+#endif
 
 #include "audio/audio.h" 
 #include "audio/audio_playback.h" 
@@ -54,11 +59,6 @@
 #include "audio/playback/none.h" 
 #include "audio/playback/jack.h" 
 #include "audio/playback/sdi.h" 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#include "config_unix.h"
-#include "config_win32.h"
-#endif
 #include "debug.h"
 #include "host.h"
 #include "lib_common.h"
@@ -264,10 +264,21 @@ struct audio_playback_type *audio_playback_get_device_details(int index)
         return available_audio_playback[index]->audio_probe();
 }
 
-struct state_audio_playback * audio_playback_init(char *device, char *cfg)
+struct state_audio_playback * audio_playback_init(const char *config)
 {
         struct state_audio_playback *s;
         int i;
+
+        char *config_mutable = strdup(config);
+
+        char *device = config_mutable;
+        char *cfg = NULL;
+
+        if(strchr(config_mutable, ':')) {
+                char *ptr = strchr(config_mutable, ':');
+                *ptr = '\0';
+                cfg = ptr + 1;
+        }
         
         s = (struct state_audio_playback *) malloc(sizeof(struct state_audio_playback));
 
@@ -290,16 +301,19 @@ struct state_audio_playback * audio_playback_init(char *device, char *cfg)
                 goto error;
         }
 
+        free(config_mutable);
+
         return s;
 
 error:
+        free(config_mutable);
         free(s);
         return NULL;
 }
 
 struct state_audio_playback *audio_playback_init_null_device(void)
 {
-        return audio_playback_init("none", NULL);
+        return audio_playback_init("none");
 }
 
 void audio_playback_finish(struct state_audio_playback *s)

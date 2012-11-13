@@ -327,8 +327,6 @@ void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
         }
     }
 
-    audio_playback_init_devices();
-
     deviceIndex = 0u;
     for(int i = 0; i < audio_playback_get_device_count(); ++i) {
         audio_playback_type *it = audio_playback_get_device_details(i);;

@@ -13,6 +13,7 @@
 #include "../include/VideoBufferOnFlyManager.h"
 
 #include "video_display.h"
+#include "audio/audio_playback.h"
 
 class GLView;
 class VideoBuffer;
@@ -87,6 +88,8 @@ class Player : public wxTimer
         Settings *settings;
 
         struct display  *hw_display;
+        struct state_audio_playback *audio_playback_device;
+
         bool display_configured;
 
         ClientManager connection;

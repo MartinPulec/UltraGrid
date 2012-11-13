@@ -7,6 +7,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string.h>
+#include <wx/msgdlg.h>
 
 #include "tv.h"
 
@@ -33,7 +34,9 @@ Player::Player() :
     connection(),
     onFlyManager(connection, buffer),
     scheduledPlayone(false),
-    display_configured(false)
+    display_configured(false),
+    hw_display(NULL),
+    audio_playback_device(NULL)
 {
     //ctor
 }
@@ -42,6 +45,7 @@ Player::~Player()
 {
     //dtor
     display_done(this->hw_display);
+    audio_playback_done(this->audio_playback_device);
     delete receiver;
 }
 
@@ -71,7 +75,19 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
     free(dev_str);
 
     if(this->hw_display == NULL) {
+        wxString msg;
+        msg << wxT("Unable to initialilze video device identified '") << wxString::FromUTF8(device) << wxT("'.");
+        wxMessageBox( msg, wxT("Video initialization error"), wxICON_EXCLAMATION);
         this->hw_display = client_initialize_video_display("none", NULL, 0);
+    }
+
+    string audio_playback = settings->GetValue(std::string("audio_playback"), std::string("none"));
+    this->audio_playback_device = audio_playback_init(audio_playback.c_str());
+    if(!this->audio_playback_device) {
+        wxString msg;
+        msg << wxT("Unable to initialize audio device identified '") << wxString::FromUTF8(audio_playback.c_str()) << wxT("'.");
+        wxMessageBox( msg, wxT("Audio initialization error"), wxICON_EXCLAMATION);
+        this->audio_playback_device = audio_playback_init("none");
     }
 
     view->setHWDisplay(this->hw_display);
