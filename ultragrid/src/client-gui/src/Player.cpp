@@ -109,7 +109,7 @@ void Player::Notify()
             return;
         }
     } else { // regular play
-        std::tr1::shared_ptr<char> res;
+        std::tr1::shared_ptr<Frame> res;
 
         if(GetCurrentFrame() < 0 || GetCurrentFrame() >= total_frames) {
             goto update_state;
@@ -134,7 +134,7 @@ void Player::Notify()
         }
 
         res = buffer.GetFrame(GetCurrentFrame());
-        if(!res.get()) { // not empty
+        if(!res.get()) { // empty
             fprintf(stderr,"N");
             goto schedule_next;
         } else {
@@ -155,7 +155,7 @@ void Player::Notify()
                 last_frame = t;
             }
 
-            view->putframe(res, display_configured);
+            view->putframe(res->video, display_configured);
             parent->UpdateTimer(GetCurrentFrame() );
         }
 
@@ -190,11 +190,11 @@ schedule_next:
 
 bool Player::Playone()
 {
-    std::tr1::shared_ptr<char> res;
+    std::tr1::shared_ptr<Frame> res;
 
     res = buffer.GetFrame(GetCurrentFrame());
     if(res.get()) { // not empty
-        view->putframe(res, display_configured);
+        view->putframe(res->video, display_configured);
 
         DropOutOfBoundFrames(OOB_FRAMES);
 
@@ -427,7 +427,7 @@ void Player::SchedulePlay()
     wxTimer::Start(1, wxTIMER_ONE_SHOT);
 }
 
-std::tr1::shared_ptr<char> Player::getframe()
+std::tr1::shared_ptr<Frame> Player::getframe()
 {
     return buffer.getframe();
 }
@@ -452,7 +452,7 @@ void Player::reconfigure(int width, int height, int codec, int data_len)
     }
 }
 
-void Player::putframe(std::tr1::shared_ptr<char> data, unsigned int frames)
+void Player::putframe(std::tr1::shared_ptr<Frame> data, unsigned int frames)
 {
     buffer.putframe(data, frames);
 }

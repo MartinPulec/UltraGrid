@@ -17,6 +17,12 @@ struct CharPtrDeleter
     }
 };
 
+Frame::Frame(size_t maxVideoLen, size_t maxAudioLen) :
+            audio(shared_ptr<char> (new char[maxAudioLen], CharPtrDeleter())),
+            video(shared_ptr<char> (new char[maxVideoLen], CharPtrDeleter())),
+            audioLen(0)
+{
+}
 
 VideoBuffer::VideoBuffer()
 {
@@ -37,7 +43,7 @@ void VideoBuffer::SetGLView(GLView *view)
     this->view = view;
 }
 
-void VideoBuffer::putframe(shared_ptr<char> data, unsigned int frames)
+void VideoBuffer::putframe(shared_ptr<Frame> data, unsigned int frames)
 {
     pthread_mutex_lock(&lock);
 #ifdef DEBUG
@@ -45,7 +51,7 @@ void VideoBuffer::putframe(shared_ptr<char> data, unsigned int frames)
 #endif
 
 
-    buffered_frames.insert(std::pair<int, std::tr1::shared_ptr<char> >(frames, data));
+    buffered_frames.insert(std::pair<int, std::tr1::shared_ptr<Frame> >(frames, data));
     last_frame = frames;
 
     pthread_mutex_unlock(&lock);
@@ -53,9 +59,9 @@ void VideoBuffer::putframe(shared_ptr<char> data, unsigned int frames)
     //Observable::notifyObservers();
 }
 
-shared_ptr<char> VideoBuffer::getframe()
+shared_ptr<Frame> VideoBuffer::getframe()
 {
-    return shared_ptr<char> (new char[data_len], CharPtrDeleter());
+    return shared_ptr<Frame> (new Frame(data_len, 0));
 }
 
 void VideoBuffer::reconfigure(int width, int height, int codec, int data_len)
@@ -92,15 +98,15 @@ void VideoBuffer::DropFrames(int low, int high)
 }
 
 /* ext API for player */
-std::tr1::shared_ptr<char> VideoBuffer::GetFrame(int frame)
+std::tr1::shared_ptr<Frame> VideoBuffer::GetFrame(int frame)
 {
-    std::tr1::shared_ptr<char>    res;
+    std::tr1::shared_ptr<Frame>    res;
 
     pthread_mutex_lock(&lock);
     {
-        std::map<int, std::tr1::shared_ptr<char> >::iterator it = buffered_frames.find(frame);
+        std::map<int, std::tr1::shared_ptr<Frame> >::iterator it = buffered_frames.find(frame);
         if(it == buffered_frames.end()) {
-            res = std::tr1::shared_ptr<char>();
+            res = std::tr1::shared_ptr<Frame>();
         } else {
             res = it->second;
         }

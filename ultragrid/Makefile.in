@@ -261,7 +261,6 @@ JACK_PLAY_LIB_OBJ = @JACK_PLAY_OBJ@ \
 		   src/audio/utils.o
 
 CLIENT_OBJ = src/client-gui/client_guiApp.o \
-		src/video_display/wxgl.o \
 		src/video_display.o \
 		src/video_display/null.o \
 	     src/client-gui/client_guiMain.o \
@@ -286,6 +285,7 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 	     src/client-gui/src/VideoBufferOnFlyManager.o \
              src/client-gui/src/VideoBuffer.o \
 		#src/rtp/decoders.o \
+		#src/video_display/wxgl.o \
 
 SERVER_OBJ = src/server/sp_server.o \
 	     src/server/streaming_server.o \

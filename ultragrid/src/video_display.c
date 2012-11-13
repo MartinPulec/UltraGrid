@@ -241,6 +241,7 @@ static display_table_t display_device_table[] = {
          NULL
          },
 #endif                          /* HAVE_MACOSX */
+#if 0
         {
          0,
          NULL,
@@ -258,6 +259,7 @@ static display_table_t display_device_table[] = {
          MK_STATIC(display_wxgl_reconfigure_audio),
          NULL
          },
+#endif
         {
          0,
          NULL,

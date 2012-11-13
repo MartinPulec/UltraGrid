@@ -45,6 +45,7 @@ enum state {
 };
 
 using namespace std;
+using namespace std::tr1;
 
 struct state_uv {
 #ifndef USE_CUSTOM_TRANSMIT
@@ -457,14 +458,14 @@ static void *receiver_thread(void *arg)
                         goto error;
                     }
 
-                    std::tr1::shared_ptr<char> buffer_data = uv->player->getframe();
+                    shared_ptr<Frame> buffer_data = uv->player->getframe();
 
                     ///decoder_reconfigure(video_desc, &pbuf_data);
                     //decoder_get_buffer(&pbuf_data, &buffer, &len);
                     if(uv->ext_recv_buffer) {
                         buffer = uv->ext_recv_buffer;
                     } else {
-                        buffer = buffer_data.get();
+                        buffer = buffer_data->video.get();
                     }
 
                     res = uv->receive(uv->receive_state, buffer, &len);
@@ -472,7 +473,7 @@ static void *receiver_thread(void *arg)
                         std::cerr << "(res: " << res << ")" << std::endl;
                         goto error;
                     }
-                    if(len != audio_len + video_len) {
+                    if(len != video_len) {
                         std::cerr << "(len: " << len << ", data_len: " << audio_len + video_len << ")" << std::endl;
                         goto error;
                     }

@@ -11,7 +11,15 @@
 
 class GLView;
 
-typedef std::tr1::shared_ptr<char> shared_frame;
+struct Frame {
+    Frame(size_t maxVideoLen, size_t maxAudioLen);
+
+    std::tr1::shared_ptr<char> video;
+    std::tr1::shared_ptr<char> audio;
+    size_t audioLen;
+};
+
+typedef std::tr1::shared_ptr<Frame> shared_frame;
 
 class VideoBuffer: public Observable
 {
@@ -22,12 +30,12 @@ class VideoBuffer: public Observable
         void SetGLView(GLView *view);
 
         /* ext API for receiver */
-        std::tr1::shared_ptr<char> getframe();
+        std::tr1::shared_ptr<Frame> getframe();
         void reconfigure(int width, int height, int codec, int data_len);
-        void putframe(std::tr1::shared_ptr<char> data, unsigned int frames);
+        void putframe(std::tr1::shared_ptr<Frame> data, unsigned int seq_num);
 
         /* ext API for player */
-        std::tr1::shared_ptr<char> GetFrame(int frame);
+        std::tr1::shared_ptr<Frame> GetFrame(int frame);
         int GetUpperBound();
         int GetLowerBound();
         int GetLastReceivedFrame();
@@ -38,7 +46,7 @@ class VideoBuffer: public Observable
 
     protected:
     private:
-        std::map<int, std::tr1::shared_ptr<char> > buffered_frames;
+        std::map<int, std::tr1::shared_ptr<Frame> > buffered_frames;
         GLView *view;
 
         pthread_mutex_t lock;
