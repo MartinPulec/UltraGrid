@@ -120,6 +120,8 @@ int none_configure_with(struct none_video_compress *s, struct video_frame *tx)
         glClearColor(1.0,1.0,0,1.0);
 
         s->configured = TRUE;
+
+        return TRUE;
 }
 
 struct video_frame * none_compress(void *arg, struct video_frame * tx)

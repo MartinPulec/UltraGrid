@@ -46,6 +46,10 @@
  *
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 struct audio_frame;
 struct audio_playback_type;
 
@@ -66,6 +70,9 @@ void sdi_register_reconfigure_callback(void *s, int (*callback)(void *, int, int
                         int),
                 void *udata);
 
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 /* vim: set expandtab: sw=8 */
 

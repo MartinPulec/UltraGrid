@@ -85,6 +85,8 @@ struct state_uv {
         Player *player;
 
         struct video_desc savedVideoDesc;
+        struct audio_desc savedAudioDesc;
+
         struct {
             struct state_decompress *ext_decoder;
             char *ext_recv_buffer;
@@ -443,7 +445,7 @@ static void *receiver_thread(void *arg)
                         std::cerr << "(res: " << res << ", len: " << len << ")"  << std::endl;
                         goto error;
                     }
-                    if(len < sizeof(video_payload_hdr_t) || len > PCKT_HDR_MAX_LEN) {
+                    if(len < PCKT_HDR_BASE_LEN * sizeof(uint32_t) || len > PCKT_HDR_MAX_LEN * sizeof(uint32_t) ) {
                         std::cerr << "(len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
                         goto error;
                     }
@@ -458,16 +460,24 @@ static void *receiver_thread(void *arg)
                         goto error;
                     }
 
-                    shared_ptr<Frame> buffer_data = uv->player->getframe();
-
                     ///decoder_reconfigure(video_desc, &pbuf_data);
                     //decoder_get_buffer(&pbuf_data, &buffer, &len);
+
+                    if(audio_len) {
+                        UGReceiver::Reconfigure(uv, video_desc, NULL);
+                    } else {
+                        UGReceiver::Reconfigure(uv, video_desc, &audio_desc);
+                    }
+
+                    shared_ptr<Frame> buffer_data = uv->player->getframe();
+
                     if(uv->ext_recv_buffer) {
                         buffer = uv->ext_recv_buffer;
                     } else {
                         buffer = buffer_data->video.get();
                     }
 
+                    len = video_len;
                     res = uv->receive(uv->receive_state, buffer, &len);
                     if(!res) {
                         std::cerr << "(res: " << res << ")" << std::endl;
@@ -486,7 +496,6 @@ static void *receiver_thread(void *arg)
                     }
 
                     //decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, video_len, s->buffer_data.get());
-
                     uv->player->putframe(buffer_data, video_desc.seq_num);
                     //display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
                     //pbuf_data.frame_buffer = display_get_frame(uv->display_device);
@@ -509,7 +518,6 @@ quit:
 }
 
 
-
 UGReceiver::UGReceiver(const char *display, Player *player_, bool use_tcp)
 {
     pthread_t receiver_thread_id;
@@ -525,6 +533,7 @@ UGReceiver::UGReceiver(const char *display, Player *player_, bool use_tcp)
     uv->player = player_;
 
     memset(&uv->savedVideoDesc,0, sizeof(uv->savedVideoDesc));
+    memset(&uv->savedAudioDesc,0, sizeof(uv->savedAudioDesc));
 
     if(uv->use_tcp) {
         std::cerr << "Tramnsmit: TCP" << std::endl;
@@ -679,7 +688,7 @@ bool UGReceiver::ParseHeader(uint32_t *hdr, size_t hdr_len,
     tmp = ntohl(hdr[PCKT_HRES_VRES]);
 
     video_desc->width = tmp >> 16;
-    video_desc->width = tmp & 0xffff;
+    video_desc->height = tmp & 0xffff;
 
     video_desc->color_spec = get_codec_from_fcc(ntohl(hdr[PCKT_FOURCC]));
 
@@ -693,7 +702,7 @@ bool UGReceiver::ParseHeader(uint32_t *hdr, size_t hdr_len,
     video_desc->fps = compute_fps(fps_pt, fpsd, fd, fi);
 
     tmp = ntohl(hdr[PCKT_SEQ_NEXT_HDR]);
-    video_desc->seq_num = ntohl(tmp) >> 1;
+    video_desc->seq_num = tmp >> 1;
 
     bool next_header = tmp & 0x1;
 
@@ -729,38 +738,65 @@ bool UGReceiver::ParseHeader(uint32_t *hdr, size_t hdr_len,
     return true;
 }
 
-void UGReceiver::Reconfigure(struct state_uv *uv, struct video_desc desc)
+void UGReceiver::Reconfigure(struct state_uv *uv, struct video_desc video_desc, struct audio_desc *audio_desc)
 {
-    if (!(uv->savedVideoDesc.width == desc.width &&
-              uv->savedVideoDesc.height == desc.height &&
-              uv->savedVideoDesc.color_spec == desc.color_spec &&
-              uv->savedVideoDesc.interlacing == desc.interlacing  &&
+    bool videoDiffers = false;
+    bool audioDiffers = false;
+
+    if (!(uv->savedVideoDesc.width == video_desc.width &&
+              uv->savedVideoDesc.height == video_desc.height &&
+              uv->savedVideoDesc.color_spec == video_desc.color_spec &&
+              uv->savedVideoDesc.interlacing == video_desc.interlacing  &&
               //savedVideoDesc.video_type == video_type &&
-              uv->savedVideoDesc.fps == desc.fps
+              uv->savedVideoDesc.fps == video_desc.fps
               )) {
-                uv->savedVideoDesc.width = desc.width;
-                uv->savedVideoDesc.height = desc.height;
-                uv->savedVideoDesc.color_spec = desc.color_spec;
-                uv->savedVideoDesc.interlacing = desc.interlacing;
-                uv->savedVideoDesc.fps = desc.fps;
+                  videoDiffers = true;
+    }
 
-                decompress_done(uv->ext_decoder);
-                uv->ext_decoder = NULL;
-                free(uv->ext_recv_buffer);
-                uv->ext_recv_buffer = NULL;
-
-                if(desc.color_spec == JPEG) {
-                    uv->ext_decoder = decompress_init(JPEG_MAGIC);
-                    if(!uv->ext_decoder) {
-                        abort();
-                    }
-                    uv->out_codec = RGB;
-                    uv->ext_buf_size = decompress_reconfigure(uv->ext_decoder, desc, 0, 8, 16, 3*desc.width, uv->out_codec);
-                    uv->ext_recv_buffer = (char *) malloc(uv->ext_buf_size);
-                } else {
-                    uv->out_codec = desc.color_spec;
-                }
-
-                uv->player->reconfigure(desc.width, desc.height, (int) uv->out_codec, vc_get_linesize(desc.width, uv->out_codec));
+    if(audio_desc) {
+        if(uv->savedAudioDesc.bps != audio_desc->bps ||
+           uv->savedAudioDesc.sample_rate != audio_desc->sample_rate ||
+           uv->savedAudioDesc.ch_count != audio_desc->ch_count) {
+               audioDiffers = true;
         }
+    }
+
+    if(videoDiffers) {
+        uv->savedVideoDesc.width = video_desc.width;
+        uv->savedVideoDesc.height = video_desc.height;
+        uv->savedVideoDesc.color_spec = video_desc.color_spec;
+        uv->savedVideoDesc.interlacing = video_desc.interlacing;
+        uv->savedVideoDesc.fps = video_desc.fps;
+
+        decompress_done(uv->ext_decoder);
+        uv->ext_decoder = NULL;
+        free(uv->ext_recv_buffer);
+        uv->ext_recv_buffer = NULL;
+
+        if(video_desc.color_spec == JPEG) {
+            uv->ext_decoder = decompress_init(JPEG_MAGIC);
+            if(!uv->ext_decoder) {
+                abort();
+            }
+            uv->out_codec = RGB;
+            uv->ext_buf_size = decompress_reconfigure(uv->ext_decoder, video_desc, 0, 8, 16, 3*video_desc.width, uv->out_codec);
+            uv->ext_recv_buffer = (char *) malloc(uv->ext_buf_size);
+        } else {
+            uv->out_codec = video_desc.color_spec;
+        }
+    }
+
+    if(audioDiffers) {
+        uv->savedAudioDesc.bps = audio_desc->bps;
+        uv->savedAudioDesc.sample_rate = audio_desc->sample_rate;
+        uv->savedAudioDesc.ch_count = audio_desc->ch_count;
+    } else {
+        memset(&uv->savedAudioDesc, 0, sizeof(uv->savedAudioDesc));
+    }
+
+    if(videoDiffers || audioDiffers) {
+        uv->player->reconfigure(video_desc.width, video_desc.height, (int) uv->out_codec,
+                                vc_get_linesize(video_desc.width, uv->out_codec) * video_desc.height,
+                                &uv->savedAudioDesc);
+    }
 }

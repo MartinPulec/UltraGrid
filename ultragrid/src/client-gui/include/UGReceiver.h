@@ -35,7 +35,7 @@ class UGReceiver {
         static bool ParseHeader(uint32_t *hdr, size_t hdr_len,
                              struct video_desc *video_desc, size_t *video_length,
                              struct audio_desc *audio_desc, size_t *audio_length);
-        static void Reconfigure(struct state_uv *uv, struct video_desc);
+        static void Reconfigure(struct state_uv *uv, struct video_desc, struct audio_desc *audio_desc);
     private:
         client_guiFrame *parent;
         struct state_uv *uv;

@@ -55,6 +55,10 @@
 
 #define PORT_AUDIO              5006
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 struct state_audio;
 
 struct audio_desc {
@@ -107,5 +111,9 @@ void change_bps(char *out, int out_bps, const char *in, int in_bps, int in_len /
  * Makes n copies of first channel (interleaved).
  */
 void audio_frame_multiply_channel(struct audio_frame *frame, int new_channel_count);
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 #endif

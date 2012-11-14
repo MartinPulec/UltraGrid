@@ -70,6 +70,10 @@ release_state:
 
 struct audio_frame *audio_source_read(struct audio_source *s, int frame_number)
 {
+        if(s == NULL) {
+                return NULL;
+        }
+
         assert(s->fps > 0.0);
 
         if(s->last_index != frame_number - 1) {

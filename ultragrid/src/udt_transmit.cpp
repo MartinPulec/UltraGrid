@@ -187,9 +187,9 @@ struct udt_transmit {
                         audio_hdr[PCKT_EXT_AUDIO_TAG] = htonl(0x1); // PCM
                 }
 
-                size_t length = PCKT_HDR_BASE_LEN;
+                size_t length = PCKT_HDR_BASE_LEN * sizeof(uint32_t);
                 if(audio) {
-                        length += PCKT_EXT_INFO_LEN + PCKT_HDR_AUDIO_LEN;
+                        length += (PCKT_EXT_INFO_LEN + PCKT_HDR_AUDIO_LEN) * sizeof(uint32_t);
                 }
                 int res = UDT::sendmsg(socket, (char *) &payload_hdr,
                                 length, TTL_MS, 0);

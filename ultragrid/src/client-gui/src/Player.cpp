@@ -17,6 +17,10 @@
 #include "../include/VideoEntry.h"
 #include "../include/Utils.h"
 
+#include "audio/audio.h"
+#include "audio/audio_playback.h"
+#include "audio/playback/sdi.h"
+
 #define SIGN(x) ((int) (x / fabs(x)))
 #define ROUND_FROM_ZERO(x) (ceil(fabs(x)) * SIGN(x))
 
@@ -90,6 +94,14 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
         this->audio_playback_device = audio_playback_init("none");
     }
 
+    if(audio_playback_does_receive_sdi(this->audio_playback_device)) {
+        sdi_register_get_callback(this->audio_playback_device, (struct audio_frame * (*)(void *)) display_get_audio_frame, this->hw_display);
+        sdi_register_put_callback(this->audio_playback_device, (void (*)(void *, struct audio_frame *)) display_put_audio_frame, this->hw_display);
+        sdi_register_reconfigure_callback(this->audio_playback_device, (int (*)(void *, int, int,
+            int)) display_reconfigure_audio, this->hw_display);
+    }
+
+
     view->setHWDisplay(this->hw_display);
     view->SetGLDisplay(!DisableGLPreview);
 
@@ -134,6 +146,7 @@ void Player::Notify()
         }
 
         res = buffer.GetFrame(GetCurrentFrame());
+        cerr << "GetCurrentFrame "   << GetCurrentFrame() << endl;
         if(!res.get()) { // empty
             fprintf(stderr,"N");
             goto schedule_next;
@@ -154,7 +167,6 @@ void Player::Notify()
                 }
                 last_frame = t;
             }
-
             view->putframe(res->video, display_configured);
             parent->UpdateTimer(GetCurrentFrame() );
         }
@@ -432,7 +444,7 @@ std::tr1::shared_ptr<Frame> Player::getframe()
     return buffer.getframe();
 }
 
-void Player::reconfigure(int width, int height, int codec, int data_len)
+void Player::reconfigure(int width, int height, int codec, int data_len, struct audio_desc *audio_desc)
 {
     buffer.reconfigure(width, height, codec, data_len);
     struct video_desc desc;
@@ -448,8 +460,12 @@ void Player::reconfigure(int width, int height, int codec, int data_len)
     if(display_reconfigure(this->hw_display, desc)) {
         display_configured = true;
     } else {
+        wxMessageBox( wxT("Error occured during display reconfiguration!"), wxT("Unable to reconfigure display!"), wxICON_EXCLAMATION);
         display_configured = false;
     }
+
+    /*audio_reconfigure(struct state_audio *s, int quant_samples, int channels,
+                int sample_rate);*/
 }
 
 void Player::putframe(std::tr1::shared_ptr<Frame> data, unsigned int frames)
