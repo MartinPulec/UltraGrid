@@ -74,6 +74,7 @@ class session_handler {
                 std::string video_format;
                 std::string glob_ext;
                 std::string color_space;
+                std::string audio;
                 pid_t pid;
                 int comm_fd;
                 enum session_serv_state state;

@@ -25,7 +25,7 @@ struct audio_source *audio_source_init(char *filename)
         struct audio_source *s;
         SF_INFO         info;
 
-        if(filename == NULL) {
+        if(filename == NULL || strcmp(filename, "none") == 0) {
                 return NULL;
         }
 

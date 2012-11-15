@@ -24,6 +24,8 @@ struct VideoEntry
 
         wxString colorSpace;
 
+        wxString audioFile;
+
     protected:
     private:
 };

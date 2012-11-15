@@ -1,8 +1,12 @@
 #include "../include/VideoEntry.h"
 #include "../include/Utils.h"
 
+using namespace std;
+
+#include <iostream>
 #include <wx/tokenzr.h>
 #include <wx/arrimpl.cpp> // this is a magic incantation which must be done!
+
 WX_DEFINE_OBJARRAY(ArrayOfVideoEntries);
 
 const char *possibleFileFormats[] = {"DPX", "EXR", "TIFF"};
@@ -33,6 +37,8 @@ VideoEntry::VideoEntry(wxString & encoded)
     this->fps = val_fps;
     totalFramesStr.ToLong(&val_total_frames);
     this->total_frames = val_total_frames;
+
+    this->audioFile = tkz_words.GetNextToken();
 }
 
 VideoEntry::~VideoEntry()
@@ -44,7 +50,7 @@ wxString VideoEntry::Serialize()
 {
     wxString line;
 
-    line << URL << wxT(" ") << Utils::FromCDouble(fps, 2) << wxT(" ") << total_frames <<  wxT(" ") << format << wxT(" ")  << colorSpace;
+    line << URL << wxT(" ") << Utils::FromCDouble(fps, 2) << wxT(" ") << total_frames <<  wxT(" ") << format << wxT(" ") << colorSpace << wxT(" ") << audioFile;
 
     return line;
 }

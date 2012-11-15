@@ -283,6 +283,11 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
         wxString use_tcp_str = wxString(settings->GetValue(std::string("use_tcp"), std::string("false")).c_str(), wxConvUTF8);
         this->connection.set_parameter(wxT("use_tcp"), use_tcp_str);
 
+        if(item.audioFile.Cmp(_T("none")) != 0) {
+            failedPart = wxT("audio setting");
+            this->connection.set_parameter(wxT("audio"), item.audioFile);
+        }
+
         failedPart = wxT("setup");
         int port = this->connection.setup(wxT("/") + path);
         failedPart = wxT("setting FPS");

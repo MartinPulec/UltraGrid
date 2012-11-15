@@ -66,6 +66,7 @@
 extern int uv_argc;
 extern char **uv_argv;
 
+using namespace std;
 
 //class UltraGrid
 session_handler::session_handler(const char *r)
@@ -155,6 +156,11 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                                                 args[index++] = dpx_arg;
                                                 args[index++] = "-m";
                                                 args[index++] = "1500";
+
+                                                if(!audio.empty()) {
+                                                        args[index++] = "-a";
+                                                        args[index++] = strdup(audio.c_str());
+                                                }
 
                                                 if(!compression.empty()) {
                                                         args[index++] = "-c";
@@ -351,6 +357,13 @@ launch_err:
                                 response.code = 451;
                                 response.message = "Parameter Not Understood";
                         }
+                } else if(strcmp(item, "audio") == 0) {
+                        response.code = 200;
+                        response.message = "OK";
+
+                        audio = string(save_ptr);
+                        cerr << "Audio:" << strtok_r(NULL, " ", &save_ptr);
+
                 } else if(strcmp(item, "fps") == 0) {
                         char *fps_str = strtok_r(NULL, " ", &save_ptr);
                         /* replace decimal coma with dot */

@@ -110,25 +110,8 @@ void VideoSelection::Parse(char *body, int body_len)
     while ( tkz.HasMoreTokens() )
     {
         wxString token = tkz.GetNextToken();
-        wxStringTokenizer tkz_words(token, wxT(" "));
-        wxString URL = tkz_words.GetNextToken();
-        wxString fps = tkz_words.GetNextToken();
-        wxString total_frames = tkz_words.GetNextToken();
-        wxString format = tkz_words.GetNextToken();
-        wxString colorSpace = tkz_words.GetNextToken();
+        VideoEntry newItem(token);
 
-        VideoEntry newItem;
-
-        newItem.URL = URL;
-        newItem.format = format;
-        double val_fps;
-        long val_total_frames;
-        fps.ToDouble(&val_fps);
-        newItem.fps = val_fps;
-        total_frames.ToLong(&val_total_frames);
-        newItem.total_frames = val_total_frames;
-
-        newItem.colorSpace = colorSpace;
         this->videos.Add(newItem);
     }
 
