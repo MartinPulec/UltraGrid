@@ -227,3 +227,12 @@ double compute_fps(int fps, int fpsd, int fd, int fi)
         return res;
 }
 
+void dump_video_desc(struct video_desc *desc)
+{
+        fprintf(stderr, "Video Desc: %dx%d@%f %s\n", 
+                        desc->width,
+                        desc->height,
+                        desc->fps,
+                        get_codec_name(desc->color_spec));
+}
+

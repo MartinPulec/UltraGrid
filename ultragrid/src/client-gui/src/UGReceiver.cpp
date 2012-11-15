@@ -438,7 +438,7 @@ static void *receiver_thread(void *arg)
                         uint32_t header[PCKT_HDR_MAX_LEN];
                         char pad[8];
                     } a;
-                    int len = sizeof(a) + 1;
+                    int len = PCKT_HDR_BASE_LEN * sizeof(uint32_t);
                     char *buffer;
                     res = uv->receive(uv->receive_state, (char *) &a.header, &len);
                     if(!res) {
@@ -449,6 +449,23 @@ static void *receiver_thread(void *arg)
                         std::cerr << "(len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
                         goto error;
                     }
+
+                    if(0) {
+                   // if(UGReceiver::BaseHeaderHasNextHeader(a.header)) {
+                        int ext_header_len = (PCKT_EXT_INFO_LEN + PCKT_HDR_AUDIO_LEN) * sizeof(uint32_t);
+                        res = uv->receive(uv->receive_state, (char *) &a.header, &ext_header_len);
+                        if(!res) {
+                            std::cerr << "(res: " << res << ", len: " << len << ")"  << std::endl;
+                            goto error;
+                        }
+                        if(ext_header_len !=  (PCKT_EXT_INFO_LEN + PCKT_HDR_AUDIO_LEN) * sizeof(uint32_t) ) {
+                            std::cerr << "(len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
+                            goto error;
+                        }
+
+                        len += ext_header_len;
+                    }
+                    //cerr << "LEN" << len << endl;
 
                     struct audio_desc audio_desc;
                     struct video_desc video_desc;
@@ -671,6 +688,11 @@ UGReceiver::~UGReceiver()
 #endif
 }
 
+bool UGReceiver::BaseHeaderHasNextHeader(uint32_t *hdr)
+{
+    return ntohl(hdr[PCKT_SEQ_NEXT_HDR]) & 0x1;
+}
+
 bool UGReceiver::ParseHeader(uint32_t *hdr, size_t hdr_len,
                              struct video_desc *video_desc, size_t *video_length,
                              struct audio_desc *audio_desc, size_t *audio_length)
@@ -703,6 +725,7 @@ bool UGReceiver::ParseHeader(uint32_t *hdr, size_t hdr_len,
 
     tmp = ntohl(hdr[PCKT_SEQ_NEXT_HDR]);
     video_desc->seq_num = tmp >> 1;
+    //dump_video_desc(video_desc);
 
     bool next_header = tmp & 0x1;
 

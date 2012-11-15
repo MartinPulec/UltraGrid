@@ -73,7 +73,7 @@ struct udt_recv {
 
                 udt_epoll_id = UDT::epoll_create();
 
-                socket = UDT::socket(AF_INET, SOCK_DGRAM, 0);
+                socket = UDT::socket(AF_INET, SOCK_STREAM, 0);
 
                 if(socket == UDT::INVALID_SOCK) {
                         throw std::runtime_error(std::string("socket: ") + UDT::getlasterror().getErrorMessage());
@@ -146,18 +146,25 @@ struct udt_recv {
 
         int receive(char *buffer, int *len)
         {
-                std::set<UDTSOCKET> readfds;
-                if(UDT::epoll_wait(udt_epoll_id, &readfds, NULL, 500, NULL, NULL) >= 1) {
-                    int res = UDT::recvmsg(recver, buffer, *len);
-                    if(res == UDT::ERROR) {
-                            std::cerr << UDT::getlasterror().getErrorMessage() << std::endl;
-                            return 0;
-                    }
-                    *len = res;
-                } else {
-                    std::cerr << "UDT receive: timeout" << std::endl;
-                    return 0;
+                size_t total = 0;
+
+                while(total < *len) {
+                        std::set<UDTSOCKET> readfds;
+                        if(UDT::epoll_wait(udt_epoll_id, &readfds, NULL, 500, NULL, NULL) >= 1) {
+                                int res = UDT::recv(recver, buffer + total, *len - total, 0);
+                                if(res == UDT::ERROR) {
+                                        std::cerr << UDT::getlasterror().getErrorMessage() << std::endl;
+                                        return 0;
+                                }
+
+                                total += res;
+                        } else {
+                                std::cerr << "UDT receive: timeout" << std::endl;
+                                return 0;
+                        }
                 }
+
+                //cerr << "UDT received: " << total << endl;
 
                 /*
                 int res = UDT::recvmsg(recver, buffer, *len);

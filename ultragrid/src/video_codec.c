@@ -645,3 +645,4 @@ int codec_is_a_rgb(codec_t codec)
 	}
         return 0;
 }
+

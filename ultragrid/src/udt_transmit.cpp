@@ -77,7 +77,7 @@ struct udt_transmit {
                 this->port = port;
 
                 UDT::startup();
-                socket = UDT::socket(AF_INET, SOCK_DGRAM, 0);
+                socket = UDT::socket(AF_INET, SOCK_STREAM, 0);
         }
 
         void accept() {
@@ -122,23 +122,38 @@ struct udt_transmit {
 
         void send(struct video_frame *frame, struct audio_frame *audio)
         {
+                size_t total = 0;
                 send_description(frame, audio);
 
-                int res = UDT::sendmsg(socket, frame->tiles[0].data, frame->tiles[0].data_len, TTL_MS, 0);
-                if(res == UDT::ERROR) {
-                        std::cerr << res << " " << UDT::getlasterror().getErrorMessage();
+                while(total < frame->tiles[0].data_len) {
+                        int res = UDT::send(socket, frame->tiles[0].data + total,
+                                        frame->tiles[0].data_len - total, 0);
+                        if(res == UDT::ERROR) {
+                                std::cerr << res << " " << UDT::getlasterror().getErrorMessage();
+                                return;
+                        }
+                        total += res;
                 }
+#if 0
                 if(res != frame->tiles[0].data_len) {
                         std::cerr << "Sent only " << res << "B, " << frame->tiles[0].data_len << "B was scheduled!" << std::endl;
                 }
+#endif
                 if(audio) {
-                        int res = UDT::sendmsg(socket, audio->data, audio->data_len, TTL_MS, 0);
-                        if(res == UDT::ERROR) {
-                                std::cerr << res << " " << UDT::getlasterror().getErrorMessage();
+                        total = 0;
+                        while(total < audio->data_len) {
+                                int res = UDT::send(socket, audio->data + total,
+                                                audio->data_len - total, 0);
+                                if(res == UDT::ERROR) {
+                                        std::cerr << res << " " << UDT::getlasterror().getErrorMessage();
+                                }
+                                total += res;
                         }
+#if 0
                         if(res != audio->data_len) {
                                 std::cerr << "Sent only " << res << "B, " << audio->data_len << "B was scheduled!" << std::endl;
                         }
+#endif
                 }
         }
 
@@ -191,10 +206,15 @@ struct udt_transmit {
                 if(audio) {
                         length += (PCKT_EXT_INFO_LEN + PCKT_HDR_AUDIO_LEN) * sizeof(uint32_t);
                 }
-                int res = UDT::sendmsg(socket, (char *) &payload_hdr,
-                                length, TTL_MS, 0);
-                if(res == UDT::ERROR) {
-                        std::cerr << res << " " << UDT::getlasterror().getErrorMessage();
+                size_t total = 0;
+                while(total < length) {
+                        int res = UDT::send(socket, (char *) &payload_hdr + total,
+                                        length - total, 0);
+                        if(res == UDT::ERROR) {
+                                std::cerr << res << " " << UDT::getlasterror().getErrorMessage();
+                                return;
+                        }
+                        total += res;
                 }
         }
 

@@ -27,6 +27,7 @@ class UGReceiver {
         void Accept(const char *remote_host, int remote_port);
         void Disconnect();
 
+        static bool BaseHeaderHasNextHeader(uint32_t *hdr);
         /**
         * @param[out] audio_lenght Contains 0 if there is no audio, > 0 otherwise
         * @retval true if header parsed successfully

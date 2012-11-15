@@ -186,6 +186,8 @@ void il_merged_to_upper(char *dst, char *src, int linesize, int height);
 
 double compute_fps(int fps, int fpsd, int fd, int fi);
 
+void dump_video_desc(struct video_desc *desc);
+
 #define AUX_INTERLACED  (1<<0)
 #define AUX_PROGRESSIVE (1<<1)
 #define AUX_SF          (1<<2)
