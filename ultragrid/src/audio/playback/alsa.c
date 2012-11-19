@@ -65,6 +65,7 @@
 #include <alsa/asoundlib.h>
 #include <stdlib.h>
 #include <string.h>
+#include <tv.h>
 
 #include "audio/audio.h"
 #include "audio/utils.h"
@@ -72,14 +73,17 @@
 #include "audio/playback/alsa.h"
 #include "debug.h"
 
-#define BUFFER_MIN 41
-#define BUFFER_MAX 100
+#define BUFFER_MIN 101
+#define BUFFER_MAX 200
 
 struct state_alsa_playback {
         snd_pcm_t *handle;
-        struct audio_frame frame;
+        struct audio_desc settings;
 
         unsigned int min_device_channels;
+        struct timeval t0;
+        int frames;
+        int total;
 };
 
 int audio_play_alsa_reconfigure(void *state, int quant_samples, int channels,
@@ -93,9 +97,12 @@ int audio_play_alsa_reconfigure(void *state, int quant_samples, int channels,
         int rc;
         snd_pcm_uframes_t frames;
 
-        s->frame.bps = quant_samples / 8;
-        s->min_device_channels = s->frame.ch_count = channels;
-        s->frame.sample_rate = sample_rate;
+        s->settings.bps = quant_samples / 8;
+        s->min_device_channels = s->settings.ch_count = channels;
+        s->settings.sample_rate = sample_rate;
+
+        s->frames = 0;
+        s->total = 0;
 
 
         /* Allocate a hardware parameters object. */
@@ -209,12 +216,6 @@ int audio_play_alsa_reconfigure(void *state, int quant_samples, int channels,
                 return FALSE;
         }
 
-        free(s->frame.data);
-
-        s->frame.max_size = s->frame.bps * s->frame.ch_count * s->frame.sample_rate; // can hold up to 1 sec
-        s->frame.data = (char*)malloc(s->frame.max_size);
-        assert(s->frame.data != NULL);
-
         return TRUE;
 }
 
@@ -249,8 +250,8 @@ struct audio_playback_type *audio_play_alsa_probe(void)
                 count += 1;
                 ret = realloc(ret, (count + 1) * sizeof(struct audio_playback_type));
 
-                ret[cur_index].name = name;
-                ret[cur_index].driver_identifier = strdup(desc_short);
+                ret[cur_index].name = strdup(desc_short);
+                ret[cur_index].driver_identifier = name;
 
                 /* if(desc_long) {
                         printf(" - %s", desc_long);
@@ -297,8 +298,9 @@ error:
 struct audio_frame *audio_play_alsa_get_frame(void *state)
 {
         struct state_alsa_playback *s = (struct state_alsa_playback *) state;
+        UNUSED(s);
 
-        return &s->frame;
+        return NULL;
 }
 
 void audio_play_alsa_put_frame(void *state, struct audio_frame *frame)
@@ -306,20 +308,20 @@ void audio_play_alsa_put_frame(void *state, struct audio_frame *frame)
         struct state_alsa_playback *s = (struct state_alsa_playback *) state;
         int rc;
         char *data = frame->data;
-        int frames = frame->data_len / (frame->bps * frame->ch_count);
+        int frames = frame->data_len / (s->settings.bps * s->settings.ch_count);
 
 #ifdef DEBUG
         snd_pcm_sframes_t delay;
         snd_pcm_delay(s->handle, &delay);
-        //fprintf(stderr, "Alsa delay: %d samples (%u Hz)\n", (int)delay, (unsigned int) s->frame.sample_rate);
+        printf("Alsa delay: %d samples (%u Hz)\n", (int)delay, (unsigned int) s->settings.sample_rate);
 #endif
 
-        if(frame->bps == 1) { // convert to unsigned
+        if(s->settings.bps == 1) { // convert to unsigned
                 signed2unsigned(frame->data, frame->data, frame->data_len);
         }
 
         if((int) s->min_device_channels > frame->ch_count && frame->ch_count == 1) {
-                if(s->frame.data_len * s->min_device_channels < frame->max_size) {
+                if(frame->data_len * s->min_device_channels < frame->max_size) {
                         audio_frame_multiply_channel(frame, s->min_device_channels);
                 }
         }
@@ -327,14 +329,16 @@ void audio_play_alsa_put_frame(void *state, struct audio_frame *frame)
         rc = snd_pcm_writei(s->handle, data, frames);
         if (rc == -EPIPE) {
                 /* EPIPE means underrun */
-                fprintf(stderr, "underrun occurred\n");
+                printf("underrun occurred\n");
                 snd_pcm_prepare(s->handle);
+
                 /* fill the stream with some sasmples */
-                for (double sec = 0.0; sec < BUFFER_MIN / 1000.0; sec += (double) frames / frame->sample_rate) {
+                for (double sec = 0.0; sec < BUFFER_MIN / 1000.0; sec += (double) frames / s->settings.sample_rate) {
                         int frames_to_write = frames;
-                        if(sec + (double) frames/frame->sample_rate > BUFFER_MIN / 1000.0) {
-                                frames = (BUFFER_MIN / 1000.0 - sec) * frame->sample_rate;
+                        if(sec + (double) frames/s->settings.sample_rate > BUFFER_MIN / 1000.0) {
+                                frames_to_write = (BUFFER_MIN / 1000.0 - sec) * s->settings.sample_rate;
                         }
+                        assert(frames_to_write > 0);
                         int rc = snd_pcm_writei(s->handle, data, frames_to_write);
                         if(rc < 0) {
                                 fprintf(stderr, "error from writei: %s\n",
@@ -348,6 +352,19 @@ void audio_play_alsa_put_frame(void *state, struct audio_frame *frame)
         }  else if (rc != (int)frames) {
                 fprintf(stderr, "short write, write %d frames\n", rc);
         }
+
+        if(s->frames == 0) {
+                gettimeofday(&s->t0, NULL);
+                s->frames += frames;
+        } else {
+                struct timeval t;
+                gettimeofday(&t, NULL);
+                printf("%f seconds, %d frames\n", tv_diff(t,s->t0),s->frames);
+                ///s->t0 = t;
+                s->frames += frames;
+        }
+
+        s->total += 1;
 }
 
 void audio_play_alsa_done(void *state)
@@ -356,7 +373,6 @@ void audio_play_alsa_done(void *state)
 
         snd_pcm_drain(s->handle);
         snd_pcm_close(s->handle);
-        free(s->frame.data);
         free(s);
 }
 

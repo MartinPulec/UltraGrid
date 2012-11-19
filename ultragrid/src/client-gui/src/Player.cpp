@@ -146,7 +146,7 @@ void Player::Notify()
         }
 
         res = buffer.GetFrame(GetCurrentFrame());
-        cerr << "GetCurrentFrame "   << GetCurrentFrame() << endl;
+        cout << "GetCurrentFrame "   << GetCurrentFrame() << endl;
         if(!res.get()) { // empty
             fprintf(stderr,"N");
             goto schedule_next;
@@ -163,11 +163,19 @@ void Player::Notify()
 
                 float delay_ms = (tv_diff(t, last_frame)  - 1/fps) * 1000;
                 if(delay_ms > 1) {
-                    fprintf(stderr, "Frame delayed %.2f ms\n", delay_ms);
+                    cout << "Frame delayed %.2f ms" << endl;
                 }
                 last_frame = t;
             }
             view->putframe(res->video, display_configured);
+
+            struct audio_frame audio;
+            audio.data = res->audio.get();
+            audio.data_len = res->audioLen;
+            audio.max_size = res->maxAudioLen;
+
+            audio_playback_put_frame(this->audio_playback_device, &audio);
+
             parent->UpdateTimer(GetCurrentFrame() );
         }
 
@@ -451,8 +459,15 @@ std::tr1::shared_ptr<Frame> Player::getframe()
 
 void Player::reconfigure(int width, int height, int codec, int data_len, struct audio_desc *audio_desc)
 {
-    buffer.reconfigure(width, height, codec, data_len);
     struct video_desc desc;
+    size_t maxAudioDataLen = 0;
+
+    if(audio_desc) {
+        // hold up to one minute
+        maxAudioDataLen = audio_desc->ch_count * audio_desc->bps * audio_desc->sample_rate;
+    }
+
+    buffer.reconfigure(width, height, codec, data_len, maxAudioDataLen);
 
     desc.width = width;
     desc.height = height;
@@ -469,8 +484,12 @@ void Player::reconfigure(int width, int height, int codec, int data_len, struct 
         display_configured = false;
     }
 
-    /*audio_reconfigure(struct state_audio *s, int quant_samples, int channels,
-                int sample_rate);*/
+    if(audio_desc) {
+        if(!audio_playback_reconfigure(this->audio_playback_device, audio_desc->bps * 8, audio_desc->ch_count,
+                    audio_desc->sample_rate)) {
+            wxMessageBox( wxT("Error occured during audio reconfiguration!"), wxT("Unable to reconfigure audio!"), wxICON_EXCLAMATION);
+        }
+    }
 }
 
 void Player::putframe(std::tr1::shared_ptr<Frame> data, unsigned int frames)

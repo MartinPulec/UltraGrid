@@ -16,6 +16,7 @@ struct Frame {
 
     std::tr1::shared_ptr<char> video;
     std::tr1::shared_ptr<char> audio;
+    size_t maxAudioLen;
     size_t audioLen;
 };
 
@@ -31,7 +32,7 @@ class VideoBuffer: public Observable
 
         /* ext API for receiver */
         std::tr1::shared_ptr<Frame> getframe();
-        void reconfigure(int width, int height, int codec, int data_len);
+        void reconfigure(int width, int height, int codec, int data_len, size_t maxAudioDataLen);
         void putframe(std::tr1::shared_ptr<Frame> data, unsigned int seq_num);
 
         /* ext API for player */
@@ -51,7 +52,9 @@ class VideoBuffer: public Observable
 
         pthread_mutex_t lock;
 
-        int data_len;
+        size_t videoDataLen;
+        size_t maxAudioDataLen;
+
         int last_frame;
 
         void DropUnusedFrames();

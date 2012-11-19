@@ -112,6 +112,8 @@ struct audio_frame *audio_source_read(struct audio_source *s, int frame_number)
 
         s->last_frames += frames;
         s->last_index = frame_number;
+
+        return &s->frame;
 }
 
 void audio_source_destroy(struct audio_source *s)

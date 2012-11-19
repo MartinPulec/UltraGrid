@@ -17,14 +17,15 @@ struct CharPtrDeleter
     }
 };
 
-Frame::Frame(size_t maxVideoLen, size_t maxAudioLen) :
-            audio(shared_ptr<char> (new char[maxAudioLen], CharPtrDeleter())),
-            video(shared_ptr<char> (new char[maxVideoLen], CharPtrDeleter())),
-            audioLen(0)
+Frame::Frame(size_t maxVideoLen_, size_t maxAudioLen_) :
+            audio(shared_ptr<char> (new char[maxAudioLen_], CharPtrDeleter())),
+            video(shared_ptr<char> (new char[maxVideoLen_], CharPtrDeleter())),
+            audioLen(0), maxAudioLen(maxAudioLen_)
 {
 }
 
-VideoBuffer::VideoBuffer()
+VideoBuffer::VideoBuffer() :
+    maxAudioDataLen(0)
 {
     //ctor
     int ret = pthread_mutex_init(&lock, NULL);
@@ -46,9 +47,9 @@ void VideoBuffer::SetGLView(GLView *view)
 void VideoBuffer::putframe(shared_ptr<Frame> data, unsigned int frames)
 {
     pthread_mutex_lock(&lock);
-#ifdef DEBUG
+//#ifdef DEBUG
     std::cerr << "Buffer: Received frame " << frames << std::endl;
-#endif
+//#endif
 
 
     buffered_frames.insert(std::pair<int, std::tr1::shared_ptr<Frame> >(frames, data));
@@ -61,14 +62,15 @@ void VideoBuffer::putframe(shared_ptr<Frame> data, unsigned int frames)
 
 shared_ptr<Frame> VideoBuffer::getframe()
 {
-    return shared_ptr<Frame> (new Frame(data_len, 0));
+    return shared_ptr<Frame> (new Frame(videoDataLen, maxAudioDataLen));
 }
 
-void VideoBuffer::reconfigure(int width, int height, int codec, int data_len)
+void VideoBuffer::reconfigure(int width, int height, int codec, int videoDataLen, size_t maxAudioDataLen)
 {
     pthread_mutex_lock(&lock);
     {
-        this->data_len = data_len;
+        this->videoDataLen = videoDataLen;
+        this->maxAudioDataLen = maxAudioDataLen;
 
         buffered_frames.clear();
         last_frame = -1;

@@ -35,7 +35,7 @@ OtherSettingsDialog::OtherSettingsDialog(wxWindow* parent,wxWindowID id,const wx
 	wxFlexGridSizer* FlexGridSizer2;
 	wxFlexGridSizer* FlexGridSizer3;
 	wxStdDialogButtonSizer* StdDialogButtonSizer1;
-
+	
 	Create(parent, wxID_ANY, _("Other Settings"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE, _T("wxID_ANY"));
 	SetClientSize(wxSize(317,203));
 	FlexGridSizer1 = new wxFlexGridSizer(4, 1, 0, 0);

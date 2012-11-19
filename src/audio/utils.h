@@ -51,10 +51,6 @@
 #ifndef _AUDIO_UTILS_H_
 #define _AUDIO_UTILS_H_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * Changes bps for everey sample.
  * 
@@ -96,10 +92,5 @@ void short_int2float(char *out, char *in, int in_len);
 
 void signed2unsigned(char *out, char *in, int in_len);
 
-void dump_audio_desc(struct audio_desc *audio_desc);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

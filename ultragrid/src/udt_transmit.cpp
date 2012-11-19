@@ -191,7 +191,7 @@ struct udt_transmit {
 
                 if(audio) {
                         payload_hdr[PCKT_HDR_BASE_LEN] = htonl(PCKT_EXT_AUDIO_TYPE << 28 |
-                                        PCKT_HDR_AUDIO_LEN << 12 |
+                                        PCKT_HDR_AUDIO_LEN * sizeof(uint32_t) << 12 |
                                         0); 
 
                         uint32_t *audio_hdr = payload_hdr + PCKT_HDR_BASE_LEN + PCKT_EXT_INFO_LEN;

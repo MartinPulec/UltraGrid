@@ -292,9 +292,3 @@ void signed2unsigned(char *out, char *in, int in_len)
         }
 }
 
-void dump_audio_desc(struct audio_desc *audio_desc)
-{
-        fprintf(stderr, "Audio description: %d channels, %d bps, sample rate %d Hz\n",
-                        audio_desc->ch_count, audio_desc->bps, audio_desc->sample_rate);
-}
-

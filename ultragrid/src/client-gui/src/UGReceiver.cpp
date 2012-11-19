@@ -29,6 +29,8 @@ extern "C" {
 #include "tcp_receive.h"
 };
 
+#include "audio/utils.h"
+
 #define USE_CUSTOM_TRANSMIT
 
 enum cmd {
@@ -450,18 +452,19 @@ static void *receiver_thread(void *arg)
                         goto error;
                     }
 
-                    if(0) {
-                   // if(UGReceiver::BaseHeaderHasNextHeader(a.header)) {
+                    if(UGReceiver::BaseHeaderHasNextHeader(a.header)) {
                         int ext_header_len = (PCKT_EXT_INFO_LEN + PCKT_HDR_AUDIO_LEN) * sizeof(uint32_t);
-                        res = uv->receive(uv->receive_state, (char *) &a.header, &ext_header_len);
+                        res = uv->receive(uv->receive_state, (char *) &a.header + len, &ext_header_len);
                         if(!res) {
                             std::cerr << "(res: " << res << ", len: " << len << ")"  << std::endl;
                             goto error;
                         }
+#if 0
                         if(ext_header_len !=  (PCKT_EXT_INFO_LEN + PCKT_HDR_AUDIO_LEN) * sizeof(uint32_t) ) {
                             std::cerr << "(len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
                             goto error;
                         }
+#endif
 
                         len += ext_header_len;
                     }
@@ -480,7 +483,7 @@ static void *receiver_thread(void *arg)
                     ///decoder_reconfigure(video_desc, &pbuf_data);
                     //decoder_get_buffer(&pbuf_data, &buffer, &len);
 
-                    if(audio_len) {
+                    if(!audio_len) {
                         UGReceiver::Reconfigure(uv, video_desc, NULL);
                     } else {
                         UGReceiver::Reconfigure(uv, video_desc, &audio_desc);
@@ -504,6 +507,16 @@ static void *receiver_thread(void *arg)
                         std::cerr << "(len: " << len << ", data_len: " << audio_len + video_len << ")" << std::endl;
                         goto error;
                     }
+
+                    len = audio_len;
+                    assert(len <= buffer_data->maxAudioLen);
+                    res = uv->receive(uv->receive_state, buffer_data->audio.get(), &len);
+                    if(!res) {
+                        std::cerr << "(res: " << res << ")" << std::endl;
+                        goto error;
+                    }
+                    assert(len == audio_len);
+                    buffer_data->audioLen = len;
 
                     if(uv->ext_decoder) {
                         decompress_frame(uv->ext_decoder,
@@ -539,7 +552,7 @@ UGReceiver::UGReceiver(const char *display, Player *player_, bool use_tcp)
 {
     pthread_t receiver_thread_id;
 
-    uv = (struct state_uv *) malloc(sizeof(struct state_uv));
+    uv = (struct state_uv *) calloc(1, sizeof(struct state_uv));
 #ifndef USE_CUSTOM_TRANSMIT
     uv->participants = pdb_init();
     uv->network_devices = initialize_network(strdup("localhost"), 5004, uv->participants);
@@ -729,30 +742,35 @@ bool UGReceiver::ParseHeader(uint32_t *hdr, size_t hdr_len,
 
     bool next_header = tmp & 0x1;
 
+    dump_video_desc(video_desc);
+
     if(next_header) {
         uint32_t *extension_header = hdr + PCKT_HDR_BASE_LEN;
 
         tmp = ntohl(*extension_header);
 
         int type = tmp >> 28;
-        size_t lenght = tmp;
+        //size_t length = tmp;
         bool have_next_header = tmp & 0x1;
         int ext_hdr_len = (tmp >> 12) & 0xffff;
 
         assert(have_next_header == false);
-        assert(type = PCKT_EXT_AUDIO_TYPE);
+        assert(type == PCKT_EXT_AUDIO_TYPE);
 
         if(type == PCKT_EXT_AUDIO_TYPE) {
-            assert(lenght == PCKT_HDR_AUDIO_LEN);
+
+            assert(ext_hdr_len  == PCKT_HDR_AUDIO_LEN * sizeof(uint32_t));
 
             uint32_t *audio_header = extension_header + 1;
 
             *audio_length = ntohl(audio_header[PCKT_EXT_AUDIO_LENGTH]);
-            tmp = ntohl(PCKT_EXT_AUDIO_QUANT_SAMPLE_RATE);
+            tmp = ntohl(audio_header[PCKT_EXT_AUDIO_QUANT_SAMPLE_RATE]);
             audio_desc->bps = (tmp >> 26) / 8;
             audio_desc->sample_rate = tmp & 0x3ffffff;
             // unused audio tag - expecting pcm
-            audio_desc->ch_count = ntohl(PCKT_EXT_AUDIO_CHANNEL_COUNT);
+            audio_desc->ch_count = ntohl(audio_header[PCKT_EXT_AUDIO_CHANNEL_COUNT]);
+
+            dump_audio_desc(audio_desc);
         }
     } else {
         *audio_length = 0;
@@ -814,12 +832,13 @@ void UGReceiver::Reconfigure(struct state_uv *uv, struct video_desc video_desc, 
         uv->savedAudioDesc.sample_rate = audio_desc->sample_rate;
         uv->savedAudioDesc.ch_count = audio_desc->ch_count;
     } else {
-        memset(&uv->savedAudioDesc, 0, sizeof(uv->savedAudioDesc));
+        //memset(&uv->savedAudioDesc, 0, sizeof(uv->savedAudioDesc));
     }
 
     if(videoDiffers || audioDiffers) {
+        cerr << "RECONF";
         uv->player->reconfigure(video_desc.width, video_desc.height, (int) uv->out_codec,
                                 vc_get_linesize(video_desc.width, uv->out_codec) * video_desc.height,
-                                &uv->savedAudioDesc);
+                                audio_desc);
     }
 }
