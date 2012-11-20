@@ -113,6 +113,10 @@ void audio_play_none_done(void *state)
         free(s);
 }
 
+void audio_play_none_reset(void *state)
+{
+}
+
 int audio_play_none_reconfigure(void *state, int quant_samples, int channels,
                                                 int sample_rate)
 {

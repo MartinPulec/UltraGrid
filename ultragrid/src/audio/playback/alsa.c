@@ -303,6 +303,25 @@ struct audio_frame *audio_play_alsa_get_frame(void *state)
         return NULL;
 }
 
+void audio_play_alsa_reset(void *state)
+{
+        struct state_alsa_playback *s = (struct state_alsa_playback *) state;
+
+        int err;
+
+        if ((err = snd_pcm_drop(s->handle)) < 0)
+        {
+                fprintf(stderr, "Alsa reset failed\n");
+                return;
+        }
+        if ((err = snd_pcm_prepare(s->handle)) < 0)
+        {
+                fprintf(stderr, "Alsa prepare failed\n");
+                return;
+        }
+        return;
+}
+
 void audio_play_alsa_put_frame(void *state, struct audio_frame *frame)
 {
         struct state_alsa_playback *s = (struct state_alsa_playback *) state;
@@ -325,7 +344,7 @@ void audio_play_alsa_put_frame(void *state, struct audio_frame *frame)
                         audio_frame_multiply_channel(frame, s->min_device_channels);
                 }
         }
-    
+
         rc = snd_pcm_writei(s->handle, data, frames);
         if (rc == -EPIPE) {
                 /* EPIPE means underrun */

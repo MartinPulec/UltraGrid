@@ -54,11 +54,8 @@ OBJS	      = @OBJS@ \
 		src/rtp/rtp.o \
 		src/rtp/rtp_callback.o \
 		src/audio_source.o \
-		src/audio/audio_playback.o \
 		src/audio/capture/none.o \
 		src/audio/capture/sdi.o \
-		src/audio/playback/none.o \
-		src/audio/playback/sdi.o \
 		src/audio/utils.o \
 		@COREAUDIO_OBJ@ \
 		@JACK_TRANS_OBJ@ \
@@ -284,6 +281,9 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 	     src/client-gui/src/ConnectionClosedException.o \
 	     src/client-gui/src/VideoBufferOnFlyManager.o \
              src/client-gui/src/VideoBuffer.o \
+		src/audio/audio_playback.o \
+		src/audio/playback/none.o \
+		src/audio/playback/sdi.o \
 		#src/rtp/decoders.o \
 		#src/video_display/wxgl.o \
 

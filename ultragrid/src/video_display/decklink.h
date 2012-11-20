@@ -61,6 +61,7 @@ int                  display_decklink_reconfigure(void *state,
 int                  display_decklink_get_property(void *state, int property, void *val, size_t *len);
 
 struct audio_frame * display_decklink_get_audio_frame(void *state);
+void                 display_decklink_audio_reset(void *state);
 void                 display_decklink_put_audio_frame(void *state, struct audio_frame *frame);
 int                  display_decklink_reconfigure_audio(void *state, int quant_samples, int channels,
                 int sample_rate);

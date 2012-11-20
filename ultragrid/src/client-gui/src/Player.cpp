@@ -95,12 +95,8 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
     }
 
     if(audio_playback_does_receive_sdi(this->audio_playback_device)) {
-        sdi_register_get_callback(this->audio_playback_device, (struct audio_frame * (*)(void *)) display_get_audio_frame, this->hw_display);
-        sdi_register_put_callback(this->audio_playback_device, (void (*)(void *, struct audio_frame *)) display_put_audio_frame, this->hw_display);
-        sdi_register_reconfigure_callback(this->audio_playback_device, (int (*)(void *, int, int,
-            int)) display_reconfigure_audio, this->hw_display);
+        sdi_register_display(this->audio_playback_device, this->hw_display);
     }
-
 
     view->setHWDisplay(this->hw_display);
     view->SetGLDisplay(!DisableGLPreview);
@@ -449,6 +445,7 @@ void Player::ScheduleOneFrame()
 void Player::SchedulePlay()
 {
     scheduledPlayone = false;
+    audio_playback_reset(this->audio_playback_device);
     wxTimer::Start(1, wxTIMER_ONE_SHOT);
 }
 

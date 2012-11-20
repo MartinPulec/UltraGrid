@@ -1050,6 +1050,11 @@ void display_decklink_put_audio_frame(void *state, struct audio_frame *frame)
 
 }
 
+void display_decklink_audio_reset(void *state)
+{
+        UNUSED(state);
+}
+
 int display_decklink_reconfigure_audio(void *state, int quant_samples, int channels,
                 int sample_rate) {
         struct state_decklink *s = (struct state_decklink *)state;

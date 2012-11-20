@@ -103,6 +103,8 @@ typedef struct {
         int                     (*func_reconfigure_audio) (void *state, int quant_samples, int channels,
                         int sample_rate);
         const char               *func_reconfigure_audio_str;
+        void                    (*func_audio_reset) (void *state);
+        const char               *func_audio_reset_str;
 
         void                     *handle;
 } display_table_t;
@@ -124,6 +126,7 @@ static display_table_t display_device_table[] = {
          MK_NAME(display_sdl_get_audio_frame),
          MK_NAME(display_sdl_put_audio_frame),
          MK_NAME(display_sdl_reconfigure_audio),
+         MK_NAME(NULL),
          NULL
          },
 #endif                          /* HAVE_SDL */
@@ -143,6 +146,7 @@ static display_table_t display_device_table[] = {
          MK_NAME(display_gl_get_audio_frame),
          MK_NAME(display_gl_put_audio_frame),
          MK_NAME(display_gl_reconfigure_audio),
+         MK_NAME(NULL),
          NULL
          },
 #endif                          /* HAVE_GL */
@@ -162,6 +166,7 @@ static display_table_t display_device_table[] = {
          MK_NAME(display_sage_get_audio_frame),
          MK_NAME(display_sage_put_audio_frame),
          MK_NAME(display_sage_reconfigure_audio),
+         MK_NAME(NULL),
          NULL
          },
 #endif                          /* HAVE_SAGE */
@@ -181,6 +186,7 @@ static display_table_t display_device_table[] = {
          MK_NAME(display_decklink_get_audio_frame),
          MK_NAME(display_decklink_put_audio_frame),
          MK_NAME(display_decklink_reconfigure_audio),
+         MK_NAME(display_decklink_audio_reset),
          NULL
          },
 #endif                          /* HAVE_DECKLINK */
@@ -200,6 +206,7 @@ static display_table_t display_device_table[] = {
          MK_NAME(display_deltacast_get_audio_frame),
          MK_NAME(display_deltacast_put_audio_frame),
          MK_NAME(display_deltacast_reconfigure_audio),
+         MK_NAME(NULL),
          NULL
          },
 #endif                          /* HAVE_DELTACAST */
@@ -219,6 +226,7 @@ static display_table_t display_device_table[] = {
          MK_NAME(display_dvs_get_audio_frame),
          MK_NAME(display_dvs_put_audio_frame),
          MK_NAME(display_dvs_reconfigure_audio),
+         MK_NAME(NULL),
          NULL
          },
 #endif                          /* HAVE_DVS */
@@ -238,6 +246,7 @@ static display_table_t display_device_table[] = {
          MK_NAME(display_quicktime_get_audio_frame),
          MK_NAME(display_quicktime_put_audio_frame),
          MK_NAME(display_quicktime_reconfigure_audio),
+         MK_NAME(display_quicktime_audio_reset),
          NULL
          },
 #endif                          /* HAVE_MACOSX */
@@ -275,6 +284,7 @@ static display_table_t display_device_table[] = {
          MK_STATIC(display_null_get_audio_frame),
          MK_STATIC(display_null_put_audio_frame),
          MK_STATIC(display_null_reconfigure_audio),
+         MK_STATIC(display_null_audio_reset),
          NULL
          }
 };
@@ -544,6 +554,12 @@ void display_put_audio_frame(struct display *d, struct audio_frame *frame)
 {
         assert(d->magic == DISPLAY_MAGIC);
         display_device_table[d->index].func_put_audio_frame(d->state, frame);
+}
+
+void display_audio_reset(struct display *d)
+{
+        assert(d->magic == DISPLAY_MAGIC);
+        display_device_table[d->index].func_audio_reset(d->state);
 }
 
 int display_reconfigure_audio(struct display *d, int quant_samples, int channels, int sample_rate)

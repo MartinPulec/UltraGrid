@@ -148,6 +148,11 @@ void display_null_put_audio_frame(void *state, struct audio_frame *frame)
         UNUSED(frame);
 }
 
+void display_null_audio_reset(void *state)
+{
+        UNUSED(state);
+}
+
 int display_null_reconfigure_audio(void *state, int quant_samples, int channels,
                 int sample_rate)
 {

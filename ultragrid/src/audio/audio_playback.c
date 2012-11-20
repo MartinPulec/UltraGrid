@@ -83,13 +83,13 @@ typedef void * (*audio_init_t)(char *cfg);
 typedef struct audio_frame* (*audio_get_frame_t)(void *state);
 typedef void (*audio_put_frame_t)(void *state, struct audio_frame *frame);
 typedef void (*audio_finish_t)(void *state);
-typedef void (*audio_done_t)(void *state);
 /*
  * Returns TRUE if succeeded, FALSE otherwise
  */
 typedef int (*audio_reconfigure_t)(void *state, int quant_samples, int channels,
                 int sample_rate);
 typedef void (*audio_playback_done_t)(void *s);
+typedef void (*audio_playback_reset_t)(void *s);
 typedef struct audio_playback_type * (*audio_playback_probe_t)(void);
 
 struct audio_playback_t {
@@ -104,6 +104,8 @@ struct audio_playback_t {
         const char              *audio_put_frame_str;
         audio_playback_done_t    audio_playback_done;
         const char              *audio_playback_done_str;
+        audio_playback_reset_t    audio_playback_reset;
+        const char              *audio_playback_reset_str;
         audio_reconfigure_t      audio_reconfigure;
         const char              *audio_reconfigure_str;
         audio_playback_probe_t   audio_probe;
@@ -119,6 +121,7 @@ static struct audio_playback_t audio_playback_table[] = {
                MK_STATIC(sdi_get_frame),
                MK_STATIC(sdi_put_frame),
                MK_STATIC(sdi_playback_done),
+               MK_STATIC(sdi_playback_reset),
                MK_STATIC(sdi_reconfigure),
                MK_STATIC(sdi_probe),
                NULL
@@ -130,6 +133,7 @@ static struct audio_playback_t audio_playback_table[] = {
                 MK_NAME(audio_play_alsa_get_frame),
                 MK_NAME(audio_play_alsa_put_frame),
                 MK_NAME(audio_play_alsa_done),
+                MK_NAME(audio_play_alsa_reset),
                 MK_NAME(audio_play_alsa_reconfigure),
                 MK_NAME(audio_play_alsa_probe),
                 NULL
@@ -170,6 +174,7 @@ static struct audio_playback_t audio_playback_table[] = {
                 MK_STATIC(audio_play_none_get_frame),
                 MK_STATIC(audio_play_none_put_frame),
                 MK_STATIC(audio_play_none_done),
+                MK_STATIC(audio_play_none_reset),
                 MK_STATIC(audio_play_none_reconfigure),
                 MK_STATIC(audio_play_none_probe),
                 NULL
@@ -326,6 +331,13 @@ void audio_playback_done(struct state_audio_playback *s)
         if(s) {
                 available_audio_playback[s->index]->audio_playback_done(s->state);
                 free(s);
+        }
+}
+
+void audio_playback_reset(struct state_audio_playback *s)
+{
+        if(s) {
+                available_audio_playback[s->index]->audio_playback_reset(s->state);
         }
 }
 

@@ -72,14 +72,9 @@ struct audio_frame             *audio_playback_get_frame(struct state_audio_play
 void                            audio_playback_put_frame(struct state_audio_playback *state, struct audio_frame *frame);
 void                            audio_playback_finish(struct state_audio_playback *state);
 void                            audio_playback_done(struct state_audio_playback *state);
+void                            audio_playback_reset(struct state_audio_playback *state);
 
 int                             audio_playback_does_receive_sdi(struct state_audio_playback *s);
-void audio_register_put_callback(struct state_audio *s, void (*callback)(void *, struct audio_frame *),
-                void *udata);
-void audio_register_get_callback(struct state_audio *s, struct audio_frame * (*callback)(void *),
-                void *udata);
-void audio_register_reconfigure_callback(struct state_audio *s, int (*callback)(void *, int, int, int),
-                void *udata);
 
 /**
  * @returns directly state of audio capture device. Little bit silly, but it is needed for
