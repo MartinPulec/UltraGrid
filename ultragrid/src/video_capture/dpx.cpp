@@ -666,7 +666,7 @@ static void * processing_thread(void *args)
                         dst = vf_alloc_desc_data(s->video_prop);
                         dst->frames = src->frames;
 
-                        s->lut_func((int *)s->lut, src->tiles[0].data,
+                        s->lut_func((int *)s->lut, dst->tiles[0].data,
                                         src->tiles[0].data, src->tiles[0].data_len);
                         vf_free_data(src);
                 } else {
