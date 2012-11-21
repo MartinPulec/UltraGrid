@@ -65,7 +65,6 @@
 #include "compat/platform_semaphore.h"
 #include "debug.h"
 #include "gl_context.h"
-#include "ihdtv/ihdtv.h"
 #include "pdb.h"
 #include "perf.h"
 #include "rtp/rtp.h"
@@ -113,11 +112,11 @@ struct state_uv {
 #else
         void  *transmit_state;
         void * (*transmit_init)(char *address, unsigned int *port);
-        void * (*transmit_accept)(void *state);
-        void * (*transmit_done)(void *state);
+        void (*transmit_accept)(void *state);
+        void (*transmit_done)(void *state);
         void (*transmit_send)(void *state, struct video_frame *frame, struct audio_frame *);
 #endif
-        int port_number;
+        unsigned int port_number;
         unsigned int connections_count;
 
         struct vidcap *capture_device;
@@ -130,8 +129,6 @@ struct state_uv {
         int requested_compression;
         const char *requested_capture;
         unsigned requested_mtu;
-
-        int use_ihdtv_protocol;
 
         volatile unsigned int sender_thread_ready:1;
         volatile unsigned int accepted:1;
@@ -201,8 +198,6 @@ static void usage(void)
         printf("\n");
         printf("\t-c <cfg>                 \tcompress video (see '-c help')\n");
         printf("\n");
-        printf("\t-i                       \tiHDTV compatibility mode\n");
-        printf("\n");
         printf("\t-r <playback_device>     \tAudio playback device (see '-r help')\n");
         printf("\n");
         printf("\t-s <capture_device>      \tAudio capture device (see '-s help')\n");
@@ -267,6 +262,7 @@ struct vidcap *initialize_video_capture(const char *requested_capture,
         return vidcap_init(id, fmt, flags);
 }
 
+#if ! defined USE_CUSTOM_TRANSMIT
 static struct rtp **initialize_network(char *addrs, int port_base, struct pdb *participants)
 {
 	struct rtp **devices = NULL;
@@ -348,38 +344,7 @@ static struct tx *initialize_transmit(unsigned requested_mtu, char *fec)
         /* have multiple codecs and/or error correction.             */
         return tx_init(requested_mtu, fec);
 }
-
-static void *ihdtv_reciever_thread(void *arg)
-{
-        ihdtv_connection *connection = (ihdtv_connection *) ((void **)arg)[0];
-}
-
-static void *ihdtv_sender_thread(void *arg)
-{
-        ihdtv_connection *connection = (ihdtv_connection *) ((void **)arg)[0];
-        struct vidcap *capture_device = (struct vidcap *)((void **)arg)[1];
-        struct video_frame *tx_frame;
-        struct audio_frame *audio;
-
-        while (!should_exit) {
-                if ((tx_frame = vidcap_grab(capture_device, &audio)) != NULL) {
-                        ihdtv_send(connection, tx_frame, 9000000);      // FIXME: fix the use of frame size!!
-                        free(tx_frame);
-                } else {
-                        fprintf(stderr,
-                                "Error recieving frame from capture device\n");
-                        return 0;
-                }
-        }
-
-        return 0;
-}
-
-static void *receiver_thread(void *arg)
-{
-        return 0;
-}
-
+#endif
 
 static void *sender_thread(void *arg)
 {
@@ -515,7 +480,7 @@ static void *sender_thread(void *arg)
         vf_free(splitted_frames);
 
         compress_done(compression);
-        watermark_done(compression);
+        watermark_done(watermark);
         destroy_gl_context(&context);
 
         return NULL;
@@ -537,7 +502,9 @@ int main(int argc, char *argv[])
 
         char *capture_cfg = NULL;
         char *jack_cfg = NULL;
+        UNUSED(jack_cfg);
         char *requested_fec = NULL;
+        UNUSED(requested_fec);
         char *save_ptr = NULL;
         sigset_t mask;
         char *audio_source = NULL;
@@ -545,7 +512,7 @@ int main(int argc, char *argv[])
         struct state_uv *uv;
         int ch;
 
-        pthread_t receiver_thread_id, sender_thread_id;
+        pthread_t sender_thread_id;
         unsigned vidcap_flags = 0;
 
         static struct option getopt_options[] = {
@@ -555,7 +522,6 @@ int main(int argc, char *argv[])
                 {"mode", required_argument, 0, 'M'},
                 {"version", no_argument, 0, 'v'},
                 {"compress", required_argument, 0, 'c'},
-                {"ihdtv", no_argument, 0, 'i'},
                 {"receive", required_argument, 0, 'r'},
                 {"send", required_argument, 0, 's'},
                 {"help", no_argument, 0, 'h'},
@@ -579,7 +545,6 @@ int main(int argc, char *argv[])
         uv->compress_options = "none";
         uv->postprocess = NULL;
         uv->requested_mtu = 0;
-        uv->use_ihdtv_protocol = 0;
 #ifdef USE_CUSTOM_TRANSMIT
         uv->transmit_init = udt_transmit_init;
         uv->transmit_accept = udt_transmit_accept;
@@ -631,10 +596,6 @@ int main(int argc, char *argv[])
                         uv->requested_compression = TRUE;
                         uv->compress_options = optarg;
                         break;
-                case 'i':
-                        uv->use_ihdtv_protocol = 1;
-                        printf("setting ihdtv protocol\n");
-                        break;
                 case 'j':
                         jack_cfg = optarg;
                         break;
@@ -652,10 +613,13 @@ int main(int argc, char *argv[])
                         break;
 #ifdef USE_CUSTOM_TRANSMIT
                 case 'T':
+                        abort();
+#if 0
                         uv->transmit_init = tcp_transmit_init;
                         uv->transmit_accept = tcp_transmit_accept;
                         uv->transmit_done = tcp_transmit_done;
                         uv->transmit_send = tcp_send;
+#endif
                         break;
 #endif
                 case '?':
@@ -677,17 +641,10 @@ int main(int argc, char *argv[])
         sigaddset(&mask, SIGABRT);
         pthread_sigmask(SIG_BLOCK, &mask, NULL);
 
-        if (uv->use_ihdtv_protocol) {
-                if ((argc != 0) && (argc != 1) && (argc != 2)) {
-                        usage();
-                        return EXIT_FAIL_USAGE;
-                }
+        if (argc == 0) {
+                network_device = strdup("localhost");
         } else {
-                if (argc == 0) {
-                        network_device = strdup("localhost");
-                } else {
-                        network_device = (char *) argv[0];
-                }
+                network_device = (char *) argv[0];
         }
 
         uv->audio_source = audio_source_init(audio_source);
@@ -708,10 +665,7 @@ int main(int argc, char *argv[])
         }
         printf("\n");*/
 
-        if (uv->use_ihdtv_protocol)
-                printf("Network protocol: ihdtv\n");
-        else
-                printf("Network protocol: ultragrid rtp\n");
+        printf("Network protocol: ultragrid rtp\n");
 
         gettimeofday(&uv->start_time, NULL);
 
@@ -736,59 +690,56 @@ int main(int argc, char *argv[])
 #endif /* HAVE_SCHED_SETSCHEDULER */
 #endif /* USE_RT */
 
-        if (uv->use_ihdtv_protocol) {
-        } else {
-                if (uv->requested_mtu == 0)     // mtu wasn't specified on the command line
-                {
-                        uv->requested_mtu = 1500;       // the default value for rpt
-                }
+        if (uv->requested_mtu == 0)     // mtu wasn't specified on the command line
+        {
+                uv->requested_mtu = 1500;       // the default value for rpt
+        }
 
 #ifndef USE_CUSTOM_TRANSMIT
-                if ((uv->network_devices =
-                     initialize_network(network_device, uv->port_number, uv->participants)) == NULL) {
-                        printf("Unable to open network\n");
-                        exit_status = EXIT_FAIL_NETWORK;
-                        goto cleanup;
-                } else {
-                        struct rtp **item;
-                        uv->connections_count = 0;
-                        /* only count how many connections has initialize_network opened */
-                        for(item = uv->network_devices; *item != NULL; ++item)
-                                ++uv->connections_count;
-                }
-                uv->participants = pdb_init();
+        if ((uv->network_devices =
+                                initialize_network(network_device, uv->port_number, uv->participants)) == NULL) {
+                printf("Unable to open network\n");
+                exit_status = EXIT_FAIL_NETWORK;
+                goto cleanup;
+        } else {
+                struct rtp **item;
+                uv->connections_count = 0;
+                /* only count how many connections has initialize_network opened */
+                for(item = uv->network_devices; *item != NULL; ++item)
+                        ++uv->connections_count;
+        }
+        uv->participants = pdb_init();
 
-                if ((uv->tx = initialize_transmit(uv->requested_mtu, requested_fec)) == NULL) {
-                        printf("Unable to initialize transmitter\n");
-                        exit_status = EXIT_FAIL_TRANSMIT;
-                        goto cleanup;
-                }
+        if ((uv->tx = initialize_transmit(uv->requested_mtu, requested_fec)) == NULL) {
+                printf("Unable to initialize transmitter\n");
+                exit_status = EXIT_FAIL_TRANSMIT;
+                goto cleanup;
+        }
 #else
-                uv->connections_count = 1;
-                uv->transmit_state = uv->transmit_init(network_device, &uv->port_number);
-                if(!uv->transmit_state) {
-                        exit_status = EXIT_FAILURE;
-                        fprintf(stderr, "Unable to connect to peer.\n");
-                        goto cleanup;
-                }
+        uv->connections_count = 1;
+        uv->transmit_state = uv->transmit_init(network_device, &uv->port_number);
+        if(!uv->transmit_state) {
+                exit_status = EXIT_FAILURE;
+                fprintf(stderr, "Unable to connect to peer.\n");
+                goto cleanup;
+        }
 #endif
 
-                /* following block only shows help (otherwise initialized in sender thread */
-                if(uv->requested_compression && strstr(uv->compress_options,"help") != NULL) {
-                        struct compress_state *compression = compress_init(uv->compress_options, NULL);
-                        compress_done(compression);
-                        exit_status = EXIT_SUCCESS;
-                        goto cleanup;
-                }
+        /* following block only shows help (otherwise initialized in sender thread */
+        if(uv->requested_compression && strstr(uv->compress_options,"help") != NULL) {
+                struct compress_state *compression = compress_init(uv->compress_options, NULL);
+                compress_done(compression);
+                exit_status = EXIT_SUCCESS;
+                goto cleanup;
+        }
 
-                if (strcmp("none", uv->requested_capture) != 0) {
-                        if (pthread_create
-                            (&sender_thread_id, NULL, sender_thread,
-                             (void *)uv) != 0) {
-                                perror("Unable to create capture thread!\n");
-                                exit_status = 1;
-                                goto cleanup;
-                        }
+        if (strcmp("none", uv->requested_capture) != 0) {
+                if (pthread_create
+                                (&sender_thread_id, NULL, sender_thread,
+                                 (void *)uv) != 0) {
+                        perror("Unable to create capture thread!\n");
+                        exit_status = 1;
+                        goto cleanup;
                 }
         }
 
@@ -815,7 +766,7 @@ int main(int argc, char *argv[])
                 ret = write(uv->comm_fd, (void *) &len, sizeof(int));
                 assert(ret > 0);
                 total += ret;
-        } while (total < sizeof(int));
+        } while (total < (int) sizeof(int));
 
         total = 0;
         do {
