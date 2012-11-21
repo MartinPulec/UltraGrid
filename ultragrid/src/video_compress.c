@@ -66,8 +66,10 @@ struct compress_t {
 
         compress_init_t     init;
         const char        * init_str;
-        compress_compress_t compress;
-        const char         *compress_str;
+        compress_push_t     push;
+        const char         *push_str;
+        compress_pop_t      pop;
+        const char         *pop_str;
         compress_done_t     done;
         const char         *done_str;
 
@@ -83,13 +85,24 @@ void init_compressions(void);
 
 
 struct compress_t compress_modules[] = {
+#if 0
 #if defined HAVE_DXT_GLSL || defined BUILD_LIBRARIES
-        {"RTDXT", "rtdxt", MK_NAME(dxt_glsl_compress_init), MK_NAME(dxt_glsl_compress), MK_NAME(dxt_glsl_compress_done), NULL},
+        {"RTDXT", "rtdxt", MK_NAME(dxt_glsl_compress_init),
+                MK_NAME(dxt_glsl_push),
+                MK_NAME(dxt_glsl_pop),
+                MK_NAME(dxt_glsl_compress_done), NULL},
+#endif
 #endif
 #if defined HAVE_JPEG || defined  BUILD_LIBRARIES
-        {"JPEG", "jpeg", MK_NAME(jpeg_compress_init), MK_NAME(jpeg_compress), MK_NAME(jpeg_compress_done), NULL},
+        {"JPEG", "jpeg", MK_NAME(jpeg_compress_init),
+                MK_NAME(jpeg_push),
+                MK_NAME(jpeg_pop),
+                MK_NAME(jpeg_compress_done), NULL},
 #endif
-        {"NONE", NULL, MK_STATIC(none_compress_init), MK_STATIC(none_compress), MK_STATIC(none_compress_done), NULL},
+        {"NONE", NULL, MK_STATIC(none_compress_init),
+                MK_STATIC(none_push),
+                MK_STATIC(none_pop),
+                MK_STATIC(none_compress_done), NULL},
 };
 
 #define MAX_COMPRESS_MODULES (sizeof(compress_modules)/sizeof(struct compress_t))
@@ -214,10 +227,15 @@ const char *get_compress_name(struct compress_state *s)
                 return NULL;
 }
 
-struct video_frame *compress_frame(struct compress_state *s, struct video_frame *frame)
+void compress_frame_push(struct compress_state *s, struct video_frame *frame)
+{
+        s->handle->push(s->state, frame);
+}
+
+struct video_frame *compress_frame_pop(struct compress_state *s)
 {
         if(s)
-                return s->handle->compress(s->state, frame);
+                return s->handle->pop(s->state);
         else
                 return NULL;
 }

@@ -130,12 +130,14 @@ struct state_uv {
         const char *requested_capture;
         unsigned requested_mtu;
 
-        volatile unsigned int sender_thread_ready:1;
+        volatile unsigned int grab_thread_ready:1;
         volatile unsigned int accepted:1;
 
         struct audio_source *audio_source;
 
         int comm_fd;
+
+        struct compress_state *compression;
 };
 
 long packet_rate = 13600;
@@ -157,6 +159,7 @@ static struct state_uv *uv_state;
 void list_video_capture_devices(void);
 struct vidcap *initialize_video_capture(const char *requested_capture,
                                                char *fmt, unsigned int flags);
+static void *sender_thread(void *arg);
 
 #ifndef WIN32
 static void signal_handler(int signal)
@@ -348,26 +351,44 @@ static struct tx *initialize_transmit(unsigned requested_mtu, char *fec)
 
 static void *sender_thread(void *arg)
 {
-        struct gl_context context;
+        struct state_uv *uv = (struct state_uv *) arg;
+        struct video_frame *tx_frame;
+
+        while(1) {
+                tx_frame = compress_frame_pop(uv->compression);
+
+                if(!tx_frame) {
+                        break;
+                }
+
+#ifdef USE_CUSTOM_TRANSMIT
+                struct audio_frame *audio = audio_source_read(uv->audio_source, tx_frame->frames);
+                uv->transmit_send(uv->transmit_state, tx_frame, audio);
+#else
+                tx_send(uv->tx, tx_frame,
+                                uv->network_devices[0]);
+
+                vf_free_data(tx_frame);
+#endif
+        }
+
+        return NULL;
+}
+
+static void *grab_thread(void *arg)
+{
+        pthread_t sender_thread_id;
+
         struct state_uv *uv = (struct state_uv *)arg;
 
-        struct video_frame *tx_frame, *splitted_frames = NULL;
+        struct video_frame *tx_frame;
         struct audio_frame *audio;
-        //struct video_frame *splitted_frames = NULL;
-        int tile_y_count;
 
-#ifdef DUMP
-        char path[20];
-        snprintf(path, 20, "dump.%d", (int) getpid());
-        mkdir(path, 0755);
-#endif
-
-
+#if 0
         struct state_color_transform *color_transform = NULL;
 
         struct state_watermark *watermark;
 
-#if 0
         init_gl_context(&context);
         color_transform = color_transform_init(&context);
         watermark = watermark_init(&context);
@@ -378,112 +399,59 @@ static void *sender_thread(void *arg)
         }
 #endif
 
-        struct compress_state *compression;
-
-        compression = compress_init(uv->compress_options);
+        uv->compression = compress_init(uv->compress_options);
         if(uv->requested_compression
-                        && compression == NULL) {
+                        && uv->compression == NULL) {
                 fprintf(stderr, "Error initializing compression.\n");
                 exit_uv(0);
         }
 
-        tile_y_count = uv->connections_count;
-
-        /* we have more than one connection */
-        if(tile_y_count > 1) {
-                /* it is simply stripping frame */
-                splitted_frames = vf_alloc(tile_y_count);
+        // must be called after compression initialized
+        if (pthread_create
+            (&sender_thread_id, NULL, sender_thread,
+             (void *)uv) != 0) {
+                perror("Unable to create sender thread!\n");
+                exit_uv(EXIT_FAILURE);
+                return NULL;
         }
 
-        uv->sender_thread_ready = TRUE;
+        uv->grab_thread_ready = TRUE;
         while(!uv->accepted && !should_exit)
             ;
 
         while (!should_exit) {
                 /* Capture and transmit video... */
                 tx_frame = vidcap_grab(uv->capture_device, &audio);
-                struct video_frame *grabbed_frame = tx_frame;
                 if (tx_frame != NULL) {
-                        struct video_frame *after_transform, *with_watermark;
-
 #if 0
+                        struct video_frame *after_transform, *with_watermark;
                         after_transform = color_transform_transform(color_transform, tx_frame);
                         with_watermark = add_watermark(watermark, after_transform);
 #endif
                         //TODO: Unghetto this
                         if (uv->requested_compression) {
-                                tx_frame = compress_frame(compression, tx_frame);
+                                compress_frame_push(uv->compression, tx_frame);
                         } else {
                                 fprintf(stderr, "Compression needed!\n");
                                 abort();
                         }
-
-                        if(!tx_frame)
-                                continue;
-                        if(uv->connections_count == 1) { /* normal case - only one connection */
-#ifdef USE_CUSTOM_TRANSMIT
-                                struct audio_frame *audio = audio_source_read(uv->audio_source, tx_frame->frames);
-                                uv->transmit_send(uv->transmit_state, tx_frame, audio);
-#else
-                                tx_send(uv->tx, tx_frame,
-                                                uv->network_devices[0]);
-#endif
-#ifdef DUMP
-                                char filename[128];
-                                assert (tx_frame->tile_count == 1);
-
-                                snprintf(filename, 128, "%s/%06d.dump", path, tx_frame->frames);
-                                int fd = creat(filename, 0644);
-                                assert(fd != -1);
-                                ssize_t total = 0, ret;
-
-                                do {
-                                        ret = write(fd, (const char *) tx_frame + total, sizeof(struct video_frame) - total);
-                                        assert(ret > 0);
-                                        total += ret;
-                                } while(total < sizeof(struct video_frame));
-
-                                total = 0;
-                                do {
-                                        ret = write(fd, (const char *) tx_frame->tiles + total, sizeof(struct tile) - total);
-                                        assert(ret > 0);
-                                        total += ret;
-                                } while(total < sizeof(struct tile));
-
-                                total = 0;
-                                do {
-                                        ret = write(fd, tx_frame->tiles[0].data + total, tx_frame->tiles[0].data_len - total);
-                                        assert(ret > 0);
-                                        total += ret;
-
-                                } while(total < tx_frame->tiles[0].data_len);
-                                close(fd);
-#endif /* DUMP */
-                        } else { /* split */
-                                int i;
-
-                                //assert(frame_count == 1);
-                                vf_split_horizontal(splitted_frames, tx_frame,
-                                               tile_y_count);
-                                for (i = 0; i < tile_y_count; ++i) {
-#ifndef USE_CUSTOM_TRANSMIT
-                                        tx_send_tile(uv->tx, splitted_frames, i,
-                                                        uv->network_devices[i], tx_frame->frames);
-#endif
-                                }
-                        }
-                        vf_free_data(grabbed_frame);
                 }
         }
+
+        // poisoned frame
+        compress_frame_push(uv->compression, NULL);
+
+        pthread_join(sender_thread_id, NULL);
 
 #ifdef USE_CUSTOM_TRANSMIT
         uv->transmit_done(uv->transmit_state);
 #endif
-        vf_free(splitted_frames);
 
-        compress_done(compression);
+        compress_done(uv->compression);
+#if 0
         watermark_done(watermark);
         destroy_gl_context(&context);
+#endif
 
         return NULL;
 }
@@ -514,7 +482,7 @@ int main(int argc, char *argv[])
         struct state_uv *uv;
         int ch;
 
-        pthread_t sender_thread_id;
+        pthread_t grab_thread_id;
         unsigned vidcap_flags = 0;
 
         static struct option getopt_options[] = {
@@ -559,7 +527,7 @@ int main(int argc, char *argv[])
 #endif
         uv->port_number = PORT_BASE;
 	uv->comm_fd = 0;
-        uv->sender_thread_ready = FALSE;
+        uv->grab_thread_ready = FALSE;
         uv->accepted = FALSE;
 
         perf_init();
@@ -737,7 +705,7 @@ int main(int argc, char *argv[])
 
         if (strcmp("none", uv->requested_capture) != 0) {
                 if (pthread_create
-                                (&sender_thread_id, NULL, sender_thread,
+                                (&grab_thread_id, NULL, grab_thread,
                                  (void *)uv) != 0) {
                         perror("Unable to create capture thread!\n");
                         exit_status = 1;
@@ -757,7 +725,7 @@ int main(int argc, char *argv[])
         ssize_t ret;
         ssize_t total = 0;
 
-        while(!uv->sender_thread_ready && !should_exit)
+        while(!uv->grab_thread_ready && !should_exit)
                 ;
 
         char buff[1000];
@@ -836,7 +804,7 @@ int main(int argc, char *argv[])
         }
 
         if (strcmp("none", uv->requested_capture) != 0 || uv->requested_compression)
-                pthread_join(sender_thread_id, NULL);
+                pthread_join(grab_thread_id, NULL);
 
         /* also wait for audio threads */
 

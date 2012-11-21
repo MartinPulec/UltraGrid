@@ -52,6 +52,8 @@
 
 #include "none.h"
 
+#include <pthread.h>
+#include <queue>
 #include <stdlib.h>
 
 #include "debug.h"
@@ -62,9 +64,13 @@
 
 #define MAGIC 0x45bb3321
 
+using namespace std;
 
 struct none_video_compress {
         uint32_t magic;
+        pthread_mutex_t lock;
+        pthread_cond_t cv;
+        queue<struct video_frame *> dummy_queue;
 };
 
 void * none_compress_init(char * opts)
@@ -73,19 +79,42 @@ void * none_compress_init(char * opts)
 
         struct none_video_compress *s;
         
-        s = (struct none_video_compress *) malloc(sizeof(struct none_video_compress));
+        s = new none_video_compress;
         s->magic = MAGIC;
+        pthread_mutex_init(&s->lock, NULL);
+        pthread_cond_init(&s->cv, NULL);
 
         return s;
 }
 
-struct video_frame * none_compress(void *arg, struct video_frame * tx)
+void none_push(void *arg, struct video_frame * tx)
 {
         struct none_video_compress *s = (struct none_video_compress *) arg;
 
         assert(s->magic == MAGIC);
 
-        return tx;
+        pthread_mutex_lock(&s->lock);
+        s->dummy_queue.push(tx);
+        pthread_cond_signal(&s->cv);
+        pthread_mutex_unlock(&s->lock);
+}
+
+struct video_frame * none_pop(void *arg)
+{
+        struct none_video_compress *s = (struct none_video_compress *) arg;
+        struct video_frame *res;
+
+        assert(s->magic == MAGIC);
+
+        pthread_mutex_lock(&s->lock);
+        while(s->dummy_queue.empty()) {
+                pthread_cond_wait(&s->cv, &s->lock);
+        }
+        res = s->dummy_queue.front();
+        s->dummy_queue.pop();
+        pthread_mutex_unlock(&s->lock);
+
+        return res;
 }
 
 void none_compress_done(void *arg)
@@ -94,6 +123,8 @@ void none_compress_done(void *arg)
 
         assert(s->magic == MAGIC);
 
-        free(arg);
+        pthread_cond_destroy(&s->cv);
+        pthread_mutex_destroy(&s->lock);
+        delete s;
 }
 
