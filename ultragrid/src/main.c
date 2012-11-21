@@ -367,20 +367,20 @@ static void *sender_thread(void *arg)
 
         struct state_watermark *watermark;
 
+#if 0
         init_gl_context(&context);
-
         color_transform = color_transform_init(&context);
         watermark = watermark_init(&context);
-
-        struct compress_state *compression;
-
 
         if(context.context == NULL) {
                 fprintf(stderr, "Error initializing GL context.\n");
                 abort();
         }
+#endif
 
-        compression = compress_init(uv->compress_options, &context);
+        struct compress_state *compression;
+
+        compression = compress_init(uv->compress_options);
         if(uv->requested_compression
                         && compression == NULL) {
                 fprintf(stderr, "Error initializing compression.\n");
@@ -406,11 +406,13 @@ static void *sender_thread(void *arg)
                 if (tx_frame != NULL) {
                         struct video_frame *after_transform, *with_watermark;
 
+#if 0
                         after_transform = color_transform_transform(color_transform, tx_frame);
                         with_watermark = add_watermark(watermark, after_transform);
+#endif
                         //TODO: Unghetto this
                         if (uv->requested_compression) {
-                                tx_frame = compress_frame(compression, with_watermark);
+                                tx_frame = compress_frame(compression, tx_frame);
                         } else {
                                 fprintf(stderr, "Compression needed!\n");
                                 abort();
@@ -727,7 +729,7 @@ int main(int argc, char *argv[])
 
         /* following block only shows help (otherwise initialized in sender thread */
         if(uv->requested_compression && strstr(uv->compress_options,"help") != NULL) {
-                struct compress_state *compression = compress_init(uv->compress_options, NULL);
+                struct compress_state *compression = compress_init(uv->compress_options);
                 compress_done(compression);
                 exit_status = EXIT_SUCCESS;
                 goto cleanup;

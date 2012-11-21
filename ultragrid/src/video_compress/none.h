@@ -49,6 +49,6 @@
 
 struct gl_context;
 
-void * none_compress_init(char * opts, struct gl_context *context);
+void * none_compress_init(char * opts);
 struct video_frame * none_compress(void *args, struct video_frame * tx);
 void none_compress_done(void *args);

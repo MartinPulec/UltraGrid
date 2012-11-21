@@ -160,7 +160,7 @@ void show_compress_help()
         }
 }
 
-struct compress_state *compress_init(char *config_string, struct gl_context *context)
+struct compress_state *compress_init(char *config_string)
 {
         struct compress_state *s;
         char *compress_options = NULL;
@@ -194,7 +194,7 @@ struct compress_state *compress_init(char *config_string, struct gl_context *con
                 return NULL;
         }
         if(s->handle->init) {
-                s->state = s->handle->init(compress_options, context);
+                s->state = s->handle->init(compress_options);
                 if(!s->state) {
                         fprintf(stderr, "Compression initialization failed: %s\n", config_string);
                         free(s);

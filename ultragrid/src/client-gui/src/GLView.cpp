@@ -588,6 +588,12 @@ void GLView::Reconf(wxCommandEvent& event)
                         width, height, 0,
                         GL_RGB, GL_UNSIGNED_BYTE,
                             NULL);
+    } else if (codec == DPX10) {
+        glBindTexture(GL_TEXTURE_2D,texture_display);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB10_A2,
+                     width, height, 0,
+                     GL_RGBA, GL_UNSIGNED_INT_10_10_10_2,
+                     NULL);
     } else if (codec == DXT5) {
         glUseProgram(PHandle_dxt5);
 
@@ -833,6 +839,12 @@ void GLView::Render(bool toHW)
                             (width + 3) / 4 * 4, dxt_height,
                             GL_COMPRESSED_RGBA_S3TC_DXT5_EXT,
                             (width + 3) / 4 * 4 * dxt_height,
+                            data);
+            break;
+        case DPX10:
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                            width, height,
+                            GL_RGBA, GL_UNSIGNED_INT_10_10_10_2,
                             data);
             break;
         default:

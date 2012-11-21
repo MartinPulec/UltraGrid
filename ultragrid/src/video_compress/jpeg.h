@@ -49,6 +49,6 @@
 
 struct gl_context;
 
-void * jpeg_compress_init(char * opts, struct gl_context *);
+void * jpeg_compress_init(char * opts);
 struct video_frame * jpeg_compress(void *args, struct video_frame * tx);
 void jpeg_compress_done(void *args);

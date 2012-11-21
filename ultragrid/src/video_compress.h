@@ -58,7 +58,7 @@ struct compress_state;
  * @param cfg command-line argument
  * @return intern state
  */
-typedef  void *(*compress_init_t)(char *cfg, struct gl_context *);
+typedef  void *(*compress_init_t)(char *cfg);
 /**
  * Compresses video frame
  * 
@@ -73,7 +73,7 @@ typedef  struct video_frame * (*compress_compress_t)(void *state, struct video_f
 typedef  void (*compress_done_t)(void *);
 
 void show_compress_help(void);
-struct compress_state *compress_init(char *config_string, struct gl_context *);
+struct compress_state *compress_init(char *config_string);
 const char *get_compress_name(struct compress_state *);
 struct video_frame *compress_frame(struct compress_state *, struct video_frame*);
 void compress_done(struct compress_state *);
