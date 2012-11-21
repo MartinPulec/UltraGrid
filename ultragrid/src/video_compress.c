@@ -56,6 +56,7 @@
 #include "video_compress.h"
 #include "video_compress/dxt_glsl.h"
 #include "video_compress/jpeg.h"
+#include "video_compress/j2k.h"
 #include "video_compress/none.h"
 #include "lib_common.h"
 
@@ -99,6 +100,10 @@ struct compress_t compress_modules[] = {
                 MK_NAME(jpeg_pop),
                 MK_NAME(jpeg_compress_done), NULL},
 #endif
+        {"J2K", "j2k", MK_NAME(j2k_compress_init),
+                MK_NAME(j2k_push),
+                MK_NAME(j2k_pop),
+                MK_NAME(j2k_compress_done), NULL},
         {"NONE", NULL, MK_STATIC(none_compress_init),
                 MK_STATIC(none_push),
                 MK_STATIC(none_pop),
