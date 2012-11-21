@@ -62,20 +62,25 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <glob.h>
-#include <unistd.h>
+#include <math.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/poll.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <semaphore.h>
-#include <math.h>
+#include <unistd.h>
+
+#include <queue>
+
 #include "video_capture.h"
 
 #define BUFFER_LEN 10
 
 #define SIGN(x) (x / fabs(x))
 #define ROUND_FROM_ZERO(x) (ceil(fabs(x)) * SIGN(x))
+
+using namespace std;
 
 typedef struct file_information
 {
@@ -181,13 +186,13 @@ typedef struct _television_header
     uint8_t  reserved[76];        /* reserved for future use (padding) */
 } Television_Header;
 
-typedef void (*lut_func_t)(unsigned int *lut, char *out_data, char *in_data, int size);
+typedef void (*lut_func_t)(int *lut, char *out_data, char *in_data, int size);
 
 struct vidcap_dpx_state {
-        volatile struct video_frame *frame;
-        struct tile        *tile;
+        struct video_desc video_prop;
         pthread_mutex_t lock;
 
+        pthread_cond_t boss_cv;
         pthread_cond_t reader_cv;
         pthread_cond_t processing_cv;
         volatile int reader_waiting;
@@ -200,10 +205,8 @@ struct vidcap_dpx_state {
         volatile unsigned int        finished:1;
         volatile unsigned int        should_exit_thread:1;
 
-        char               *buffer_read[BUFFER_LEN];
-        volatile int        buffer_read_start, buffer_read_end;
-        char               *buffer_processed[BUFFER_LEN];
-        volatile int        buffer_processed_start, buffer_processed_end;
+        queue<struct video_frame *> read_queue;
+        queue<struct video_frame *> processed_queue;
 
         char               *buffer_send;
 
@@ -212,7 +215,6 @@ struct vidcap_dpx_state {
         struct timeval      t, t0;
 
         glob_t              glob;
-        int                 index;
 
         unsigned int                *lut;
         lut_func_t          lut_func;
@@ -228,6 +230,8 @@ struct vidcap_dpx_state {
         unsigned int        play_to_buffer;
 
         float               speed;
+
+        int                 seq_num;
 
         struct file_information file_information;
         struct _image_information image_information;
@@ -360,7 +364,8 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
 
 	printf("vidcap_dpx_init\n");
 
-        s = (struct vidcap_dpx_state *) calloc(1, sizeof(struct vidcap_dpx_state));
+        // call constructor in order to the constructors of involved objects to be called
+        s = new vidcap_dpx_state;
 
         if(!fmt || strcmp(fmt, "help") == 0) {
                 usage();
@@ -371,23 +376,20 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         pthread_cond_init(&s->processing_cv, NULL);
         pthread_cond_init(&s->reader_cv, NULL);
         pthread_cond_init(&s->pause_cv, NULL);
+        pthread_cond_init(&s->boss_cv, NULL);
         s->processing_waiting = FALSE;
         s->reader_waiting = FALSE;
         s->should_pause = TRUE;
         s->should_jump = FALSE;
         s->grab_waiting = FALSE;
 
-
-        s->buffer_processed_start = s->buffer_processed_end = 0;
-        s->buffer_read_start = s->buffer_read_end = 0;
-        s->index = 0;
+        s->seq_num = 0;
 
         s->should_exit_thread = FALSE;
         s->finished = FALSE;
 
-        s->frame = vf_alloc(1);
-        s->frame->fps = 30.0;
-        s->frame->frames = -1;
+        s->video_prop.tile_count = 1;
+        s->video_prop.fps = 30.0;
         s->gamma = 1.0;
         s->loop = FALSE;
         s->play_to_buffer = 0;
@@ -398,7 +400,7 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
                 if(strncmp("files=", item, strlen("files=")) == 0) {
                         glob_pattern = item + strlen("files=");
                 } else if(strncmp("fps=", item, strlen("fps=")) == 0) {
-                        s->frame->fps = atof(item + strlen("fps="));
+                        s->video_prop.fps = atof(item + strlen("fps="));
                 } else if(strncmp("gamma=", item, strlen("gamma=")) == 0) {
                         s->gamma = atof(item + strlen("gamma="));
                 } else if(strncmp("colorspace=", item, strlen("colorspace=")) == 0) {
@@ -453,11 +455,11 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
                 switch (s->image_information.image_element[0].bit_size)
                 {
                         case 8:
-                                s->frame->color_spec = RGBA;
+                                s->video_prop.color_spec = RGBA;
                                 s->lut_func = apply_lut_8b;
                                 break;
                         case 10:
-                                s->frame->color_spec = DPX10;
+                                s->video_prop.color_spec = DPX10;
                                 if(s->big_endian)
                                         s->lut_func = apply_lut_10b_be;
                                 else
@@ -472,22 +474,23 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
 
                 create_lut(s);
         } else {
-                s->frame->color_spec = DXT5;
+                s->video_prop.color_spec = DXT5;
                 s->lut_func = NULL;
         }
 
-        s->frame->interlacing = PROGRESSIVE;
-        s->tile = vf_get_tile(s->frame, 0);
-        s->tile->width = to_native_order(s, s->image_information.pixels_per_line);
-        s->tile->height = to_native_order(s, s->image_information.lines_per_image_ele);
+        s->video_prop.interlacing = PROGRESSIVE;
+        s->video_prop.width = to_native_order(s, s->image_information.pixels_per_line);
+        s->video_prop.height = to_native_order(s, s->image_information.lines_per_image_ele);
 
-        s->tile->data_len = vc_get_linesize(s->tile->width, s->frame->color_spec) * s->tile->height;
+        ///s->tile->data_len = vc_get_linesize(s->tile->width, s->frame->color_spec) * s->tile->height;
 
+#if 0
         for (i = 0; i < BUFFER_LEN; ++i) {
                 s->buffer_read[i] = malloc(s->tile->data_len);
                 s->buffer_processed[i] = malloc(s->tile->data_len);
         }
         s->buffer_send = malloc(s->tile->data_len);
+#endif
 
         close(fd);
 
@@ -515,7 +518,6 @@ vidcap_dpx_finish(void *state)
 void
 vidcap_dpx_done(void *state)
 {
-        return;
 	struct vidcap_dpx_state *s = (struct vidcap_dpx_state *) state;
         int i;
 	assert(s != NULL);
@@ -531,13 +533,18 @@ vidcap_dpx_done(void *state)
 	pthread_join(s->reading_thread, NULL);
 	pthread_join(s->processing_thread, NULL);
 
-        vf_free(s->frame);
-        for (i = 0; i < BUFFER_LEN; ++i) {
-                free(s->buffer_read[i]);
-                free(s->buffer_processed[i]);
+        while(!s->read_queue.empty()) {
+                struct video_frame *frame = s->read_queue.front();
+                vf_free_data(frame);
+                s->read_queue.pop();
         }
-        free(s->buffer_send);
-        free(s);
+        while(!s->processed_queue.empty()) {
+                struct video_frame *frame = s->processed_queue.front();
+                vf_free_data(frame);
+                s->processed_queue.pop();
+        }
+
+        delete s;
         fprintf(stderr, "DPX exited\n");
 }
 
@@ -551,7 +558,7 @@ static void * reading_thread(void *args)
                         pthread_mutex_unlock(&s->lock);
                         goto after_while;
                 }
-                while(s->finished || s->should_jump || s->buffer_read_start == ((s->buffer_read_end + 1) % BUFFER_LEN)) { /* full */
+                while(s->finished || s->should_jump || s->read_queue.size() == BUFFER_LEN) { /* full */
                         s->reader_waiting = TRUE;
                         pthread_cond_wait(&s->reader_cv, &s->lock);
                         s->reader_waiting = FALSE;
@@ -562,43 +569,47 @@ static void * reading_thread(void *args)
                 }
 
                 pthread_mutex_unlock(&s->lock);
+                
+                struct video_frame *frame = vf_alloc_desc_data(s->video_prop);
+                frame->frames = s->seq_num;
 
-                char *filename = s->glob.gl_pathv[s->index];
-                s->index += SIGN(s->speed);
+                char *filename = s->glob.gl_pathv[s->seq_num];
+                s->seq_num += SIGN(s->speed);
 
-                if(s->index >= (int) s->glob.gl_pathc) {
-                        if(s->index != (int) s->glob.gl_pathc - 1 + SIGN(s->speed)) {
-                                s->index = (int) s->glob.gl_pathc - 1;
+                if(s->seq_num >= (int) s->glob.gl_pathc) {
+                        if(s->seq_num != (int) s->glob.gl_pathc - 1 + SIGN(s->speed)) {
+                                s->seq_num = (int) s->glob.gl_pathc - 1;
                         }
                 }
 
-                if(s->index < 0) {
-                        if(s->index != SIGN(s->speed)) {
-                                s->index = 0;
+                if(s->seq_num < 0) {
+                        if(s->seq_num != SIGN(s->speed)) {
+                                s->seq_num = 0;
                         }
                 }
 
                 int fd = open(filename, O_RDONLY);
                 ssize_t bytes_read = 0;
                 unsigned int file_offset = to_native_order(s, s->file_information.offset);
+
                 do {
-                        bytes_read += pread(fd, s->buffer_read[s->buffer_read_end] + bytes_read,
-                                        s->tile->data_len - bytes_read,
+                        bytes_read += pread(fd, frame->tiles[0].data + bytes_read,
+                                        frame->tiles[0].data_len - bytes_read,
                                         file_offset + bytes_read);
-                } while(bytes_read < s->tile->data_len);
+                } while(bytes_read < frame->tiles[0].data_len);
 
                 close(fd);
 
                 pthread_mutex_lock(&s->lock);
-                s->buffer_read_end = (s->buffer_read_end + 1) % BUFFER_LEN; /* and we will read next one */
+                s->read_queue.push(frame);
                 if(s->processing_waiting)
                         pthread_cond_signal(&s->processing_cv);
-                pthread_mutex_unlock(&s->lock);
 
-                if( (s->speed > 0.0 && s->index >= (int) s->glob.gl_pathc) ||
-                                s->index < 0) {
+                if( (s->speed > 0.0 && s->seq_num >= (int) s->glob.gl_pathc) ||
+                                s->seq_num < 0) {
                         s->finished = TRUE;
                 }
+                pthread_mutex_unlock(&s->lock);
         }
 after_while:
 
@@ -618,7 +629,7 @@ static void * processing_thread(void *args)
                         pthread_mutex_unlock(&s->lock);
                         break;
                 }
-                while(s->should_jump || s->buffer_processed_start == ((s->buffer_processed_end + 1) % BUFFER_LEN)) { /* full */
+                while(s->should_jump || s->processed_queue.size() == BUFFER_LEN) { /* full */
                         s->processing_waiting = TRUE;
                         pthread_cond_wait(&s->processing_cv, &s->lock);
                         s->processing_waiting = FALSE;
@@ -634,7 +645,7 @@ static void * processing_thread(void *args)
                         break;
                         pthread_mutex_unlock(&s->lock);
                 }
-                while(s->buffer_read_start == s->buffer_read_end) { /* empty */
+                while(s->read_queue.empty()) { /* empty */
                         s->processing_waiting = TRUE;
                         pthread_cond_wait(&s->processing_cv, &s->lock);
                         s->processing_waiting = FALSE;
@@ -644,21 +655,30 @@ static void * processing_thread(void *args)
                         }
                 }
 
+                assert(!s->read_queue.empty());
+                struct video_frame *src = s->read_queue.front();
+                struct video_frame *dst = NULL;
+                s->read_queue.pop();
+
                 pthread_mutex_unlock(&s->lock);
 
                 if(s->lut_func) {
-                        s->lut_func(s->lut, s->buffer_processed[s->buffer_processed_end],
-                                        s->buffer_read[s->buffer_read_start], s->tile->data_len);
+                        dst = vf_alloc_desc_data(s->video_prop);
+                        dst->frames = src->frames;
+
+                        s->lut_func((int *)s->lut, src->tiles[0].data,
+                                        src->tiles[0].data, src->tiles[0].data_len);
+                        vf_free_data(src);
                 } else {
-                        memcpy(s->buffer_processed[s->buffer_processed_end],
-                                        s->buffer_read[s->buffer_read_start], s->tile->data_len);
+                        dst = src;
                 }
 
                 pthread_mutex_lock(&s->lock);
-                s->buffer_read_start = (s->buffer_read_start + 1) % BUFFER_LEN; /* and we will read next one */
-                s->buffer_processed_end = (s->buffer_processed_end + 1) % BUFFER_LEN; /* and we will read next one */
+
+                s->processed_queue.push(dst);
                 if(s->reader_waiting)
                         pthread_cond_signal(&s->reader_cv);
+                pthread_cond_signal(&s->boss_cv);
                 pthread_mutex_unlock(&s->lock);
         }
 after_while:
@@ -680,9 +700,11 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
         if(s->play_to_buffer > 0)
                 s->play_to_buffer--;
 
-        if(s->finished && s->buffer_processed_start == s->buffer_processed_end &&
-                        s->buffer_read_start == s->buffer_read_end) {
+        if(s->finished && s->processed_queue.empty() &&
+                        s->read_queue.empty()) {
                 if(s->loop) {
+                        abort();
+#if 0
                         if(s->speed > 0.0) {
                                 s->index =  0;
                                 s->frame->frames = - SIGN(s->speed);
@@ -693,19 +715,23 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
 
                         s->finished = FALSE;
                         pthread_cond_signal(&s->reader_cv);
+#endif
                 } else  {
                         pthread_mutex_unlock(&s->lock);
                         return NULL;
                 }
         }
 
+        while(s->processed_queue.empty()) {
+                pthread_cond_wait(&s->boss_cv, &s->lock);
+        }
+
+        struct video_frame *frame = s->processed_queue.front();
+        s->processed_queue.pop();
+
+        if(s->processing_waiting)
+                        pthread_cond_signal(&s->processing_cv);
         pthread_mutex_unlock(&s->lock);
-
-        while(s->buffer_processed_start == s->buffer_processed_end && !should_exit && !s->finished && !s->should_jump)
-                ;
-
-        if(s->should_jump)
-                return NULL;
 
         if(s->prev_time.tv_sec == 0 && s->prev_time.tv_usec == 0) { /* first run */
                 gettimeofday(&s->prev_time, NULL);
@@ -714,34 +740,25 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
         // if we play regurally, we need to wait for its time
         if(s->play_to_buffer == 0) {
                 gettimeofday(&s->cur_time, NULL);
-                if(s->frame->fps == 0) /* it would make following loop infinite */
+                if(s->video_prop.fps == 0) /* it would make following loop infinite */
                         return NULL;
-                while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->frame->fps / (fabs(s->speed) < 1.0 ? fabs(s->speed) : 1.0)) {
+                while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->video_prop.fps / (fabs(s->speed) < 1.0 ? fabs(s->speed) : 1.0)) {
                         gettimeofday(&s->cur_time, NULL);
                 }
                 s->prev_time = s->cur_time;
                 //tv_add_usec(&s->prev_time, 1000000.0 / s->frame->fps);
         } // else we do not want to wait for next frame time
 
-        s->tile->data = s->buffer_processed[s->buffer_processed_start];
-        s->buffer_processed[s->buffer_processed_start] = s->buffer_send;
-        s->buffer_send = s->tile->data;
-
-        pthread_mutex_lock(&s->lock);
-        s->buffer_processed_start = (s->buffer_processed_start + 1) % BUFFER_LEN;
-        if(s->processing_waiting)
-                        pthread_cond_signal(&s->processing_cv);
-        pthread_mutex_unlock(&s->lock);
-
         s->frames++;
 
-        s->frame->frames += SIGN(s->speed);
+#if 0
         if( s->frame->frames >= (int) s->glob.gl_pathc) {
                 s->frame->frames = s->glob.gl_pathc - 1;
         }
         if( s->frame->frames < 0) {
                 s->frame->frames = 0;
         }
+#endif
 
         gettimeofday(&s->t, NULL);
         double seconds = tv_diff(s->t, s->t0);
@@ -754,7 +771,7 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
 
         *audio = NULL;
 
-	return s->frame;
+	return frame;
 }
 
 static void flush_pipeline(struct vidcap_dpx_state *s)
@@ -766,9 +783,17 @@ static void flush_pipeline(struct vidcap_dpx_state *s)
 
         pthread_mutex_lock(&s->lock);
         s->finished = FALSE;
-        s->buffer_processed_start = s->buffer_processed_end = 0;
-        s->buffer_read_start = s->buffer_read_end = 0;
 
+        while(!s->read_queue.empty()) {
+                struct video_frame *frame = s->read_queue.front();
+                vf_free_data(frame);
+                s->read_queue.pop();
+        }
+        while(!s->processed_queue.empty()) {
+                struct video_frame *frame = s->processed_queue.front();
+                vf_free_data(frame);
+                s->processed_queue.pop();
+        }
 }
 
 static void play_after_flush(struct vidcap_dpx_state *s)
@@ -783,12 +808,11 @@ static void play_after_flush(struct vidcap_dpx_state *s)
 
 static void clamp_indices(struct vidcap_dpx_state *s)
 {
-        if(s->index < 0) {
-                s->index = 0;
-        } else if(s->index >= (int) s->glob.gl_pathc) {
-                s->index = s->glob.gl_pathc - 1;
+        if(s->seq_num < 0) {
+                s->seq_num = 0;
+        } else if(s->seq_num >= (int) s->glob.gl_pathc) {
+                s->seq_num = s->glob.gl_pathc - 1;
         }
-
 }
 
 
@@ -796,53 +820,45 @@ void vidcap_dpx_command(struct vidcap *state, int command, void *data)
 {
 	struct vidcap_dpx_state 	*s = (struct vidcap_dpx_state *) state;
 
+        pthread_mutex_lock(&s->lock);
+
         if(command == VIDCAP_PAUSE) {
                 fprintf(stderr, "[DPX] PAUSE\n");
-                pthread_mutex_lock(&s->lock);
                 s->should_pause = TRUE;
-                pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_PLAY) {
                 fprintf(stderr, "[DPX] PLAY\n");
-                pthread_mutex_lock(&s->lock);
                 clamp_indices(s);
                 s->should_pause = FALSE;
                 pthread_cond_signal(&s->pause_cv);
-                pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_PLAYONE) {
                 fprintf(stderr, "[DPX] PLAYONE\n");
-                pthread_mutex_lock(&s->lock);
                 s->play_to_buffer = *(int *) data;
                 pthread_cond_signal(&s->pause_cv);
-                pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_FPS) {
                 fprintf(stderr, "[DPX] FPS\n");
-                pthread_mutex_lock(&s->lock);
-                s->frame->fps = *(float *) data;
-                pthread_mutex_unlock(&s->lock);
+                s->video_prop.fps = *(float *) data;
         } else if(command == VIDCAP_POS) {
-                pthread_mutex_lock(&s->lock);
                 flush_pipeline(s);
-                s->index = *(int *) data;
+                s->seq_num = *(int *) data;
                 clamp_indices(s);
-                fprintf(stderr, "[DPX] New position: %d\n", s->index);
-                s->frame->frames = s->index - SIGN(s->speed);
+                fprintf(stderr, "[DPX] New position: %d\n", s->seq_num);
                 play_after_flush(s);
-                pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_LOOP) {
                 fprintf(stderr, "[DPX] LOOP %d\n", *(int *) data);
-                pthread_mutex_lock(&s->lock);
                 s->loop = *(int *) data;
-                pthread_mutex_unlock(&s->lock);
         } else if(command == VIDCAP_SPEED) {
+#if 0
                 fprintf(stderr, "[DPX] SPEED %f\n", *(float *) data);
                 pthread_mutex_lock(&s->lock);
                 flush_pipeline(s);
                 clamp_indices(s);
                 //s->frame->frames  = s->index - ROUND_FROM_ZERO(s->speed);
-                s->index = s->frame->frames + SIGN(s->speed);
+                //s->index = s->frame->frames + SIGN(s->speed);
                 s->speed = *(float *) data;
                 play_after_flush(s);
-                pthread_mutex_unlock(&s->lock);
+#endif
         }
+
+        pthread_mutex_unlock(&s->lock);
 }
 

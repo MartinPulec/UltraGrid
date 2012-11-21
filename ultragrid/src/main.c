@@ -437,6 +437,7 @@ static void *sender_thread(void *arg)
         while (!should_exit) {
                 /* Capture and transmit video... */
                 tx_frame = vidcap_grab(uv->capture_device, &audio);
+                struct video_frame *grabbed_frame = tx_frame;
                 if (tx_frame != NULL) {
                         struct video_frame *after_transform, *with_watermark;
 
@@ -504,6 +505,7 @@ static void *sender_thread(void *arg)
 #endif
                                 }
                         }
+                        vf_free_data(grabbed_frame);
                 }
         }
 

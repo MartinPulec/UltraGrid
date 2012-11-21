@@ -49,9 +49,18 @@
 struct vidcap_type;
 struct video_frame;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct vidcap_type	*vidcap_dpx_probe(void);
 void                    *vidcap_dpx_init(char *fmt, unsigned int flags);
 void                     vidcap_dpx_finish(void *state);
 void                     vidcap_dpx_done(void *state);
 struct video_frame	*vidcap_dpx_grab(void *state, struct audio_frame **audio);
 void                     vidcap_dpx_command(struct vidcap *state, int command, void *data);
+
+#ifdef __cplusplus
+}
+#endif
+
