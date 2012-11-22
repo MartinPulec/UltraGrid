@@ -54,14 +54,16 @@
 #include "libgpujpeg/gpujpeg_common.h"
 #include "compat/platform_semaphore.h"
 #include "video_codec.h"
+#include <queue>
 #include <pthread.h>
 #include <stdlib.h>
+
+using namespace std;
+
 
 struct compress_jpeg_state {
         struct gpujpeg_encoder *encoder;
         struct gpujpeg_parameters encoder_param;
-        
-        struct video_frame *out;
         
         decoder_t decoder;
         char *decoded;
@@ -74,34 +76,61 @@ struct compress_jpeg_state {
         struct gpujpeg_encoder_input encoder_input;
 
         int device_id;
+        
+        queue<struct video_frame *> in;
+        queue<struct video_frame *> out;
+
+        pthread_mutex_t lock;
+        pthread_cond_t in_cv;
+        pthread_cond_t out_cv;
+
+        pthread_t thread_id;
 };
+
+static void *worker(void *args);
+static struct video_frame * jpeg_compress(void *arg, struct video_frame * tx);
+
+static void *worker(void *args) {
+        struct compress_jpeg_state *s = (struct compress_jpeg_state *) args;
+
+        while(1) {
+                struct video_frame *frame;
+                pthread_mutex_lock(&s->lock);
+                while(s->in.empty()) {
+                        pthread_cond_wait(&s->in_cv, &s->lock);
+                }
+
+                frame = s->in.front();
+                s->in.pop();
+
+                if(!frame) {
+                        // pass poisoned pill to consumer and exit
+                        s->out.push(NULL);
+                        pthread_cond_signal(&s->out_cv);
+                        pthread_mutex_unlock(&s->lock);
+                        break;
+                }
+                pthread_mutex_unlock(&s->lock);
+
+                struct video_frame *out_frame;
+
+                out_frame = jpeg_compress(s, frame);
+
+                pthread_mutex_lock(&s->lock);
+                s->out.push(out_frame);
+                pthread_cond_signal(&s->out_cv);
+                pthread_mutex_unlock(&s->lock);
+        }
+
+        return NULL;
+}
 
 static int configure_with(struct compress_jpeg_state *s, struct video_frame *frame);
 
 static int configure_with(struct compress_jpeg_state *s, struct video_frame *frame)
 {
         unsigned int x;
-
-        assert(frame->tiles[0].storage == OPENGL_TEXTURE);
         
-        s->out = vf_alloc(frame->tile_count);
-        
-        for (x = 0; x < frame->tile_count; ++x) {
-                if (vf_get_tile(frame, x)->width != vf_get_tile(frame, 0)->width ||
-                                vf_get_tile(frame, x)->width != vf_get_tile(frame, 0)->width) {
-                        fprintf(stderr,"[JPEG] Requested to compress tiles of different size!");
-                        exit_uv(129);
-                        return FALSE;
-                }
-                        
-                vf_get_tile(s->out, x)->width = vf_get_tile(frame, 0)->width;
-                vf_get_tile(s->out, x)->height = vf_get_tile(frame, 0)->height;
-        }
-        
-        s->out->interlacing = PROGRESSIVE;
-        s->out->fps = frame->fps;
-        s->out->color_spec = s->color_spec;
-
         switch (frame->color_spec) {
                 case RGB:
                         s->decoder = (decoder_t) memcpy;
@@ -180,12 +209,11 @@ static int configure_with(struct compress_jpeg_state *s, struct video_frame *fra
         }
 
         
-        s->out->color_spec = JPEG;
         struct gpujpeg_image_parameters param_image;
         gpujpeg_image_set_default_parameters(&param_image);
 
-        param_image.width = s->out->tiles[0].width;
-        param_image.height = s->out->tiles[0].height;
+        param_image.width = frame->tiles[0].width;
+        param_image.height = frame->tiles[0].height;
         param_image.comp_count = 3;
         if(s->rgb) {
                 param_image.color_space = GPUJPEG_RGB;
@@ -202,12 +230,6 @@ static int configure_with(struct compress_jpeg_state *s, struct video_frame *fra
                 gpujpeg_encoder_input_set_texture(&s->encoder_input, s->texture);
         }
         
-        for (x = 0; x < frame->tile_count; ++x) {
-                        vf_get_tile(s->out, x)->data = (char *) malloc(s->out->tiles[0].width * s->out->tiles[0].height * 3);
-                        vf_get_tile(s->out, x)->linesize = s->out->tiles[0].width * (param_image.color_space == GPUJPEG_RGB ? 3 : 2);
-
-        }
-
         s->encoder = gpujpeg_encoder_create(&s->encoder_param, &param_image);
         
         if(!s->encoder) {
@@ -216,21 +238,51 @@ static int configure_with(struct compress_jpeg_state *s, struct video_frame *fra
                 return FALSE;
         }
         
-        s->decoded = malloc(4 * s->out->tiles[0].width * s->out->tiles[0].height);
-
+        s->decoded = (char *) malloc(4 * frame->tiles[0].width * frame->tiles[0].height);
 
         return TRUE;
+}
+
+void jpeg_push(void *args, struct video_frame * tx)
+{
+        struct compress_jpeg_state *s = (struct compress_jpeg_state *) args;
+
+        pthread_mutex_lock(&s->lock);
+        s->in.push(tx);
+        pthread_cond_signal(&s->in_cv);
+        pthread_mutex_unlock(&s->lock);
+}
+
+struct video_frame *jpeg_pop(void *args)
+{
+        struct compress_jpeg_state *s = (struct compress_jpeg_state *) args;
+        struct video_frame *res;
+
+        pthread_mutex_lock(&s->lock);
+        while(s->out.empty()) {
+                pthread_cond_wait(&s->out_cv, &s->lock);
+        }
+
+        res = s->out.front();
+        s->out.pop();
+
+        pthread_mutex_unlock(&s->lock);
+
+        return res;
 }
 
 void * jpeg_compress_init(char * opts)
 {
         struct compress_jpeg_state *s;
         
-        s = (struct compress_jpeg_state *) malloc(sizeof(struct compress_jpeg_state));
+        s = new compress_jpeg_state;
 
-        s->out = NULL;
         s->decoded = NULL;
         s->device_id = 0;
+
+        pthread_cond_init(&s->in_cv, NULL);
+        pthread_cond_init(&s->out_cv, NULL);
+        pthread_mutex_init(&s->lock, NULL);
                 
         if(opts && strcmp(opts, "help") == 0) {
                 printf("JPEG comperssion usage:\n");
@@ -249,7 +301,7 @@ void * jpeg_compress_init(char * opts)
                 if(tok) {
                         int ret;
                         s->device_id = atoi(tok);
-                        ret = gpujpeg_init_device(s->device_id, GPUJPEG_OPENGL_INTEROPERABILITY);
+                        ret = gpujpeg_init_device(s->device_id, 0);
 
                         if(ret != 0) {
                                 fprintf(stderr, "[JPEG] initializing CUDA device %d failed.\n", atoi(tok));
@@ -257,7 +309,7 @@ void * jpeg_compress_init(char * opts)
                         }
                 } else {
                         printf("Initializing CUDA device 0...\n");
-                        int ret = gpujpeg_init_device(0, GPUJPEG_OPENGL_INTEROPERABILITY);
+                        int ret = gpujpeg_init_device(0, 0);
                         if(ret != 0) {
                                 fprintf(stderr, "[JPEG] initializing default CUDA device failed.\n");
                                 return NULL;
@@ -277,16 +329,24 @@ void * jpeg_compress_init(char * opts)
                 
         s->encoder = NULL; /* not yet configured */
 
+        if(pthread_create(&s->thread_id, NULL, worker, (void *) s) != 0) {
+                perror("Unable to initialzize thread");
+                return NULL;
+        }
+
         return s;
 }
 
-struct video_frame * jpeg_compress(void *arg, struct video_frame * tx)
+static struct video_frame * jpeg_compress(void *arg, struct video_frame * tx)
 {
         struct compress_jpeg_state *s = (struct compress_jpeg_state *) arg;
         int i;
         unsigned char *line1, *line2;
 
         unsigned int x;
+        struct video_frame *res;
+
+        cudaSetDevice(s->device_id);
         
         if(!s->encoder) {
                 int ret;
@@ -296,42 +356,47 @@ struct video_frame * jpeg_compress(void *arg, struct video_frame * tx)
         }
 
         if(s->storage == CPU_POINTER) {
+
                 for (x = 0; x < tx->tile_count;  ++x) {
                         struct tile *in_tile = vf_get_tile(tx, x);
-                        struct tile *out_tile = vf_get_tile(s->out, x);
                         
                         line1 = (unsigned char *) in_tile->data;
                         line2 = (unsigned char *) s->decoded;
+
+                        int dst_linesize = vc_get_linesize(in_tile->width, s->rgb ? RGB : UYVY);
                         
                         for (i = 0; i < (int) in_tile->height; ++i) {
-                                s->decoder(line2, line1, out_tile->linesize,
+                                s->decoder(line2, line1, dst_linesize,
                                                 0, 8, 16);
                                 line1 += vc_get_linesize(in_tile->width, tx->color_spec);
-                                line2 += out_tile->linesize;
+                                line2 += dst_linesize;
                         }
                         
+#if 0
                         line1 = (unsigned char *) out_tile->data + (in_tile->height - 1) * out_tile->linesize;
                         for( ; i < (int) s->out->tiles[0].height; ++i) {
                                 memcpy(line2, line1, out_tile->linesize);
                                 line2 += out_tile->linesize;
                         }
+#endif
                         
-                        if(s->interlaced_input)
-                                vc_deinterlace((unsigned char *) s->decoded, out_tile->linesize,
-                                                s->out->tiles[0].height);
-                        
+                        gpujpeg_encoder_input_set_image(&s->encoder_input, (uint8_t *) s->decoded);
                         uint8_t *compressed;
                         int size;
                         int ret;
-                        ret = gpujpeg_encoder_encode(s->encoder, (unsigned char *) s->decoded, &compressed, &size);
+                        ret = gpujpeg_encoder_encode(s->encoder, &s->encoder_input, &compressed, &size);
                         
                         if(ret != 0)
                                 return NULL;
-                        
-                        out_tile->data_len = size;
-                        memcpy(out_tile->data, compressed, size);
+
+                        res = tx;
+                        free(tx->tiles[0].data);
+                        tx->tiles[0].data_len = size;
+                        tx->tiles[0].data = (char *) malloc(size);
+                        memcpy(tx->tiles[0].data, compressed, size);
                 }
         } else {
+#if 0
                 uint8_t *compressed;
                 int size;
                 int ret;
@@ -343,23 +408,25 @@ struct video_frame * jpeg_compress(void *arg, struct video_frame * tx)
                 struct tile *out_tile = vf_get_tile(s->out, 0);
                 out_tile->data_len = size;
                 memcpy(out_tile->data, compressed, size);
+#endif
         }
-        
 
-        s->out->frames = tx->frames;
+        res->color_spec = JPEG;
 
-        return s->out;
+        return res;
 }
 
 void jpeg_compress_done(void *arg)
 {
         struct compress_jpeg_state *s = (struct compress_jpeg_state *) arg;
+        cudaSetDevice(s->device_id);
+
+        pthread_cond_destroy(&s->in_cv);
+        pthread_cond_destroy(&s->out_cv);
+        pthread_mutex_destroy(&s->lock);
         
-        if(s->out)
-                free(s->out->tiles[0].data);
-        vf_free(s->out);
         if(s->encoder)
                 gpujpeg_encoder_destroy(s->encoder);
         
-        free(s);
+        delete s;
 }

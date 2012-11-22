@@ -170,7 +170,9 @@ void Player::Notify()
             audio.data_len = res->audioLen;
             audio.max_size = res->maxAudioLen;
 
-            audio_playback_put_frame(this->audio_playback_device, &audio);
+            if(audio.data_len) {
+                audio_playback_put_frame(this->audio_playback_device, &audio);
+            }
 
             parent->UpdateTimer(GetCurrentFrame() );
         }

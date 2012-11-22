@@ -3,9 +3,10 @@ RANLIB        = ranlib
 CC            = @CC@
 CXX	      = @CXX@
 LINKER	      = ld
-CFLAGS        = -fPIC @DEFS@ @CFLAGS@ @X_CFLAGS@ -DPATH_PREFIX=@prefix@ -DLIB_DIR=@libdir@ @OPENEXR_INC@
+COMMON_FLAGS  = -fPIC -D_GNU_SOURCE -DHAVE_CONFIG_H -DPATH_PREFIX=@prefix@ -DLIB_DIR=@libdir@ @OPENEXR_INC@
+CFLAGS        = $(COMMON_FLAGS) @DEFS@ @CFLAGS@ @X_CFLAGS@ 
 CPPFLAGS      = @CPPFLAGS@
-CXXFLAGS      = -fPIC -DHAVE_CONFIG_H @CXXFLAGS@ -DPATH_PREFIX=@prefix@ -DLIB_DIR=@libdir@ -I/usr/include/OpenEXR
+CXXFLAGS      = $(COMMON_FLAGS) @CXXFLAGS@
 NVCCFLAGS     = @NVCCFLAGS@ -Xcompiler -fPIC
 LDFLAGS      =  @LDFLAGS@
 LIBS         += @LIBS@ @JACK_TRANS_LIB@ @MATHLIBS@ @COREAUDIO_LIB@ \

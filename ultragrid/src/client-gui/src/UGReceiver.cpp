@@ -520,9 +520,9 @@ static void *receiver_thread(void *arg)
 
                     if(uv->ext_decoder) {
                         decompress_frame(uv->ext_decoder,
-                                (unsigned char *) buffer_data.get(),
+                                (unsigned char *) buffer_data->video.get(),
                                 (unsigned char *) uv->ext_recv_buffer,
-                                len);
+                                video_len);
                     }
 
                     //decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, video_len, s->buffer_data.get());

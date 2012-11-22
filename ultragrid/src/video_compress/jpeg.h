@@ -47,8 +47,15 @@
 
 #include "video.h"
 
-struct gl_context;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-void * jpeg_compress_init(char * opts);
-struct video_frame * jpeg_compress(void *args, struct video_frame * tx);
-void jpeg_compress_done(void *args);
+void                *jpeg_compress_init(char * opts);
+void                 jpeg_push(void *args, struct video_frame * tx);
+struct video_frame  *jpeg_pop(void *args);
+void                 jpeg_compress_done(void *args);
+
+#ifdef __cplusplus
+}
+#endif

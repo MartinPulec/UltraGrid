@@ -90,7 +90,6 @@
 // endif DUMP
 
 
-
 #define EXIT_FAIL_USAGE		1
 #define EXIT_FAIL_UI   		2
 #define EXIT_FAIL_CAPTURE	4
@@ -354,6 +353,8 @@ static void *sender_thread(void *arg)
         struct state_uv *uv = (struct state_uv *) arg;
         struct video_frame *tx_frame;
 
+        pthread_setname_np(pthread_self(), __func__);
+
         while(1) {
                 tx_frame = compress_frame_pop(uv->compression);
 
@@ -384,6 +385,7 @@ static void *grab_thread(void *arg)
         struct video_frame *tx_frame;
         struct audio_frame *audio;
 
+        pthread_setname_np(pthread_self(), __func__);
 #if 0
         struct state_color_transform *color_transform = NULL;
 
@@ -602,6 +604,8 @@ int main(int argc, char *argv[])
 
         argc -= optind;
         argv += optind;
+
+        pthread_setname_np(pthread_self(), __func__);
 
         sigemptyset(&mask);
         sigaddset(&mask, SIGINT);

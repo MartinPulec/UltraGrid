@@ -32,6 +32,10 @@
 
 #include "gpujpeg_type.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Color transform debug info
  */
@@ -480,5 +484,9 @@ struct gpujpeg_color_order<GPUJPEG_YUV>
         float tmp = c1; c1 = c2; c2 = tmp;
     }
 };
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // GPUJPEG_COLORSPACE_H
