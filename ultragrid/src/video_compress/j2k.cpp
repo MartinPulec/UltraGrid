@@ -71,6 +71,12 @@ bool j2k_reconfigure(struct j2k_video_compress *state, struct video_desc video_d
 
 struct j2k_video_compress {
         struct demo_enc *j2k_encoder;
+        struct video_desc saved_desc;
+
+        bool initialized;
+        bool should_exit;
+        pthread_mutex_t lock;
+        pthread_cond_t cv;
 
         uint32_t magic;
 };
@@ -85,6 +91,13 @@ bool j2k_reconfigure(struct j2k_video_compress *s, struct video_desc video_descr
                         video_description.height,
                         4,
                         1.0f);
+
+        pthread_mutex_lock(&s->lock);
+        s->initialized = true;
+        pthread_cond_signal(&s->cv);
+        pthread_mutex_unlock(&s->lock);
+
+        return s->j2k_encoder != NULL;
 }
 
 void * j2k_compress_init(char * opts)
@@ -93,6 +106,12 @@ void * j2k_compress_init(char * opts)
         
         s = new j2k_video_compress;
         s->magic = MAGIC;
+
+        memset(&s->saved_desc, 0, sizeof(s->saved_desc));
+        pthread_mutex_init(&s->lock, NULL);
+        pthread_cond_init(&s->cv, NULL);
+        s->initialized = false;
+        s->should_exit = false;
 
         s->j2k_encoder = NULL;
 
@@ -105,11 +124,30 @@ void j2k_push(void *arg, struct video_frame * tx)
 
         assert(s->magic == MAGIC);
 
-        demo_enc_submit(s->j2k_encoder, (void *) tx,
-                        tx->tiles[0].data, tx->tiles[0].data_len,
-                        tx->tiles[0].data, tx->tiles[0].data_len,
-                        0.7,
-                        0);
+        if(!tx) {
+                pthread_mutex_lock(&s->lock);
+                if(!s->initialized) {
+                        pthread_cond_signal(&s->cv);
+                } else {
+                        demo_enc_stop(s->j2k_encoder);
+                }
+                s->initialized = false;
+                pthread_mutex_unlock(&s->lock);
+        } else {
+                if(tx->tiles[0].width != s->saved_desc.width ||
+                                tx->tiles[0].height != s->saved_desc.height) {
+                        s->saved_desc.width = tx->tiles[0].width;
+                        s->saved_desc.height = tx->tiles[0].height;
+                        bool ret = j2k_reconfigure(s, s->saved_desc);
+                        assert(ret);
+                }
+
+                demo_enc_submit(s->j2k_encoder, (void *) tx,
+                                tx->tiles[0].data, tx->tiles[0].data_len,
+                                tx->tiles[0].data, tx->tiles[0].data_len,
+                                0.7,
+                                0);
+        }
 }
 
 struct video_frame * j2k_pop(void *arg)
@@ -119,13 +157,44 @@ struct video_frame * j2k_pop(void *arg)
 
         assert(s->magic == MAGIC);
 
+        pthread_mutex_lock(&s->lock);
+        while(!s->initialized) {
+                pthread_cond_wait(&s->cv, &s->lock);
+        }
+
+        if(s->should_exit) {
+                pthread_mutex_unlock(&s->lock);
+                return NULL;
+        }
+        pthread_mutex_unlock(&s->lock);
+
         int size = demo_enc_wait(s->j2k_encoder,
                         (void **) &res,
                         NULL,
                         NULL);
 
+        if(size == 0) {
+                return NULL;
+        } else if(size == -1) {
+                fprintf(stderr, "[J2K] Error encoding.\n");
+                return NULL;
+        }
+
         res->tiles[0].data_len = size;
         res->color_spec = J2K;
+
+#if 0
+        fprintf(stderr, "%d\n", res->frames);
+        if(res->frames == 30) {
+                int fd = open("frame30.j2k", O_CREAT|O_WRONLY, 0666);
+                assert(fd > 0);
+                size_t bytes = 0;
+                do {
+                        bytes += write(fd, res->tiles[0].data + bytes, size - bytes);
+                } while (bytes < size);
+                close(fd);
+        }
+#endif
 
         assert(size > 0);
 

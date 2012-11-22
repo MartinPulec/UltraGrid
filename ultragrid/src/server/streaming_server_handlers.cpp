@@ -170,10 +170,12 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                                                 args[index++] = "-C";
                                                 args[index++] = fd_str;
 
+#if 0
                                                 if(strncmp(compression.c_str(), "JPEG", 4) == 0) {
                                                         args[index++] = "-f";
                                                         args[index++] = "mult:2";
                                                 }
+#endif
 
                                                 if(this->use_tcp) {
                                                         args[index++] = "-T";
@@ -353,6 +355,8 @@ launch_err:
                                 this->compression  = "RTDXT:DXT1";
                         } else if (strcmp(compression, "DXT5") == 0) {
                                 this->compression  = "RTDXT:DXT5";
+                        } else if (strcmp(compression, "J2K") == 0) {
+                                this->compression  = "J2K";
                         } else {
                                 response.code = 451;
                                 response.message = "Parameter Not Understood";

@@ -226,7 +226,7 @@ static int on_input(j2k_encoder * encoder,
     
     // submit the image
     if(0 != j2k_encoder_set_input(encoder, item->src_ptr,
-                                  J2K_FMT_R10_G10_B10_X2_B,
+                                  J2K_FMT_R10_G10_B10_X2_L,
                                   &item->params, item)) {
         // error => return work item back with error code set
         item->out_size = -1;
