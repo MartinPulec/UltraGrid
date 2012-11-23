@@ -101,7 +101,7 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
     view->setHWDisplay(this->hw_display);
     view->SetGLDisplay(!DisableGLPreview);
 
-    receiver = new UGReceiver((const char *) "wxgl", this, use_tcp);
+    receiver = new UGReceiver(&buffer, this, use_tcp);
 }
 
 //called upon refresh
@@ -167,8 +167,8 @@ void Player::Notify()
 
             struct audio_frame audio;
             audio.data = res->audio.get();
-            audio.data_len = res->audioLen;
-            audio.max_size = res->maxAudioLen;
+            audio.data_len = res->audio_len;
+            audio.max_size = res->audio_len;
 
             if(audio.data_len) {
                 audio_playback_put_frame(this->audio_playback_device, &audio);
@@ -493,5 +493,8 @@ void Player::reconfigure(int width, int height, int codec, int data_len, struct 
 
 void Player::putframe(std::tr1::shared_ptr<Frame> data, unsigned int frames)
 {
+    abort();
+#if 0
     buffer.putframe(data, frames);
+#endif
 }

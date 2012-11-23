@@ -17,10 +17,10 @@ struct CharPtrDeleter
     }
 };
 
-Frame::Frame(size_t maxVideoLen_, size_t maxAudioLen_) :
-            audio(shared_ptr<char> (new char[maxAudioLen_], CharPtrDeleter())),
-            video(shared_ptr<char> (new char[maxVideoLen_], CharPtrDeleter())),
-            audioLen(0), maxAudioLen(maxAudioLen_)
+Frame::Frame(size_t audioLen_, size_t videoLen_) :
+            audio(shared_ptr<char> (new char[audioLen_], CharPtrDeleter())),
+            video(shared_ptr<char> (new char[videoLen_], CharPtrDeleter())),
+            video_len(videoLen_), audio_len(audioLen_)
 {
 }
 
@@ -44,16 +44,18 @@ void VideoBuffer::SetGLView(GLView *view)
     this->view = view;
 }
 
-void VideoBuffer::putframe(shared_ptr<Frame> data, unsigned int frames)
+void VideoBuffer::putframe(std::tr1::shared_ptr<Frame> data)
 {
     pthread_mutex_lock(&lock);
+
+    int seq_num = data->video_desc.seq_num ;
 //#ifdef DEBUG
-    std::cerr << "Buffer: Received frame " << frames << std::endl;
+    std::cerr << "Buffer: Received frame " << seq_num << std::endl;
 //#endif
 
 
-    buffered_frames.insert(std::pair<int, std::tr1::shared_ptr<Frame> >(frames, data));
-    last_frame = frames;
+    buffered_frames.insert(std::pair<int, std::tr1::shared_ptr<Frame> >(seq_num, data));
+    last_frame = seq_num;
 
     pthread_mutex_unlock(&lock);
 

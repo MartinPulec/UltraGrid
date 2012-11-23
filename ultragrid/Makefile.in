@@ -262,27 +262,28 @@ JACK_PLAY_LIB_OBJ = @JACK_PLAY_OBJ@ \
 CLIENT_OBJ = src/client-gui/client_guiApp.o \
 		src/video_display.o \
 		src/video_display/null.o \
-	     src/client-gui/client_guiMain.o \
-	     src/client-gui/KeyBindingsHelp.o \
 	     src/client-gui/About.o \
+	     src/client-gui/client_guiMain.o \
+	     src/client-gui/CompressionSetting.o \
+	     src/client-gui/KeyBindingsHelp.o \
 	     src/client-gui/OtherSettingsDialog.o \
 	     src/client-gui/ServerSelectionDialog.o \
 	     src/client-gui/VideoSelection.o \
+	     src/client-gui/src/AsyncMsgHandler.o \
+	     src/client-gui/src/ClientManager.o \
+	     src/client-gui/src/ConnectionClosedException.o \
+	     src/client-gui/src/CustomGridBagSizer.o \
+	     src/client-gui/src/Decompress.o \
+	     src/client-gui/src/GLView.o \
+	     src/client-gui/src/Player.o \
+	     src/client-gui/src/ProgressSlider.o \
 	     src/client-gui/src/Settings.o \
 	     src/client-gui/src/sp_client.o \
 	     src/client-gui/src/UGReceiver.o \
-	     src/client-gui/src/AsyncMsgHandler.o \
-	     src/client-gui/src/VideoEntry.o \
-	     src/client-gui/src/ProgressSlider.o \
-	     src/client-gui/CompressionSetting.o \
-	     src/client-gui/src/ClientManager.o \
-	     src/client-gui/src/CustomGridBagSizer.o \
 	     src/client-gui/src/Utils.o \
-	     src/client-gui/src/Player.o \
-	     src/client-gui/src/GLView.o \
-	     src/client-gui/src/ConnectionClosedException.o \
-	     src/client-gui/src/VideoBufferOnFlyManager.o \
              src/client-gui/src/VideoBuffer.o \
+	     src/client-gui/src/VideoBufferOnFlyManager.o \
+	     src/client-gui/src/VideoEntry.o \
 		src/audio/audio_playback.o \
 		src/audio/playback/none.o \
 		src/audio/playback/sdi.o \

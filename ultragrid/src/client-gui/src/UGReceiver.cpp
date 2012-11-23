@@ -9,6 +9,8 @@
 
 #include "../client_guiMain.h"
 #include "../include/GLView.h"
+#include "Decompress.h"
+#include "VideoBuffer.h"
 
 /* UltraGrid bits */
 extern "C" {
@@ -30,6 +32,7 @@ extern "C" {
 };
 
 #include "audio/utils.h"
+#include <malloc.h>
 
 #define USE_CUSTOM_TRANSMIT
 
@@ -50,51 +53,53 @@ using namespace std;
 using namespace std::tr1;
 
 struct state_uv {
+    state_uv(VideoBuffer *buffer) :
+        decompress(buffer)
+    {
+        memset(&savedAudioDesc, 0, sizeof(savedAudioDesc));
+        memset(&savedVideoDesc, 0, sizeof(savedVideoDesc));
+    }
+
 #ifndef USE_CUSTOM_TRANSMIT
-        struct rtp **network_devices;
-        struct pdb *participants;
+    struct rtp **network_devices;
+    struct pdb *participants;
 #else
-        void *receive_state;
+    void *receive_state;
 #endif
-        unsigned int connections_count;
+    unsigned int connections_count;
 
-        struct timeval start_time, curr_time;
+    struct timeval start_time, curr_time;
 
-        char *decoder_mode;
-        char *postprocess;
+    char *decoder_mode;
+    char *postprocess;
 
-        pthread_mutex_t lock;
-        pthread_cond_t boss_cv;
-        pthread_cond_t worker_cv;
-        volatile bool boss_waiting;
-        volatile bool worker_waiting;
-        enum cmd command;
-        enum state state;
+    pthread_mutex_t lock;
+    pthread_cond_t boss_cv;
+    pthread_cond_t worker_cv;
+    volatile bool boss_waiting;
+    volatile bool worker_waiting;
+    enum cmd command;
+    enum state state;
 
-        uint32_t ts;
+    uint32_t ts;
 
-        void * (* receive_init)(const char *address, unsigned int port);
-        void (*receive_done)(void *state);
-        int (*receive)(void *state, char *buffer, int *len);
-        int (*receive_accept)(void *state, const char *remote_host, int remote_port);
-        int (*receive_disconnect)(void *state);
+    void * (* receive_init)(const char *address, unsigned int port);
+    void (*receive_done)(void *state);
+    int (*receive)(void *state, char *buffer, int *len);
+    int (*receive_accept)(void *state, const char *remote_host, int remote_port);
+    int (*receive_disconnect)(void *state);
 
-        char * remote_host;
-        int remote_port;
+    char * remote_host;
+    int remote_port;
 
-        bool use_tcp;
+    struct video_desc savedVideoDesc;
+    struct audio_desc savedAudioDesc;
 
-        Player *player;
+    bool use_tcp;
 
-        struct video_desc savedVideoDesc;
-        struct audio_desc savedAudioDesc;
+    Player *player;
 
-        struct {
-            struct state_decompress *ext_decoder;
-            char *ext_recv_buffer;
-            unsigned int ext_buf_size;
-            codec_t out_codec;
-        };
+    Decompress decompress;
 };
 
 volatile int should_exit = FALSE;
@@ -441,7 +446,7 @@ static void *receiver_thread(void *arg)
                         char pad[8];
                     } a;
                     int len = PCKT_HDR_BASE_LEN * sizeof(uint32_t);
-                    char *buffer;
+
                     res = uv->receive(uv->receive_state, (char *) &a.header, &len);
                     if(!res) {
                         std::cerr << "(res: " << res << ", len: " << len << ")"  << std::endl;
@@ -472,13 +477,19 @@ static void *receiver_thread(void *arg)
 
                     struct audio_desc audio_desc;
                     struct video_desc video_desc;
-
                     size_t audio_len, video_len;
 
-                    if(!UGReceiver::ParseHeader(a.header, len, &video_desc, &video_len, &audio_desc, &audio_len)) {
+                    if(!UGReceiver::ParseHeader(a.header, len, &video_desc,
+                                                &video_len, &audio_desc,
+                                                &audio_len)) {
                         cerr << "Failed parsing packet header" << endl;
                         goto error;
                     }
+
+                    shared_ptr<Frame> receivedFrame(new Frame(audio_len, video_len));
+                    receivedFrame->audio_desc = audio_desc;
+                    receivedFrame->video_desc = video_desc;
+
 
                     ///decoder_reconfigure(video_desc, &pbuf_data);
                     //decoder_get_buffer(&pbuf_data, &buffer, &len);
@@ -489,6 +500,7 @@ static void *receiver_thread(void *arg)
                         UGReceiver::Reconfigure(uv, video_desc, &audio_desc);
                     }
 
+#if 0
                     shared_ptr<Frame> buffer_data = uv->player->getframe();
 
                     if(uv->ext_recv_buffer) {
@@ -496,9 +508,10 @@ static void *receiver_thread(void *arg)
                     } else {
                         buffer = buffer_data->video.get();
                     }
-
+#endif
                     len = video_len;
-                    res = uv->receive(uv->receive_state, buffer, &len);
+
+                    res = uv->receive(uv->receive_state, receivedFrame->video.get(), &len);
                     if(!res) {
                         std::cerr << "(res: " << res << ")" << std::endl;
                         goto error;
@@ -509,13 +522,17 @@ static void *receiver_thread(void *arg)
                     }
 
                     len = audio_len;
+
+#if 0
                     assert(len <= buffer_data->maxAudioLen);
-                    res = uv->receive(uv->receive_state, buffer_data->audio.get(), &len);
+#endif
+                    res = uv->receive(uv->receive_state, receivedFrame->audio.get(), &len);
                     if(!res) {
                         std::cerr << "(res: " << res << ")" << std::endl;
                         goto error;
                     }
                     assert(len == audio_len);
+#if 0
                     buffer_data->audioLen = len;
 
                     if(uv->ext_decoder) {
@@ -527,6 +544,9 @@ static void *receiver_thread(void *arg)
 
                     //decoder_decode(pbuf_data.decoder, &pbuf_data, buffer, video_len, s->buffer_data.get());
                     uv->player->putframe(buffer_data, video_desc.seq_num);
+#endif
+
+                    uv->decompress.push(receivedFrame);
                     //display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
                     //pbuf_data.frame_buffer = display_get_frame(uv->display_device);
                 }
@@ -540,19 +560,17 @@ no_err:
 
 quit:
 
-        decompress_done(uv->ext_decoder);
-
         std::cerr << "UGRECEIVER THREAD EXITED";
 
         return 0;
 }
 
 
-UGReceiver::UGReceiver(const char *display, Player *player_, bool use_tcp)
+UGReceiver::UGReceiver(VideoBuffer *buffer_, Player *player_, bool use_tcp)
 {
     pthread_t receiver_thread_id;
 
-    uv = (struct state_uv *) calloc(1, sizeof(struct state_uv));
+    uv = new state_uv(buffer_);
 #ifndef USE_CUSTOM_TRANSMIT
     uv->participants = pdb_init();
     uv->network_devices = initialize_network(strdup("localhost"), 5004, uv->participants);
@@ -562,8 +580,10 @@ UGReceiver::UGReceiver(const char *display, Player *player_, bool use_tcp)
     uv->receive_state = 0;
     uv->player = player_;
 
+#if 0
     memset(&uv->savedVideoDesc,0, sizeof(uv->savedVideoDesc));
     memset(&uv->savedAudioDesc,0, sizeof(uv->savedAudioDesc));
+#endif
 
     if(uv->use_tcp) {
         std::cerr << "Tramnsmit: TCP" << std::endl;
@@ -797,10 +817,12 @@ void UGReceiver::Reconfigure(struct state_uv *uv, struct video_desc video_desc, 
     if(audio_desc) {
         if(uv->savedAudioDesc.bps != audio_desc->bps ||
            uv->savedAudioDesc.sample_rate != audio_desc->sample_rate ||
-           uv->savedAudioDesc.ch_count != audio_desc->ch_count) {
+          uv->savedAudioDesc.ch_count != audio_desc->ch_count) {
                audioDiffers = true;
         }
     }
+
+    codec_t out_codec;
 
     if(videoDiffers) {
         uv->savedVideoDesc.width = video_desc.width;
@@ -809,21 +831,10 @@ void UGReceiver::Reconfigure(struct state_uv *uv, struct video_desc video_desc, 
         uv->savedVideoDesc.interlacing = video_desc.interlacing;
         uv->savedVideoDesc.fps = video_desc.fps;
 
-        decompress_done(uv->ext_decoder);
-        uv->ext_decoder = NULL;
-        free(uv->ext_recv_buffer);
-        uv->ext_recv_buffer = NULL;
-
         if(video_desc.color_spec == JPEG) {
-            uv->ext_decoder = decompress_init(JPEG_MAGIC);
-            if(!uv->ext_decoder) {
-                abort();
-            }
-            uv->out_codec = RGB;
-            uv->ext_buf_size = decompress_reconfigure(uv->ext_decoder, video_desc, 0, 8, 16, 3*video_desc.width, uv->out_codec);
-            uv->ext_recv_buffer = (char *) malloc(uv->ext_buf_size);
+            out_codec = RGB;
         } else {
-            uv->out_codec = video_desc.color_spec;
+            out_codec = video_desc.color_spec;
         }
     }
 
@@ -837,8 +848,8 @@ void UGReceiver::Reconfigure(struct state_uv *uv, struct video_desc video_desc, 
 
     if(videoDiffers || audioDiffers) {
         cerr << "RECONF";
-        uv->player->reconfigure(video_desc.width, video_desc.height, (int) uv->out_codec,
-                                vc_get_linesize(video_desc.width, uv->out_codec) * video_desc.height,
+        uv->player->reconfigure(video_desc.width, video_desc.height, (int) out_codec,
+                                vc_get_linesize(video_desc.width, out_codec) * video_desc.height,
                                 audio_desc);
     }
 }

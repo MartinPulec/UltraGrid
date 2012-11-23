@@ -12,6 +12,7 @@
 class client_guiFrame;
 class GLView;
 class Player;
+class VideoBuffer;
 struct state_uv;
 
 struct display *client_initialize_video_display(const char *requested_display,
@@ -22,7 +23,7 @@ struct state_decompress;
 
 class UGReceiver {
     public:
-        UGReceiver(const char *display, Player *player, bool use_tcp);
+        UGReceiver(VideoBuffer *buffer, Player *player, bool use_tcp);
         ~UGReceiver();
         void Accept(const char *remote_host, int remote_port);
         void Disconnect();
