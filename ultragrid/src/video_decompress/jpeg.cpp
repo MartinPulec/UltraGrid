@@ -56,6 +56,16 @@
 #include <stdlib.h>
 #include "video_decompress/jpeg.h"
 
+#include <queue>
+
+using namespace std;
+using namespace std::tr1;
+
+struct jpeg_decompress_frame {
+        std::tr1::shared_ptr<char> data;
+        size_t                     len;
+};
+
 struct state_decompress_jpeg {
         struct gpujpeg_decoder *decoder;
 
@@ -64,6 +74,15 @@ struct state_decompress_jpeg {
         int rshift, gshift, bshift;
         int pitch;
         codec_t out_codec;
+
+        queue<struct video_frame *> in;
+        queue<struct video_frame *> out;
+
+        pthread_mutex_t lock;
+        pthread_cond_t in_cv;
+        pthread_cond_t out_cv;
+
+        pthread_t thread_id;
 };
 
 static int configure_with(struct state_decompress_jpeg *s, struct video_desc desc);
@@ -93,8 +112,10 @@ void * jpeg_decompress_init(void)
 {
         struct state_decompress_jpeg *s;
 
-        s = (struct state_decompress_jpeg *) malloc(sizeof(struct state_decompress_jpeg));
-        s->decoder = NULL;
+        s = new state_decompress_jpeg; 
+        pthread_cond_init(&s->in_cv, NULL);
+        pthread_cond_init(&s->out_cv, NULL);
+        pthread_mutex_init(&s->lock, NULL);
 
         return s;
 }
@@ -180,6 +201,16 @@ void jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffer, uns
         }
 }
 
+void jpeg_push(void *state, std::tr1::shared_ptr<Frame> src)
+{
+
+}
+
+std::tr1::shared_ptr<Frame> jpeg_pop(void *state)
+{
+
+}
+
 void jpeg_decompress_done(void *state)
 {
         struct state_decompress_jpeg *s = (struct state_decompress_jpeg *) state;
@@ -187,5 +218,6 @@ void jpeg_decompress_done(void *state)
         if(s->decoder) {
                 gpujpeg_decoder_destroy(s->decoder);
         }
-        free(s);
+
+        delete s;
 }

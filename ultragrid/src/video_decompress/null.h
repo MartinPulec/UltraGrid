@@ -47,11 +47,15 @@
 
 #include "video_codec.h"
 
+#include <tr1/memory>
+#include "Frame.h"
+
 #define NULL_MAGIC 0x24443b5bu
 
 void * null_decompress_init(void);
 int null_decompress_reconfigure(void *state, struct video_desc desc,
                         int rshift, int gshift, int bshift, int pitch, codec_t out_codec);
-void null_decompress(void *state, unsigned char *dst, unsigned char *buffer, unsigned int src_len);
+void null_push(void *state, std::tr1::shared_ptr<Frame>);
+std::tr1::shared_ptr<Frame> null_pop(void *state);
 void null_decompress_done(void *state);
 

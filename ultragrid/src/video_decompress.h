@@ -49,11 +49,8 @@
 #define __video_decompress_h
 #include "video_codec.h"
 
+#include "Frame.h"
 #include "video_decompress/jpeg.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 struct state_decompress;
 
@@ -69,7 +66,8 @@ typedef  int (*decompress_reconfigure_t)(void * state, struct video_desc desc,
 /**
  * Decompresses data from buffer of src_len into dst
  */
-typedef  void (*decompress_decompress_t)(void *state, unsigned char *dst, unsigned char *buffer, unsigned int src_len);
+typedef void (*decompress_push_t)(void *, std::tr1::shared_ptr<Frame> buffer);
+typedef std::tr1::shared_ptr<Frame> (*decompress_pop_t)(void *);
 /**
  * Cleanup function
  */
@@ -90,11 +88,8 @@ void initialize_video_decompress(void);
 
 struct state_decompress *decompress_init(unsigned int decoder_index);
 int decompress_reconfigure(struct state_decompress *, struct video_desc, int rshift, int gshift, int bshift, int pitch, codec_t out_codec);
-void decompress_frame(struct state_decompress *, unsigned char *dst, unsigned char *buffer, unsigned int src_len);
+void decompress_push(struct state_decompress *, std::tr1::shared_ptr<Frame> buffer);
+std::tr1::shared_ptr<Frame> decompress_pop(struct state_decompress *);
 void decompress_done(struct state_decompress *);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* __video_decompress_h */

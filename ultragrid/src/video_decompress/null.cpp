@@ -79,14 +79,20 @@ int null_decompress_reconfigure(void *state, struct video_desc desc,
         return TRUE;
 }
 
-void null_decompress(void *state, unsigned char *dst, unsigned char *buffer, unsigned int src_len)
+void null_push(void *state, std::tr1::shared_ptr<Frame> src)
 {
         struct state_decompress_null *s = (struct state_decompress_null *) state;
         assert(s->magic == NULL_MAGIC);
 
-        UNUSED(dst);
-        UNUSED(buffer);
-        UNUSED(src_len);
+        UNUSED(src);
+}
+
+std::tr1::shared_ptr<Frame> null_pop(void *state)
+{
+        struct state_decompress_null *s = (struct state_decompress_null *) state;
+        assert(s->magic == NULL_MAGIC);
+
+        return std::tr1::shared_ptr<Frame>();
 }
 
 void null_decompress_done(void *state)

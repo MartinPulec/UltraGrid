@@ -24,12 +24,13 @@ extern "C" {
 #include "tv.h"
 #include "video_capture.h"
 #include "video_display.h"
-#include "video_decompress.h"
-#include "video_decompress/jpeg.h"
 
 #include "udt_receive.h"
 #include "tcp_receive.h"
 };
+
+#include "video_decompress.h"
+#include "video_decompress/jpeg.h"
 
 #include "audio/utils.h"
 #include <malloc.h>

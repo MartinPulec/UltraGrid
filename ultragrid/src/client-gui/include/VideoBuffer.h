@@ -11,19 +11,9 @@
 
 #include "../include/Observable.h"
 
+#include "Frame.h"
 
 class GLView;
-
-struct Frame {
-    Frame(size_t videoLen, size_t audioLen);
-
-    std::tr1::shared_ptr<char> video;
-    std::tr1::shared_ptr<char> audio;
-    size_t audio_len;
-    size_t video_len;
-    struct audio_desc audio_desc;
-    struct video_desc video_desc;
-};
 
 #if 0
 struct Frame {

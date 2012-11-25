@@ -80,7 +80,6 @@
 #include "video_codec.h"
 #include "video_capture.h"
 #include "video_compress.h"
-#include "video_decompress.h"
 #include "watermark.h"
 
 // ifdef DUMP

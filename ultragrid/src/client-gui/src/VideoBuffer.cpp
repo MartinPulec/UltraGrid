@@ -9,21 +9,6 @@
 using namespace std::tr1;
 using namespace std;
 
-struct CharPtrDeleter
-{
-    void operator()(char *ptr) const
-    {
-        delete[] ptr;
-    }
-};
-
-Frame::Frame(size_t audioLen_, size_t videoLen_) :
-            audio(shared_ptr<char> (new char[audioLen_], CharPtrDeleter())),
-            video(shared_ptr<char> (new char[videoLen_], CharPtrDeleter())),
-            video_len(videoLen_), audio_len(audioLen_)
-{
-}
-
 VideoBuffer::VideoBuffer() :
     maxAudioDataLen(0)
 {

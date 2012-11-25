@@ -42,8 +42,6 @@
 		<Unit filename="About.h" />
 		<Unit filename="CompressionSetting.cpp" />
 		<Unit filename="CompressionSetting.h" />
-		<Unit filename="CompressionSettings.cpp" />
-		<Unit filename="CompressionSettings.h" />
 		<Unit filename="KeyBindingsHelp.cpp" />
 		<Unit filename="KeyBindingsHelp.h" />
 		<Unit filename="OtherSettingsDialog.cpp" />
@@ -60,9 +58,9 @@
 		<Unit filename="include/ClientDataCStr.h" />
 		<Unit filename="include/ClientManager.h" />
 		<Unit filename="include/ConnectionClosedException.h" />
+		<Unit filename="include/Decompress.h" />
 		<Unit filename="include/GLView.h" />
 		<Unit filename="include/Observable.h" />
-		<Unit filename="include/Observer.cpp" />
 		<Unit filename="include/Observer.h" />
 		<Unit filename="include/Player.h" />
 		<Unit filename="include/ProgressSlider.h" />
@@ -77,6 +75,7 @@
 		<Unit filename="src/ClientDataCStr.cpp" />
 		<Unit filename="src/ClientManager.cpp" />
 		<Unit filename="src/ConnectionClosedException.cpp" />
+		<Unit filename="src/Decompress.cpp" />
 		<Unit filename="src/GLView.cpp" />
 		<Unit filename="src/Observable.cpp" />
 		<Unit filename="src/Observer.h" />
@@ -97,7 +96,6 @@
 		<Unit filename="../include/Player.h">
 			<Option virtualFolder="client-gui/include/" />
 		</Unit>
-		<Unit filename="../src/ConnectionClosedException.cpp" />
 		<Unit filename="../src/Player.cpp">
 			<Option virtualFolder="client-gui/src/" />
 		</Unit>
@@ -125,7 +123,6 @@
 					<wxDialog wxs="wxsmith/KeyBindingsHelp.wxs" src="KeyBindingsHelp.cpp" hdr="KeyBindingsHelp.h" name="KeyBindingsHelp" language="CPP" />
 					<wxDialog wxs="wxsmith/About.wxs" src="About.cpp" hdr="About.h" name="About" language="CPP" />
 					<wxDialog wxs="wxsmith/OtherSettingsDialog.wxs" src="OtherSettingsDialog.cpp" hdr="OtherSettingsDialog.h" name="OtherSettingsDialog" language="CPP" />
-					<wxDialog wxs="wxsmith/CompressionSettings.wxs" src="CompressionSettings.cpp" hdr="CompressionSettings.h" name="CompressionSettings" language="CPP" />
 					<wxDialog wxs="wxsmith/CompressionSetting.wxs" src="CompressionSetting.cpp" hdr="CompressionSetting.h" name="CompressionSetting" language="CPP" />
 				</resources>
 			</wxsmith>

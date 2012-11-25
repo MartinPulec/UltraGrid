@@ -69,8 +69,10 @@ typedef struct {
         const char *init_str;
         decompress_reconfigure_t reconfigure;
         const char *reconfigure_str;
-        decompress_decompress_t decompress;
-        const char *decompress_str;
+        decompress_push_t push;
+        const char *push_str;
+        decompress_pop_t pop;
+        const char *pop_str;
         decompress_done_t done;
         const char *done_str;
 
@@ -130,16 +132,18 @@ struct decode_from_to decoders_for_codec[] = {
 const int decoders_for_codec_count = (sizeof(decoders_for_codec) / sizeof(struct decode_from_to));
 
 decoder_table_t decoders[] = {
+#if 0
 #if defined HAVE_DXT_GLSL || defined BUILD_LIBRARIES
         { RTDXT_MAGIC, "rtdxt", MK_NAME(dxt_glsl_decompress_init), MK_NAME(dxt_glsl_decompress_reconfigure),
                 MK_NAME(dxt_glsl_decompress), MK_NAME(dxt_glsl_decompress_done), NULL},
 #endif
+#endif
 #if defined HAVE_JPEG || defined BUILD_LIBRARIES
         { JPEG_MAGIC, "jpeg", MK_NAME(jpeg_decompress_init), MK_NAME(jpeg_decompress_reconfigure),
-                MK_NAME(jpeg_decompress), MK_NAME(jpeg_decompress_done), NULL},
+                MK_NAME(jpeg_push), MK_NAME(jpeg_pop), MK_NAME(jpeg_decompress_done), NULL},
 #endif 
         { NULL_MAGIC, NULL, MK_STATIC(null_decompress_init), MK_STATIC(null_decompress_reconfigure),
-                MK_STATIC(null_decompress), MK_STATIC(null_decompress_done), NULL}
+                MK_STATIC(null_push), MK_STATIC(null_pop), MK_STATIC(null_decompress_done), NULL}
 };
 
 #define MAX_DECODERS (sizeof(decoders) / sizeof(decoder_table_t))
@@ -192,11 +196,18 @@ int decompress_reconfigure(struct state_decompress *s, struct video_desc desc, i
         return s->functions->reconfigure(s->state, desc, rshift, gshift, bshift, pitch, out_codec);
 }
 
-void decompress_frame(struct state_decompress *s, unsigned char *dst, unsigned char *buffer, unsigned int src_len)
+void decompress_push(struct state_decompress *s, std::tr1::shared_ptr<Frame> frame)
 {
         assert(s->magic == DECOMPRESS_MAGIC);
 
-        s->functions->decompress(s->state, dst, buffer, src_len);
+        s->functions->push(s->state, frame);
+}
+
+std::tr1::shared_ptr<Frame> decompress_frame(struct state_decompress *s)
+{
+        assert(s->magic == DECOMPRESS_MAGIC);
+
+        return s->functions->pop(s->state);
 }
 
 void decompress_done(struct state_decompress *s)
