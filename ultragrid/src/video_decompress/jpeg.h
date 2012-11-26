@@ -49,11 +49,12 @@
 
 #include <tr1/memory>
 
+#include "video.h"
 #include "Frame.h"
 
 #define JPEG_MAGIC 0x3fd43f51u
 
-void * jpeg_decompress_init(void);
+void * jpeg_decompress_init(codec_t out_codec);
 int jpeg_decompress_reconfigure(void *state, struct video_desc desc,
                         int rshift, int gshift, int bshift, int pitch, codec_t out_codec);
 void jpeg_push(void *state, std::tr1::shared_ptr<Frame> src);

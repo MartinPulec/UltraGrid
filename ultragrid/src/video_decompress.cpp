@@ -172,25 +172,33 @@ void initialize_video_decompress(void)
         }
 }
 
-struct state_decompress *decompress_init(unsigned int decoder_index)
+static pthread_once_t once_control = PTHREAD_ONCE_INIT;
+
+struct state_decompress *decompress_init(unsigned int decoder_index, codec_t out_codec)
 {
         int i;
         struct state_decompress *s;
+
+        pthread_once(&once_control, initialize_video_decompress);
 
         for(i = 0; i < available_decoders_count; ++i) {
                 if(available_decoders[i]->magic == decoder_index) {
                         s = (struct state_decompress *) malloc(sizeof(struct state_decompress));
                         s->magic = DECOMPRESS_MAGIC;
                         s->functions = available_decoders[i];
-                        s->state = s->functions->init();
+                        s->state = s->functions->init(out_codec);
                         return s;
                 }
         }
+
+        fprintf(stderr, "Decompress not found!!!\n");
         return NULL;
 }
 
 int decompress_reconfigure(struct state_decompress *s, struct video_desc desc, int rshift, int gshift, int bshift, int pitch, codec_t out_codec)
 {
+        // Do not use!!!!
+        abort();
         assert(s->magic == DECOMPRESS_MAGIC);
 
         return s->functions->reconfigure(s->state, desc, rshift, gshift, bshift, pitch, out_codec);
@@ -203,7 +211,7 @@ void decompress_push(struct state_decompress *s, std::tr1::shared_ptr<Frame> fra
         s->functions->push(s->state, frame);
 }
 
-std::tr1::shared_ptr<Frame> decompress_frame(struct state_decompress *s)
+std::tr1::shared_ptr<Frame> decompress_pop(struct state_decompress *s)
 {
         assert(s->magic == DECOMPRESS_MAGIC);
 

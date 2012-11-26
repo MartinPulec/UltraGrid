@@ -254,6 +254,8 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
 {
     wxString failedPart;
 
+    codec_t transmit_codec, display_codec = RGB;
+
     currentVideo = &item;
 
     last_wanted = 0;
@@ -282,7 +284,13 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
         failedPart = wxT("format setting");
         this->connection.set_parameter(wxT("format"), video_format + wxT(" ") + item.colorSpace);
         failedPart = wxT("compression setting");
-        this->connection.set_parameter(wxT("compression"), wxString(settings->GetValue(std::string("compression"), std::string("none")).c_str(), wxConvUTF8) << wxT(" ") +
+
+        // COMPRESSION
+        string compression = settings->GetValue(std::string("compression"), std::string("none"));
+        if(compression == string("JPEG")) {
+            transmit_codec = JPEG;
+        }
+        this->connection.set_parameter(wxT("compression"), wxString(compression.c_str(), wxConvUTF8) << wxT(" ") +
                 wxString(settings->GetValue(std::string("jpeg_qual"), std::string("80")).c_str(), wxConvUTF8));
 
         failedPart = wxT("TCP/UDP setting");
@@ -308,6 +316,8 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
         receiver->Accept(hostname.mb_str(), port);
         this->fps = fps;
         SchedulePlay();
+
+        receiver->reinitializeDecompress(transmit_codec, display_codec);
 
         connection.play(start_frame);
         //connection.play();

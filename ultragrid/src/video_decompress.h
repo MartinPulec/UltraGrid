@@ -51,13 +51,14 @@
 
 #include "Frame.h"
 #include "video_decompress/jpeg.h"
+#include "video_decompress/null.h"
 
 struct state_decompress;
 
 /**
  * initializes decompression and returns internal state
  */
-typedef  void *(*decompress_init_t)();
+typedef  void *(*decompress_init_t)(codec_t out_codec);
 /**
  * Recompresses decompression for specified video description
  */
@@ -86,7 +87,7 @@ extern const int decoders_for_codec_count;
 
 void initialize_video_decompress(void);
 
-struct state_decompress *decompress_init(unsigned int decoder_index);
+struct state_decompress *decompress_init(unsigned int decoder_index, codec_t out_codec);
 int decompress_reconfigure(struct state_decompress *, struct video_desc, int rshift, int gshift, int bshift, int pitch, codec_t out_codec);
 void decompress_push(struct state_decompress *, std::tr1::shared_ptr<Frame> buffer);
 std::tr1::shared_ptr<Frame> decompress_pop(struct state_decompress *);

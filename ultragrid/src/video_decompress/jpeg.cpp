@@ -75,17 +75,21 @@ struct state_decompress_jpeg {
         int pitch;
         codec_t out_codec;
 
-        queue<struct video_frame *> in;
-        queue<struct video_frame *> out;
+        queue<shared_ptr<Frame> >in;
+        queue<shared_ptr<Frame> > out;
 
         pthread_mutex_t lock;
         pthread_cond_t in_cv;
         pthread_cond_t out_cv;
 
         pthread_t thread_id;
+
+        struct video_desc saved_video_desc;
 };
 
 static int configure_with(struct state_decompress_jpeg *s, struct video_desc desc);
+static void *worker(void *args);
+void jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffer, unsigned int src_len);
 
 static int configure_with(struct state_decompress_jpeg *s, struct video_desc desc)
 {
@@ -108,7 +112,61 @@ static int configure_with(struct state_decompress_jpeg *s, struct video_desc des
         return TRUE;
 }
 
-void * jpeg_decompress_init(void)
+static void *worker(void *args) {
+        struct state_decompress_jpeg *s = (struct state_decompress_jpeg *) args;
+
+        while(1) {
+                shared_ptr<Frame> frame;
+                pthread_mutex_lock(&s->lock);
+                while(s->in.empty()) {
+                        pthread_cond_wait(&s->in_cv, &s->lock);
+                }
+
+                frame = s->in.front();
+                s->in.pop();
+
+                if(!frame) {
+                        // pass poisoned pill to consumer and exit
+                        s->out.push(shared_ptr<Frame>());
+                        pthread_cond_signal(&s->out_cv);
+                        pthread_mutex_unlock(&s->lock);
+                        break;
+                }
+                pthread_mutex_unlock(&s->lock);
+
+                struct video_desc &received_desc = frame->video_desc;
+                if(s->saved_video_desc.width !=  received_desc.width ||
+                                s->saved_video_desc.height != received_desc.height) {
+                        s->saved_video_desc = received_desc;
+                        int ret = jpeg_decompress_reconfigure((void *) s, received_desc,
+                                        0, 8, 16, vc_get_linesize(received_desc.width, s->out_codec),
+                                        s->out_codec);
+                        assert(ret);
+                }
+
+                size_t new_length = vc_get_linesize(frame->video_desc.width, s->out_codec) *
+                        frame->video_desc.height;
+                shared_ptr<char> out_data(std::tr1::shared_ptr<char> (new char[new_length], CharPtrDeleter()));
+
+                ///out_frame = jpeg_compress(s, frame);
+                jpeg_decompress((void *) s, (unsigned char *) out_data.get(),
+                                (unsigned char *) frame->video.get(), frame->video_len);
+
+                // replace old data with new ones
+                frame->video = out_data;
+                frame->video_len = new_length;
+                frame->video_desc.color_spec = s->out_codec;
+
+                pthread_mutex_lock(&s->lock);
+                s->out.push(frame);
+                pthread_cond_signal(&s->out_cv);
+                pthread_mutex_unlock(&s->lock);
+        }
+
+        return NULL;
+}
+
+void * jpeg_decompress_init(codec_t out_codec)
 {
         struct state_decompress_jpeg *s;
 
@@ -116,6 +174,16 @@ void * jpeg_decompress_init(void)
         pthread_cond_init(&s->in_cv, NULL);
         pthread_cond_init(&s->out_cv, NULL);
         pthread_mutex_init(&s->lock, NULL);
+
+        memset(&s->saved_video_desc, 0, sizeof(s->saved_video_desc));
+        s->decoder = 0;
+
+        s->out_codec = out_codec;
+
+        if(pthread_create(&s->thread_id, NULL, worker, (void *) s) != 0) {
+                perror("Unable to initialzize thread");
+                return NULL;
+        }
 
         return s;
 }
@@ -203,12 +271,30 @@ void jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffer, uns
 
 void jpeg_push(void *state, std::tr1::shared_ptr<Frame> src)
 {
+        struct state_decompress_jpeg *s = (struct state_decompress_jpeg *) state;
 
+        pthread_mutex_lock(&s->lock);
+        s->in.push(src);
+        pthread_cond_signal(&s->in_cv);
+        pthread_mutex_unlock(&s->lock);
 }
 
 std::tr1::shared_ptr<Frame> jpeg_pop(void *state)
 {
+        struct state_decompress_jpeg *s = (struct state_decompress_jpeg *) state;
+        std::tr1::shared_ptr<Frame> res;
 
+        pthread_mutex_lock(&s->lock);
+        while(s->out.empty()) {
+                pthread_cond_wait(&s->out_cv, &s->lock);
+        }
+
+        res = s->out.front();
+        s->out.pop();
+
+        pthread_mutex_unlock(&s->lock);
+
+        return res;
 }
 
 void jpeg_decompress_done(void *state)

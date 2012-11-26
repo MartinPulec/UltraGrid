@@ -266,8 +266,6 @@ static void *receiver_thread(void *arg)
         struct timeval last_tile_received = {0, 0};
         struct pbuf_video_data pbuf_data;
 
-        initialize_video_decompress();
-
         fr = 1;
 
         while (1) {
@@ -853,4 +851,9 @@ void UGReceiver::Reconfigure(struct state_uv *uv, struct video_desc video_desc, 
                                 vc_get_linesize(video_desc.width, out_codec) * video_desc.height,
                                 audio_desc);
     }
+}
+
+void UGReceiver::reinitializeDecompress(codec_t transmit_codec, codec_t display_codec)
+{
+    uv->decompress.reintializeDecompress(transmit_codec, display_codec);
 }

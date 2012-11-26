@@ -38,6 +38,8 @@ class UGReceiver {
                              struct video_desc *video_desc, size_t *video_length,
                              struct audio_desc *audio_desc, size_t *audio_length);
         static void Reconfigure(struct state_uv *uv, struct video_desc, struct audio_desc *audio_desc);
+
+        void reinitializeDecompress(codec_t transmit_codec, codec_t display_codec);
     private:
         client_guiFrame *parent;
         struct state_uv *uv;

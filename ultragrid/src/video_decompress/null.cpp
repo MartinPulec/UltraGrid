@@ -51,22 +51,35 @@
 #include "video_decompress/null.h"
 #include <stdlib.h>
 
+#include <queue>
+
+using namespace std;
+using namespace std::tr1;
+
 struct state_decompress_null {
         uint32_t magic;
+        pthread_mutex_t lock;
+        pthread_cond_t cv;
+        queue<shared_ptr<Frame> > dummy_queue;
 };
 
-void * null_decompress_init(void)
+void * null_decompress_init(codec_t out_codec)
 {
         struct state_decompress_null *s;
+        UNUSED(out_codec);
 
-        s = (struct state_decompress_null *) malloc(sizeof(struct state_decompress_null));
+        s = new state_decompress_null;
         s->magic = NULL_MAGIC;
+        pthread_mutex_init(&s->lock, NULL);
+        pthread_cond_init(&s->cv, NULL);
+
         return s;
 }
 
 int null_decompress_reconfigure(void *state, struct video_desc desc,
                         int rshift, int gshift, int bshift, int pitch, codec_t out_codec)
 {
+abort();
         struct state_decompress_null *s = (struct state_decompress_null *) state;
         UNUSED(desc);
         UNUSED(rshift);
@@ -84,15 +97,28 @@ void null_push(void *state, std::tr1::shared_ptr<Frame> src)
         struct state_decompress_null *s = (struct state_decompress_null *) state;
         assert(s->magic == NULL_MAGIC);
 
-        UNUSED(src);
+        pthread_mutex_lock(&s->lock);
+        s->dummy_queue.push(src);
+        pthread_cond_signal(&s->cv);
+        pthread_mutex_unlock(&s->lock);
 }
 
 std::tr1::shared_ptr<Frame> null_pop(void *state)
 {
         struct state_decompress_null *s = (struct state_decompress_null *) state;
+        shared_ptr<Frame> res;
+
         assert(s->magic == NULL_MAGIC);
 
-        return std::tr1::shared_ptr<Frame>();
+        pthread_mutex_lock(&s->lock);
+        while(s->dummy_queue.empty()) {
+                pthread_cond_wait(&s->cv, &s->lock);
+        }
+        res = s->dummy_queue.front();
+        s->dummy_queue.pop();
+        pthread_mutex_unlock(&s->lock);
+
+        return res;
 }
 
 void null_decompress_done(void *state)
@@ -102,6 +128,6 @@ void null_decompress_done(void *state)
         if(!s)
                 return;
         assert(s->magic == NULL_MAGIC);
-        free(s);
+        delete s;
 }
 
