@@ -153,6 +153,7 @@ std::tr1::shared_ptr<Frame> j2k_pop(void *state)
                 ret->video_len = vc_get_linesize(ret->video_desc.width, s->out_codec) *
                         ret->video_desc.height;
                 ret->video = item->decompressed;
+
                 delete item;
         } else {
                 if(err == 2) cerr << "Error decoding J2K" << endl;

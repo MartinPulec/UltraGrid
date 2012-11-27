@@ -815,6 +815,9 @@ void GLView::Render(bool toHW)
 
     glBindTexture(GL_TEXTURE_2D, texture_display);
 
+    if(this->data != (char *) cesnet_logo.pixel_data)
+        glDisable(GL_BLEND);
+
     switch(codec) {
         case DXT1:
             glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,

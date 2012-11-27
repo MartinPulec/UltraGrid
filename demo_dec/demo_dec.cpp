@@ -450,7 +450,7 @@ void demo_dec_submit(demo_dec * dec_ptr,
         item->fmt[comp_idx].stride_y = size_x;
         item->fmt[comp_idx].bit_depth = 10;
         item->fmt[comp_idx].is_signed = 0;
-        item->fmt[comp_idx].final_shl = 2 + comp_idx * 10;
+        item->fmt[comp_idx].final_shl = comp_idx * 10;
         item->fmt[comp_idx].combine_or = comp_idx;
     }
     
