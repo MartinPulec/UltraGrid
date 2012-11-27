@@ -368,8 +368,8 @@ static void *sender_thread(void *arg)
                 tx_send(uv->tx, tx_frame,
                                 uv->network_devices[0]);
 
-                vf_free_data(tx_frame);
 #endif
+                vf_free_data(tx_frame);
         }
 
         return NULL;
