@@ -314,7 +314,7 @@ static struct display_device *get_devices(void)
         typedef map<string, list<int> > group_map;
         group_map                       groups; // device prefix, indices
 
-        struct display_device *ret = (struct display_device *) malloc(sizeof(struct display_device));
+        struct display_device *ret = (struct display_device *) malloc(sizeof(struct display_device) * (numDevices + 1));
 
         ret[numDevices].name = NULL;
 
@@ -334,7 +334,7 @@ static struct display_device *get_devices(void)
                 STRING          deviceNameString = NULL;
                 const char     *name;
 
-                ret = (struct display_device *) realloc((void *) ret, sizeof(struct display_device) * (numDevices + 1));
+                ret = (struct display_device *) realloc((void *) ret, sizeof(struct display_device) * (numDevices + 2)); // current count + this + EOR
                 
                 // *** Print the model name of the DeckLink card
                 result = deckLink->GetDisplayName((STRING *) &deviceNameString);
@@ -383,7 +383,7 @@ static struct display_device *get_devices(void)
         deckLinkIterator->Release();
 
         for(group_map::iterator it = groups.begin(); it != groups.end(); ++it) {
-                ret = (struct display_device *) realloc((void *) ret, sizeof(struct display_device) * (numDevices + 1));
+                ret = (struct display_device *) realloc((void *) ret, sizeof(struct display_device) * (numDevices + 2)); // current count + this + EOR
                 ret[numDevices].name = (char *) malloc(it->first.size() + strlen("(groupped)") + 1);
                 strcpy((char *) ret[numDevices].name, it->first.c_str());
                 strcat((char *) ret[numDevices].name, "(groupped)");
