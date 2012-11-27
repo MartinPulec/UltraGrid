@@ -304,6 +304,46 @@ static struct video_desc *get_mode_list(IDeckLink *deckLink, ssize_t *count)
 
 }
 
+struct groupped_item_data {
+        list<int> devices;
+        struct video_desc       *modes;
+        // -1 means that driver doesnt provide modes
+        ssize_t                  modes_count;
+};
+
+bool has_same_set_of_modes(struct video_desc *set1, ssize_t set1_size,
+                struct video_desc *set2, ssize_t set2_size);
+// ordered set for now is sufficient (Decklink Quad)
+bool has_same_set_of_modes(struct video_desc *set1, ssize_t set1_size,
+                struct video_desc *set2, ssize_t set2_size)
+{
+        if(set1_size != set2_size) {
+                return false;
+        }
+
+        for (int i = 0; i < set1_size; ++i) {
+                if(set1[i].width !=  set2[i].width ||
+                                set1[i].height != set2[i].height ||
+                                fabs(set1[i].fps - set1[i].fps) >= 0.01 ||
+                                set1[i].interlacing != set2[i].interlacing) {
+                        return false;
+                }
+        }
+
+        return true;
+}
+
+void multiply_mode_sizes_by(struct video_desc *set, ssize_t set_size,
+                size_t x, size_t y);
+void multiply_mode_sizes_by(struct video_desc *set, ssize_t set_size,
+                size_t x, size_t y)
+{
+        for (int i = 0; i < set_size; ++i) {
+                set[i].width *= x;
+                set[i].height *= y;
+        }
+}
+
 static struct display_device *get_devices(void)
 {
         IDeckLinkIterator*              deckLinkIterator;
@@ -311,7 +351,7 @@ static struct display_device *get_devices(void)
         int                             numDevices = 0;
         HRESULT                         result;
 
-        typedef map<string, list<int> > group_map;
+        typedef map<string, groupped_item_data > group_map;
         group_map                       groups; // device prefix, indices
 
         struct display_device *ret = (struct display_device *) malloc(sizeof(struct display_device) * (numDevices + 1));
@@ -345,16 +385,37 @@ static struct display_device *get_devices(void)
                 name = ret[numDevices].name = deviceNameString;
 #endif
 
+                ssize_t count = -1;
+                ret[numDevices].modes = get_mode_list(deckLink, &count);
+                ret[numDevices].modes_count = count;
+
                 if(strchr(ret[numDevices].name, '(')) {
                         size_t len = strchr(ret[numDevices].name, '(') - ret[numDevices].name;
                         group_map::iterator it = groups.find(string(name, len));
-                        if(it == groups.end()) {
+                        if(it == groups.end() ||
+                                        !has_same_set_of_modes(it->second.modes, it->second.modes_count,
+                                                ret[numDevices].modes, ret[numDevices].modes_count)) {
+                                groupped_item_data data;
+                                data.devices.push_front(numDevices);
+                                if(count >= 0) {
+                                        data.modes = (struct video_desc *) malloc(sizeof(struct video_desc) *
+                                                        count);
+                                        memcpy(data.modes, ret[numDevices].modes, count *
+                                                        sizeof(struct video_desc));
+                                        data.modes_count = count;
+                                }
+
+                                pair<string, groupped_item_data > new_item(string(name, len),
+                                                        data);
+                                groups.insert(new_item);
+#if 0
                                 pair<string, list<int> > new_item(string(name, len),
                                                         list<int>());
                                 new_item.second.push_front(numDevices);
                                 groups.insert(new_item);
+#endif
                         } else {
-                                it->second.push_back(numDevices);
+                                it->second.devices.push_back(numDevices);
                         }
                 }
 
@@ -368,10 +429,6 @@ static struct display_device *get_devices(void)
                         CFRelease(deviceNameString);
 #endif
                 }
-
-                ssize_t count = -1;
-                ret[numDevices].modes = get_mode_list(deckLink, &count);
-                ret[numDevices].modes_count = count;
                 
                 // Increment the total number of DeckLink cards found
                 numDevices++;
@@ -383,25 +440,39 @@ static struct display_device *get_devices(void)
         deckLinkIterator->Release();
 
         for(group_map::iterator it = groups.begin(); it != groups.end(); ++it) {
-                ret = (struct display_device *) realloc((void *) ret, sizeof(struct display_device) * (numDevices + 2)); // current count + this + EOR
-                ret[numDevices].name = (char *) malloc(it->first.size() + strlen("(groupped)") + 1);
-                strcpy((char *) ret[numDevices].name, it->first.c_str());
-                strcat((char *) ret[numDevices].name, "(groupped)");
+                // tiled 4K
+                if(it->second.devices.size() >= 4) {
+                        ret = (struct display_device *) realloc((void *) ret, sizeof(struct display_device) * (numDevices + 2)); // current count + this + EOR
+                        ret[numDevices].name = (char *) malloc(it->first.size() + strlen("(groupped)") + 1);
+                        strcpy((char *) ret[numDevices].name, it->first.c_str());
+                        strcat((char *) ret[numDevices].name, "(groupped)");
 
-                ret[numDevices].driver_identifier = (char *) malloc(128); 
-                strcpy((char *) ret[numDevices].driver_identifier, "decklink:");
+                        ret[numDevices].driver_identifier = (char *) malloc(128); 
+                        strcpy((char *) ret[numDevices].driver_identifier, "decklink:");
 
-                for(list<int>::iterator device_index = it->second.begin();
-                                device_index != it->second.end();
-                                ++device_index) {
-                        char index_str[8];
-                        snprintf(index_str, sizeof(index_str), "%s%d",
-                                        (device_index != it->second.begin() ? "," : ""),
-                                        *device_index);
-                        strcat((char *) ret[numDevices].driver_identifier, index_str);
+                        size_t devices_included_in_group = 0;
+                        for(list<int>::iterator device_index = it->second.devices.begin();
+                                        device_index != it->second.devices.end();
+                                        ++device_index) {
+                                devices_included_in_group += 1;
+                                char index_str[8];
+                                snprintf(index_str, sizeof(index_str), "%s%d",
+                                                (device_index != it->second.devices.begin() ? "," : ""),
+                                                *device_index);
+                                strcat((char *) ret[numDevices].driver_identifier, index_str);
+                                // we do not more than 4 devices in this branch
+                                if(devices_included_in_group == 4)
+                                        break;
+                        }
+
+                        ret[numDevices].modes = it->second.modes;
+                        ret[numDevices].modes_count = it->second.modes_count;
+                        // adjust modes to 2x2 grid
+                        multiply_mode_sizes_by(ret[numDevices].modes, ret[numDevices].modes_count,
+                                        2, 2);
+
+                        numDevices++;
                 }
-
-                numDevices++;
         }
 
         ret[numDevices].name = NULL;
