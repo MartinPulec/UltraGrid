@@ -1,5 +1,12 @@
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#include "config_win32.h"
+#endif
+
 #include "Decompress.h"
 
+#include <iostream>
 #include <string.h>
 #include <wx/log.h>
 
@@ -7,6 +14,7 @@
 
 #include "VideoBuffer.h"
 
+using namespace std;
 using namespace std::tr1;
 
 ////////////////////////////////////////////////////////////
@@ -39,15 +47,21 @@ wxThread::ExitCode DecompressThread::Entry()
 // Decompress
 ////////////////////////////////////////////////////////////
 Decompress::Decompress(VideoBuffer *b) :
-    buffer(b), thread(0), decompress(0)
+    buffer(b), thread(0), decompress(0),
+    in_codec((codec_t) -1), out_codec((codec_t) -1)
 {
 }
 
 Decompress::~Decompress()
 {
-    // send a poisoned pill
-    push(std::tr1::shared_ptr<Frame>());
-    thread->Wait();
+    if(thread) {
+        // send a poisoned pill
+        push(std::tr1::shared_ptr<Frame>());
+        thread->Wait();
+        thread = 0;
+
+        decompress_done(decompress);
+    }
 }
 
 void Decompress::push(std::tr1::shared_ptr<Frame> frame)
@@ -62,17 +76,27 @@ void Decompress::pushDecompressedFrame(std::tr1::shared_ptr<Frame> frame)
 
 void Decompress::reintializeDecompress(codec_t in_codec, codec_t out_codec)
 {
+    if(in_codec == this->in_codec &&
+       out_codec == this->out_codec) {
+           // no need to reinitialize
+           return;
+    }
+
     if(thread) {
         // send a poisoned pill
         push(std::tr1::shared_ptr<Frame>());
         thread->Wait();
         thread = 0;
+
         decompress_done(decompress);
     }
 
     unsigned int decoder_index;
 
     switch(in_codec) {
+        case J2K:
+            decoder_index = J2K_DECOMPRESS_MAGIC;
+            break;
         case JPEG:
             decoder_index = JPEG_MAGIC;
             break;

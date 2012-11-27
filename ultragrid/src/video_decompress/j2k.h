@@ -1,5 +1,5 @@
 /*
- * FILE:    video_codec.h
+ * FILE:    video_decompress/dxt_glsl.c
  * AUTHORS: Martin Benes     <martinbenesh@gmail.com>
  *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
  *          Petr Holub       <hopet@ics.muni.cz>
@@ -44,54 +44,20 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#ifndef __video_decompress_h
 
-#define __video_decompress_h
 #include "video_codec.h"
 
+#include <tr1/memory>
+
+#include "video.h"
 #include "Frame.h"
-#include "video_decompress/jpeg.h"
-#include "video_decompress/j2k.h"
-#include "video_decompress/null.h"
 
-struct state_decompress;
+#define J2K_DECOMPRESS_MAGIC 0x4f1d51fdu
 
-/**
- * initializes decompression and returns internal state
- */
-typedef  void *(*decompress_init_t)(codec_t out_codec);
-/**
- * Recompresses decompression for specified video description
- */
-typedef  int (*decompress_reconfigure_t)(void * state, struct video_desc desc, 
-                int rshift, int gshift, int bshift, int pitch, codec_t out_codec);
-/**
- * Decompresses data from buffer of src_len into dst
- */
-typedef void (*decompress_push_t)(void *, std::tr1::shared_ptr<Frame> buffer);
-typedef std::tr1::shared_ptr<Frame> (*decompress_pop_t)(void *);
-/**
- * Cleanup function
- */
-typedef  void (*decompress_done_t)(void *);
+void * j2k_decompress_init(codec_t out_codec);
+int j2k_decompress_reconfigure(void *state, struct video_desc desc,
+                        int rshift, int gshift, int bshift, int pitch, codec_t out_codec);
+void j2k_push(void *state, std::tr1::shared_ptr<Frame> src);
+std::tr1::shared_ptr<Frame> j2k_pop(void *state);
+void j2k_decompress_done(void *state);
 
-
-struct decode_from_to {
-        codec_t from;
-        codec_t to;
-
-        uint32_t decompress_index;
-};
-extern struct decode_from_to decoders_for_codec[];
-extern const int decoders_for_codec_count;
-
-
-void initialize_video_decompress(void);
-
-struct state_decompress *decompress_init(unsigned int decoder_index, codec_t out_codec);
-int decompress_reconfigure(struct state_decompress *, struct video_desc, int rshift, int gshift, int bshift, int pitch, codec_t out_codec);
-void decompress_push(struct state_decompress *, std::tr1::shared_ptr<Frame> buffer);
-std::tr1::shared_ptr<Frame> decompress_pop(struct state_decompress *);
-void decompress_done(struct state_decompress *);
-
-#endif /* __video_decompress_h */

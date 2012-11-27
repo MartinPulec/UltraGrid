@@ -59,6 +59,7 @@
 		<Unit filename="include/ClientManager.h" />
 		<Unit filename="include/ConnectionClosedException.h" />
 		<Unit filename="include/Decompress.h" />
+		<Unit filename="include/Frame.h" />
 		<Unit filename="include/GLView.h" />
 		<Unit filename="include/Observable.h" />
 		<Unit filename="include/Observer.h" />

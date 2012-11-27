@@ -126,12 +126,12 @@ void j2k_push(void *arg, struct video_frame * tx)
 
         if(!tx) {
                 pthread_mutex_lock(&s->lock);
+                s->should_exit = true;
                 if(!s->initialized) {
                         pthread_cond_signal(&s->cv);
                 } else {
                         demo_enc_stop(s->j2k_encoder);
                 }
-                s->initialized = false;
                 pthread_mutex_unlock(&s->lock);
         } else {
                 if(tx->tiles[0].width != s->saved_desc.width ||

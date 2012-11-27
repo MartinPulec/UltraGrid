@@ -47,6 +47,7 @@ class Decompress
         VideoBuffer                 *buffer;
 
         struct video_desc           savedVideoDesc;
+        codec_t                      in_codec;
         codec_t                      out_codec;
 
         struct state_decompress    *decompress;

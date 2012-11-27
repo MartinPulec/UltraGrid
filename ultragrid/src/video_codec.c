@@ -59,6 +59,7 @@ static int get_halign(codec_t codec);
 
 #define to_fourcc(a,b,c,d)     (((a)<<24) | ((b)<<16) | ((c)<<8) | (d))
 
+// this MUST be of the same order as (enum) codec_t (vc_get_linesize) !!!!
 const struct codec_info_t codec_info[] = {
         {RGBA, "RGBA", 0x41424752, 1, 4.0, TRUE, FALSE},
         {UYVY, "UYVY", 846624121, 1, 2, FALSE, FALSE},
@@ -75,6 +76,7 @@ const struct codec_info_t codec_info[] = {
         {RGB16, "RGB16", to_fourcc('R','G','1','6'), 1, 6.0, TRUE, FALSE},
 
         {DPX10, "DPX10", to_fourcc('D','P','1','0'), 1, 4.0, TRUE, FALSE},
+        {XPD10, "XPD10", to_fourcc('X','P','1','0'), 1, 4.0, TRUE, FALSE},
         {JPEG, "JPEG", to_fourcc('J','P','E','G'), 0, 0.0, FALSE, TRUE},
         {J2K, "J2K", to_fourcc('M','J','2','C'), 0, 0.0, FALSE, TRUE},
         {RAW, "raw", to_fourcc('r','a','w','s'), 0, 1.0, FALSE, TRUE}, /* raw SDI */

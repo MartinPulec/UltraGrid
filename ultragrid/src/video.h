@@ -77,9 +77,10 @@ typedef enum {
         RGB,
         RGB16,
         DPX10,
+        XPD10,
         JPEG,
+        J2K,
         RAW,
-        J2K
 } codec_t;
 
 enum interlacing_t {

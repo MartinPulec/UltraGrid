@@ -718,6 +718,8 @@ UGReceiver::~UGReceiver()
 #ifdef DEBUG
     std::cerr << "UGRECEIVER SHOULD HAVE EXITED" << std::endl;
 #endif
+
+    delete uv;
 }
 
 bool UGReceiver::BaseHeaderHasNextHeader(uint32_t *hdr)
@@ -830,10 +832,15 @@ void UGReceiver::Reconfigure(struct state_uv *uv, struct video_desc video_desc, 
         uv->savedVideoDesc.interlacing = video_desc.interlacing;
         uv->savedVideoDesc.fps = video_desc.fps;
 
-        if(video_desc.color_spec == JPEG) {
-            out_codec = RGB;
-        } else {
-            out_codec = video_desc.color_spec;
+        switch(video_desc.color_spec) {
+            case J2K:
+                out_codec = XPD10;
+                break;
+            case JPEG:
+                out_codec = RGB;
+                break;
+            default:
+                out_codec = video_desc.color_spec;
         }
     }
 
