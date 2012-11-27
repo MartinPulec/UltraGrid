@@ -103,6 +103,8 @@ private:
         if(requiredSize > sizeGPU) {
             if(ptrGPU) {
                 freeGPU(ptrGPU);
+                ptrGPU = 0;
+                sizeGPU = 0;
             }
             ptrGPU = (T*)mallocGPU(requiredSize);
             sizeGPU = requiredSize;
@@ -144,6 +146,8 @@ private:
         if(capacities[bufferIdx] < byteCount) {
             if(ptrs[bufferIdx]) {
                 freeGPU(ptrs[bufferIdx]);
+                ptrs[bufferIdx] = 0;
+                capacities[bufferIdx] = 0;
             }
             ptrs[bufferIdx] = (T*)mallocGPU(byteCount);
             capacities[bufferIdx] = byteCount;
@@ -244,6 +248,8 @@ public:
         if(capacity < size) {
             if(ptr) {
                 freeGPU(ptr);
+                ptr = 0;
+                capacity = 0;
             }
             ptr = mallocGPU(size);
             capacity = size;

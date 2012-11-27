@@ -28,13 +28,15 @@ t2_cpu_encoder * t2_cpu_create(const struct j2k_encoder * const enc);
 /// @param out_ptr   pointer to output buffer in main memory, where the output 
 ///                  should be written
 /// @param out_size  size of output buffer
+/// @param subsampled true if half sized image should be saved
 /// @return  either size of output stream (in bytes) if encoded OK,
 ///          or negative error code if failed
 int t2_cpu_encode(
     const struct j2k_encoder * const j2k_enc,
     t2_cpu_encoder * const t2_enc,
     unsigned char * const out,
-    const int out_size
+    const int out_size,
+    const bool subsampled
 );
 
 

@@ -102,6 +102,7 @@ j2k_image_params_set_default(struct j2k_image_params * params)
 {
     params->output_byte_count = 0;
     params->quality = 1.0f;
+    params->subsampled = 0;
 }
 
 
@@ -680,14 +681,15 @@ print_timer(const char * const what, struct j2k_gpu_timer * const timer) {
  * 
  * @param encoder  encoder instance
  * @param quality  0.2 = poor quality, 1.0 = full quality, 1.2 = extra quality
+ * @param subsampled  nonzero if highest resolutions should be cleared
  */
 static void
-j2k_encoder_set_quality(struct j2k_encoder* encoder, float quality)
+j2k_encoder_set_quality(struct j2k_encoder* encoder, float quality, int subsampled)
 {
     if(encoder->params.compression == CM_LOSSY_FLOAT) {
         const float limited_quality = quality < encoder->params.quality_limit
                 ? quality : encoder->params.quality_limit;
-        quantizer_setup_lossy(encoder, limited_quality);
+        quantizer_setup_lossy(encoder, limited_quality, subsampled);
     }
 }
 
@@ -721,7 +723,17 @@ dev_to_host(void * dest, const void * src, size_t size, cudaStream_t str) {
 }
 
 
-
+/**
+ * Sets buffers of given stream to be used in decoder structure.
+ */
+static void
+use_stream_buffers(const struct j2k_pipeline_stream * const stream,
+                   struct j2k_encoder * const enc) {
+    enc->d_band = stream->d_band;
+    enc->d_cblk = stream->d_cblk;
+    enc->band = stream->band;
+    enc->cblk = stream->cblk;
+}
 
 
 /** 
@@ -784,8 +796,7 @@ j2k_encoder_run(struct j2k_encoder * encoder,
     // encode all input images
     do {
         // set buffer pointers for current encoding stage
-        encoder->d_band = enc_str->d_band;
-        encoder->d_cblk = enc_str->d_cblk;
+        use_stream_buffers(enc_str, encoder);
         
         // run preprocessor on encoding stage (if it has image loaded)
         if(enc_str->active) {
@@ -868,7 +879,7 @@ j2k_encoder_run(struct j2k_encoder * encoder,
             
             // copy fixed-size codeblock info structures into host buffer
             encoder->error |= dev_to_host(
-                encoder->cblk,
+                out_str->cblk,
                 out_str->d_cblk,
                 encoder->cblk_size,
                 out_str->stream
@@ -913,6 +924,9 @@ j2k_encoder_run(struct j2k_encoder * encoder,
                 encoder->error = -761;
             }
             
+            // use input stream buffers for input setup
+            use_stream_buffers(in_str, encoder);
+            
             // 1 if encoder has nothing else to do but waiting for new image
             const int should_block = !enc_str->active && !out_str->active;
             
@@ -930,12 +944,16 @@ j2k_encoder_run(struct j2k_encoder * encoder,
 
         // call output callback if no error occured (and if output stage is active)
         if(0 == encoder->error && out_str->active) {
+            // use output stream buffers for output composition
+            use_stream_buffers(out_str, encoder);
+            
             // print output memcpy time        
             if(out_str->active) {
                 print_timer("Output memcpy", encoder->timer_d_to_h);
             }
             
             // Call T2 from output callback
+            encoder->out_stream = out_str;
             encoder->have_output = 1;
             out_callback(encoder, user_callback_data, out_str->user_input_data);
             encoder->have_output = 0;
@@ -1038,7 +1056,13 @@ j2k_encoder_get_output(struct j2k_encoder * enc,
     
     // run T2 (surrounded by time measurement)
     j2k_cpu_timer_start(enc->timer_t2);
-    const int t2_result = j2k_t2_encode(enc, enc->t2, (unsigned char *)output_buffer_ptr, output_buffer_size);
+    const int t2_result = j2k_t2_encode(
+            enc, 
+            enc->t2, 
+            (unsigned char *)output_buffer_ptr, 
+            output_buffer_size, 
+            enc->out_stream->image_params.subsampled
+    );
     j2k_cpu_timer_stop(enc->timer_t2);
     if(enc->timer_t2) {
         print_time("T2", j2k_cpu_timer_time_ms(enc->timer_t2));
@@ -1147,6 +1171,11 @@ j2k_encoder_set_input
         j2k_image_params_set_default(&loading_stage->image_params);
     }
     
+    // clear subsampling if not using DCI 4K
+    if(enc->params.capabilities != J2K_CAP_DCI_4K) {
+        loading_stage->image_params.subsampled = 0;
+    }
+    
     // remember the buffer pointer and format
     loading_stage->source_ptr = data;
     loading_stage->format = format;
@@ -1162,12 +1191,16 @@ j2k_encoder_set_input
     
     // quantizer setup (for lossy encoding)
     if(enc->params.compression == CM_LOSSY_FLOAT) {
-        j2k_encoder_set_quality(enc, loading_stage->image_params.quality);
+        j2k_encoder_set_quality(
+            enc, 
+            loading_stage->image_params.quality,
+            loading_stage->image_params.subsampled
+        );
         
         // copy stepsizes into GPU buffer
         enc->error |= host_to_dev(
             loading_stage->d_band, 
-            enc->band, 
+            loading_stage->band, 
             enc->band_size, 
             loading_stage->stream
         );

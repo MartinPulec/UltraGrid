@@ -59,6 +59,22 @@ static void usage(const char * const message) {
 }
 
 
+static void transform(void * data, const size_t size) {
+    unsigned int src, r, g, b;
+    int pix_idx;
+    
+    for(pix_idx = size / 6; pix_idx--;) {
+        src = ((unsigned int*)data)[pix_idx];
+        r = (src >> 00) & 0x3ff;
+        g = (src >> 10) & 0x3ff;
+        b = (src >> 20) & 0x3ff;
+        ((unsigned short*)data)[pix_idx * 3 + 0] = r << 6 | r >> 10;
+        ((unsigned short*)data)[pix_idx * 3 + 1] = g << 6 | g >> 10;
+        ((unsigned short*)data)[pix_idx * 3 + 2] = b << 6 | b >> 10;
+    }
+}
+
+
 /** Saving thread implementation. */
 static void * saving_thread_impl(void * param) {
     int status;
@@ -75,6 +91,8 @@ static void * saving_thread_impl(void * param) {
         else if(0 == status) {
             /* save the image */
             if(file = fopen(item->path, "w")) {
+                /* transform 10-10-10-2 to 16-16-16 */
+                transform(item->buffer_ptr, item->output_size);
                 if(1 == fwrite(item->buffer_ptr, item->output_size, 1, file))
                     printf("Output file saved OK: %s (%dx%d).\n", 
                            item->path, item->size_x, item->size_y);
@@ -142,7 +160,7 @@ static int load_and_submit(FILE * const file,
         printf("File %s isn't valid JPEG 2000 codestream.\n", filename);
         return -1;
     }
-    item->output_size = item->size_x * item->size_y * 4;
+    item->output_size = item->size_x * item->size_y * 6;
     
     /* check buffer size again (this time for output size) */
     if(item->buffer_size < item->output_size) {

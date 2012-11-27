@@ -60,7 +60,7 @@ public:
     ///   4 = decoder info
     ///   5 = decoder debug
     /// @param maxVerbosity maximal verbosity of displayed messages (inclusive)
-    Logger(const int maxVerbosity = 4) {
+    Logger(const int maxVerbosity = 2) {
         this->callback = defaultCallback;
         this->maxVerbosity = maxVerbosity;
         this->beginTimeMs = getTimeMs();

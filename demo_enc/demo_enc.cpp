@@ -21,7 +21,6 @@ struct work_item {
     void * custom_data_ptr;        // custom pointer associated with the image
     void * out_buffer_ptr;         // output buffer pointer
     size_t out_buffer_size;        // output buffer size
-    int subsampled;                // true if subsampled
     const void * src_ptr;          // source data pointer
     j2k_image_params params;       // encoding parameters for the image
     int out_size;                  // output codestream size or -1 for error
@@ -465,7 +464,7 @@ void demo_enc_submit(struct demo_enc * enc_ptr,
     item->custom_data_ptr = custom_data_ptr;
     item->out_buffer_ptr = out_buffer_ptr;
     item->out_buffer_size = out_buffer_size;
-    item->subsampled = subsampled;
+    item->params.subsampled = subsampled;
     item->src_ptr = src_ptr;
     item->params.output_byte_count = required_size;
     item->params.quality = quality;

@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "j2k.h"
 #include "j2k_encoder_init.h"
 #include "ebcot/mqc/mqc.h"
@@ -127,6 +128,8 @@ j2k_encoder_free_buffer(struct j2k_encoder * const encoder)
         struct j2k_pipeline_stream * const stream = encoder->pipeline + i;
         if(stream->d_band) { cudaFree(stream->d_band); stream->d_band = 0; }
         if(stream->d_cblk) { cudaFree(stream->d_cblk); stream->d_cblk = 0; }
+        if(stream->band) { cudaFreeHost(stream->band); stream->band = 0; }
+        if(stream->cblk) { cudaFreeHost(stream->cblk); stream->cblk = 0; }
     }
     return 0;
 }
@@ -505,7 +508,7 @@ j2k_quantization_init(struct j2k_encoder * const encoder)
     if( encoder->params.compression == CM_LOSSLESS ) {
         quantizer_setup_lossless(encoder);
     } else if ( encoder->params.compression == CM_LOSSY_FLOAT ) {
-        quantizer_setup_lossy(encoder, encoder->params.quality_limit);
+        quantizer_setup_lossy(encoder, encoder->params.quality_limit, 0);
     } else {
         assert(0); // unknown compression mode
     }
@@ -698,8 +701,6 @@ j2k_encoder_init_buffer(struct j2k_encoder* encoder)
     if(cudaSuccess != cudaMalloc((void**)&encoder->d_component, components_size)) { result |= 1 << 1; }
     if(cudaSuccess != cudaMallocHost((void**)&encoder->resolution, resolutions_size)) { result |= 1 << 2; }
     if(cudaSuccess != cudaMalloc((void**)&encoder->d_resolution, resolutions_size)) { result |= 1 << 3; }
-    if(cudaSuccess != cudaMallocHost((void**)&encoder->band, encoder->band_size)) { result |= 1 << 4; }
-    if(cudaSuccess != cudaMallocHost((void**)&encoder->cblk, encoder->cblk_size)) { result |= 1 << 5; }
     if(cudaSuccess != cudaMallocHost((void**)&encoder->precinct, precincts_size)) { result |= 1 << 6; }
     if(cudaSuccess != cudaMalloc((void**)&encoder->d_precinct, precincts_size)) { result |= 1 << 7; }
     
@@ -708,11 +709,15 @@ j2k_encoder_init_buffer(struct j2k_encoder* encoder)
         struct j2k_pipeline_stream * const stream = encoder->pipeline + i;
         if(cudaSuccess != cudaMalloc((void**)&stream->d_band, encoder->band_size)) { result |= 1 << 8; }
         if(cudaSuccess != cudaMalloc((void**)&stream->d_cblk, encoder->cblk_size)) { result |= 1 << 9; }
+        if(cudaSuccess != cudaMallocHost((void**)&stream->band, encoder->band_size)) { result |= 1 << 4; }
+        if(cudaSuccess != cudaMallocHost((void**)&stream->cblk, encoder->cblk_size)) { result |= 1 << 5; }
     }
     
     // use buffers of pipeline stream #0 for initialization (will be copied to other streams later)
     encoder->d_band = encoder->pipeline[0].d_band;
     encoder->d_cblk = encoder->pipeline[0].d_cblk;
+    encoder->band = encoder->pipeline[0].band;
+    encoder->cblk = encoder->pipeline[0].cblk;
     
     // check allocation result
     if(result) {
@@ -859,6 +864,8 @@ j2k_encoder_init_buffer(struct j2k_encoder* encoder)
         const struct j2k_pipeline_stream * const dest_stream = encoder->pipeline + i;
         if(cudaSuccess != cudaMemcpy(dest_stream->d_band, src_stream->d_band, encoder->band_size, cudaMemcpyDeviceToDevice)) { result |= 1; }
         if(cudaSuccess != cudaMemcpy(dest_stream->d_cblk, src_stream->d_cblk, encoder->cblk_size, cudaMemcpyDeviceToDevice)) { result |= 1; }
+        memcpy(dest_stream->band, src_stream->band, encoder->band_size);
+        memcpy(dest_stream->cblk, src_stream->cblk, encoder->cblk_size);
     }
     
     // finally check mempcy status

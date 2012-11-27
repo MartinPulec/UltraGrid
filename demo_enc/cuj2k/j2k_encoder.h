@@ -201,6 +201,12 @@ struct j2k_image_params
      * (e.g. if there is not enough information to be encoded).
      */
     size_t output_byte_count;
+    
+    /**
+     * Nonzero if image should be half-sized. (Only valid for 4K DCI images, 
+     * in which case, the output will beocme DCI 2K). Zero for normal coding.
+     */
+    int subsampled;
 };
 
 

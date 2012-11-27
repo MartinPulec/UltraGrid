@@ -86,21 +86,33 @@ inline int ilog2(int n) {
 }
 
 
+
+/// Divide and round up
+inline int div_rnd_up(const int n, const int d) {
+    return (n + d - 1) / d;
+}
+
+
 /// Encodes main header of JPEG2000 codestream into given output.
 /// @param enc  encoder structure of the image
 /// @param out  output bytes writer
 /// @param tlm_out  output writer for TLM marker records - to be initialized
+/// @param subsampled true if half sized image should be saved
 /// @return true if OK, false otherwise
 bool t2_cpu_main_header_encode(const struct j2k_encoder * const enc,
                                t2_cpu_output_t * const out,
-                               t2_cpu_output_t * const tlm_out) {
+                               t2_cpu_output_t * const tlm_out,
+                               const bool subsampled) {
+    // "sampling factor"
+    const int sampling_factor = subsampled ? 2 : 1;
+    
     // pointer directly to parameters (used frequently)
     const j2k_encoder_params * const params = &enc->params;
     
     // some interesting parameters
     const int comp_count = params->comp_count;
     const int layer_count = 1;  // TODO: layer count
-    const int res_count = params->resolution_count;
+    const int res_count = params->resolution_count + 1 - sampling_factor;
     const int band_count = res_count * 3 - 2; // for each tile-component
     
     // sizes of various markers
@@ -109,7 +121,7 @@ bool t2_cpu_main_header_encode(const struct j2k_encoder * const enc,
     const int qcd_bytes = enc->quantization_mode == QM_EXPLICIT
             ? (3 + 2 * band_count)
             : (enc->quantization_mode == QM_IMPLICIT ? 5 : (3 + band_count));
-    const int tlm_bytes = 4 + 6 * enc->tilepart_count;
+    const int tlm_bytes = 4 + 6 * (enc->tilepart_count / sampling_factor);
             
     // have enough space for SOC, SIZ, COD and QCD?
     if(!out->has_space(10 + siz_bytes + cod_bytes + qcd_bytes + tlm_bytes)) {
@@ -122,26 +134,30 @@ bool t2_cpu_main_header_encode(const struct j2k_encoder * const enc,
     // SIZ marker (p. 26, JPEG2000 Part 1 final draft)
     out->put_2bytes(0xFF51);
     out->put_2bytes(siz_bytes); // SIZ length
-    switch(params->capabilities) {
-        case J2K_CAP_DEFAULT:
-            out->put_2bytes(0);
-            break;
-        case J2K_CAP_DCI_2K_24:
-        case J2K_CAP_DCI_2K_48:
-            out->put_2bytes(3);
-            break;
-        case J2K_CAP_DCI_4K:
-            out->put_2bytes(4);
-            break;
-        default:
-            return false; // unknown codestream capabilities
+    if(subsampled) {
+        out->put_2bytes(3); // DCI 2K
+    } else {
+        switch(params->capabilities) {
+            case J2K_CAP_DEFAULT:
+                out->put_2bytes(0);
+                break;
+            case J2K_CAP_DCI_2K_24:
+            case J2K_CAP_DCI_2K_48:
+                out->put_2bytes(3);
+                break;
+            case J2K_CAP_DCI_4K:
+                out->put_2bytes(4);
+                break;
+            default:
+                return false; // unknown codestream capabilities
+        }
     }
-    out->put_4bytes(params->size.width); // image width
-    out->put_4bytes(params->size.height); // & height
+    out->put_4bytes(div_rnd_up(params->size.width, sampling_factor)); // image width
+    out->put_4bytes(div_rnd_up(params->size.height, sampling_factor)); // & height
     out->put_4bytes(0);  //  image origin x
     out->put_4bytes(0);  //  image origin y
-    out->put_4bytes(params->size.width); // tile width
-    out->put_4bytes(params->size.height); // & height
+    out->put_4bytes(div_rnd_up(params->size.width, sampling_factor)); // tile width
+    out->put_4bytes(div_rnd_up(params->size.height, sampling_factor)); // & height
     out->put_4bytes(0);  //  tile origin x
     out->put_4bytes(0);  //  tile origin y
     out->put_2bytes(comp_count);
@@ -213,7 +229,7 @@ bool t2_cpu_main_header_encode(const struct j2k_encoder * const enc,
     out->put_byte(0x60);        // = using 16bit Ttlm and 32bit Ptlm
     
     // initialize tilepart record writer
-    const int tilepart_info_bytes = 6 * enc->tilepart_count;
+    const int tilepart_info_bytes = 6 * (enc->tilepart_count / sampling_factor);
     tlm_out->init(out->get_end(), out->get_end() + tilepart_info_bytes);
     
     // initialize tilepart info records with zeros
@@ -237,7 +253,7 @@ bool t2_cpu_main_header_encode(const struct j2k_encoder * const enc,
     out->put_bytes((const unsigned char*)comment, comment_len);
     
     // DCI 4K needs hardcoded progression order change
-    if(params->capabilities == J2K_CAP_DCI_4K) {
+    if(params->capabilities == J2K_CAP_DCI_4K && !subsampled) {
         // have enough space for the marker segment?
         if(!out->has_space(2 + 2 + 7 * 2)) {
             return false;
@@ -461,18 +477,20 @@ bool t2_cpu_tilepart_encode(const struct j2k_encoder * const enc,
 /// @param out_begin  pointer to output buffer in main memory, where the output 
 ///                   should be written
 /// @param out_size   size of output buffer
+/// @param subsampled true if half sized image should be saved
 /// @return  either size of output stream (in bytes) if encoded OK,
 ///          or negative error code if failed
 int t2_cpu_encode(const struct j2k_encoder * const j2k_enc,
                   t2_cpu_encoder * const t2_enc,
                   unsigned char * const out_begin,
-                  const int out_size) {
+                  const int out_size,
+                  const bool subsampled) {
     // prepare bit/byte writer
     t2_cpu_output_t output, tlm_output;
     output.init(out_begin, out_begin + out_size);
     
     // put main header into the output buffer
-    if(!t2_cpu_main_header_encode(j2k_enc, &output, &tlm_output)) {
+    if(!t2_cpu_main_header_encode(j2k_enc, &output, &tlm_output, subsampled)) {
         return -4;
     }
     
@@ -480,8 +498,13 @@ int t2_cpu_encode(const struct j2k_encoder * const j2k_enc,
     // in the tile
     unsigned int tile_prec_idx = 0;
     
+    // numebr fo tileparts to be saved
+    const int save_tilepart_count = subsampled
+            ? j2k_enc->tilepart_count / 2
+            : j2k_enc->tilepart_count;
+    
     // encode all tileparts
-    for(int tpart_idx = 0; tpart_idx < j2k_enc->tilepart_count; tpart_idx++) {
+    for(int tpart_idx = 0; tpart_idx < save_tilepart_count; tpart_idx++) {
         // encode header of current tilepart
         if(!t2_cpu_tilepart_encode(j2k_enc,
                                    tpart_idx,

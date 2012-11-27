@@ -81,9 +81,10 @@ quantizer_setup_lossless(struct j2k_encoder* encoder);
  * 
  * @param encoder  instance of encoder with parameters set and structure ready
  * @param quality  quality parameter for stepsizes computation
+ * @param subsampled  nonzero to set maximal coefficients for highest resolution
  */
 void
-quantizer_setup_lossy(struct j2k_encoder* encoder, float quality);
+quantizer_setup_lossy(struct j2k_encoder* encoder, float quality, int subsampled);
 
 /** 
  * Perform quantization

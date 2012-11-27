@@ -46,31 +46,15 @@ namespace cuj2kd {
 
 /// High level DWT implementation for JPEG 2000 decoder.
 class DWT {
-    
 private:
-    
-    static void launch(int * const out,
-                       const int * const llIn,
-                       const int * const hlIn,
-                       const int * const lhIn,
-                       const int * const hhIn,
-                       const bool reversible,
-                       const XY & begin,
-                       const XY & end,
-                       cudaStream_t & stream);
-    
-    
-    
-    
-    static void copyGpu(void * const dest,
-                        const void * const src,
-                        const size_t size,
-                        cudaStream_t & stream); 
-    
-    static void setup();
-    
+    /// Buffer for correctly mirrored line pointers and coordinates
+    GPUBuffer mirror;
     
 public:
+    /// Standard constructor - configures DWT kernels
+    DWT();
+    
+    /// Transforms all bands in all tiles in given images in given stream.
     void transform(
         Image & image,
         IOBufferGPU<u8> & working,

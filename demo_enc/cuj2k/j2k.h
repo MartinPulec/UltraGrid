@@ -244,6 +244,12 @@ struct j2k_pipeline_stream {
     // All code-blocks buffer (for all components of the stream's image)
     struct j2k_cblk * d_cblk;
     
+    // All bands buffer (for all components of currently encoded image)
+    struct j2k_band * band;
+    
+    // All code-blocks buffer (for all components of currently encoded image)
+    struct j2k_cblk * cblk;
+    
     // Image specific parameters
     struct j2k_image_params image_params;
     
@@ -403,8 +409,9 @@ struct j2k_encoder {
     // encoding pipeline stages (loading, encoding, saving)
     struct j2k_pipeline_stream pipeline[3];
     
-    // pointer to currently loading stream
+    // pointer to currently loading and saving streams
     struct j2k_pipeline_stream * in_stream;
+    struct j2k_pipeline_stream * out_stream;
     
     // pointers to timers or NULLs if no time measurement required:
     struct j2k_gpu_timer * timer_h_to_d;

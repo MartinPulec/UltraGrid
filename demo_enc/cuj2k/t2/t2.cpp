@@ -58,16 +58,18 @@ struct j2k_t2_encoder * j2k_t2_create(const struct j2k_encoder * const enc)  {
 /// @param out_ptr   pointer to output buffer in main memory, where the output 
 ///                  should be written
 /// @param out_size  size of output buffer
+/// @param subsampled  true for half-sized output
 /// @return  either size of output stream (in bytes) if encoded OK,
 ///          or negative error code if failed
 int j2k_t2_encode(const struct j2k_encoder * const j2k_enc,
               struct j2k_t2_encoder * const t2_enc,
               unsigned char * const out,
-              const int out_size) {
+              const int out_size,
+              const int subsampled) {
     if(t2_enc->gpu_t2_enc_ptr) {
         return t2_gpu_encode(j2k_enc, t2_enc->gpu_t2_enc_ptr, out, out_size);
     } else if (t2_enc->cpu_t2_enc_ptr) {
-        return t2_cpu_encode(j2k_enc, t2_enc->cpu_t2_enc_ptr, out, out_size);
+        return t2_cpu_encode(j2k_enc, t2_enc->cpu_t2_enc_ptr, out, out_size, subsampled);
     } else {
         return -1;
     }

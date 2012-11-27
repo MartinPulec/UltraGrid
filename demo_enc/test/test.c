@@ -104,6 +104,7 @@ static void * saving_thread_impl(void * param) {
 
 /** Reads given file and submits it for encoding. */
 static void submit_input(const char * const filename) {
+    static int subsampled = 1;
     struct work_item * item = 0;
     FILE * file = 0;
     int load_size = size_x * size_y * 4; /* 4 bytes per pixel */
@@ -122,7 +123,7 @@ static void submit_input(const char * const filename) {
             pthread_mutex_unlock(&mutex);
             
             /* compose output filename */
-            snprintf(item->path, MAX_PATH_LEN, "%s.j2k", filename);
+            snprintf(item->path, MAX_PATH_LEN, "%s%s.j2k", filename, subsampled ? ".sub" : ".full");
             
             /* load the file */
             if(1 == fread(item->buffer, load_size, 1, file)) {
@@ -131,7 +132,8 @@ static void submit_input(const char * const filename) {
                 
                 /* submit the work item for encoding */
                 demo_enc_submit(enc, item, item->buffer, buffer_size, 
-                                item->buffer, 0, 1.0f, 0);
+                                item->buffer, 0, 1.0f, subsampled);
+                subsampled = !subsampled;
             } else {
                 /* show error message */
                 printf("Cannot read %d bytes from file %s.\n", load_size, filename);

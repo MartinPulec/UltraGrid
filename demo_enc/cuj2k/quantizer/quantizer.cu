@@ -92,10 +92,10 @@ decompose_stepsize(const double stepsize,
     // TODO: check, whether to check overflow/underflow
     if(*exponent_out > MAX_EXP) {
         *exponent_out = MAX_EXP;
-        *mantisa_out = MAX_MAN;
+        *mantisa_out = 0;
     } else if (*exponent_out < 0) {
         *exponent_out = 0;
-        *mantisa_out = 0;
+        *mantisa_out = MAX_MAN;
     } else if (*mantisa_out > MAX_MAN) { // exp. OK => max 11 bits for mantisa
         *mantisa_out = MAX_MAN;
     } else if (*mantisa_out < 0) {
@@ -253,7 +253,7 @@ quantizer_setup_lossless(struct j2k_encoder* encoder)
 
 /** Documented at declaration */
 void
-quantizer_setup_lossy(struct j2k_encoder* encoder, float quality)
+quantizer_setup_lossy(struct j2k_encoder* encoder, float quality, int subsampled)
 {
     // set quantization type
     encoder->quantization_mode = QM_EXPLICIT;
@@ -280,8 +280,13 @@ quantizer_setup_lossy(struct j2k_encoder* encoder, float quality)
             const int dwt_level_count = params->resolution_count - max(1, res_idx);
             
             // weights of filter outputs at this resolution
-            const double l_weight = get_lowpass_weight(dwt_level_count);
-            const double h_weight = get_highpass_weight(dwt_level_count);
+            double l_weight = get_lowpass_weight(dwt_level_count);
+            double h_weight = get_highpass_weight(dwt_level_count);
+            
+            // clear weights in highest resolution of each component if supsampling
+            if(subsampled && res_idx == params->resolution_count - 1) {
+                l_weight = h_weight = 0.00000000001f;
+            }
             
             // for all resolution's bands:
             for ( int bnd = 0; bnd < res_ptr->band_count; bnd++ ) {

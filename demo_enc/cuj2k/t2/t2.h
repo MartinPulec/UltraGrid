@@ -28,13 +28,15 @@ struct j2k_t2_encoder * j2k_t2_create(const struct j2k_encoder * const enc);
 /// @param out_ptr   pointer to output buffer in main memory, where the output 
 ///                  should be written
 /// @param out_size  size of output buffer
+/// @param subsampled  true for half-sized output
 /// @return  either size of output stream (in bytes) if encoded OK,
 ///          or negative error code if failed
 int j2k_t2_encode(
     const struct j2k_encoder * const j2k_enc,
     struct j2k_t2_encoder * const t2_enc,
     unsigned char * const out,
-    const int out_size
+    const int out_size,
+    const int subsampled
 );
 
 
