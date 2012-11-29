@@ -61,6 +61,7 @@
 #include "video_codec.h"
 #include "video_compress.h"
 
+#define MAX_QUEUE_LEN 5
 
 #define MAGIC 0x45bb3321
 
@@ -69,7 +70,8 @@ using namespace std;
 struct none_video_compress {
         uint32_t magic;
         pthread_mutex_t lock;
-        pthread_cond_t cv;
+        pthread_cond_t in_cv;
+        pthread_cond_t out_cv;
         queue<struct video_frame *> dummy_queue;
 };
 
@@ -82,7 +84,8 @@ void * none_compress_init(char * opts)
         s = new none_video_compress;
         s->magic = MAGIC;
         pthread_mutex_init(&s->lock, NULL);
-        pthread_cond_init(&s->cv, NULL);
+        pthread_cond_init(&s->in_cv, NULL);
+        pthread_cond_init(&s->out_cv, NULL);
 
         return s;
 }
@@ -94,8 +97,12 @@ void none_push(void *arg, struct video_frame * tx)
         assert(s->magic == MAGIC);
 
         pthread_mutex_lock(&s->lock);
+        while(s->dummy_queue.size() > MAX_QUEUE_LEN) {
+                pthread_cond_wait(&s->in_cv, &s->lock);
+        }
+
         s->dummy_queue.push(tx);
-        pthread_cond_signal(&s->cv);
+        pthread_cond_signal(&s->out_cv);
         pthread_mutex_unlock(&s->lock);
 }
 
@@ -108,10 +115,11 @@ struct video_frame * none_pop(void *arg)
 
         pthread_mutex_lock(&s->lock);
         while(s->dummy_queue.empty()) {
-                pthread_cond_wait(&s->cv, &s->lock);
+                pthread_cond_wait(&s->out_cv, &s->lock);
         }
         res = s->dummy_queue.front();
         s->dummy_queue.pop();
+        pthread_cond_signal(&s->in_cv);
         pthread_mutex_unlock(&s->lock);
 
         return res;
@@ -123,7 +131,8 @@ void none_compress_done(void *arg)
 
         assert(s->magic == MAGIC);
 
-        pthread_cond_destroy(&s->cv);
+        pthread_cond_destroy(&s->in_cv);
+        pthread_cond_destroy(&s->out_cv);
         pthread_mutex_destroy(&s->lock);
         delete s;
 }

@@ -58,8 +58,9 @@
 #include <pthread.h>
 #include <stdlib.h>
 
-using namespace std;
+#define MAX_IN_QUEUE_LEN 5
 
+using namespace std;
 
 struct compress_jpeg_state {
         struct gpujpeg_encoder *encoder;
@@ -81,8 +82,9 @@ struct compress_jpeg_state {
         queue<struct video_frame *> out;
 
         pthread_mutex_t lock;
-        pthread_cond_t in_cv;
-        pthread_cond_t out_cv;
+        pthread_cond_t worker_in_cv;
+        pthread_cond_t boss_in_cv;
+        pthread_cond_t boss_out_cv;
 
         pthread_t thread_id;
 };
@@ -97,16 +99,18 @@ static void *worker(void *args) {
                 struct video_frame *frame;
                 pthread_mutex_lock(&s->lock);
                 while(s->in.empty()) {
-                        pthread_cond_wait(&s->in_cv, &s->lock);
+                        pthread_cond_wait(&s->worker_in_cv, &s->lock);
                 }
 
                 frame = s->in.front();
                 s->in.pop();
 
+                pthread_cond_signal(&s->boss_in_cv);
+
                 if(!frame) {
                         // pass poisoned pill to consumer and exit
                         s->out.push(NULL);
-                        pthread_cond_signal(&s->out_cv);
+                        pthread_cond_signal(&s->boss_out_cv);
                         pthread_mutex_unlock(&s->lock);
                         break;
                 }
@@ -118,7 +122,7 @@ static void *worker(void *args) {
 
                 pthread_mutex_lock(&s->lock);
                 s->out.push(out_frame);
-                pthread_cond_signal(&s->out_cv);
+                pthread_cond_signal(&s->boss_out_cv);
                 pthread_mutex_unlock(&s->lock);
         }
 
@@ -248,8 +252,13 @@ void jpeg_push(void *args, struct video_frame * tx)
         struct compress_jpeg_state *s = (struct compress_jpeg_state *) args;
 
         pthread_mutex_lock(&s->lock);
+
+        while(s->in.size() > MAX_IN_QUEUE_LEN) {
+                pthread_cond_wait(&s->boss_in_cv, &s->lock);
+        }
+
         s->in.push(tx);
-        pthread_cond_signal(&s->in_cv);
+        pthread_cond_signal(&s->worker_in_cv);
         pthread_mutex_unlock(&s->lock);
 }
 
@@ -260,7 +269,7 @@ struct video_frame *jpeg_pop(void *args)
 
         pthread_mutex_lock(&s->lock);
         while(s->out.empty()) {
-                pthread_cond_wait(&s->out_cv, &s->lock);
+                pthread_cond_wait(&s->boss_out_cv, &s->lock);
         }
 
         res = s->out.front();
@@ -280,8 +289,9 @@ void * jpeg_compress_init(char * opts)
         s->decoded = NULL;
         s->device_id = 0;
 
-        pthread_cond_init(&s->in_cv, NULL);
-        pthread_cond_init(&s->out_cv, NULL);
+        pthread_cond_init(&s->worker_in_cv, NULL);
+        pthread_cond_init(&s->boss_in_cv, NULL);
+        pthread_cond_init(&s->boss_out_cv, NULL);
         pthread_mutex_init(&s->lock, NULL);
                 
         if(opts && strcmp(opts, "help") == 0) {
@@ -421,8 +431,9 @@ void jpeg_compress_done(void *arg)
         struct compress_jpeg_state *s = (struct compress_jpeg_state *) arg;
         cudaSetDevice(s->device_id);
 
-        pthread_cond_destroy(&s->in_cv);
-        pthread_cond_destroy(&s->out_cv);
+        pthread_cond_destroy(&s->worker_in_cv);
+        pthread_cond_destroy(&s->boss_in_cv);
+        pthread_cond_destroy(&s->boss_out_cv);
         pthread_mutex_destroy(&s->lock);
         
         if(s->encoder)

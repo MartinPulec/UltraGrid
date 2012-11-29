@@ -62,6 +62,7 @@
 #include "video_codec.h"
 #include "video_compress.h"
 
+#define MAX_QUEUE_LEN 10
 
 #define MAGIC 0x45bb3321
 
@@ -76,7 +77,9 @@ struct j2k_video_compress {
         bool initialized;
         bool should_exit;
         pthread_mutex_t lock;
-        pthread_cond_t cv;
+        pthread_cond_t in_cv;
+        pthread_cond_t out_cv;
+        size_t counter;
 
         uint32_t magic;
 };
@@ -92,10 +95,8 @@ bool j2k_reconfigure(struct j2k_video_compress *s, struct video_desc video_descr
                         4,
                         1.0f);
 
-        pthread_mutex_lock(&s->lock);
         s->initialized = true;
-        pthread_cond_signal(&s->cv);
-        pthread_mutex_unlock(&s->lock);
+        pthread_cond_signal(&s->out_cv);
 
         return s->j2k_encoder != NULL;
 }
@@ -109,9 +110,11 @@ void * j2k_compress_init(char * opts)
 
         memset(&s->saved_desc, 0, sizeof(s->saved_desc));
         pthread_mutex_init(&s->lock, NULL);
-        pthread_cond_init(&s->cv, NULL);
+        pthread_cond_init(&s->out_cv, NULL);
+        pthread_cond_init(&s->in_cv, NULL);
         s->initialized = false;
         s->should_exit = false;
+        s->counter = 0;
 
         s->j2k_encoder = NULL;
 
@@ -124,16 +127,20 @@ void j2k_push(void *arg, struct video_frame * tx)
 
         assert(s->magic == MAGIC);
 
+        pthread_mutex_lock(&s->lock);
+
         if(!tx) {
-                pthread_mutex_lock(&s->lock);
                 s->should_exit = true;
                 if(!s->initialized) {
-                        pthread_cond_signal(&s->cv);
+                        pthread_cond_signal(&s->out_cv);
                 } else {
                         demo_enc_stop(s->j2k_encoder);
                 }
-                pthread_mutex_unlock(&s->lock);
         } else {
+                while(s->counter > MAX_QUEUE_LEN) {
+                        pthread_cond_wait(&s->in_cv, &s->lock);
+                }
+
                 if(tx->tiles[0].width != s->saved_desc.width ||
                                 tx->tiles[0].height != s->saved_desc.height) {
                         s->saved_desc.width = tx->tiles[0].width;
@@ -142,12 +149,16 @@ void j2k_push(void *arg, struct video_frame * tx)
                         assert(ret);
                 }
 
+
                 demo_enc_submit(s->j2k_encoder, (void *) tx,
                                 tx->tiles[0].data, tx->tiles[0].data_len,
                                 tx->tiles[0].data, tx->tiles[0].data_len,
                                 0.7,
                                 0);
+
+                s->counter += 1;
         }
+        pthread_mutex_unlock(&s->lock);
 }
 
 struct video_frame * j2k_pop(void *arg)
@@ -159,7 +170,7 @@ struct video_frame * j2k_pop(void *arg)
 
         pthread_mutex_lock(&s->lock);
         while(!s->initialized) {
-                pthread_cond_wait(&s->cv, &s->lock);
+                pthread_cond_wait(&s->out_cv, &s->lock);
         }
 
         if(s->should_exit) {
@@ -172,6 +183,11 @@ struct video_frame * j2k_pop(void *arg)
                         (void **) &res,
                         NULL,
                         NULL);
+
+        pthread_mutex_lock(&s->lock);
+        s->counter -= 1;
+        pthread_cond_signal(&s->in_cv);
+        pthread_mutex_unlock(&s->lock);
 
         if(size == 0) {
                 return NULL;
@@ -210,6 +226,10 @@ void j2k_compress_done(void *arg)
         if(s->j2k_encoder) {
                 demo_enc_destroy(s->j2k_encoder);
         }
+
+        pthread_cond_destroy(&s->in_cv);
+        pthread_cond_destroy(&s->out_cv);
+        pthread_mutex_destroy(&s->lock);
 
         delete s;
 }
