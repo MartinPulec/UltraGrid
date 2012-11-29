@@ -54,11 +54,12 @@ extern "C" {
 #endif
 struct tcp_transmit;
 struct video_frame;
+struct audio_frame;
 
 void                *tcp_transmit_init(char *address, unsigned int *port);
 void	             tcp_transmit_accept(void *tcp_transmit);
 void		         tcp_transmit_done(void *tcp_transmit);
-void                 tcp_send(void *tcp_transmit, struct video_frame *frame);
+void                 tcp_send(void *tcp_transmit, struct video_frame *frame, struct audio_frame *audio);
 
 #ifdef __cplusplus
 }

@@ -60,6 +60,8 @@
 
 #include "config.h"
 #include "config_unix.h"
+
+#include "audio/audio.h"
 #include "rtp/rtp.h"
 #include "rtp/rtp_callback.h"
 #include "tcp_transmit.h"
@@ -108,57 +110,58 @@ struct tcp_transmit {
         ~tcp_transmit() {
         }
 
-        bool send(struct video_frame *frame)
+        void send(struct video_frame *frame, struct audio_frame *audio)
         {
-            bool rc;
-            rc = send_description(frame);
-            if(!rc)
-                return false;
+                size_t total = 0;
+                send_description(frame, audio);
 
-
-            ssize_t res, total;
-
-            total = 0;
-
-            char *data = frame->tiles[0].data;
-            int data_len = frame->tiles[0].data_len;
-
-            do {
-                //std::cerr << __FILE__ << ":" << __LINE__ <<  std::endl;
-                res = write(this->data_socket_fd, (const char *) data + total, data_len - total);
-                //std::cerr << __FILE__ << ":" << __LINE__ << ": (total sent " << total << "/" << data_len << ")"<< std::endl;
-                if(res == -1) {
-                    std::cerr << __FILE__ << ":" << __LINE__ << ": Connection timeout" << std::endl;
-                    return false;
-                } else if (res == 0) {
-                    std::cerr << __FILE__ << ":" << __LINE__ << ": Connection closed (total sent " << total << "/" << data_len << ")"<< std::endl;
-                    return false;
-                } else {
-                    total += res;
+                while(total < frame->tiles[0].data_len) {
+                        int res = write(this->data_socket_fd, frame->tiles[0].data + total,
+                                        frame->tiles[0].data_len - total);
+                        if(res == -1) {
+                                perror("");
+                                abort();
+                        }
+                        total += res;
                 }
-            } while(total < data_len);
-
-            return true;
+#if 0
+                if(res != frame->tiles[0].data_len) {
+                        std::cerr << "Sent only " << res << "B, " << frame->tiles[0].data_len << "B was scheduled!" << std::endl;
+                }
+#endif
+                if(audio) {
+                        total = 0;
+                        while(total < audio->data_len) {
+                                int res = write(this->data_socket_fd, audio->data + total,
+                                                audio->data_len - total);
+                                if(res == -1) {
+                                        perror("");
+                                        abort();
+                                }
+                                total += res;
+                        }
+#if 0
+                        if(res != audio->data_len) {
+                                std::cerr << "Sent only " << res << "B, " << audio->data_len << "B was scheduled!" << std::endl;
+                        }
+#endif
+                }
         }
 
-        bool send_description(struct video_frame *frame)
+        void send_description(struct video_frame *frame, struct audio_frame *audio)
         {
                 assert(frame->tile_count == 1);
 
                 struct tile *tile = vf_get_tile(frame, 0);
-                video_payload_hdr_t payload_hdr;
+                uint32_t payload_hdr[PCKT_HDR_BASE_LEN + 
+                        PCKT_EXT_INFO_LEN +
+                        PCKT_HDR_AUDIO_LEN];
                 uint32_t tmp;
                 unsigned int fps, fpsd, fd, fi;
 
-                payload_hdr.hres = htons(tile->width);
-                payload_hdr.vres = htons(tile->height);
-                payload_hdr.fourcc = htonl(get_fourcc(frame->color_spec));
-                payload_hdr.length = htonl(tile->data_len);
-                payload_hdr.frame = htonl(frame->frames);
-                // unused payload_hdr.substream_bufnum
-                // unused payload_hdr.offset
-
-                /* word 6 */
+                payload_hdr[PCKT_LENGTH] = htonl(tile->data_len);
+                payload_hdr[PCKT_HRES_VRES] = htonl(tile->width << 16 | tile->height);
+                payload_hdr[PCKT_FOURCC] = htonl(get_fourcc(frame->color_spec));
                 tmp = frame->interlacing << 29;
                 fps = round(frame->fps);
                 fpsd = 1;
@@ -172,27 +175,41 @@ struct tcp_transmit {
                 tmp |= fpsd << 15;
                 tmp |= fd << 14;
                 tmp |= fi << 13;
-                payload_hdr.il_fps = htonl(tmp);
+                payload_hdr[PCKT_IL_FPS] = htonl(tmp);
 
-                ssize_t res, total;
+                int next_header = audio == NULL ? 0 : 1;
+                payload_hdr[PCKT_SEQ_NEXT_HDR] = htonl(frame->frames << 1 | next_header);
 
-                total = 0;
+                if(audio) {
+                        payload_hdr[PCKT_HDR_BASE_LEN] = htonl(PCKT_EXT_AUDIO_TYPE << 28 |
+                                        PCKT_HDR_AUDIO_LEN * sizeof(uint32_t) << 12 |
+                                        0); 
 
-                do {
-                    res = write(this->data_socket_fd, (const char *) &payload_hdr + total, sizeof(payload_hdr) - total);
-                    if(res == -1) {
-                        std::cerr << __FILE__ << ":" << __LINE__ << ": Connection timeout" << std::endl;
-                        return false;
-                    } else if (res == 0) {
-                        std::cerr << __FILE__ << ":" << __LINE__ << ": Connection closed" << std::endl;
-                        return false;
-                    } else {
+                        uint32_t *audio_hdr = payload_hdr + PCKT_HDR_BASE_LEN + PCKT_EXT_INFO_LEN;
+                        audio_hdr[PCKT_EXT_AUDIO_LENGTH] = htonl(audio->data_len);
+                        audio_hdr[PCKT_EXT_AUDIO_QUANT_SAMPLE_RATE] = htonl((audio->bps * 8) << 26 |
+                                        audio->sample_rate);
+                        audio_hdr[PCKT_EXT_AUDIO_CHANNEL_COUNT] = htonl(audio->ch_count);
+                        audio_hdr[PCKT_EXT_AUDIO_TAG] = htonl(0x1); // PCM
+                }
+
+                size_t length = PCKT_HDR_BASE_LEN * sizeof(uint32_t);
+                if(audio) {
+                        length += (PCKT_EXT_INFO_LEN + PCKT_HDR_AUDIO_LEN) * sizeof(uint32_t);
+                }
+                size_t total = 0;
+                while(total < length) {
+                        int res = write(this->data_socket_fd, (char *) &payload_hdr + total,
+                                        length - total);
+                        if(res == -1) {
+                                perror("");
+                                abort();
+                                return;
+                        }
                         total += res;
-                    }
-                } while(total < sizeof(payload_hdr));
-
-                return true;
+                }
         }
+
 
         private:
 
@@ -228,9 +245,9 @@ void tcp_transmit_done(void *state)
     delete s;
 }
 
-void tcp_send(void *state, struct video_frame *frame)
+void tcp_send(void *state, struct video_frame *frame, struct audio_frame *audio)
 {
     tcp_transmit *s = (tcp_transmit *) state;
 
-    s->send(frame);
+    s->send(frame, audio);
 }

@@ -399,7 +399,8 @@ static void *receiver_thread(void *arg)
                 }
                 // accepted
 
-                if(uv->use_tcp) {
+                if(0) {
+                //if(uv->use_tcp) {
 #if 0
                     int res, data_len;
                     int total_received;

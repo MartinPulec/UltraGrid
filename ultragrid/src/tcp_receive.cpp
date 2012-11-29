@@ -56,6 +56,9 @@
 
 #include "config.h"
 #include "config_unix.h"
+
+#include <sys/select.h>
+
 #include "tcp_receive.h"
 #include "video.h"
 #include "client-gui/include/Utils.h"
@@ -131,20 +134,43 @@ struct tcp_recv {
 
         int receive(char *buffer, int *len)
         {
-            ssize_t ret = read(this->socket_fd, buffer, *len);
+                size_t total = 0;
 
-            *len = ret;
-            if(ret == 0) {
-                std::cerr << "tcp receive: closed" << std::endl;
+                while(total < *len) {
+                        fd_set set;
+                        FD_ZERO(&set);
+                        FD_SET(this->socket_fd, &set);
 
-                return 0;
-            } else if(ret == -1) {
-                std::cerr << "tcp receive: timeout" << std::endl;
+                        struct timeval timeout;
+                        timeout.tv_sec = 0;
+                        timeout.tv_usec = 500 * 1000;
+                        if(select(this->socket_fd + 1, &set, NULL, NULL, &timeout) >= 1) {
+                        //if(UDT::epoll_wait(udt_epoll_id, &readfds, NULL, 500, NULL, NULL) >= 1) {
+                                int res = read(this->socket_fd, buffer + total, *len - total);
+                                if(res == -1) {
+                                        perror("TCP receive");
+                                        return 0;
+                                }
 
-                return 0;
-            }
+                                total += res;
+                        } else {
+                                std::cerr << "TCP receive: timeout" << std::endl;
+                                return 0;
+                        }
+                }
 
-            return 1;
+                //cerr << "UDT received: " << total << endl;
+
+                /*
+                   int res = UDT::recvmsg(recver, buffer, *len);
+                   if(res == UDT::ERROR) {
+                   std::cerr << UDT::getlasterror().getErrorMessage() << std::endl;
+                   return 0;
+                   }
+                 *len = res;
+                 */
+
+                return 1;
         }
 
         private:

@@ -584,13 +584,10 @@ int main(int argc, char *argv[])
                         break;
 #ifdef USE_CUSTOM_TRANSMIT
                 case 'T':
-                        abort();
-#if 0
                         uv->transmit_init = tcp_transmit_init;
                         uv->transmit_accept = tcp_transmit_accept;
                         uv->transmit_done = tcp_transmit_done;
                         uv->transmit_send = tcp_send;
-#endif
                         break;
 #endif
                 case '?':
