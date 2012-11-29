@@ -144,7 +144,7 @@ struct video_frame
         enum interlacing_t   interlacing;
         double               fps;
 
-        void               (*deleter) (void *ptr);
+        void               (*deleter) (void *ptr, size_t size);
 
         /* number of frames (sequential number) */
         int                  frames;

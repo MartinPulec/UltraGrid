@@ -51,11 +51,21 @@
 #include "debug.h"
 
 #include <cuda_runtime.h>
-
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+
+#include "cuda_memory_pool.h"
 #include "video.h"
+
+#include "video_codec.h"
+
+static void default_free(void *ptr, size_t size);
+
+static void default_free(void *ptr, size_t size) {
+        UNUSED(size);
+        free(ptr);
+}
 
 struct video_frame * vf_alloc(int count)
 {
@@ -68,6 +78,7 @@ struct video_frame * vf_alloc(int count)
         buf->tile_count = count;
 
         buf->luts_to_apply = NULL;
+        buf->deleter = default_free;
 
         return buf;
 }
@@ -83,7 +94,7 @@ struct video_frame * vf_alloc_desc(struct video_desc desc)
         buf->color_spec = desc.color_spec;
         buf->interlacing = desc.interlacing;
         buf->fps = desc.fps;
-        buf->deleter = free;
+        buf->deleter = default_free;
         // tile_count already filled
         for(unsigned int i = 0u; i < desc.tile_count; ++i) {
                 buf->tiles[i].width = desc.width;
@@ -120,7 +131,7 @@ struct video_frame * vf_alloc_desc_data_cuda(struct video_desc desc)
         struct video_frame *buf;
 
         buf = vf_alloc_desc(desc);
-        buf->deleter = cudaFreeHost;
+        buf->deleter = cuda_free;
 
         if(buf) {
                 for(unsigned int i = 0; i < desc.tile_count; ++i) {
@@ -128,8 +139,7 @@ struct video_frame * vf_alloc_desc_data_cuda(struct video_desc desc)
                                         desc.color_spec);
                         buf->tiles[i].data_len = buf->tiles[i].linesize *
                                 desc.height;
-                        cudaError_t res = cudaMallocHost(&buf->tiles[i].data, buf->tiles[i].data_len);
-                        assert(res == cudaSuccess);
+                        buf->tiles[i].data = (char *) cuda_alloc(buf->tiles[i].data_len);
                 }
         }
 
@@ -150,7 +160,7 @@ void vf_free_data(struct video_frame *buf)
                 return;
 
         for(unsigned int i = 0u; i < buf->tile_count; ++i) {
-                buf->deleter(buf->tiles[i].data);
+                buf->deleter(buf->tiles[i].data, buf->tiles[i].data_len);
         }
         vf_free(buf);
 }
@@ -241,7 +251,7 @@ const char *get_video_mode_description(int video_mode)
 void il_upper_to_merged(char *dst, char *src, int linesize, int height)
 {
         int y;
-        char *tmp = malloc(linesize * height);
+        char *tmp = (char *) malloc(linesize * height);
         char *line1, *line2;
 
         line1 = tmp;
@@ -266,7 +276,7 @@ void il_upper_to_merged(char *dst, char *src, int linesize, int height)
 void il_merged_to_upper(char *dst, char *src, int linesize, int height)
 {
         int y;
-        char *tmp = malloc(linesize * height);
+        char *tmp = (char *) malloc(linesize * height);
         char *line1, *line2;
 
         line1 = tmp;
