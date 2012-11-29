@@ -50,6 +50,8 @@
 #include "config_win32.h"
 #include "debug.h"
 
+#include <cuda_runtime.h>
+
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -81,6 +83,7 @@ struct video_frame * vf_alloc_desc(struct video_desc desc)
         buf->color_spec = desc.color_spec;
         buf->interlacing = desc.interlacing;
         buf->fps = desc.fps;
+        buf->deleter = free;
         // tile_count already filled
         for(unsigned int i = 0u; i < desc.tile_count; ++i) {
                 buf->tiles[i].width = desc.width;
@@ -112,6 +115,27 @@ struct video_frame * vf_alloc_desc_data(struct video_desc desc)
         return buf;
 }
 
+struct video_frame * vf_alloc_desc_data_cuda(struct video_desc desc)
+{
+        struct video_frame *buf;
+
+        buf = vf_alloc_desc(desc);
+        buf->deleter = cudaFreeHost;
+
+        if(buf) {
+                for(unsigned int i = 0; i < desc.tile_count; ++i) {
+                        buf->tiles[i].linesize = vc_get_linesize(desc.width,
+                                        desc.color_spec);
+                        buf->tiles[i].data_len = buf->tiles[i].linesize *
+                                desc.height;
+                        cudaError_t res = cudaMallocHost(&buf->tiles[i].data, buf->tiles[i].data_len);
+                        assert(res == cudaSuccess);
+                }
+        }
+
+        return buf;
+}
+
 void vf_free(struct video_frame *buf)
 {
         if(!buf)
@@ -126,7 +150,7 @@ void vf_free_data(struct video_frame *buf)
                 return;
 
         for(unsigned int i = 0u; i < buf->tile_count; ++i) {
-                free(buf->tiles[i].data);
+                buf->deleter(buf->tiles[i].data);
         }
         vf_free(buf);
 }

@@ -144,6 +144,8 @@ struct video_frame
         enum interlacing_t   interlacing;
         double               fps;
 
+        void               (*deleter) (void *ptr);
+
         /* number of frames (sequential number) */
         int                  frames;
 
@@ -191,6 +193,7 @@ struct video_frame * vf_alloc_desc(struct video_desc desc);
  *         NULL if insufficient memory
  */
 struct video_frame * vf_alloc_desc_data(struct video_desc desc);
+struct video_frame * vf_alloc_desc_data_cuda(struct video_desc desc);
 void vf_free(struct video_frame *buf);
 /**
  * Same as vf_free plus removing (free) data fields

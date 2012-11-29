@@ -570,7 +570,7 @@ static void * reading_thread(void *args)
 
                 pthread_mutex_unlock(&s->lock);
                 
-                struct video_frame *frame = vf_alloc_desc_data(s->video_prop);
+                struct video_frame *frame = vf_alloc_desc_data_cuda(s->video_prop);
                 frame->frames = s->seq_num;
 
                 char *filename = s->glob.gl_pathv[s->seq_num];
