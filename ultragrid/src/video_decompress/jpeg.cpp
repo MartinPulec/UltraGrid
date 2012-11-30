@@ -59,6 +59,8 @@
 
 #include <queue>
 
+#define MAX_IN_QUEUE_LEN 10
+
 using namespace std;
 using namespace std::tr1;
 
@@ -76,12 +78,13 @@ struct state_decompress_jpeg {
         int pitch;
         codec_t out_codec;
 
-        queue<shared_ptr<Frame> >in;
+        queue<shared_ptr<Frame> > in;
         queue<shared_ptr<Frame> > out;
 
         pthread_mutex_t lock;
-        pthread_cond_t in_cv;
-        pthread_cond_t out_cv;
+        pthread_cond_t worker_in_cv;
+        pthread_cond_t boss_in_cv;
+        pthread_cond_t boss_out_cv;
 
         pthread_t thread_id;
 
@@ -120,16 +123,18 @@ static void *worker(void *args) {
                 shared_ptr<Frame> frame;
                 pthread_mutex_lock(&s->lock);
                 while(s->in.empty()) {
-                        pthread_cond_wait(&s->in_cv, &s->lock);
+                        pthread_cond_wait(&s->worker_in_cv, &s->lock);
                 }
 
                 frame = s->in.front();
                 s->in.pop();
 
+                pthread_cond_signal(&s->boss_in_cv);
+
                 if(!frame) {
                         // pass poisoned pill to consumer and exit
                         s->out.push(shared_ptr<Frame>());
-                        pthread_cond_signal(&s->out_cv);
+                        pthread_cond_signal(&s->boss_out_cv);
                         pthread_mutex_unlock(&s->lock);
                         break;
                 }
@@ -163,7 +168,7 @@ static void *worker(void *args) {
 
                 pthread_mutex_lock(&s->lock);
                 s->out.push(frame);
-                pthread_cond_signal(&s->out_cv);
+                pthread_cond_signal(&s->boss_out_cv);
                 pthread_mutex_unlock(&s->lock);
         }
 
@@ -175,8 +180,9 @@ void * jpeg_decompress_init(codec_t out_codec)
         struct state_decompress_jpeg *s;
 
         s = new state_decompress_jpeg; 
-        pthread_cond_init(&s->in_cv, NULL);
-        pthread_cond_init(&s->out_cv, NULL);
+        pthread_cond_init(&s->worker_in_cv, NULL);
+        pthread_cond_init(&s->boss_in_cv, NULL);
+        pthread_cond_init(&s->boss_out_cv, NULL);
         pthread_mutex_init(&s->lock, NULL);
 
         memset(&s->saved_video_desc, 0, sizeof(s->saved_video_desc));
@@ -278,8 +284,11 @@ void jpeg_push(void *state, std::tr1::shared_ptr<Frame> src)
         struct state_decompress_jpeg *s = (struct state_decompress_jpeg *) state;
 
         pthread_mutex_lock(&s->lock);
+        while(s->in.size() > MAX_IN_QUEUE_LEN) {
+                pthread_cond_wait(&s->boss_in_cv, &s->lock);
+        }
         s->in.push(src);
-        pthread_cond_signal(&s->in_cv);
+        pthread_cond_signal(&s->worker_in_cv);
         pthread_mutex_unlock(&s->lock);
 }
 
@@ -290,7 +299,7 @@ std::tr1::shared_ptr<Frame> jpeg_pop(void *state)
 
         pthread_mutex_lock(&s->lock);
         while(s->out.empty()) {
-                pthread_cond_wait(&s->out_cv, &s->lock);
+                pthread_cond_wait(&s->boss_out_cv, &s->lock);
         }
 
         res = s->out.front();

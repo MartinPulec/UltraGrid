@@ -53,13 +53,16 @@
 
 #include <queue>
 
+#define MAX_QUEUE_SIZE 5
+
 using namespace std;
 using namespace std::tr1;
 
 struct state_decompress_null {
         uint32_t magic;
         pthread_mutex_t lock;
-        pthread_cond_t cv;
+        pthread_cond_t in_cv;
+        pthread_cond_t out_cv;
         queue<shared_ptr<Frame> > dummy_queue;
 };
 
@@ -71,7 +74,8 @@ void * null_decompress_init(codec_t out_codec)
         s = new state_decompress_null;
         s->magic = NULL_MAGIC;
         pthread_mutex_init(&s->lock, NULL);
-        pthread_cond_init(&s->cv, NULL);
+        pthread_cond_init(&s->in_cv, NULL);
+        pthread_cond_init(&s->out_cv, NULL);
 
         return s;
 }
@@ -98,8 +102,12 @@ void null_push(void *state, std::tr1::shared_ptr<Frame> src)
         assert(s->magic == NULL_MAGIC);
 
         pthread_mutex_lock(&s->lock);
+        while(s->dummy_queue.size() > MAX_QUEUE_SIZE) {
+                pthread_cond_wait(&s->in_cv, &s->lock);
+        }
+
         s->dummy_queue.push(src);
-        pthread_cond_signal(&s->cv);
+        pthread_cond_signal(&s->out_cv);
         pthread_mutex_unlock(&s->lock);
 }
 
@@ -112,10 +120,12 @@ std::tr1::shared_ptr<Frame> null_pop(void *state)
 
         pthread_mutex_lock(&s->lock);
         while(s->dummy_queue.empty()) {
-                pthread_cond_wait(&s->cv, &s->lock);
+                pthread_cond_wait(&s->out_cv, &s->lock);
         }
         res = s->dummy_queue.front();
         s->dummy_queue.pop();
+
+        pthread_cond_signal(&s->in_cv);
         pthread_mutex_unlock(&s->lock);
 
         return res;
@@ -128,6 +138,11 @@ void null_decompress_done(void *state)
         if(!s)
                 return;
         assert(s->magic == NULL_MAGIC);
+
+        pthread_mutex_destroy(&s->lock);
+        pthread_cond_destroy(&s->in_cv);
+        pthread_cond_destroy(&s->out_cv);
+
         delete s;
 }
 

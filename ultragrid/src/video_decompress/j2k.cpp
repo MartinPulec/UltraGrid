@@ -63,6 +63,8 @@
 #include "demo_dec/demo_dec.h"
 #include "video_codec.h"
 
+#define MAX_ON_FLY_FRAMES 10
+
 using namespace std;
 using namespace std::tr1;
 
@@ -79,11 +81,14 @@ struct j2k_decompress_data {
 
 class state_j2k_decompress {
         public:
-                state_j2k_decompress(codec_t out_codec_) : out_codec(out_codec_) {
+                state_j2k_decompress(codec_t out_codec_) : out_codec(out_codec_), 
+                                count(0) {
                         state = demo_dec_create(NULL, 0);
                         if(!state) {
                                 throw;
                         }
+                        pthread_cond_init(&this->cv, NULL);
+                        pthread_mutex_init(&this->lock, NULL);
                 }
 
                 virtual ~state_j2k_decompress() {
@@ -91,7 +96,12 @@ class state_j2k_decompress {
                 }
 
                 struct demo_dec *state;
-                codec_t out_codec;
+                codec_t          out_codec;
+                
+                size_t           count;
+
+                pthread_mutex_t  lock;
+                pthread_cond_t   cv;
 };
 
 void * j2k_decompress_init(codec_t out_codec)
@@ -114,9 +124,17 @@ void j2k_push(void *state, std::tr1::shared_ptr<Frame> frame)
         class state_j2k_decompress *s = 
                 (class state_j2k_decompress *) state;
 
+        pthread_mutex_lock(&s->lock);
+
+        while(s->count > MAX_ON_FLY_FRAMES) {
+                pthread_cond_wait(&s->cv, &s->lock);
+        }
+
         if(!frame) {
                 // pass poisoned pill
                 demo_dec_stop(s->state);
+                s->count = 0;
+                pthread_mutex_unlock(&s->lock);
                 return;
         }
 
@@ -134,6 +152,10 @@ void j2k_push(void *state, std::tr1::shared_ptr<Frame> frame)
                         decompressed.get(),
                         frame->video.get(),
                         frame->video_len);
+
+        s->count += 1;
+
+        pthread_mutex_unlock(&s->lock);
 }
 
 std::tr1::shared_ptr<Frame> j2k_pop(void *state)
@@ -150,6 +172,8 @@ std::tr1::shared_ptr<Frame> j2k_pop(void *state)
                  NULL
                 );
 
+        pthread_mutex_lock(&s->lock);
+
         if(err == 0) {
                 ret = item->frame;
                 ret->video_desc.color_spec = s->out_codec;
@@ -163,6 +187,10 @@ std::tr1::shared_ptr<Frame> j2k_pop(void *state)
                 if(err == 2) cerr << "Error decoding J2K" << endl;
                 ret = std::tr1::shared_ptr<Frame>();
         }
+
+        s->count -= 1;
+        pthread_cond_signal(&s->cv);
+        pthread_mutex_unlock(&s->lock);
 
         return ret;
 }
