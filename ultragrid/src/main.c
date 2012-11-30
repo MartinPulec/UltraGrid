@@ -56,13 +56,15 @@
 #include "config_win32.h"
 #endif /* HAVE_CONFIG_H */
 
+#include <getopt.h>
 #include <string.h>
 #include <stdlib.h>
-#include <getopt.h>
+#include <sys/prctl.h>
 
 #include "audio_source.h"
 #include "color_transform.h"
 #include "compat/platform_semaphore.h"
+#include "cuda_memory_pool.h"
 #include "debug.h"
 #include "gl_context.h"
 #include "pdb.h"
@@ -352,7 +354,7 @@ static void *sender_thread(void *arg)
         struct state_uv *uv = (struct state_uv *) arg;
         struct video_frame *tx_frame;
 
-        pthread_setname_np(pthread_self(), __func__);
+        prctl(PR_SET_NAME, (unsigned long) __func__, 0, 0);
 
         while(1) {
                 tx_frame = compress_frame_pop(uv->compression);
@@ -384,7 +386,7 @@ static void *grab_thread(void *arg)
         struct video_frame *tx_frame;
         struct audio_frame *audio;
 
-        pthread_setname_np(pthread_self(), __func__);
+        prctl(PR_SET_NAME, (unsigned long) __func__, 0, 0);
 #if 0
         struct state_color_transform *color_transform = NULL;
 
@@ -601,7 +603,7 @@ int main(int argc, char *argv[])
         argc -= optind;
         argv += optind;
 
-        pthread_setname_np(pthread_self(), __func__);
+        prctl(PR_SET_NAME, (unsigned long) __func__, 0, 0);
 
         sigemptyset(&mask);
         sigaddset(&mask, SIGINT);
