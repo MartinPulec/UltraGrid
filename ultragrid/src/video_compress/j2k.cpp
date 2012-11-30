@@ -152,7 +152,7 @@ void j2k_push(void *arg, struct video_frame * tx)
 
                 demo_enc_submit(s->j2k_encoder, (void *) tx,
                                 tx->tiles[0].data, tx->tiles[0].data_len,
-                                tx->tiles[0].data, tx->tiles[0].data_len,
+                                tx->tiles[0].data, 1.25*1024*1024,
                                 0.7,
                                 0);
 
