@@ -564,8 +564,9 @@ display_decklink_getf(void *state)
                         right->GetBytes((void **) &s->frame->tiles[1].data);
                 } else {
                         for(int i = 0; i < s->devices_cnt; ++i) {
-                                s->state[i].deckLinkFrame = DeckLinkFrame::Create(s->frame->tiles[0].width, s->frame->tiles[0].height,
-                                                s->frame->tiles[0].linesize, s->pixelFormat);
+                                s->state[i].deckLinkFrame = DeckLinkFrame::Create(s->frame->tiles[0].width / s->dev_x,
+                                                s->frame->tiles[0].height / s->dev_y,
+                                                s->frame->tiles[0].linesize / s->dev_x, s->pixelFormat);
                         }
                 }
         }
@@ -638,11 +639,12 @@ int display_decklink_putf(void *state, char *frame)
                         for(int y = 0; y < s->dev_y; ++y) {
                                 char *data;
                                 s->state[x + y * s->dev_x].deckLinkFrame->GetBytes((void **) &data);
-                                for (int line = y * (s->tile->width / s->dev_x);
-                                                line < (y + 1) * (s->tile->width / s->dev_x);
+                                for (int line = y * (s->tile->height / s->dev_y);
+                                                line < (y + 1) * (s->tile->height / s->dev_y);
                                                 ++line) {
                                         int linesize = s->tile->linesize / s->dev_x;
-                                        char *src = data + line * s->tile->linesize;
+                                        //char *src = data + line * s->tile->linesize;
+                                        char *src = s->frame->tiles[0].data + line * s->tile->linesize;
                                         src += x * linesize;
                                         memcpy(data, src, linesize);
                                         data += linesize;
@@ -812,8 +814,8 @@ display_decklink_reconfigure(void *state, struct video_desc desc)
                         BMDVideoOutputFlags outputFlags= bmdVideoOutputFlagDefault;
 	                
                         struct video_desc device_desc = desc;
-                        desc.width /= s->dev_x;
-                        desc.height /= s->dev_y;
+                        device_desc.width /= s->dev_x;
+                        device_desc.height /= s->dev_y;
 	                displayMode = get_mode(s->state[i].deckLinkOutput, device_desc, &s->frameRateDuration,
                                                 &s->frameRateScale, i);
                         if(displayMode == (BMDDisplayMode) -1)
