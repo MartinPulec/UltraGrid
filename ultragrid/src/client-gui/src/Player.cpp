@@ -137,8 +137,24 @@ void Player::Notify()
         } else if(GetCurrentFrame() < buffer.GetUpperBound() - OOB_FRAMES
             && speed_status != -1
            ) {
+#if 0 // not yet implemnted, see below for temporal implementation
                connection.set_parameter(wxT("speed"), Utils::FromCDouble(speed / 1.01, 2));
                speed_status = -1;
+#endif
+        }
+
+        // ZPOMAL !!!!
+        if(GetCurrentFrame() < buffer.GetUpperBound() - OOB_FRAMES * 2 // nacetli jsme vice nez pol bufferu
+            && !slow_down
+           ) {
+               slow_down = true;
+               connection.pause();
+        }
+        if(GetCurrentFrame() > buffer.GetUpperBound() - OOB_FRAMES
+           && slow_down)
+        {
+            slow_down = false;
+            connection.play();
         }
 
         res = buffer.GetFrame(GetCurrentFrame());
@@ -231,6 +247,8 @@ void Player::DropOutOfBoundFrames(int interval)
             return;
 
         if(GetCurrentFrame() < interval || GetCurrentFrame() + interval > total_frames - 1) {
+            // do we really reach here? Or it is relic from looping?:P
+#if 0
             int min, max;
 
             // not mistake - exactly one value over/underruns buffer size
@@ -238,12 +256,15 @@ void Player::DropOutOfBoundFrames(int interval)
             min = (GetCurrentFrame() + interval) % total_frames;
 
             buffer.DropFrames(min, max);
+#endif
         } else {
             int val = GetCurrentFrame() - OOB_FRAMES;
             buffer.DropFrames(0, val);
 
-            val = GetCurrentFrame() + OOB_FRAMES;
+            // Do not do this!!!! We will possibly erase frame that won't be sent anymore (currently)
+            /*val = GetCurrentFrame() + OOB_FRAMES;
             buffer.DropFrames(val, total_frames);
+            */
         }
     } else {
         buffer.Reset();
@@ -261,6 +282,8 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
     last_wanted = 0;
     speed_status = 0;
     gettimeofday(&this->last_frame, NULL);
+
+    slow_down = false;
 
     try {
         wxString tmp;

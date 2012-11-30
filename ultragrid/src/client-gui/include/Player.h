@@ -111,6 +111,7 @@ class Player : public wxTimer
         int last_wanted;
 
         int speed_status;
+        bool slow_down;
 };
 
 #endif // PLAYER_H
