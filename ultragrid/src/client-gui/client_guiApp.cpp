@@ -24,6 +24,7 @@ static client_guiFrame *app = NULL;
 
 bool client_guiApp::OnInit()
 {
+    cuda_memory_pool_init();
     audio_playback_init_devices();
     signal(SIGPIPE, SIG_IGN);
 
@@ -55,6 +56,7 @@ bool client_guiApp::OnInit()
 int client_guiApp::OnExit()
 {
     display_free_devices();
+    cuda_memory_pool_destroy();
 
     return 0;
 }

@@ -49,6 +49,7 @@
 #include "config_unix.h"
 #include "debug.h"
 
+#include "cuda_memory_pool.h"
 #include "libgpujpeg/gpujpeg_decoder.h"
 //#include "compat/platform_semaphore.h"
 #include "video_codec.h"
@@ -146,7 +147,9 @@ static void *worker(void *args) {
 
                 size_t new_length = vc_get_linesize(frame->video_desc.width, s->out_codec) *
                         frame->video_desc.height;
-                shared_ptr<char> out_data(std::tr1::shared_ptr<char> (new char[new_length], CharPtrDeleter()));
+                shared_ptr<char> out_data(std::tr1::shared_ptr<char> (
+                                        (char *) cuda_alloc(new_length),
+                                        CudaDeleter(new_length)));
 
                 ///out_frame = jpeg_compress(s, frame);
                 jpeg_decompress((void *) s, (unsigned char *) out_data.get(),
@@ -154,6 +157,7 @@ static void *worker(void *args) {
 
                 // replace old data with new ones
                 frame->video = out_data;
+                frame->max_video_len = new_length;
                 frame->video_len = new_length;
                 frame->video_desc.color_spec = s->out_codec;
 

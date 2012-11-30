@@ -58,6 +58,7 @@
 #include <queue>
 #include <stdlib.h>
 
+#include "cuda_memory_pool.h"
 #include "debug.h"
 #include "demo_dec/demo_dec.h"
 #include "video_codec.h"
@@ -122,7 +123,9 @@ void j2k_push(void *state, std::tr1::shared_ptr<Frame> frame)
         size_t new_length = vc_get_linesize(frame->video_desc.width, s->out_codec) *
                 frame->video_desc.height;
         cerr << "NEW lenght " << new_length << endl;
-        shared_ptr<char> decompressed(std::tr1::shared_ptr<char> (new char[new_length], CharPtrDeleter()));
+        shared_ptr<char> decompressed(std::tr1::shared_ptr<char> (
+                                (char *) cuda_alloc(new_length),
+                                CudaDeleter(new_length)));
 
         struct j2k_decompress_data *new_item;
         new_item = new j2k_decompress_data(frame, decompressed);
@@ -152,6 +155,7 @@ std::tr1::shared_ptr<Frame> j2k_pop(void *state)
                 ret->video_desc.color_spec = s->out_codec;
                 ret->video_len = vc_get_linesize(ret->video_desc.width, s->out_codec) *
                         ret->video_desc.height;
+                ret->max_video_len = ret->video_len;
                 ret->video = item->decompressed;
 
                 delete item;
