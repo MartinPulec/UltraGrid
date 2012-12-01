@@ -838,7 +838,7 @@ void UGReceiver::Reconfigure(struct state_uv *uv, struct video_desc video_desc, 
 
         switch(video_desc.color_spec) {
             case J2K:
-                out_codec = XPD10;
+                out_codec = v210;
                 break;
             case JPEG:
                 out_codec = RGB;

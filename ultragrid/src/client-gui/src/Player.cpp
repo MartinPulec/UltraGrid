@@ -314,7 +314,7 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
             transmit_codec = JPEG;
         } else if(compression == string("J2K")) {
             transmit_codec = J2K;
-            display_codec = XPD10;
+            display_codec = v210;
         }
         this->connection.set_parameter(wxT("compression"), wxString(compression.c_str(), wxConvUTF8) << wxT(" ") +
                 wxString(settings->GetValue(std::string("jpeg_qual"), std::string("80")).c_str(), wxConvUTF8));
@@ -506,7 +506,7 @@ void Player::reconfigure(int width, int height, int codec, int data_len, struct 
 
     desc.width = width;
     desc.height = height;
-    desc.color_spec = UYVY;
+    desc.color_spec = v210;
     desc.fps = currentVideo->fps;
     desc.interlacing = PROGRESSIVE;
     desc.tile_count = 1;

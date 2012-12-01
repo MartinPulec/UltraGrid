@@ -108,7 +108,7 @@ void * j2k_decompress_init(codec_t out_codec)
 {
         class state_j2k_decompress *s;
 
-        out_codec = XPD10;
+        assert(out_codec == v210);
         s = new state_j2k_decompress(out_codec);
 
         return s;
@@ -151,7 +151,8 @@ void j2k_push(void *state, std::tr1::shared_ptr<Frame> frame)
         demo_dec_submit(s->state, (void *) new_item,
                         decompressed.get(),
                         frame->video.get(),
-                        frame->video_len);
+                        frame->video_len,
+                        0);
 
         s->count += 1;
 

@@ -20,6 +20,8 @@ extern "C" {
 #else /* HAVE_MACOSX */
 #include <GL/gl.h>
 #include <GL/glext.h>
+
+#include "video_codec.h"
 #include "x11_common.h"
 
 #endif /* HAVE_MACOSX */
@@ -867,7 +869,7 @@ void GLView::Render(bool toHW)
         default:
             cerr << "Error - received unsupported codec" << endl;
             //exit_uv(128);
-            return;
+            //return;
     }
 
     {
@@ -984,6 +986,10 @@ void GLView::Render(bool toHW)
         RenderScrollbars();
 
         if(frame) {
+            memcpy(frame->tiles[0].data, data, vc_get_linesize(width, v210) * height);
+            display_put_frame(this->hw_display, (char *) frame);
+
+#if 0
             glDisable(GL_BLEND);
             glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_device);
             glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_device, 0);
@@ -1051,12 +1057,14 @@ void GLView::Render(bool toHW)
             glEnable(GL_BLEND);
             //memcpy(frame->tiles[0].data, data, frame->tiles[0].data_len);
             display_put_frame(this->hw_display, (char *) frame);
+#endif /* 8 */
         }
 
         glUseProgram(0);
 
         SwapBuffers();
         //gl_check_error();
+
     }
 }
 
