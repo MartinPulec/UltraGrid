@@ -79,7 +79,7 @@ public:
         InBeginCallback inBeginCallback,
         InEndCallback inEndCallback,
         OutCallback outCallback,
-//         PostprocCallback postprocCallback,
+        PostprocCallback postprocCallback,
         DecEndCallback decEndCallback,
         void * const customCallbackPtr
     );

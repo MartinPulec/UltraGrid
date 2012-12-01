@@ -54,6 +54,7 @@ demo_dec_destroy
  * @param out_buffer_ptr  pointer to ouptut buffer with sufficient capacity
  * @param codestream_ptr  pointer to JPEG 2000 codestream
  * @param codestream_size size of given codestream (in bytes)
+ * @param double_sized    nonzero for output size to be double sized
  */
 void
 demo_dec_submit
@@ -62,7 +63,8 @@ demo_dec_submit
     void * custom_data_ptr,
     void * out_buffer_ptr,
     const void * codestream_ptr,
-    int codestream_size
+    int codestream_size,
+    int double_sized
 );
 
 
@@ -135,6 +137,20 @@ demo_dec_image_info
     int * size_y_out
 );
 
+
+
+/**
+ * Gets size of v210 encoded image.
+ * @param size_x  image width
+ * @param size_y  image height
+ * @return byte size of v210 encoded image (including all sorts of padding)
+ */
+int
+demo_dec_v210_size
+(
+    int size_x,
+    int size_y
+);
 
 
 #ifdef __cplusplus

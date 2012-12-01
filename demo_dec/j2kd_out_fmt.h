@@ -20,21 +20,32 @@ public:
     /// Constructor - Initializes static formatting stuff
     OutputFormatter();
     
+    /// Computes formatted output size, checking for indices out of bounds.
+    /// @param image  pointer to image structure instance
+    /// @param format  pointer to array of component format infos
+    ///                (must be immutable at least to end of current decoding)
+    /// @param count   number of output components
+    /// @param capacity  capacity of the output buffer
+    /// @return size of the buffer needed for formatted data
+    static size_t checkFmt(
+        Image * const image,
+        const CompFormat * const format,
+        const int count,
+        const size_t capacity
+    );
+    
     /// This does the output formatting.
     /// @param image  pointer to image structure instance
     /// @param src source buffer
     /// @param out  pointer to GPU output buffer
-    /// @param size  capacity of the output buffer
     /// @param stream  CUDA stream to launch kernels in
     /// @param format  pointer to array of component format infos
     ///                (must be immutable at least to end of current decoding)
     /// @param count   number of output components
-    /// @return size of used part of output buffer in bytes (less than 'size')
-    size_t run(
+    void run(
         Image * const image,
         const void * const src,
         void * const out,
-        const size_t size,
         const cudaStream_t & stream,
         const CompFormat * const format,
         const int count

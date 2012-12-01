@@ -59,22 +59,6 @@ static void usage(const char * const message) {
 }
 
 
-static void transform(void * data, const size_t size) {
-    unsigned int src, r, g, b;
-    int pix_idx;
-    
-    for(pix_idx = size / 6; pix_idx--;) {
-        src = ((unsigned int*)data)[pix_idx];
-        r = (src >> 00) & 0x3ff;
-        g = (src >> 10) & 0x3ff;
-        b = (src >> 20) & 0x3ff;
-        ((unsigned short*)data)[pix_idx * 3 + 0] = r << 6 | r >> 10;
-        ((unsigned short*)data)[pix_idx * 3 + 1] = g << 6 | g >> 10;
-        ((unsigned short*)data)[pix_idx * 3 + 2] = b << 6 | b >> 10;
-    }
-}
-
-
 /** Saving thread implementation. */
 static void * saving_thread_impl(void * param) {
     int status;
@@ -91,8 +75,6 @@ static void * saving_thread_impl(void * param) {
         else if(0 == status) {
             /* save the image */
             if(file = fopen(item->path, "w")) {
-                /* transform 10-10-10-2 to 16-16-16 */
-                transform(item->buffer_ptr, item->output_size);
                 if(1 == fwrite(item->buffer_ptr, item->output_size, 1, file))
                     printf("Output file saved OK: %s (%dx%d).\n", 
                            item->path, item->size_x, item->size_y);
@@ -123,6 +105,7 @@ static int load_and_submit(FILE * const file,
                            const char * const filename) {
     int file_size;
     void * new_buffer_ptr;
+    const int double_sized = 0;
     
     /* get file size */
     fseek(file, 0, SEEK_END);
@@ -160,7 +143,11 @@ static int load_and_submit(FILE * const file,
         printf("File %s isn't valid JPEG 2000 codestream.\n", filename);
         return -1;
     }
-    item->output_size = item->size_x * item->size_y * 6;
+    if(double_sized) {
+        item->size_x *= 2;
+        item->size_y *= 2;
+    }
+    item->output_size = demo_dec_v210_size(item->size_x, item->size_y);
     
     /* check buffer size again (this time for output size) */
     if(item->buffer_size < item->output_size) {
@@ -185,7 +172,8 @@ static int load_and_submit(FILE * const file,
     printf("Loaded %d bytes from file %s.\n", file_size, filename);
     
     /* submit the work item for decoding and indicate success. */
-    demo_dec_submit(dec, item, item->buffer_ptr, item->buffer_ptr, file_size);
+    demo_dec_submit(dec, item, item->buffer_ptr, item->buffer_ptr, file_size,
+                    double_sized);
     return 0;
 }
 
@@ -207,7 +195,7 @@ static void submit_input(const char * const filename) {
         pthread_mutex_unlock(&mutex);
         
         /* compose output filename */
-        snprintf(item->path, MAX_PATH_LEN, "%s.rgb", filename);
+        snprintf(item->path, MAX_PATH_LEN, "%s.v210", filename);
         
         /* load and submit or return work item to queue if failed */
         if(load_and_submit(file, item, filename)) {

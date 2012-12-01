@@ -520,34 +520,42 @@ static void checkSize(size_t & maxSizeRequired,
 }
 
 
-/// Checks component format settings and returns maximal used byte index + 1.
-static size_t checkFmt(const XY & begin,
-                       const XY & end,
-                       const CompFormat * const fmtPtr,
-                       const int fmtCount,
-                       const int compCount,
-                       const size_t bufferSize) {
-    // TODO: check the check to reflect new component format
-    
+
+/// Computes formatted output size, checking for indices out of bounds.
+/// @param image  pointer to image structure instance
+/// @param format  pointer to array of component format infos
+///                (must be immutable at least to end of current decoding)
+/// @param count   number of output components
+/// @param capacity  capacity of the output buffer
+/// @return size of the buffer needed for formatted data
+size_t OutputFormatter::checkFmt(
+    Image * const image,
+    const CompFormat * const format,
+    const int count,
+    const size_t capacity
+) {
+    // references to image limits
+    const XY & begin = image->imgBegin;
+    const XY & end = image->imgEnd;
     
     // this will contain ouput size (maximal used output byte index + 1)
     size_t requiredSize = 0;
     
     // format count must be positive
-    if(fmtCount < 1) {
+    if(count < 1) {
         throw Error(J2KD_ERROR_ARGUMENT_OUT_OF_RANGE,
                     "Nothing to decode - use at least 1 component format.");
     }
     
     // format pointer must not be null
-    if(0 == fmtPtr) {
+    if(0 == format) {
         throw Error(J2KD_ERROR_ARGUMENT_NULL,
                     "NULL pointer to component formats.");
     }
     
     // for each format ...
-    for(int fmtIdx = fmtCount; fmtIdx--;) {
-        const CompFormat & fmt = fmtPtr[fmtIdx];
+    for(int fmtIdx = count; fmtIdx--;) {
+        const CompFormat & fmt = format[fmtIdx];
         
         // component index must be nonnegative
         if(fmt.component_idx < 0) {
@@ -557,11 +565,11 @@ static size_t checkFmt(const XY & begin,
         }
         
         // component index must be less than component count
-        if(fmt.component_idx > compCount) {
+        if(fmt.component_idx > (int)image->comps.count()) {
             throw Error(J2KD_ERROR_ARGUMENT_OUT_OF_RANGE,
                         "Component index (%d) for format #%d greater than "
                         "number of components (%d).",
-                        fmt.component_idx, fmtIdx, compCount);
+                        fmt.component_idx, fmtIdx, (int)image->comps.count());
         }
         
         // bit depth must not be negative
@@ -571,11 +579,18 @@ static size_t checkFmt(const XY & begin,
                         fmt.bit_depth, fmt.component_idx);
         }
         
+        // maximal bit depth is 32 bits per sample
+        if(fmt.bit_depth > 32) {
+            throw Error(J2KD_ERROR_ARGUMENT_OUT_OF_RANGE,
+                        "Too big bit depth '%d' required for component %d",
+                        fmt.bit_depth, fmt.component_idx);
+        }
+        
         // all 4 corner pixel must fit into the buffer (so that all pixels fit)
-        checkSize(requiredSize, fmt, fmtIdx, bufferSize, begin.x, begin.y);
-        checkSize(requiredSize, fmt, fmtIdx, bufferSize, begin.x, end.y - 1);
-        checkSize(requiredSize, fmt, fmtIdx, bufferSize, end.x - 1, begin.y);
-        checkSize(requiredSize, fmt, fmtIdx, bufferSize, end.x - 1, end.y - 1);
+        checkSize(requiredSize, fmt, fmtIdx, capacity, begin.x, begin.y);
+        checkSize(requiredSize, fmt, fmtIdx, capacity, begin.x, end.y - 1);
+        checkSize(requiredSize, fmt, fmtIdx, capacity, end.x - 1, begin.y);
+        checkSize(requiredSize, fmt, fmtIdx, capacity, end.x - 1, end.y - 1);
     }
     
     // return minimal buffer size needed to contain all formatted data
@@ -585,28 +600,21 @@ static size_t checkFmt(const XY & begin,
 
 
 /// This does the output formatting.
-/// @param image  pointer to image structure instance
-/// @param src source buffer
-/// @param out  pointer to GPU output buffer
-/// @param size  capacity of the output buffer
+/// @param image   pointer to image structure instance
+/// @param srcPtr  source buffer
+/// @param outPtr  pointer to GPU output buffer
 /// @param stream  CUDA stream to launch kernels in
 /// @param format  pointer to array of component format infos
 ///                (must be immutable at least to end of current decoding)
 /// @param count   number of output components
-/// @return size of used part of output buffer in bytes (less than 'size')
-size_t OutputFormatter::run(
+void OutputFormatter::run(
     Image * const image,
     const void * const srcPtr,
     void * const outPtr,
-    const size_t size,
     const cudaStream_t & stream,
     const CompFormat * const format,
     const int count
 ) {
-    // check format indexing limits (and compute output size or throw Error) 
-    const size_t outSize = checkFmt(image->imgBegin, image->imgEnd, format,
-                                    count, image->comps.count(), size);
-    
     // for each formatted component
     for(int fmtIdx = 0; fmtIdx < count; fmtIdx++) {
         // pointer to component formatting info
@@ -657,9 +665,6 @@ size_t OutputFormatter::run(
                                fmt.combine_or, p, stream);
         }
     }
-    
-    // return size of formatted data
-    return outSize;
 }
 
 

@@ -9,6 +9,7 @@
 #include <map>
 #include <cstdio>
 #include <pthread.h>
+#include <inttypes.h>
 #include <cuda_runtime_api.h>
 #include "j2kd_api.h"
 #include "demo_dec.h"
@@ -17,13 +18,16 @@
 /// Decoding work item.
 struct work_item {
     long int index;                // frame index (assigned by input queue)
-    j2kd_component_format fmt[3];  // formatting info (always 3 components)
+    j2kd_component_format fmt[12]; // formatting info (3 or 3x4 components)
     void * custom_data_ptr;        // custom pointer associated with the image
     void * out_buffer_ptr;         // output buffer pointer
     const void * codestream_ptr;   // codestream pointer
     int codestream_size;           // codestream size
     int status;                    // 0 if OK, 2 for decoding error
     size_t out_buffer_size;        // expected size of the output buffer
+    int size_x;                    // output width
+    int size_y;                    // output height
+    bool doubled;                  // true if output size is doubled
 };
 
 
@@ -226,7 +230,7 @@ static int on_in_begin(void * custom_callback_ptr,
     *codestream_ptr_out = item->codestream_ptr;
     *codestream_size_out = item->codestream_size;
     *comp_format_ptr_out = item->fmt;
-    *comp_format_count_out = 3;  // always 3 components
+    *comp_format_count_out = item->doubled ? 12 : 3;
     
     // indicate that there may be more images to be decoded
     return 1;
@@ -273,6 +277,97 @@ static void on_end(void * custom_callback_ptr,
 }
 
 
+/// Packs 3 10bit valus into the 32 bit uint.
+static __device__ uint32_t pack_10bit(float lo, float mid, float hi) {
+    const uint32_t l = __saturatef(lo) * 1023.0f;
+    const uint32_t m = __saturatef(mid) * 1023.0f;
+    const uint32_t h = __saturatef(hi) * 1023.0f;
+    return l + (m << 10) + (h << 20);
+}
+
+
+/// V210 encoding kernel.
+static __global__ void v210_encode(const int grps_x,
+                                   const int grps_y,
+                                   const uint16_t * src,
+                                   uint4 * const dest) {
+    // get coordinates of this thread's group of 6 pixels
+    const int grp_x = blockIdx.x * blockDim.x + threadIdx.x;
+    const int grp_y = blockIdx.y * blockDim.y + threadIdx.y;
+    
+    // possibly stop if out of bounds
+    if(grp_x >= grps_x || grp_y >= grps_y) {
+        return;
+    }
+    
+    // index of the group in buffers
+    const int grp_idx = grp_y * grps_x + grp_x;
+    
+    // load all 18 source samples of the group
+    float samples[18];
+    const uint16_t * const src_samples = src + 18 * grp_idx;
+    #pragma unroll
+    for(int i = 0; i < 9; i++) {
+        const ushort2 s = ((const ushort2*)src_samples)[i];
+        samples[i * 2 + 0] = s.x * 0.000977517106549f;  //  divide by 1023
+        samples[i * 2 + 1] = s.y * 0.000977517106549f;
+    }
+    
+    // TODO: replace out-of-bound samples with copies of boundary samples here
+    
+    // TODO: optimize (merge 0..1023 -> 0..1 with rgb->yuv conversion)
+    
+    // convert samples to YUV
+    float y[6], u[6], v[6];
+    #pragma unroll
+    for(int i = 0; i < 6; i++) {
+        const float r = samples[i * 3 + 0];
+        const float g = samples[i * 3 + 1];
+        const float b = samples[i * 3 + 2];
+        
+        y[i] = 0.183f * r + 0.614f * g + 0.062f * b + 0.0627450980392f;
+        u[i] = -0.101f * r - 0.338f * g + 0.439f * b + 0.5f;
+        v[i] = 0.439f * r - 0.399f * g - 0.040f * b + 0.5f;
+    }
+    
+    // pack samples to output 16 bytes
+    uint4 res;
+    res.x = pack_10bit((u[0] + u[1]) * 0.5f, y[0], (v[0] + v[1]) * 0.5f);
+    res.y = pack_10bit(y[1], (u[2] + u[3]) * 0.5f, y[2]);
+    res.z = pack_10bit((v[2] + v[3]) * 0.5f, y[3], (u[4] + u[5]) * 0.5f);
+    res.w = pack_10bit(y[4], (v[4] + v[5]) * 0.5f, y[5]);
+    
+    // save to right place
+    dest[grp_idx] = res;
+}
+
+
+/// Postprocessing callback.
+static size_t postproc(void * custom_callback_ptr,
+                      void * custom_image_ptr,
+                      void * src,
+                      void * dest,
+                      const void * cuda_stream_id_ptr) {
+    // get pointer to work item
+    work_item * const item = (work_item*)custom_image_ptr;
+    
+    // number of groups per x-axis
+    const int grps_x = ((item->size_x + 5) / 6 + 7) & ~7;
+    const int grps_y = item->size_y;
+    
+    // stream for kernel to run in
+    const cudaStream_t str = *(const cudaStream_t*)cuda_stream_id_ptr;
+    
+    // launch configuration
+    const dim3 ts(32, 8);
+    const dim3 gs((grps_x + ts.x - 1) / ts.x, (grps_y + ts.y - 1) / ts.y);
+    v210_encode<<<gs, ts, 0, str>>>(grps_x, grps_y, (const uint16_t*)src, (uint4*)dest);
+    
+    // return expected output size
+    return item->out_buffer_size;
+}
+
+
 /// Decoding thread implementation.
 static void * dec_thread_impl(void * data) {
     // get parameters
@@ -292,7 +387,8 @@ static void * dec_thread_impl(void * data) {
     
     // start decoding if no error occured
     if(dec) {
-        if(J2KD_OK != j2kd_run(dec, on_in_begin, on_in_end, on_out, on_end, params->dec)) {
+        if(J2KD_OK != j2kd_run(dec, on_in_begin, on_in_end, on_out,
+                               postproc, on_end, params->dec)) {
             printf("Decoder ERROR: %s.\n", j2kd_status(dec));
         }
         
@@ -300,6 +396,9 @@ static void * dec_thread_impl(void * data) {
         j2kd_destroy(dec);
     }
     delete params;
+    
+    // return value ignored
+    return 0;
 }
 
 
@@ -416,11 +515,13 @@ void demo_dec_destroy(demo_dec * dec_ptr) {
 /// @param out_buffer_ptr  pointer to ouptut buffer with sufficient capacity
 /// @param codestream_ptr  pointer to JPEG 2000 codestream
 /// @param codestream_size size of given codestream (in bytes)
+/// @param double_sized    nonzero for output size to be double sized
 void demo_dec_submit(demo_dec * dec_ptr,
                      void * custom_data_ptr,
                      void * out_buffer_ptr,
                      const void * codestream_ptr,
-                     int codestream_size) {
+                     int codestream_size,
+                     int double_sized) {
     // compose new work item
     work_item * const item = new work_item;
     item->index = -1;  // frame index (assigned by input queue)
@@ -429,33 +530,60 @@ void demo_dec_submit(demo_dec * dec_ptr,
     item->codestream_ptr = codestream_ptr;    // codestream pointer
     item->codestream_size = codestream_size;  // codestream size
     item->out_buffer_ptr = out_buffer_ptr;    // output buffer pointer
+    item->doubled = (bool)double_sized;
     
     // get and check info about the image
-    int comp_count, size_x, size_y;
+    int comp_count;
     if(!demo_dec_image_info(codestream_ptr, codestream_size,
-                            &comp_count, &size_x, &size_y)
+                            &comp_count, &item->size_x, &item->size_y)
             || comp_count != 3) {
         // let the decoding fail if codestream is not correct
-        size_x = 0;
-        size_y = 0;
+        item->size_x = 0;
+        item->size_y = 0;
         codestream_size = 0;
     }
+    
+    // double the output size if required
+    if(double_sized) {
+        item->size_x *= 2;
+        item->size_y *= 2;
+    }
+    
+    // compute expected size of the output buffer
+    item->out_buffer_size = demo_dec_v210_size(item->size_x, item->size_y);
     
     // initialize format specification for each of 3 components
     for(int comp_idx = 3; comp_idx--;) {
         item->fmt[comp_idx].component_idx = comp_idx;
-        item->fmt[comp_idx].type = J2KD_TYPE_INT32;
-        item->fmt[comp_idx].offset = 0;
-        item->fmt[comp_idx].stride_x = 1;
-        item->fmt[comp_idx].stride_y = size_x;
+        item->fmt[comp_idx].type = J2KD_TYPE_INT16;
+        item->fmt[comp_idx].offset = comp_idx;
+        item->fmt[comp_idx].stride_x = 3;
+        item->fmt[comp_idx].stride_y = (item->out_buffer_size * 18)
+                                     / (item->size_y * 16);
         item->fmt[comp_idx].bit_depth = 10;
         item->fmt[comp_idx].is_signed = 0;
-        item->fmt[comp_idx].final_shl = comp_idx * 10;
-        item->fmt[comp_idx].combine_or = comp_idx;
+        item->fmt[comp_idx].final_shl = 0;
+        item->fmt[comp_idx].combine_or = 0;
     }
     
-    // compute expected size of the output buffer
-    item->out_buffer_size = 4 * size_x * size_y;
+    // copy and update output formats if doubling is required
+    if(double_sized) {
+        // copy items
+        for(int i = 3; i < 12; i++) {
+            item->fmt[i] = item->fmt[i % 3];
+        }
+        // update strides and offsets
+        for(int y = 2; y--;) {
+            for(int x = 2; x--;) {
+                for(int c = 3; c--;) {
+                    j2kd_component_format & fmt = item->fmt[y * 6 + x * 3 + c];
+                    fmt.offset += y * fmt.stride_y + x * fmt.stride_x;
+                    fmt.stride_x *= 2;
+                    fmt.stride_y *= 2;
+                }
+            }
+        }   
+    }
     
     // submit the work item into the queue
     dec_ptr->input.put(item);
@@ -534,7 +662,7 @@ int demo_dec_image_info(const void * codestream_ptr,
                         int * comp_count_out,
                         int * size_x_out,
                         int * size_y_out) {
-        // get info about codestream
+    // get info about codestream
     j2kd_image_info i;
     if(J2KD_OK != j2kd_get_image_info(codestream_ptr, codestream_size, &i)) {
         // indicate that the codestream is not a codestream :)
@@ -556,3 +684,19 @@ int demo_dec_image_info(const void * codestream_ptr,
     return 1;
 }
 
+
+
+/// Gets size of v210 encoded image.
+/// @param size_x  image width
+/// @param size_y  image height
+/// @return byte size of v210 encoded image (including all sorts of padding)
+int demo_dec_v210_size(int size_x, int size_y) {
+    // number of 6-pixel groups per line
+    const int grps_per_line = (size_x + 5) / 6;
+    
+    // line size (in bytes) with padding to multiple of 128 bytes
+    const int line_bytes = (grps_per_line * 16 + 127) & ~127;
+    
+    // return total byte count
+    return line_bytes * size_y;
+}

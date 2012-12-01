@@ -45,7 +45,7 @@ void Decoder::run(
     InBeginCallback inBeginCallback,
     InEndCallback inEndCallback,
     OutCallback outCallback,
-//     PostprocCallback postprocCallback,
+    PostprocCallback postprocCallback,
     DecEndCallback decEndCallback,
     void * const customCallbackPtr
 ) {
@@ -217,24 +217,54 @@ void Decoder::run(
         
         // run output formatting is working item is OK
         if(workingItem->isActive()) {
+            // get output size, checking the bounds
+            outSize = OutputFormatter::checkFmt(
+                workingImage,
+                workingItem->fmtPtr,
+                workingItem->fmtCount,
+                postprocCallback ? ~(size_t)0 : outBufferCapacity
+            );
+            
             // select output pointer for formatting
             data.swap();
             void * fmtDataOutPtr = outBufferPtr;
-            if(!outBufferInDeviceMem) {
+            if(postprocCallback) {
+                // format into GPU working buffer and later pass to callback
+                data.outResize(outSize);
+                fmtDataOutPtr = data.outPtr();
+            } else if(!outBufferInDeviceMem) {
                 // format into output GPU buffer and later memcpy to host
-                fmtDataOutPtr = output.resize(outBufferCapacity);
+                fmtDataOutPtr = output.resize(outSize);
             }
             
             // issue output formatting kernel
-            outSize = fmt.run(
+            fmt.run(
                 workingImage,
                 data.inPtr(),
                 fmtDataOutPtr,
-                outBufferCapacity,
                 workingItem->stream,
                 workingItem->fmtPtr,
                 workingItem->fmtCount
             );
+            
+            // possibly run postprocessing callback
+            if(postprocCallback) {
+                data.swap();
+                void * postProcDataOutPtr = outBufferPtr;
+                if(!outBufferInDeviceMem) {
+                    // format into output GPU buffer and later memcpy to host
+                    postProcDataOutPtr = output.resize(outBufferCapacity);
+                }
+                
+                // issue postprocessing
+                outSize = postprocCallback(
+                    customCallbackPtr,
+                    workingItem->customImagePtr,
+                    (void*)data.mutableInPtr(),
+                    postProcDataOutPtr,
+                    (const void *)&workingItem->stream
+                );
+            }
         }
         
         // rotate working items for next iteration
@@ -366,6 +396,7 @@ void Decoder::decode(
         singleImageInBeginCallback,
         singleImageInEndCallback,
         singleImageOutCallback,
+        0,
         singleImageDecEndCallback,
         &params
     );

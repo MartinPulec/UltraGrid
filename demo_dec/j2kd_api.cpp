@@ -239,7 +239,7 @@ enum j2kd_status_code j2kd_run
     j2kd_input_begin_callback in_begin_callback,
     j2kd_input_end_callback in_end_callback,
     j2kd_output_callback out_callback,
-    /*j2kd_postprocessing_callback postproc_callback,*/
+    j2kd_postprocessing_callback postproc_callback,
     j2kd_decoding_end_callback dec_end_callback,
     void * const custom_callback_ptr
 ) {
@@ -254,6 +254,7 @@ enum j2kd_status_code j2kd_run
             in_begin_callback,
             in_end_callback,
             out_callback,
+            postproc_callback,
             dec_end_callback,
             custom_callback_ptr
         );

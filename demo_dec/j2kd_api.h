@@ -379,16 +379,20 @@ typedef void j2kd_output_callback
 );
 
 
-#if 0
-typedef int j2kd_postprocessing_callback
+/**
+ * TODO: add description
+ * 
+ * 
+ * @return output data size
+ */
+typedef size_t j2kd_postprocessing_callback
 (
     void * custom_callback_ptr,
     void * custom_image_ptr,
-    const void * src,
+    void * src,
     void * dest,
     const void * cuda_stream_id_ptr
 );
-#endif
 
 
 typedef void j2kd_decoding_end_callback
@@ -407,7 +411,7 @@ enum j2kd_status_code j2kd_run
     j2kd_input_begin_callback in_begin_callback,
     j2kd_input_end_callback in_end_callback,
     j2kd_output_callback out_callback,
-    /*j2kd_postprocessing_callback postproc_callback,*/
+    j2kd_postprocessing_callback postproc_callback,
     j2kd_decoding_end_callback dec_end_callback,
     void * const custom_callback_ptr
 );

@@ -30,7 +30,7 @@ typedef j2kd_status_code StatusCode;
 typedef j2kd_input_begin_callback InBeginCallback;
 typedef j2kd_input_end_callback InEndCallback;
 typedef j2kd_output_callback OutCallback;
-// typedef j2kd_postprocessing_callback PostprocCallback;
+typedef j2kd_postprocessing_callback PostprocCallback;
 typedef j2kd_decoding_end_callback DecEndCallback;
 
 
