@@ -95,7 +95,8 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
     }
 
     if(audio_playback_does_receive_sdi(this->audio_playback_device)) {
-        sdi_register_display(this->audio_playback_device, this->hw_display);
+        sdi_register_display(audio_playback_get_state_pointer(this->audio_playback_device),
+                             this->hw_display);
     }
 
     view->setHWDisplay(this->hw_display);

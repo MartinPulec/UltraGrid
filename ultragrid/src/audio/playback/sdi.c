@@ -60,9 +60,11 @@
 #include "video_display.h" 
 #include "debug.h"
 
+#define MAGIC 0xa42bf933
 
 struct state_sdi_playback {
         void *display_state;
+        uint32_t magic;
 };
 
 struct audio_playback_type *sdi_probe(void) {
@@ -80,6 +82,7 @@ void * sdi_playback_init(char *cfg)
         struct state_sdi_playback *s = malloc(sizeof(struct state_sdi_playback));
         UNUSED(cfg);
         s->display_state = NULL;
+        s->magic = MAGIC;
         return s;
 }
 
@@ -87,6 +90,8 @@ void sdi_register_display(void *state, void *display)
 {
         struct state_sdi_playback *s = (struct state_sdi_playback *) state;
         
+        assert(s->magic == MAGIC);
+
         s->display_state = display;
 }
 
@@ -94,6 +99,8 @@ void sdi_put_frame(void *state, struct audio_frame *frame)
 {
         struct state_sdi_playback *s;
         s = (struct state_sdi_playback *) state;
+
+        assert(s->magic == MAGIC);
 
         if(s->display_state)
                 display_put_audio_frame(s->display_state, frame);
@@ -104,6 +111,8 @@ struct audio_frame * sdi_get_frame(void *state)
         struct state_sdi_playback *s;
         s = (struct state_sdi_playback *) state;
         
+        assert(s->magic == MAGIC);
+
         if(s->display_state) {
                 return display_get_audio_frame(s->display_state);
         } else {
@@ -116,6 +125,8 @@ int sdi_reconfigure(void *state, int quant_samples, int channels,
 {
         struct state_sdi_playback *s;
         s = (struct state_sdi_playback *) state;
+
+        assert(s->magic == MAGIC);
 
         if(s->display_state) {
                 return display_reconfigure_audio(s->display_state, quant_samples, channels, sample_rate);
@@ -134,6 +145,8 @@ void sdi_playback_reset(void *state)
 {
         struct state_sdi_playback *s;
         s = (struct state_sdi_playback *) state;
+
+        assert(s->magic == MAGIC);
 
         display_audio_reset(s->display_state);
 }
