@@ -1096,7 +1096,7 @@ struct audio_frame * display_decklink_get_audio_frame(void *state)
 void display_decklink_put_audio_frame(void *state, struct audio_frame *frame)
 {
         struct state_decklink *s = (struct state_decklink *)state;
-        unsigned int sampleFrameCount = s->audio.data_len / (s->audio.bps *
+        unsigned int sampleFrameCount = frame->data_len / (s->audio.bps *
                         s->audio.ch_count);
         unsigned int sampleFramesWritten;
 
@@ -1116,7 +1116,7 @@ void display_decklink_put_audio_frame(void *state, struct audio_frame *frame)
                                 s->output_audio_channel_count);
         }
         
-	s->state[0].deckLinkOutput->ScheduleAudioSamples (s->audio.data, sampleFrameCount, 0, 		
+	s->state[0].deckLinkOutput->ScheduleAudioSamples (frame->data, sampleFrameCount, 0,
                 0, &sampleFramesWritten);
         if(sampleFramesWritten != sampleFrameCount)
                 fprintf(stderr, "[decklink] audio buffer underflow!\n");
