@@ -229,7 +229,8 @@ struct vidcap_dpx_state {
         volatile unsigned int        grab_waiting:1;
         unsigned int        play_to_buffer;
 
-        float               speed;
+        float               speed; // TODO: remove
+        float               speedup;
 
         int                 seq_num;
 
@@ -394,6 +395,7 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         s->loop = FALSE;
         s->play_to_buffer = 0;
         s->speed = 1.0;
+        s->speedup = 1.0;
 
         item = strtok_r(fmt, ":", &save_ptr);
         while(item) {
@@ -742,7 +744,8 @@ vidcap_dpx_grab(void *state, struct audio_frame **audio)
                 gettimeofday(&s->cur_time, NULL);
                 if(s->video_prop.fps == 0) /* it would make following loop infinite */
                         return NULL;
-                while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->video_prop.fps / (fabs(s->speed) < 1.0 ? fabs(s->speed) : 1.0)) {
+                while(tv_diff_usec(s->cur_time, s->prev_time) < 1000000.0 / s->video_prop.fps / 
+                               s->speedup / (fabs(s->speed) < 1.0 ? fabs(s->speed) : 1.0)) {
                         gettimeofday(&s->cur_time, NULL);
                 }
                 s->prev_time = s->cur_time;
@@ -847,6 +850,8 @@ void vidcap_dpx_command(struct vidcap *state, int command, void *data)
                 fprintf(stderr, "[DPX] LOOP %d\n", *(int *) data);
                 s->loop = *(int *) data;
         } else if(command == VIDCAP_SPEED) {
+                fprintf(stderr, "[DPX] SPEEDUP %f\n", *(float *) data);
+                s->speedup = *(float *) data;
 #if 0
                 fprintf(stderr, "[DPX] SPEED %f\n", *(float *) data);
                 pthread_mutex_lock(&s->lock);
