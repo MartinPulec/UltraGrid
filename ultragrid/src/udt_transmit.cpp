@@ -56,6 +56,7 @@
 #endif /* HAVE_CONFIG_H */
 
 #include <udt.h>
+#include <ccc.h>
 #include <stdexcept>
 #include <iostream>
 
@@ -69,6 +70,21 @@
 using namespace std;
 
 #define TTL_MS 1000
+
+#define RATE 800
+#define BUFFER_SIZE (100 * 1000 * 1000)
+
+class CUDPBlast: public CCC
+{
+        public:
+                CUDPBlast() { m_dCWndSize = 83333.0;
+                        setRate(RATE);
+                }
+
+                void setRate(int mbps) {
+                        m_dPktSndPeriod = (m_iMSS * 8.0) / mbps;
+                }
+};
 
 struct udt_transmit {
         udt_transmit(char *address, unsigned int port)
@@ -103,6 +119,14 @@ struct udt_transmit {
                 int timeout = 3;
                 //UDT::setsockopt(socket, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
                 //UDT::setsockopt(socket, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
+                
+                CCCFactory<CUDPBlast> *factory = new CCCFactory<CUDPBlast>();
+                int ret = UDT::setsockopt(socket, /* unused */ 0, UDT_CC, (char *) factory, sizeof(CCCFactory<CUDPBlast>));
+                assert(ret == 0);
+                
+                int buf = BUFFER_SIZE;
+                ret = UDT::setsockopt(socket, /* unused */ 0, UDT_SNDBUF, (const char *) &buf, sizeof(buf));
+                assert(ret == 0);
 
                 err = UDT::connect(socket, res->ai_addr, res->ai_addrlen);
 
@@ -124,6 +148,12 @@ struct udt_transmit {
         {
                 size_t total = 0;
                 send_description(frame, audio);
+
+                CUDPBlast *ccc;
+                int optlen = sizeof(&ccc);
+                int ret = UDT::getsockopt(socket, /* unused */ 0, UDT_CC, (char *) &ccc, &optlen);
+                assert(ret == 0);
+                ccc->setRate(RATE);
 
                 while(total < frame->tiles[0].data_len) {
                         int res = UDT::send(socket, frame->tiles[0].data + total,
