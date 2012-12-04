@@ -61,25 +61,15 @@ class cuda_memory_pool {
                 pthread_spinlock_t      spin;
 };
 
-static struct cuda_memory_pool *pool = NULL;
-
-void cuda_memory_pool_init()
-{
-        pool = new cuda_memory_pool;
-}
-
-void cuda_memory_pool_destroy()
-{
-        delete pool;
-}
+static struct cuda_memory_pool pool;
 
 void * cuda_alloc(size_t size)
 {
-        return pool->alloc(size);
+        return pool.alloc(size);
 }
 
 void cuda_free(void *ptr, size_t size)
 {
-        pool->free(ptr, size);
+        pool.free(ptr, size);
 }
 

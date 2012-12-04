@@ -64,7 +64,6 @@
 #include "audio_source.h"
 #include "color_transform.h"
 #include "compat/platform_semaphore.h"
-#include "cuda_memory_pool.h"
 #include "debug.h"
 #include "gl_context.h"
 #include "pdb.h"
@@ -613,8 +612,6 @@ int main(int argc, char *argv[])
         sigaddset(&mask, SIGABRT);
         pthread_sigmask(SIG_BLOCK, &mask, NULL);
 
-        cuda_memory_pool_init();
-
         if (argc == 0) {
                 network_device = strdup("localhost");
         } else {
@@ -827,8 +824,6 @@ cleanup:
         if (uv->participants != NULL)
                 pdb_destroy(&uv->participants);
 #endif
-        cuda_memory_pool_destroy();
-
         printf("Exit\n");
 
         return exit_status;
