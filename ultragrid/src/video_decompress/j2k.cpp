@@ -190,7 +190,7 @@ std::tr1::shared_ptr<Frame> j2k_pop(void *state)
         }
 
         s->count -= 1;
-        pthread_cond_signal(&s->cv);
+        pthread_cond_broadcast(&s->cv);
         pthread_mutex_unlock(&s->lock);
 
         return ret;
@@ -202,5 +202,17 @@ void j2k_decompress_done(void *state)
                 (class state_j2k_decompress *) state;
 
         delete s;
+}
+
+void j2k_wait_free(void *state)
+{
+        class state_j2k_decompress *s = 
+                (class state_j2k_decompress *) state;
+
+        pthread_mutex_lock(&s->lock);
+        while(s->count > 0) {
+                pthread_cond_wait(&s->cv, &s->lock);
+        }
+        pthread_mutex_unlock(&s->lock);
 }
 

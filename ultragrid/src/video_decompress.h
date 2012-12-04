@@ -75,6 +75,11 @@ typedef std::tr1::shared_ptr<Frame> (*decompress_pop_t)(void *);
  */
 typedef  void (*decompress_done_t)(void *);
 
+/* 
+ * wait until there is no more frame scheduled
+ */
+typedef  void (*decompress_wait_free_t)(void *);
+
 
 struct decode_from_to {
         codec_t from;
@@ -93,5 +98,6 @@ int decompress_reconfigure(struct state_decompress *, struct video_desc, int rsh
 void decompress_push(struct state_decompress *, std::tr1::shared_ptr<Frame> buffer);
 std::tr1::shared_ptr<Frame> decompress_pop(struct state_decompress *);
 void decompress_done(struct state_decompress *);
+void decompress_wait_free(struct state_decompress *);
 
 #endif /* __video_decompress_h */

@@ -709,6 +709,8 @@ void UGReceiver::Disconnect()
     }
     uv->boss_waiting = false;
 
+    uv->decompress.waitFree();
+
     pthread_mutex_unlock(&uv->lock);
 }
 

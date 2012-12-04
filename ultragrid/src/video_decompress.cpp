@@ -75,6 +75,8 @@ typedef struct {
         const char *pop_str;
         decompress_done_t done;
         const char *done_str;
+        decompress_wait_free_t wait_free;
+        const char *wait_free_str;
 
         void *handle;
 } decoder_table_t;
@@ -143,9 +145,15 @@ decoder_table_t decoders[] = {
                 MK_NAME(jpeg_push), MK_NAME(jpeg_pop), MK_NAME(jpeg_decompress_done), NULL},
 #endif 
         { J2K_DECOMPRESS_MAGIC, NULL, MK_STATIC(j2k_decompress_init), MK_STATIC(j2k_decompress_reconfigure),
-                MK_STATIC(j2k_push), MK_STATIC(j2k_pop), MK_STATIC(j2k_decompress_done), NULL},
+                MK_STATIC(j2k_push), MK_STATIC(j2k_pop),
+                MK_STATIC(j2k_decompress_done),
+                MK_STATIC(j2k_wait_free),
+                NULL},
         { NULL_MAGIC, NULL, MK_STATIC(null_decompress_init), MK_STATIC(null_decompress_reconfigure),
-                MK_STATIC(null_push), MK_STATIC(null_pop), MK_STATIC(null_decompress_done), NULL}
+                MK_STATIC(null_push), MK_STATIC(null_pop),
+                MK_STATIC(null_decompress_done),
+                MK_STATIC(null_wait_free),
+                NULL}
 };
 
 #define MAX_DECODERS (sizeof(decoders) / sizeof(decoder_table_t))
@@ -225,6 +233,13 @@ void decompress_done(struct state_decompress *s)
         if(s) {
                 s->functions->done(s->state);
                 free(s);
+        }
+}
+
+void decompress_wait_free(struct state_decompress *s)
+{
+        if(s) {
+                s->functions->wait_free(s->state);
         }
 }
 

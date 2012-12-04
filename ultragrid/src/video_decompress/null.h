@@ -59,4 +59,5 @@ int null_decompress_reconfigure(void *state, struct video_desc desc,
 void null_push(void *state, std::tr1::shared_ptr<Frame>);
 std::tr1::shared_ptr<Frame> null_pop(void *state);
 void null_decompress_done(void *state);
+void null_wait_free(void *state);
 

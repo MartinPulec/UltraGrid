@@ -123,3 +123,8 @@ void Decompress::reintializeDecompress(codec_t in_codec, codec_t out_codec)
         }
     }
 }
+
+void Decompress::waitFree()
+{
+    decompress_wait_free(decompress);
+}

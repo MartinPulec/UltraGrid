@@ -40,6 +40,7 @@ class Decompress
         void pushDecompressedFrame(std::tr1::shared_ptr<Frame> frame);
 
         void reintializeDecompress(codec_t in_codec, codec_t out_codec);
+        void waitFree();
 
     protected:
     private:

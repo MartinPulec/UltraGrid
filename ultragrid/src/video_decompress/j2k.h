@@ -60,4 +60,5 @@ int j2k_decompress_reconfigure(void *state, struct video_desc desc,
 void j2k_push(void *state, std::tr1::shared_ptr<Frame> src);
 std::tr1::shared_ptr<Frame> j2k_pop(void *state);
 void j2k_decompress_done(void *state);
+void j2k_wait_free(void *state);
 

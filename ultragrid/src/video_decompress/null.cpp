@@ -107,7 +107,7 @@ void null_push(void *state, std::tr1::shared_ptr<Frame> src)
         }
 
         s->dummy_queue.push(src);
-        pthread_cond_signal(&s->out_cv);
+        pthread_cond_broadcast(&s->out_cv);
         pthread_mutex_unlock(&s->lock);
 }
 
@@ -144,5 +144,16 @@ void null_decompress_done(void *state)
         pthread_cond_destroy(&s->out_cv);
 
         delete s;
+}
+
+void null_wait_free(void *state)
+{
+        struct state_decompress_null *s = (struct state_decompress_null *) state;
+
+        pthread_mutex_lock(&s->lock);
+        while(!s->dummy_queue.empty()) {
+                pthread_cond_wait(&s->out_cv, &s->lock);
+        }
+        pthread_mutex_unlock(&s->lock);
 }
 
