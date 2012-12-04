@@ -576,6 +576,7 @@ error:
                 {
                     PlaybackAbortedMessage *message = new PlaybackAbortedMessage(error);
                     uv->player->EnqueueMessage(message);
+                    uv->state = ST_NONE;
                 }
 no_err:
                 ;

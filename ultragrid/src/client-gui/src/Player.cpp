@@ -109,6 +109,8 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
 // overloaded wxTimer::Notify
 void Player::Notify()
 {
+    this->ProcessMessages();
+
     if(scheduledPlayone) {
         if(!Playone()) {
             if(onFlyManager.LastRequestIsDue(this->fps)) {
@@ -556,7 +558,7 @@ void Player::ProcessMessages()
                 dynamic_cast<PlaybackAbortedMessage *>(message);
             wxString errorMessage(abortMessage->what().c_str(), wxConvUTF8);
             this->StopPlayback();
-            wxMessageBox(errorMessage, wxT("Playback error"), wxICON_EXCLAMATION);
+            wxLogError(errorMessage);
         }
 
         delete message;
