@@ -339,8 +339,11 @@ static void *receiver_thread(void *arg)
                         last_tile_received = uv->curr_time;
                 }
 #else
+                std::string error;
+
                 // LOCK - LOCK - LOCK
                 pthread_mutex_lock(&uv->lock);
+
 
                 bool accept = false;
 
@@ -448,20 +451,32 @@ static void *receiver_thread(void *arg)
                     int len = PCKT_HDR_BASE_LEN * sizeof(uint32_t);
 
                     res = uv->receive(uv->receive_state, (char *) &a.header, &len);
+
                     if(!res) {
-                        std::cerr << "(res: " << res << ", len: " << len << ")"  << std::endl;
-                        goto error;
+                        if(len == 0) {
+                            // normal timeout, no action needed
+                            cout << "(timeout)" << endl;
+                            goto no_err;
+                        } else {
+                            std::cerr << "(res: " << res << ", len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
+                            error = string("Incomplete header");
+                            goto error;
+                        }
                     }
+
+#if 0
                     if(len < PCKT_HDR_BASE_LEN * sizeof(uint32_t) || len > PCKT_HDR_MAX_LEN * sizeof(uint32_t) ) {
                         std::cerr << "(len: " << len << ", sizeof(video_payload_hdr_t): " << sizeof(video_payload_hdr_t) << ")"  << std::endl;
                         goto error;
                     }
+#endif
 
                     if(UGReceiver::BaseHeaderHasNextHeader(a.header)) {
                         int ext_header_len = (PCKT_EXT_INFO_LEN + PCKT_HDR_AUDIO_LEN) * sizeof(uint32_t);
                         res = uv->receive(uv->receive_state, (char *) &a.header + len, &ext_header_len);
                         if(!res) {
                             std::cerr << "(res: " << res << ", len: " << len << ")"  << std::endl;
+                            error = string("Incomplete header");
                             goto error;
                         }
 #if 0
@@ -482,7 +497,7 @@ static void *receiver_thread(void *arg)
                     if(!UGReceiver::ParseHeader(a.header, len, &video_desc,
                                                 &video_len, &audio_desc,
                                                 &audio_len)) {
-                        cerr << "Failed parsing packet header" << endl;
+                        error = string("Failed parsing packet header");
                         goto error;
                     }
 
@@ -517,10 +532,12 @@ static void *receiver_thread(void *arg)
                     res = uv->receive(uv->receive_state, receivedFrame->video.get(), &len);
                     if(!res) {
                         std::cerr << "(res: " << res << ")" << std::endl;
+                        error = string("Incomplete data");
                         goto error;
                     }
                     if(len != video_len) {
                         std::cerr << "(len: " << len << ", data_len: " << audio_len + video_len << ")" << std::endl;
+                        error = string("Incomplete data");
                         goto error;
                     }
 
@@ -553,9 +570,13 @@ static void *receiver_thread(void *arg)
                     //display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
                     //pbuf_data.frame_buffer = display_get_frame(uv->display_device);
                 }
-error:
-                ;
 
+                goto no_err;
+error:
+                {
+                    PlaybackAbortedMessage *message = new PlaybackAbortedMessage(error);
+                    uv->player->EnqueueMessage(message);
+                }
 no_err:
                 ;
 #endif

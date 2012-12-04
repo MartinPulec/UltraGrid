@@ -535,3 +535,30 @@ void Player::putframe(std::tr1::shared_ptr<Frame> data, unsigned int frames)
     buffer.putframe(data, frames);
 #endif
 }
+
+void Player::EnqueueMessage(PlayerMessage *message)
+{
+    wxMutexLocker lock(messageQueueLock);
+
+    messageQueue.push(message);
+
+}
+
+void Player::ProcessMessages()
+{
+    wxMutexLocker lock(messageQueueLock);
+    while(!messageQueue.empty()) {
+        PlayerMessage *message = messageQueue.front();
+        messageQueue.pop();
+
+        if(dynamic_cast<PlaybackAbortedMessage *>(message)) {
+            PlaybackAbortedMessage *abortMessage =
+                dynamic_cast<PlaybackAbortedMessage *>(message);
+            wxString errorMessage(abortMessage->what().c_str(), wxConvUTF8);
+            this->StopPlayback();
+            wxMessageBox(errorMessage, wxT("Playback error"), wxICON_EXCLAMATION);
+        }
+
+        delete message;
+    }
+}

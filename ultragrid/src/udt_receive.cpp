@@ -64,6 +64,8 @@
 #include "udt_receive.h"
 #include "video.h"
 
+#define TIMEOUT_MS 5000
+
 using namespace std;
 
 struct udt_recv {
@@ -83,7 +85,7 @@ struct udt_recv {
 
                 err = UDT::ERROR;
 
-                int timeout = 500; //ms
+                int timeout = TIMEOUT_MS;
                 //UDT::setsockopt(socket, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
                 //UDT::setsockopt(socket, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
 
@@ -150,16 +152,18 @@ struct udt_recv {
 
                 while(total < *len) {
                         std::set<UDTSOCKET> readfds;
-                        if(UDT::epoll_wait(udt_epoll_id, &readfds, NULL, 500, NULL, NULL) >= 1) {
+                        if(UDT::epoll_wait(udt_epoll_id, &readfds, NULL, TIMEOUT_MS, NULL, NULL) >= 1) {
                                 int res = UDT::recv(recver, buffer + total, *len - total, 0);
                                 if(res == UDT::ERROR) {
                                         std::cerr << UDT::getlasterror().getErrorMessage() << std::endl;
+                                        *len = total;
                                         return 0;
                                 }
 
                                 total += res;
                         } else {
                                 std::cerr << "UDT receive: timeout" << std::endl;
+                                *len = total;
                                 return 0;
                         }
                 }
@@ -174,6 +178,8 @@ struct udt_recv {
                 }
                 *len = res;
                 */
+
+                *len = total;
 
                 return 1;
         }

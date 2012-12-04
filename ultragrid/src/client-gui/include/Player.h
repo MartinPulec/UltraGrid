@@ -1,6 +1,14 @@
 #ifndef PLAYER_H
 #define PLAYER_H
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#include "config_win32.h"
+#endif // HAVE_CONFIG_H
+
+#include <queue>
+#include <string>
 #include <sys/time.h>
 
 #include <wx/string.h>
@@ -32,6 +40,21 @@ enum playerState {
     sPlaying
 };
 
+
+class PlayerMessage {
+    public:
+        virtual ~PlayerMessage() {}
+};
+
+class PlaybackAbortedMessage: public PlayerMessage {
+    public:
+        PlaybackAbortedMessage(const std::string &cause_) :cause(cause_) {}
+        std::string what() {
+            return cause;
+        }
+    private:
+        std::string cause;
+};
 
 class Player : public wxTimer
 {
@@ -71,6 +94,8 @@ class Player : public wxTimer
         void reconfigure(int width, int height, int codec, int data_len, struct audio_desc *audio_desc);
         void putframe(std::tr1::shared_ptr<Frame> data, unsigned int seq_num);
 
+        void EnqueueMessage(PlayerMessage *message);
+
     protected:
     private:
         void SetCurrentFrame(int frame);
@@ -83,6 +108,8 @@ class Player : public wxTimer
         void SchedulePlay();
 
         void DropOutOfBoundFrames(int interval = 0);
+
+        void ProcessMessages();
 
         GLView *view;
         VideoBuffer buffer;
@@ -112,6 +139,9 @@ class Player : public wxTimer
 
         int speed_status;
         bool slow_down;
+
+        std::queue<PlayerMessage *> messageQueue;
+        wxMutex                     messageQueueLock;
 };
 
 #endif // PLAYER_H
