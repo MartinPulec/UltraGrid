@@ -29,6 +29,13 @@
 
 using namespace std;
 
+DEFINE_EVENT_TYPE(wxEVT_PLAYER_MESSAGE)
+
+BEGIN_EVENT_TABLE(Player, wxTimer)
+  EVT_COMMAND  (wxID_ANY, wxEVT_PLAYER_MESSAGE, Player::ProcessMessages)
+END_EVENT_TABLE()
+
+
 Player::Player() :
     receiver(0),
     speed(1.0),
@@ -109,8 +116,6 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
 // overloaded wxTimer::Notify
 void Player::Notify()
 {
-    this->ProcessMessages();
-
     if(scheduledPlayone) {
         if(!Playone()) {
             if(onFlyManager.LastRequestIsDue(this->fps)) {
@@ -518,14 +523,14 @@ void Player::reconfigure(int width, int height, int codec, int data_len, struct 
     if(display_reconfigure(this->hw_display, desc)) {
         display_configured = true;
     } else {
-        wxMessageBox( wxT("Error occured during display reconfiguration!"), wxT("Unable to reconfigure display!"), wxICON_EXCLAMATION);
         display_configured = false;
+        throw string("Error occured during display reconfiguration!");
     }
 
     if(audio_desc) {
         if(!audio_playback_reconfigure(this->audio_playback_device, audio_desc->bps * 8, audio_desc->ch_count,
                     audio_desc->sample_rate)) {
-            wxMessageBox( wxT("Error occured during audio reconfiguration!"), wxT("Unable to reconfigure audio!"), wxICON_EXCLAMATION);
+            throw string("Error occured during audio reconfiguration!");
         }
     }
 }
@@ -538,15 +543,27 @@ void Player::putframe(std::tr1::shared_ptr<Frame> data, unsigned int frames)
 #endif
 }
 
-void Player::EnqueueMessage(PlayerMessage *message)
+void Player::EnqueueMessage(PlayerMessage *message, bool synchronous)
 {
-    wxMutexLocker lock(messageQueueLock);
-
+    MessageResponder *responder = 0;
+    if(synchronous) {
+        responder = new MessageResponder;
+        message->setResponder(responder);
+    }
+    messageQueueLock.Lock();
     messageQueue.push(message);
+    messageQueueLock.Unlock();
 
+    wxCommandEvent event(wxEVT_PLAYER_MESSAGE, GetId());
+    wxPostEvent(this, event);
+
+    if(synchronous) {
+        responder->wait();
+        delete responder;
+    }
 }
 
-void Player::ProcessMessages()
+void Player::ProcessMessages(wxCommandEvent& WXUNUSED(event) )
 {
     wxMutexLocker lock(messageQueueLock);
     while(!messageQueue.empty()) {
@@ -559,6 +576,10 @@ void Player::ProcessMessages()
             wxString errorMessage(abortMessage->what().c_str(), wxConvUTF8);
             this->StopPlayback();
             wxLogError(errorMessage);
+
+            message->setStatus(true);
+        } else {
+            message->setStatus(false);
         }
 
         delete message;

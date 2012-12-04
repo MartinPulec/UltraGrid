@@ -512,10 +512,15 @@ static void *receiver_thread(void *arg)
                     ///decoder_reconfigure(video_desc, &pbuf_data);
                     //decoder_get_buffer(&pbuf_data, &buffer, &len);
 
-                    if(!audio_len) {
-                        UGReceiver::Reconfigure(uv, video_desc, NULL);
-                    } else {
-                        UGReceiver::Reconfigure(uv, video_desc, &audio_desc);
+                    try {
+                        if(!audio_len) {
+                            UGReceiver::Reconfigure(uv, video_desc, NULL);
+                        } else {
+                            UGReceiver::Reconfigure(uv, video_desc, &audio_desc);
+                        }
+                    } catch (string &str) {
+                        error = str;
+                        goto error;
                     }
 
 #if 0
@@ -532,12 +537,12 @@ static void *receiver_thread(void *arg)
                     res = uv->receive(uv->receive_state, receivedFrame->video.get(), &len);
                     if(!res) {
                         std::cerr << "(res: " << res << ")" << std::endl;
-                        error = string("Incomplete data");
+                        error = string("Incomplete video data");
                         goto error;
                     }
                     if(len != video_len) {
                         std::cerr << "(len: " << len << ", data_len: " << audio_len + video_len << ")" << std::endl;
-                        error = string("Incomplete data");
+                        error = string("Incomplete video data");
                         goto error;
                     }
 
@@ -549,6 +554,7 @@ static void *receiver_thread(void *arg)
                     res = uv->receive(uv->receive_state, receivedFrame->audio.get(), &len);
                     if(!res) {
                         std::cerr << "(res: " << res << ")" << std::endl;
+                        error = string("Incomplete audio data");
                         goto error;
                     }
                     assert(len == audio_len);

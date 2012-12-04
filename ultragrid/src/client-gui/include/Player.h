@@ -32,6 +32,10 @@ class VideoEntry;
 class AsyncMsgHandler;
 class Frame;
 
+BEGIN_DECLARE_EVENT_TYPES()
+DECLARE_EVENT_TYPE(wxEVT_PLAYER_MESSAGE, -1)
+END_DECLARE_EVENT_TYPES()
+
 struct audio_desc;
 
 enum playerState {
@@ -40,10 +44,47 @@ enum playerState {
     sPlaying
 };
 
+class MessageResponder
+{
+    public:
+        MessageResponder() :
+          completed(false), cv(lock)
+        {}
+        bool wait() {
+            wxMutexLocker locker(lock);
+            cv.Wait();
+
+            return status;
+        }
+
+        void setStatus(bool status) {
+            wxMutexLocker locker(lock);
+            this->status = status;
+            cv.Signal();
+        }
+
+    private:
+        wxMutex lock;
+        wxCondition cv;
+        bool completed;
+        bool status;
+};
 
 class PlayerMessage {
     public:
+        PlayerMessage() : responder(0) {}
         virtual ~PlayerMessage() {}
+        void setResponder(MessageResponder *responder) {
+            this->responder = responder;
+        }
+        void setStatus(bool res) {
+            if(responder) {
+                responder->setStatus(res);
+            }
+        }
+
+    private:
+        MessageResponder *responder;
 };
 
 class PlaybackAbortedMessage: public PlayerMessage {
@@ -94,9 +135,11 @@ class Player : public wxTimer
         void reconfigure(int width, int height, int codec, int data_len, struct audio_desc *audio_desc);
         void putframe(std::tr1::shared_ptr<Frame> data, unsigned int seq_num);
 
-        void EnqueueMessage(PlayerMessage *message);
+        void EnqueueMessage(PlayerMessage *message, bool synchronous = false);
 
     protected:
+        DECLARE_EVENT_TABLE()
+
     private:
         void SetCurrentFrame(int frame);
 
@@ -109,7 +152,7 @@ class Player : public wxTimer
 
         void DropOutOfBoundFrames(int interval = 0);
 
-        void ProcessMessages();
+        void ProcessMessages(wxCommandEvent& WXUNUSED(event) );
 
         GLView *view;
         VideoBuffer buffer;
