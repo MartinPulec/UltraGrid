@@ -90,8 +90,10 @@ void * none_compress_init(char * opts)
         return s;
 }
 
-void none_push(void *arg, struct video_frame * tx)
+void none_push(void *arg, struct video_frame * tx, double quality)
 {
+        UNUSED(quality);
+
         struct none_video_compress *s = (struct none_video_compress *) arg;
 
         assert(s->magic == MAGIC);

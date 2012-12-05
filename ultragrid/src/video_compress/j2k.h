@@ -52,7 +52,7 @@ extern "C" {
 #endif
 
 void                *j2k_compress_init(char * opts);
-void                 j2k_push(void *args, struct video_frame * tx);
+void                 j2k_push(void *args, struct video_frame * tx, double requested_quality);
 struct video_frame  *j2k_pop(void *args);
 void                 j2k_compress_done(void *args);
 

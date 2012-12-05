@@ -6,7 +6,7 @@
 		<style>wxDEFAULT_FRAME_STYLE|wxWANTS_CHARS</style>
 		<object class="wxFlexGridSizer" subclass="CustomGridBagSizer" variable="FlexGridSizer1" member="yes">
 			<cols>1</cols>
-			<rows>2</rows>
+			<rows>3</rows>
 			<growablecols>0</growablecols>
 			<growablerows>0</growablerows>
 			<object class="sizeritem">
@@ -25,7 +25,7 @@
 			<object class="sizeritem">
 				<object class="wxFlexGridSizer" variable="FlexGridSizer2" member="yes">
 					<cols>14</cols>
-					<rows>2</rows>
+					<rows>1</rows>
 					<growablecols>6</growablecols>
 					<object class="sizeritem">
 						<object class="wxButton" name="ID_BUTTON2" variable="Select" member="yes">
@@ -166,6 +166,35 @@
 					</object>
 				</object>
 				<flag>wxALL|wxEXPAND|wxFIXED_MINSIZE|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+				<border>5</border>
+				<option>1</option>
+			</object>
+			<object class="sizeritem">
+				<object class="wxFlexGridSizer" variable="FlexGridSizer3" member="no">
+					<cols>2</cols>
+					<rows>1</rows>
+					<growablecols>1</growablecols>
+					<growablerows>0</growablerows>
+					<object class="sizeritem">
+						<object class="wxStaticText" name="ID_J2K_QUALITY_LABEL" variable="J2KQualityLabel" member="yes">
+							<label>J2K quality</label>
+						</object>
+						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+						<border>5</border>
+						<option>1</option>
+					</object>
+					<object class="sizeritem">
+						<object class="wxSlider" name="ID_J2K_QUALITY_SLIDER" variable="J2KQualitySlider" member="yes">
+							<value>1000</value>
+							<max>1000</max>
+							<size>551,27</size>
+						</object>
+						<flag>wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+						<border>5</border>
+						<option>1</option>
+					</object>
+				</object>
+				<flag>wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
 				<border>5</border>
 				<option>1</option>
 			</object>

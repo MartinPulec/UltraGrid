@@ -372,7 +372,17 @@ launch_err:
 
                         audio = string(save_ptr);
                         cerr << "Audio:" << strtok_r(NULL, " ", &save_ptr);
+                } else if(strcmp(item, "quality") == 0) {
+                        response.code = 200;
+                        response.message = "OK";
 
+                        char *quality = strtok_r(NULL, " ", &save_ptr);
+                        char buff[20];
+                        snprintf(buff, 20, "QUALITY %s", quality);
+
+                        int len = strlen(buff);
+                        write(comm_fd, &len, sizeof(len));
+                        write(comm_fd, buff, len);
                 } else if(strcmp(item, "fps") == 0) {
                         char *fps_str = strtok_r(NULL, " ", &save_ptr);
                         /* replace decimal coma with dot */

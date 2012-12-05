@@ -124,6 +124,8 @@ class client_guiFrame: public wxFrame
         static const long ID_Quicker;
         static const long PlayButton;
         static const long ID_BUTTON1;
+        static const long ID_J2K_QUALITY_LABEL;
+        static const long ID_J2K_QUALITY_SLIDER;
         static const long idMenuQuit;
         static const long idServerSetting;
         static const long idCompressionSetting;
@@ -146,6 +148,7 @@ class client_guiFrame: public wxFrame
         wxStaticText* SpeedStr;
         wxButton* Forward;
         GLView* gl;
+        wxStaticText* J2KQualityLabel;
         ProgressSlider* Slider1;
         wxButton* StopBtn;
         wxMenuItem* MenuItem6;
@@ -153,6 +156,7 @@ class client_guiFrame: public wxFrame
         wxButton* Quicker;
         CustomGridBagSizer* FlexGridSizer1;
         wxButton* Pause;
+        wxSlider* J2KQualitySlider;
         wxSpinCtrl* FrameCount;
         //*)
 

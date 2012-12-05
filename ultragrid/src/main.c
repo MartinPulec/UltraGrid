@@ -137,6 +137,7 @@ struct state_uv {
         int comm_fd;
 
         struct compress_state *compression;
+        volatile double compress_quality;
 };
 
 long packet_rate = 13600;
@@ -432,7 +433,7 @@ static void *grab_thread(void *arg)
 #endif
                         //TODO: Unghetto this
                         if (uv->requested_compression) {
-                                compress_frame_push(uv->compression, tx_frame);
+                                compress_frame_push(uv->compression, tx_frame, uv->compress_quality);
                         } else {
                                 fprintf(stderr, "Compression needed!\n");
                                 abort();
@@ -441,7 +442,7 @@ static void *grab_thread(void *arg)
         }
 
         // poisoned frame
-        compress_frame_push(uv->compression, NULL);
+        compress_frame_push(uv->compression, NULL, uv->compress_quality);
 
         pthread_join(sender_thread_id, NULL);
 
@@ -515,6 +516,7 @@ int main(int argc, char *argv[])
         uv->requested_capture = "none";
         uv->requested_compression = TRUE;
         uv->compress_options = "none";
+        uv->compress_quality = 1.0;
         uv->postprocess = NULL;
         uv->requested_mtu = 0;
 #ifdef USE_CUSTOM_TRANSMIT
@@ -799,6 +801,9 @@ int main(int argc, char *argv[])
                                 } else if(strncmp(buff, "SPEED", strlen("SPEED")) == 0) {
                                         float speed = atof(buff + strlen("SPEED") + 1);
                                         vidcap_command(uv->capture_device, VIDCAP_SPEED, (void *) &speed);
+                                } else if(strncmp(buff, "QUALITY", strlen("QUALITY")) == 0) {
+                                        uv->compress_quality =
+                                                atof(buff + strlen("QUALITY") + 1);
                                 }
                         }
                 }

@@ -77,6 +77,8 @@ const long client_guiFrame::ID_Slower = wxNewId();
 const long client_guiFrame::ID_Quicker = wxNewId();
 const long client_guiFrame::PlayButton = wxNewId();
 const long client_guiFrame::ID_BUTTON1 = wxNewId();
+const long client_guiFrame::ID_J2K_QUALITY_LABEL = wxNewId();
+const long client_guiFrame::ID_J2K_QUALITY_SLIDER = wxNewId();
 const long client_guiFrame::idMenuQuit = wxNewId();
 const long client_guiFrame::idServerSetting = wxNewId();
 const long client_guiFrame::idCompressionSetting = wxNewId();
@@ -113,12 +115,13 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     wxMenu* Menu1;
     wxMenu* Menu3;
     wxMenuItem* MenuItem3;
+    wxFlexGridSizer* FlexGridSizer3;
     wxMenuItem* MenuItem5;
     wxMenuBar* MenuBar1;
     wxMenu* Menu2;
 
     Create(parent, wxID_ANY, _("FlashNET Player"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_FRAME_STYLE|wxWANTS_CHARS, _T("wxID_ANY"));
-    FlexGridSizer1 = new CustomGridBagSizer(2, 1, 0, 0);
+    FlexGridSizer1 = new CustomGridBagSizer(3, 1, 0, 0);
     FlexGridSizer1->AddGrowableCol(0);
     FlexGridSizer1->AddGrowableRow(0);
     int GLCanvasAttributes_1[] = {
@@ -129,7 +132,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     	0, 0 };
     gl = new GLView(this, ID_GLCANVAS1, wxDefaultPosition, wxSize(767,391), 0, _T("ID_GLCANVAS1"), GLCanvasAttributes_1);
     FlexGridSizer1->Add(gl, 1, wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    FlexGridSizer2 = new wxFlexGridSizer(2, 14, 0, 0);
+    FlexGridSizer2 = new wxFlexGridSizer(1, 14, 0, 0);
     FlexGridSizer2->AddGrowableCol(6);
     Select = new wxButton(this, ID_BUTTON2, _("⏏"), wxDefaultPosition, wxSize(60,27), 0, wxDefaultValidator, _T("ID_BUTTON2"));
     FlexGridSizer2->Add(Select, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -163,6 +166,14 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Pause = new wxButton(this, ID_BUTTON1, _("▶"), wxDefaultPosition, wxSize(60,27), 0, wxDefaultValidator, _T("ID_BUTTON1"));
     FlexGridSizer2->Add(Pause, 1, wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FlexGridSizer1->Add(FlexGridSizer2, 1, wxALL|wxEXPAND|wxFIXED_MINSIZE|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    FlexGridSizer3 = new wxFlexGridSizer(1, 2, 0, 0);
+    FlexGridSizer3->AddGrowableCol(1);
+    FlexGridSizer3->AddGrowableRow(0);
+    J2KQualityLabel = new wxStaticText(this, ID_J2K_QUALITY_LABEL, _("J2K quality"), wxDefaultPosition, wxDefaultSize, 0, _T("ID_J2K_QUALITY_LABEL"));
+    FlexGridSizer3->Add(J2KQualityLabel, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    J2KQualitySlider = new wxSlider(this, ID_J2K_QUALITY_SLIDER, 1000, 0, 1000, wxDefaultPosition, wxSize(551,27), 0, wxDefaultValidator, _T("ID_J2K_QUALITY_SLIDER"));
+    FlexGridSizer3->Add(J2KQualitySlider, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    FlexGridSizer1->Add(FlexGridSizer3, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     SetSizer(FlexGridSizer1);
     MenuBar1 = new wxMenuBar();
     Menu1 = new wxMenu();
@@ -212,6 +223,14 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Connect(idCompressionSetting,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnCompressSetting);
     Connect(idKeyBindings,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnKeyBindingsHelp);
     Connect(idOtherSettings,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnOtherSettings);
+
+    J2KQualitySlider->Connect(
+#ifdef __WXMAC__
+    wxEVT_SCROLL_THUMBRELEASE
+#else
+    wxEVT_SCROLL_CHANGED
+#endif
+        , (wxObjectEventFunction)&Player::QualityChanged, 0, &player);
 
     gl->Connect(wxEVT_PAINT,(wxObjectEventFunction)&GLView::OnPaint,0,gl);
     /*int GLCanvasAttributes_1[] = {

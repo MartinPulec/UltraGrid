@@ -53,7 +53,7 @@ extern "C" {
 
 
 void                *none_compress_init(char * opts);
-void                 none_push(void *args, struct video_frame * tx);
+void                 none_push(void *args, struct video_frame * tx, double requested_quality);
 struct video_frame  *none_pop(void *args);
 void                 none_compress_done(void *args);
 

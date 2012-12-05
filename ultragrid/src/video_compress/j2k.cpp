@@ -121,7 +121,7 @@ void * j2k_compress_init(char * opts)
         return s;
 }
 
-void j2k_push(void *arg, struct video_frame * tx)
+void j2k_push(void *arg, struct video_frame * tx, double requested_quality)
 {
         struct j2k_video_compress *s = (struct j2k_video_compress *) arg;
 
@@ -149,10 +149,14 @@ void j2k_push(void *arg, struct video_frame * tx)
                         assert(ret);
                 }
 
+                int quality = 1.25 * 1024 * 1024 * requested_quality;
+                if(quality == 0) {
+                        quality = 1;
+                }
 
                 demo_enc_submit(s->j2k_encoder, (void *) tx,
                                 tx->tiles[0].data, tx->tiles[0].data_len,
-                                tx->tiles[0].data, 1.25*1024*1024,
+                                tx->tiles[0].data, quality,
                                 0.7,
                                 0);
 

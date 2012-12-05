@@ -232,9 +232,10 @@ const char *get_compress_name(struct compress_state *s)
                 return NULL;
 }
 
-void compress_frame_push(struct compress_state *s, struct video_frame *frame)
+void compress_frame_push(struct compress_state *s, struct video_frame *frame,
+                double requested_quality)
 {
-        s->handle->push(s->state, frame);
+        s->handle->push(s->state, frame, requested_quality);
 }
 
 struct video_frame *compress_frame_pop(struct compress_state *s)

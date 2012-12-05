@@ -122,6 +122,7 @@ class Player : public wxTimer
         void SetLoop(bool val);
 
         void SetSpeed(double val);
+        void SetQuality(double val);
 
         void SetMsgHandler(AsyncMsgHandler *msgHandler);
         void ChangeState(enum playerState newState);
@@ -136,6 +137,9 @@ class Player : public wxTimer
         void putframe(std::tr1::shared_ptr<Frame> data, unsigned int seq_num);
 
         void EnqueueMessage(PlayerMessage *message, bool synchronous = false);
+
+        // this is for quality control
+        void QualityChanged(wxScrollEvent&);
 
     protected:
         DECLARE_EVENT_TABLE()

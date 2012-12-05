@@ -34,6 +34,13 @@ DEFINE_EVENT_TYPE(wxEVT_PLAYER_MESSAGE)
 
 BEGIN_EVENT_TABLE(Player, wxTimer)
   EVT_COMMAND  (wxID_ANY, wxEVT_PLAYER_MESSAGE, Player::ProcessMessages)
+
+#ifdef __WXMAC__
+    EVT_SCROLL_THUMBRELEASE(Player::QualityChanged)
+#else
+    EVT_SCROLL_CHANGED(Player::QualityChanged)
+#endif
+
 END_EVENT_TABLE()
 
 
@@ -346,6 +353,9 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
         failedPart = wxT("setting speed");
         connection.set_parameter(wxT("speed"), Utils::FromCDouble(speed, 2));
 
+        failedPart = wxT("setting quality");
+        this->SetQuality(parent->J2KQualitySlider->GetValue() / 1000.0);
+
         failedPart = wxT("playing");
 
         receiver->Accept(hostname.mb_str(), port);
@@ -585,4 +595,17 @@ void Player::ProcessMessages(wxCommandEvent& WXUNUSED(event) )
 
         delete message;
     }
+}
+
+void Player::QualityChanged(wxScrollEvent& evt)
+{
+    this->SetQuality(evt.GetPosition() / 1000.0);
+}
+
+void Player::SetQuality(double val)
+{
+    if(!connection.isConnected())
+        return;
+
+    connection.set_parameter(wxT("quality"), wxString::Format(wxT("%2.2f"),val));
 }

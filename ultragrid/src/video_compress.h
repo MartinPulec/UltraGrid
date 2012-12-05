@@ -66,7 +66,7 @@ typedef  void *(*compress_init_t)(char *cfg);
  * @param uncompressed frame
  * @return compressed frame
  */
-typedef  void (*compress_push_t)(void *state, struct video_frame *frame);
+typedef  void (*compress_push_t)(void *state, struct video_frame *frame, double requested_quality);
 typedef  struct video_frame * (*compress_pop_t)(void *state);
 
 /**
@@ -77,7 +77,8 @@ typedef  void (*compress_done_t)(void *);
 void show_compress_help(void);
 struct compress_state *compress_init(char *config_string);
 const char            *get_compress_name(struct compress_state *);
-void                   compress_frame_push(struct compress_state *, struct video_frame*);
+void                   compress_frame_push(struct compress_state *, struct video_frame*,
+                                           double requested_quality);
 struct video_frame    *compress_frame_pop(struct compress_state *);
 void                   compress_done(struct compress_state *);
 
