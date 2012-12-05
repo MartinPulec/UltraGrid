@@ -7,6 +7,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string.h>
+#include <wx/log.h>
 #include <wx/msgdlg.h>
 
 #include "tv.h"
