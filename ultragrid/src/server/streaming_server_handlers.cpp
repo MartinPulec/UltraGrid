@@ -383,6 +383,16 @@ launch_err:
                         int len = strlen(buff);
                         write(comm_fd, &len, sizeof(len));
                         write(comm_fd, buff, len);
+                } else if(strcmp(item, "module") == 0) {
+                        response.code = 200;
+                        response.message = "OK";
+
+                        char buff[1024];
+                        snprintf(buff, sizeof(buff), "MODULE %s", save_ptr);
+
+                        int len = strlen(buff);
+                        write(comm_fd, &len, sizeof(len));
+                        write(comm_fd, buff, len);
                 } else if(strcmp(item, "fps") == 0) {
                         char *fps_str = strtok_r(NULL, " ", &save_ptr);
                         /* replace decimal coma with dot */

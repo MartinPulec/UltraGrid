@@ -59,6 +59,10 @@
 #ifndef _VIDEO_CAPTURE_H_
 #define _VIDEO_CAPTURE_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef uint32_t	vidcap_id_t;
 
 /*                                 arg type */
@@ -115,6 +119,11 @@ struct video_frame	*vidcap_grab(struct vidcap *state, struct audio_frame **audio
 void                     vidcap_command(struct vidcap *state, int command, void *data);
 
 #define VIDCAP_FLAG_ENABLE_AUDIO (1<<1)
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif /* _VIDEO_CAPTURE_H_ */
 

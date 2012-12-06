@@ -58,6 +58,7 @@
 
 #include <getopt.h>
 #include <string.h>
+#include <string>
 #include <stdlib.h>
 #include <sys/prctl.h>
 
@@ -66,6 +67,7 @@
 #include "compat/platform_semaphore.h"
 #include "debug.h"
 #include "gl_context.h"
+#include "messaging.h"
 #include "pdb.h"
 #include "perf.h"
 #include "rtp/rtp.h"
@@ -89,6 +91,7 @@
 #include <unistd.h>
 // endif DUMP
 
+using namespace std;
 
 #define EXIT_FAIL_USAGE		1
 #define EXIT_FAIL_UI   		2
@@ -164,7 +167,7 @@ static void *sender_thread(void *arg);
 #ifndef WIN32
 static void signal_handler(int signal)
 {
-        debug_msg("Caught signal %d\n", signal);
+        fprintf(stderr, "Caught signal %d\n", signal);
         exit_uv(0);
         return;
 }
@@ -724,29 +727,31 @@ int main(int argc, char *argv[])
         signal(SIGHUP, signal_handler);
         signal(SIGABRT, signal_handler);
 #endif
-        int len;
-        ssize_t ret;
-        ssize_t total = 0;
+        {
+                int len;
+                ssize_t ret;
+                ssize_t total = 0;
 
-        while(!uv->grab_thread_ready && !should_exit)
-                ;
+                while(!uv->grab_thread_ready && !should_exit)
+                        ;
 
-        char buff[1000];
-        snprintf(buff, sizeof(buff), "%d", uv->port_number);
-        len = strlen(buff);
+                char buff[1000];
+                snprintf(buff, sizeof(buff), "%d", uv->port_number);
+                len = strlen(buff);
 
-        do {
-                ret = write(uv->comm_fd, (void *) &len, sizeof(int));
-                assert(ret > 0);
-                total += ret;
-        } while (total < (int) sizeof(int));
+                do {
+                        ret = write(uv->comm_fd, (void *) &len, sizeof(int));
+                        assert(ret > 0);
+                        total += ret;
+                } while (total < (int) sizeof(int));
 
-        total = 0;
-        do {
-                ret = write(uv->comm_fd, (const char *) &buff + total, len - total);
-                assert(ret > 0);
-                total += ret;
-        } while (total < len);
+                total = 0;
+                do {
+                        ret = write(uv->comm_fd, (const char *) &buff + total, len - total);
+                        assert(ret > 0);
+                        total += ret;
+                } while (total < len);
+        }
 
 #ifdef DEBUG
         fprintf(stderr, "Sent port\n");
@@ -801,6 +806,10 @@ int main(int argc, char *argv[])
                                 } else if(strncmp(buff, "SPEED", strlen("SPEED")) == 0) {
                                         float speed = atof(buff + strlen("SPEED") + 1);
                                         vidcap_command(uv->capture_device, VIDCAP_SPEED, (void *) &speed);
+                                } else if(strncmp(buff, "MODULE", strlen("MODULE")) == 0) {
+                                        struct text_message message;
+                                        message.text = string(buff + strlen("MODULE") + 1);
+                                        message_manager.broadcast(&message);
                                 } else if(strncmp(buff, "QUALITY", strlen("QUALITY")) == 0) {
                                         uv->compress_quality =
                                                 atof(buff + strlen("QUALITY") + 1);

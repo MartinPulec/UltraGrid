@@ -50,6 +50,10 @@
 #include "video_codec.h"
 #include "gl_context.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct compress_state;
 
 /**
@@ -81,5 +85,9 @@ void                   compress_frame_push(struct compress_state *, struct video
                                            double requested_quality);
 struct video_frame    *compress_frame_pop(struct compress_state *);
 void                   compress_done(struct compress_state *);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __video_compress_h */

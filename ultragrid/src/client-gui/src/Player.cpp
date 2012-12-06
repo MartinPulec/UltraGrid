@@ -5,6 +5,7 @@
 #endif // HAVE_CONFIG_H
 
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <string.h>
 #include <wx/log.h>
@@ -356,6 +357,14 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
         failedPart = wxT("setting quality");
         this->SetQuality(parent->J2KQualitySlider->GetValue() / 1000.0);
 
+        failedPart = wxT("setting module parameters");
+        for(std::map<std::string, std::string>::iterator it = additional_parameters.begin();
+                it != additional_parameters.end();
+                ++it) {
+            wxString param(it->second.c_str(), wxConvUTF8);
+            connection.set_parameter(wxT("module"), param);
+        }
+
         failedPart = wxT("playing");
 
         receiver->Accept(hostname.mb_str(), port);
@@ -599,7 +608,13 @@ void Player::ProcessMessages(wxCommandEvent& WXUNUSED(event) )
 
 void Player::QualityChanged(wxScrollEvent& evt)
 {
-    this->SetQuality(evt.GetPosition() / 1000.0);
+    try {
+        this->SetQuality(evt.GetPosition() / 1000.0);
+    } catch (std::exception &e) {
+        wxString msg = wxString::FromUTF8(e.what());
+
+        wxLogError(msg);
+    }
 }
 
 void Player::SetQuality(double val)
@@ -608,4 +623,31 @@ void Player::SetQuality(double val)
         return;
 
     connection.set_parameter(wxT("quality"), wxString::Format(wxT("%2.2f"),val));
+}
+
+void Player::SetHDDownscaling(bool val)
+{
+    ostringstream param;
+    param << "J2K HDDownscalling ";
+
+    if(val) {
+        param << "true";
+    } else {
+        param << "false";
+    }
+
+    additional_parameters["J2K_HDDownscaling"] = param.str();
+
+    wxString paramWX(param.str().c_str(), wxConvUTF8);;
+
+    if(!connection.isConnected())
+        return;
+
+    try {
+        connection.set_parameter(wxT("module"), paramWX);
+    } catch (std::exception &e) {
+        wxString msg = wxString::FromUTF8(e.what());
+
+        wxLogError(msg);
+    }
 }

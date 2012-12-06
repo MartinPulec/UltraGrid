@@ -37,6 +37,7 @@
 #include <wx/slider.h>
 #include <wx/statusbr.h>
 #include <wx/frame.h>
+#include <wx/tglbtn.h>
 #include <wx/stattext.h>
 #include <wx/textctrl.h>
 //*)
@@ -79,6 +80,7 @@ class client_guiFrame: public wxFrame
         void OnForwardSlowClick(wxCommandEvent& event);
         void OnBackwardSlowClick(wxCommandEvent& event);
         void OnBackwardFastClick(wxCommandEvent& event);
+        void OnHDToggle(wxCommandEvent& event);
         //*)
         void OnKeyBindingsHelp(wxCommandEvent& event);
         void OnOtherSettings(wxCommandEvent& event);
@@ -124,6 +126,7 @@ class client_guiFrame: public wxFrame
         static const long ID_Quicker;
         static const long PlayButton;
         static const long ID_BUTTON1;
+        static const long ID_HD;
         static const long ID_J2K_QUALITY_LABEL;
         static const long ID_J2K_QUALITY_SLIDER;
         static const long idMenuQuit;
@@ -150,6 +153,7 @@ class client_guiFrame: public wxFrame
         GLView* gl;
         wxStaticText* J2KQualityLabel;
         ProgressSlider* Slider1;
+        wxToggleButton* HD;
         wxButton* StopBtn;
         wxMenuItem* MenuItem6;
         wxMenuItem* MenuItem4;

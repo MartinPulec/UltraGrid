@@ -52,6 +52,7 @@
 
 #include "j2k.h"
 
+#include <iostream>
 #include <pthread.h>
 #include <queue>
 #include <stdlib.h>
@@ -59,6 +60,7 @@
 #include "debug.h"
 #include "demo_enc.h"
 #include "host.h"
+#include "messaging.h"
 #include "video_codec.h"
 #include "video_compress.h"
 
@@ -70,7 +72,11 @@ using namespace std;
 
 bool j2k_reconfigure(struct j2k_video_compress *state, struct video_desc video_description);
 
-struct j2k_video_compress {
+struct j2k_video_compress: public observer {
+        j2k_video_compress() : downscaled(false) {
+                message_manager.register_observer(this);
+        }
+
         struct demo_enc *j2k_encoder;
         struct video_desc saved_desc;
 
@@ -82,6 +88,27 @@ struct j2k_video_compress {
         size_t counter;
 
         uint32_t magic;
+
+        volatile bool downscaled;
+
+        void notify(message *msg) {
+                if(dynamic_cast<text_message *>(msg)) {
+                        text_message *text_msg = dynamic_cast<text_message *>(msg);
+                        cerr << text_msg->text << endl;
+
+                        if(strncasecmp(text_msg->text.c_str(), "J2K ", 4) == 0) {
+                                const char *data = text_msg->text.c_str() + 4;
+                                const char *token = "HDDownscalling ";
+                                if(strncasecmp(data, token, strlen(token)) == 0) {
+                                        if(strncasecmp(data + strlen(token), "true", 4) == 0) {
+                                                downscaled = true;
+                                        } else {
+                                                downscaled = false;
+                                        }
+                                }
+                        }
+                }
+        }
 };
 
 bool j2k_reconfigure(struct j2k_video_compress *s, struct video_desc video_description)
@@ -154,11 +181,18 @@ void j2k_push(void *arg, struct video_frame * tx, double requested_quality)
                         quality = 1;
                 }
 
+                bool subsampled = s->downscaled;
+
+                if(subsampled) {
+                        tx->tiles[0].width /= 2;
+                        tx->tiles[0].height /= 2;
+                }
+
                 demo_enc_submit(s->j2k_encoder, (void *) tx,
                                 tx->tiles[0].data, tx->tiles[0].data_len,
                                 tx->tiles[0].data, quality,
                                 0.7,
-                                0);
+                                subsampled ? 1 : 0);
 
                 s->counter += 1;
         }

@@ -77,6 +77,7 @@ const long client_guiFrame::ID_Slower = wxNewId();
 const long client_guiFrame::ID_Quicker = wxNewId();
 const long client_guiFrame::PlayButton = wxNewId();
 const long client_guiFrame::ID_BUTTON1 = wxNewId();
+const long client_guiFrame::ID_HD = wxNewId();
 const long client_guiFrame::ID_J2K_QUALITY_LABEL = wxNewId();
 const long client_guiFrame::ID_J2K_QUALITY_SLIDER = wxNewId();
 const long client_guiFrame::idMenuQuit = wxNewId();
@@ -166,12 +167,14 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Pause = new wxButton(this, ID_BUTTON1, _("▶"), wxDefaultPosition, wxSize(60,27), 0, wxDefaultValidator, _T("ID_BUTTON1"));
     FlexGridSizer2->Add(Pause, 1, wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FlexGridSizer1->Add(FlexGridSizer2, 1, wxALL|wxEXPAND|wxFIXED_MINSIZE|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    FlexGridSizer3 = new wxFlexGridSizer(1, 2, 0, 0);
+    FlexGridSizer3 = new wxFlexGridSizer(1, 3, 0, 0);
     FlexGridSizer3->AddGrowableCol(1);
     FlexGridSizer3->AddGrowableRow(0);
+    HD = new wxToggleButton(this, ID_HD, _("HD"), wxDefaultPosition, wxSize(43,29), 0, wxDefaultValidator, _T("ID_HD"));
+    FlexGridSizer3->Add(HD, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     J2KQualityLabel = new wxStaticText(this, ID_J2K_QUALITY_LABEL, _("J2K quality"), wxDefaultPosition, wxDefaultSize, 0, _T("ID_J2K_QUALITY_LABEL"));
     FlexGridSizer3->Add(J2KQualityLabel, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    J2KQualitySlider = new wxSlider(this, ID_J2K_QUALITY_SLIDER, 1000, 0, 1000, wxDefaultPosition, wxSize(551,27), 0, wxDefaultValidator, _T("ID_J2K_QUALITY_SLIDER"));
+    J2KQualitySlider = new wxSlider(this, ID_J2K_QUALITY_SLIDER, 1000, 0, 1000, wxDefaultPosition, wxSize(618,29), 0, wxDefaultValidator, _T("ID_J2K_QUALITY_SLIDER"));
     FlexGridSizer3->Add(J2KQualitySlider, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FlexGridSizer1->Add(FlexGridSizer3, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     SetSizer(FlexGridSizer1);
@@ -216,6 +219,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Connect(ID_Quicker,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnForwardFastClick);
     Connect(PlayButton,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnStopBtnClick);
     Connect(ID_BUTTON1,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnPauseClick);
+    Connect(ID_HD,wxEVT_COMMAND_TOGGLEBUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnHDToggle);
     Connect(idMenuQuit,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnQuit);
     Connect(idMenuAbout,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnAbout);
     //*)
@@ -868,4 +872,9 @@ void client_guiFrame::OnKeyBindingsHelp(wxCommandEvent& event)
     KeyBindingsHelp dlg(this);
 
     dlg.ShowModal();
+}
+
+void client_guiFrame::OnHDToggle(wxCommandEvent& event)
+{
+    player.SetHDDownscaling(HD->GetValue());
 }

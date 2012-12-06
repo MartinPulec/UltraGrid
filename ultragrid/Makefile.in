@@ -79,9 +79,6 @@ OBJS	      = @OBJS@ \
 		@OPENEXR_OBJ@ \
 		src/video_capture/tiff.o \
 		src/video_capture/null.o \
-		src/video_compress.o \
-		src/video_compress/none.o \
-		src/video_compress/j2k.o \
 		src/video_decompress.o \
 		src/video_decompress/j2k.o \
 		src/video_decompress/null.o \
@@ -292,10 +289,14 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 		#src/video_display/wxgl.o \
 
 SERVER_OBJ = src/server/sp_server.o \
+	     src/messaging.o \
 	     src/server/streaming_server.o \
 	     src/server/streaming_server_handlers.o \
 	     src/client-gui/src/Utils.o \
 		src/audio_source.o \
+		src/video_compress.o \
+		src/video_compress/none.o \
+		src/video_compress/j2k.o \
 
 SERVER_GUI_OBJ = src/serv-gui/serv_guiApp.o \
 		 src/serv-gui/serv_guiMain.o \

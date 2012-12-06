@@ -171,10 +171,20 @@
 			</object>
 			<object class="sizeritem">
 				<object class="wxFlexGridSizer" variable="FlexGridSizer3" member="no">
-					<cols>2</cols>
+					<cols>3</cols>
 					<rows>1</rows>
 					<growablecols>1</growablecols>
 					<growablerows>0</growablerows>
+					<object class="sizeritem">
+						<object class="wxToggleButton" name="ID_HD" variable="HD" member="yes">
+							<label>HD</label>
+							<size>43,29</size>
+							<handler function="OnHDToggle" entry="EVT_TOGGLEBUTTON" />
+						</object>
+						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+						<border>5</border>
+						<option>1</option>
+					</object>
 					<object class="sizeritem">
 						<object class="wxStaticText" name="ID_J2K_QUALITY_LABEL" variable="J2KQualityLabel" member="yes">
 							<label>J2K quality</label>
@@ -187,7 +197,7 @@
 						<object class="wxSlider" name="ID_J2K_QUALITY_SLIDER" variable="J2KQualitySlider" member="yes">
 							<value>1000</value>
 							<max>1000</max>
-							<size>551,27</size>
+							<size>618,29</size>
 						</object>
 						<flag>wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
 						<border>5</border>

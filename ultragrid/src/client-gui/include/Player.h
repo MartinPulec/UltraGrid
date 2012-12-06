@@ -141,6 +141,8 @@ class Player : public wxTimer
         // this is for quality control
         void QualityChanged(wxScrollEvent&);
 
+        void SetHDDownscaling(bool val);
+
     protected:
         DECLARE_EVENT_TABLE()
 
@@ -178,6 +180,9 @@ class Player : public wxTimer
         double speed;
         int total_frames;
         bool loop;
+
+        std::map<std::string, std::string> additional_parameters;
+
         int current_frame;
         enum playerState state;
         bool scheduledPlayone;

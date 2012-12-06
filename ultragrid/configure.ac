@@ -3,7 +3,7 @@ dnl Process this file with autoconf to produce a configure script.
 AC_INIT([UltraGrid], [1.1-rc3], [ultragrid-dev@cesnet.cz])
 AM_INIT_AUTOMAKE([1.10])
 AC_PREREQ(2.61)
-AC_CONFIG_SRCDIR([src/main.c])
+AC_CONFIG_SRCDIR([src/main.cpp])
 
 PARENT=`echo $PWD | sed -e 's%/[[^/]]*$%%'`
 
