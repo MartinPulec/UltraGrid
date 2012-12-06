@@ -331,7 +331,7 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
             transmit_codec = JPEG;
         } else if(compression == string("J2K")) {
             transmit_codec = J2K;
-            display_codec = v210;
+            display_codec = R10k;
         }
         this->connection.set_parameter(wxT("compression"), wxString(compression.c_str(), wxConvUTF8) << wxT(" ") +
                 wxString(settings->GetValue(std::string("jpeg_qual"), std::string("80")).c_str(), wxConvUTF8));

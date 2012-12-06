@@ -123,7 +123,8 @@ GLView::GLView(wxFrame *p, wxWindowID id, const wxPoint &pos, const wxSize &size
     init(false),
     Frame(std::tr1::shared_ptr<char>()),
     useHWDisplay(false),
-    displayGL(true)
+    displayGL(true),
+    cuda_postproc(0)
 {
     vpXMultiplier = vpYMultiplier = 1.0;
     xoffset = yoffset = 0.0;
@@ -646,6 +647,12 @@ void GLView::Reconf(wxCommandEvent& event)
      glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, 0);
 #endif
 
+    cuda_postproc_v210_destroy(cuda_postproc);
+    cuda_postproc = cuda_postproc_v210_create(0, //gpu index
+                                              3840, 2160, 3840, 2160,
+                                              0 //verbose
+                                              );
+
     resize();
 
     //wxPostEvent(parent, event);
@@ -986,6 +993,9 @@ void GLView::Render(bool toHW)
         RenderScrollbars();
 
         if(frame) {
+            cuda_postproc_v210_run(cuda_postproc, width, height, 0, 1, 0 ,1, POSTPROC_RGB, 0.5,
+                                   data, data);
+
             memcpy(frame->tiles[0].data, data, vc_get_linesize(width, v210) * height);
             display_put_frame(this->hw_display, (char *) frame);
 

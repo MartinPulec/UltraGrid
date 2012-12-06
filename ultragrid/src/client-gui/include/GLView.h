@@ -13,6 +13,7 @@
 #include <tr1/memory>
 
 #include "../include/ClientDataIntPair.h"
+#include "../cuda_postproc_v210/cuda_postproc_v210.h"
 
 #define MOUSE_CLICKED_MAGIC 0x1b3ff678
 
@@ -140,6 +141,8 @@ class GLView : public wxGLCanvas
         void dxt_bind_texture();
 
         void init_device_shaders();
+
+        struct cuda_postproc_v210 *cuda_postproc;
 
 #ifdef USE_PBO
         GLuint pbo;
