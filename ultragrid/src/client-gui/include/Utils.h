@@ -15,6 +15,9 @@ class Utils
         static bool boolFromString(std::string);
 
         static int conn_nonb(struct sockaddr_in sa, int sock, int timeout);
+
+        static void toV210(char *src, char *dst, int width, int height);
+        static void scale(int sw, int sh, int *src, int dw, int dh, int *dst);
     protected:
     private:
 };

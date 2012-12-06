@@ -105,7 +105,6 @@ static int load_and_submit(FILE * const file,
                            const char * const filename) {
     int file_size;
     void * new_buffer_ptr;
-    const int double_sized = 0;
     
     /* get file size */
     fseek(file, 0, SEEK_END);
@@ -143,11 +142,7 @@ static int load_and_submit(FILE * const file,
         printf("File %s isn't valid JPEG 2000 codestream.\n", filename);
         return -1;
     }
-    if(double_sized) {
-        item->size_x *= 2;
-        item->size_y *= 2;
-    }
-    item->output_size = demo_dec_v210_size(item->size_x, item->size_y);
+    item->output_size = item->size_x * item->size_y * 4;
     
     /* check buffer size again (this time for output size) */
     if(item->buffer_size < item->output_size) {
@@ -172,8 +167,7 @@ static int load_and_submit(FILE * const file,
     printf("Loaded %d bytes from file %s.\n", file_size, filename);
     
     /* submit the work item for decoding and indicate success. */
-    demo_dec_submit(dec, item, item->buffer_ptr, item->buffer_ptr, file_size,
-                    double_sized);
+    demo_dec_submit(dec, item, item->buffer_ptr, item->buffer_ptr, file_size);
     return 0;
 }
 
@@ -195,7 +189,7 @@ static void submit_input(const char * const filename) {
         pthread_mutex_unlock(&mutex);
         
         /* compose output filename */
-        snprintf(item->path, MAX_PATH_LEN, "%s.v210", filename);
+        snprintf(item->path, MAX_PATH_LEN, "%s.10b", filename);
         
         /* load and submit or return work item to queue if failed */
         if(load_and_submit(file, item, filename)) {

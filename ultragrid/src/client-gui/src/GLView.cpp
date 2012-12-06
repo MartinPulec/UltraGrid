@@ -24,6 +24,8 @@ extern "C" {
 #include "video_codec.h"
 #include "x11_common.h"
 
+#include "Utils.h"
+
 #endif /* HAVE_MACOSX */
 
 #define STRINGIFY(A) #A
@@ -986,7 +988,10 @@ void GLView::Render(bool toHW)
         RenderScrollbars();
 
         if(frame) {
-            memcpy(frame->tiles[0].data, data, vc_get_linesize(width, v210) * height);
+            char *tmp = (char *) malloc(width * height * 4);
+            Utils::scale(3840, 2160, (int *) data, 3840, 2160, (int *) tmp);
+            Utils::toV210(tmp, frame->tiles[0].data, width, height);
+            free(tmp);
             display_put_frame(this->hw_display, (char *) frame);
 
 #if 0

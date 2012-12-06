@@ -1,9 +1,14 @@
+#include "config.h"
+#include "config_unix.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <string>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <omp.h>
+#include <tv.h>
 
 #include "../include/Utils.h"
 
@@ -60,7 +65,7 @@ Utils::conn_nonb(struct sockaddr_in sa, int sock, int timeout)
         return -1;
 
     //initiate non-blocking connect
-    if( (ret = connect(sock, (struct sockaddr *)&sa, 16)) < 0 )
+    if( (ret = connect(sock, (struct sockaddr *)&sa, sizeof(sa))) < 0 )
         if (errno != EINPROGRESS)
             return -1;
 
@@ -102,4 +107,230 @@ bool Utils::boolFromString(string str)
     } else {
         return false;
     }
+}
+
+void rgb2yuv422(unsigned char *in, unsigned int width, unsigned int height)
+{
+        unsigned int i, j;
+        int r, g, b;
+        int y, u, v, y1, u1, v1;
+        unsigned char *dst;
+
+        dst = in;
+
+        for (j = 0; j < height; j++) {
+                for (i = 0; i < width; i += 2) {
+                        r = *(in++);
+                        g = *(in++);
+                        b = *(in++);
+                        in++;   /*skip alpha */
+
+                        y = r * 0.299 + g * 0.587 + b * 0.114;
+                        u = b * 0.5 - r * 0.168736 - g * 0.331264;
+                        v = r * 0.5 - g * 0.418688 - b * 0.081312;
+                        //y -= 16;
+                        if (y > 255)
+                                y = 255;
+                        if (y < 0)
+                                y = 0;
+                        if (u < -128)
+                                u = -128;
+                        if (u > 127)
+                                u = 127;
+                        if (v < -128)
+                                v = -128;
+                        if (v > 127)
+                                v = 127;
+                        u += 128;
+                        v += 128;
+
+                        r = *(in++);
+                        g = *(in++);
+                        b = *(in++);
+                        in++;   /*skip alpha */
+
+                        y1 = r * 0.299 + g * 0.587 + b * 0.114;
+                        u1 = b * 0.5 - r * 0.168736 - g * 0.331264;
+                        v1 = r * 0.5 - g * 0.418688 - b * 0.081312;
+                        if (y1 > 255)
+                                y1 = 255;
+                        if (y1 < 0)
+                                y1 = 0;
+                        if (u1 < -128)
+                                u1 = -128;
+                        if (u1 > 127)
+                                u1 = 127;
+                        if (v1 < -128)
+                                v1 = -128;
+                        if (v1 > 127)
+                                v1 = 127;
+                        u1 += 128;
+                        v1 += 128;
+
+                        *(dst++) = (u + u1) / 2;
+                        *(dst++) = y;
+                        *(dst++) = (v + v1) / 2;
+                        *(dst++) = y1;
+                }
+        }
+}
+
+unsigned char *tov210(unsigned char *in, unsigned int width,
+                      unsigned int aligned_x, unsigned int height, double bpp)
+{
+        struct packed {
+                unsigned a:10;
+                unsigned b:10;
+                unsigned c:10;
+                unsigned p1:2;
+        } *p;
+        unsigned int i, j;
+
+        unsigned int linesize = aligned_x * bpp;
+
+        unsigned char *dst = (unsigned char *)malloc(aligned_x * height * bpp);
+        unsigned char *src;
+        unsigned char *ret = dst;
+
+        for (j = 0; j < height; j++) {
+                p = (struct packed *)dst;
+                dst += linesize;
+                src = in;
+                in += width * 2;
+                for (i = 0; i < width; i += 3) {
+                        unsigned int u, y, v;
+
+                        u = *(src++);
+                        y = *(src++);
+                        v = *(src++);
+
+                        p->a = u << 2;
+                        p->b = y << 2;
+                        p->c = v << 2;
+                        p->p1 = 0;
+
+                        p++;
+
+                        u = *(src++);
+                        y = *(src++);
+                        v = *(src++);
+
+                        p->a = u << 2;
+                        p->b = y << 2;
+                        p->c = v << 2;
+                        p->p1 = 0;
+
+                        p++;
+                }
+        }
+        return ret;
+}
+
+
+void Utils::toV210(char *src, char *dst, int width, int height)
+{
+    struct packed_in {
+        unsigned c:10;
+        unsigned b:10;
+        unsigned a:10;
+        unsigned p1:2;
+    };
+
+    struct packed_out {
+        unsigned a:10;
+        unsigned b:10;
+        unsigned c:10;
+        unsigned p1:2;
+    } ;
+
+
+#pragma omp parallel for
+    for(int j = 0; j < height; ++j) {
+    struct packed_in *in = (struct packed_in *) src + j * width;
+    struct packed_out *out = (struct packed_out *) dst + j * width * 4 / 6;
+
+        for (int i = 0; i < width; i += 6) {
+            register long int y_1, u, v;
+            register long int y_2;
+
+           register struct packed_in in1, in2;
+
+            in1 = *in++;
+            in2 = *in++;
+            y_1 = (11993 * in1.a + 40239 * in1.b + 4063 * in1.c) / 65536 + 64;
+            y_2 = (11993 * in2.a + 40239 * in2.b + 4063 * in2.c) / 65536 + 64;
+            u = (-6619 / 2 * (in1.a + in2.a) - 22151 / 2 * (in1.b + in2.b) + 29870 / 2 * (in1.c + in2.c)) / 65536 + 512;
+            v = (28770 / 2 * (in1.a + in2.a) - 26148 / 2 * (in1.b + in2.b) - 2621 / 2 * (in1.c + in2.c))  / 65536 + 512;
+
+            out->a = u;
+            out->b = y_1;
+            out->c = v;
+            out->p1 = 3;
+            out += 1;
+            out->a = y_2;
+
+            in1 = *in++;
+            in2 = *in++;
+            y_1 = (11993 * in1.a + 40239 * in1.b + 4063 * in1.c) / 65536 + 64;
+            y_2 = (11993 * in2.a + 40239 * in2.b + 4063 * in2.c) / 65536 + 64;
+            u = (-6619 / 2 * (in1.a + in2.a) - 22151 / 2 * (in1.b + in2.b) + 29870 / 2 * (in1.c + in2.c)) / 65536 + 512;
+            v = (28770 / 2 * (in1.a + in2.a) - 26148 / 2 * (in1.b + in2.b) - 2621 / 2 * (in1.c + in2.c))  / 65536 + 512;
+
+            out->b = u;
+            out->c = y_1;
+            out->p1 = 3;
+            out += 1;
+            out->a = v;
+            out->b = y_2;
+
+            in1 = *in++;
+            in2 = *in++;
+            y_1 = (11993 * in1.a + 40239 * in1.b + 4063 * in1.c) / 65536 + 64;
+            y_2 = (11993 * in2.a + 40239 * in2.b + 4063 * in2.c) / 65536 + 64;
+            u = (-6619 / 2 * (in1.a + in2.a) - 22151 / 2 * (in1.b + in2.b) + 29870 / 2 * (in1.c + in2.c)) / 65536 + 512;
+            v = (28770 / 2 * (in1.a + in2.a) - 26148 / 2 * (in1.b + in2.b) - 2621 / 2 * (in1.c + in2.c))  / 65536 + 512;
+
+            out->c = u;
+            out->p1 = 3;
+            out += 1;
+            out->a = y_1;
+            out->b = v;
+            out->c = y_2;
+            out->p1 = 3;
+            out += 1;
+        }
+    }
+}
+
+void Utils::scale(int sw, int sh, int *src, int dw, int dh, int *dst)
+{
+        int x,y;
+
+        int xadd = sw / dw;
+        int dx = sw % dw;
+        int ex;
+
+        int yadd = sh / dh;
+        int dy = sh % dh;
+        int ey = 0;
+
+        for(y = 0; y < dh; y += yadd) {
+                ex = 0;
+                int *line = dst;
+                for(x = 0; x < dw; x += xadd) {
+                        *(line++) = *(src+x);
+                        ex += dx;
+                        if(ex >= dw) {
+                                ex -= dw;
+                                x++;
+                        }
+                }
+                dst += dw;
+                src += sw*yadd;
+                ey += dy;
+                if(ey > dh) {
+                        ey -= dh;
+                        src += sw;
+                }
+        }
 }
