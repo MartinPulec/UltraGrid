@@ -946,7 +946,7 @@ rtdxt=no
 AC_ARG_ENABLE(rtdxt, 
       AS_HELP_STRING([--disable-rtdxt], [disable Real-Time OpenGL DXT compression (default is auto)]), 
 	[rtdxt_req=$enableval],
-        [rtdxt_req=yes])
+        [rtdxt_req=no])
 
 SAVED_LIBS=$LIBS
 
