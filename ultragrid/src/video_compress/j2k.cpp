@@ -58,6 +58,7 @@
 #include <stdlib.h>
 
 #include "debug.h"
+#include "defs.h"
 #include "demo_enc.h"
 #include "host.h"
 #include "messaging.h"
@@ -176,7 +177,7 @@ void j2k_push(void *arg, struct video_frame * tx, double requested_quality)
                         assert(ret);
                 }
 
-                int quality = 1.25 * 1024 * 1024 * requested_quality;
+                int quality = J2K_MAX_FRAME_MB * 1000 * 1000 * requested_quality;
                 if(quality == 0) {
                         quality = 1;
                 }
