@@ -61,6 +61,7 @@
 		<Unit filename="include/Decompress.h" />
 		<Unit filename="include/Frame.h" />
 		<Unit filename="include/GLView.h" />
+		<Unit filename="include/J2KBitrate.h" />
 		<Unit filename="include/Observable.h" />
 		<Unit filename="include/Observer.h" />
 		<Unit filename="include/Player.h" />
@@ -78,6 +79,7 @@
 		<Unit filename="src/ConnectionClosedException.cpp" />
 		<Unit filename="src/Decompress.cpp" />
 		<Unit filename="src/GLView.cpp" />
+		<Unit filename="src/J2KBitrate.cpp" />
 		<Unit filename="src/Observable.cpp" />
 		<Unit filename="src/Observer.h" />
 		<Unit filename="src/Player.cpp" />

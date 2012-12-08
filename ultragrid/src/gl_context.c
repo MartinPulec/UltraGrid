@@ -21,10 +21,8 @@
 void init_gl_context(struct gl_context *context) {
 #ifndef HAVE_MACOSX
         x11_enter_thread();
-        context->context = glx_init(OPENGL_VERSION_UNSPECIFIED);
         context->legacy = TRUE;
         if(context) {
-                glx_validate(context->context);
         }
 #else
         context->context = NULL;
@@ -74,7 +72,6 @@ void destroy_gl_context(struct gl_context *context) {
 #ifdef HAVE_MACOSX
         mac_gl_free(context->context);
 #else
-        glx_free(context->context);
 #endif
 }
 

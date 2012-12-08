@@ -27,6 +27,7 @@
 #include "include/ClientManager.h"
 #include "include/VideoBuffer.h"
 #include "include/Player.h"
+#include "J2KBitrate.h"
 
 //(*Headers(client_guiFrame)
 #include <wx/glcanvas.h>
@@ -128,6 +129,7 @@ class client_guiFrame: public wxFrame
         static const long ID_BUTTON1;
         static const long ID_HD;
         static const long ID_J2K_QUALITY_LABEL;
+        static const long ID_J2KBitrateVal;
         static const long ID_J2K_QUALITY_SLIDER;
         static const long idMenuQuit;
         static const long idServerSetting;
@@ -147,6 +149,7 @@ class client_guiFrame: public wxFrame
         wxStatusBar* StatusBar1;
         wxButton* Select;
         wxButton* FPSOk;
+        J2KBitrate* J2KBitrateVal;
         wxTextCtrl* fps;
         wxStaticText* SpeedStr;
         wxButton* Forward;
@@ -181,6 +184,7 @@ class client_guiFrame: public wxFrame
         DECLARE_EVENT_TABLE()
     friend class UltraGridManager;
     friend class Player;
+    friend class J2KBitrate;
 };
 
 #endif // CLIENT_GUIMAIN_H
