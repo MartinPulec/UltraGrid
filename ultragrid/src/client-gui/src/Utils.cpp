@@ -304,38 +304,16 @@ void Utils::toV210(char *src, char *dst, int width, int height)
 
 void Utils::scale(int sw, int sh, int *s, int dw, int dh, int *d)
 {
-        int y;
+	float yadd = (float)sh/dh;
+	float xadd = (float)sw/dw;
 
-        int xadd = sw / dw;
-        int dx = sw % dw;
+	int y;
 
-        int yadd = sh / dh;
-        int dy = sh % dh;
-
-
-#pragma omp parallel for
-        for(y = 0; y < dh; y += yadd) {
-                int ey = (y / yadd * dy) % dh;
-                int ex = 0;
-                int x;
-                int *dst = d + dw * y / yadd;
-                int *src = s + sw * y;
-                int *line = dst;
-
-                for(x = 0; x < dw; x += xadd) {
-                        *(line++) = *(src+x);
-                        ex += dx;
-                        if(ex >= dw) {
-                                ex -= dw;
-                                x++;
-                        }
-                }
-                dst += dw;
-                src += sw*yadd;
-                ey += dy;
-                if(ey > dh) {
-                        ey -= dh;
-                        src += sw;
-                }
+//#pragma omp parallel for
+        for(y = 0; y < dh; y += 1) {
+		int *line = s + dw * (int) (y * yadd);
+		for(int x = 0; x < dw; ++x) {
+			d[x + y * dw] = line[(int) (x * xadd)];
+		}
         }
 }
