@@ -309,11 +309,12 @@ void Utils::scale(int sw, int sh, int *s, int dw, int dh, int *d)
 
 	int y;
 
-//#pragma omp parallel for
-        for(y = 0; y < dh; y += 1) {
-		int *line = s + dw * (int) (y * yadd);
+#pragma omp parallel for
+    for(y = 0; y < dh; y += 1) {
+		int *dst = d + y * dw;
+		int *src_line = s + dw * (int) (y * yadd);
 		for(int x = 0; x < dw; ++x) {
-			d[x + y * dw] = line[(int) (x * xadd)];
+			*dst++ = src_line[(int) (x * xadd)];
 		}
-        }
+    }
 }
