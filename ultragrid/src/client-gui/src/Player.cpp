@@ -192,7 +192,7 @@ void Player::Notify()
 
                 float delay_ms = (tv_diff(t, last_frame)  - 1/fps) * 1000;
                 if(delay_ms > 1) {
-                    cout << "Frame delayed %.2f ms" << endl;
+                    cout << "Frame delayed " << delay_ms <<" ms" << endl;
                 }
                 last_frame = t;
             }
