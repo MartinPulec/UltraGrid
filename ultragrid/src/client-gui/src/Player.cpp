@@ -177,7 +177,7 @@ void Player::Notify()
         res = buffer.GetFrame(GetCurrentFrame());
         cout << "GetCurrentFrame "   << GetCurrentFrame() << endl;
         if(!res.get()) { // empty
-            fprintf(stderr,"N");
+            cerr << "Frame " << GetCurrentFrame() << " not found in buffer." << endl;
             goto schedule_next;
         } else {
             if (!scheduledPlayone) {
