@@ -302,21 +302,26 @@ void Utils::toV210(char *src, char *dst, int width, int height)
     }
 }
 
-void Utils::scale(int sw, int sh, int *src, int dw, int dh, int *dst)
+void Utils::scale(int sw, int sh, int *s, int dw, int dh, int *d)
 {
-        int x,y;
+        int y;
 
         int xadd = sw / dw;
         int dx = sw % dw;
-        int ex;
 
         int yadd = sh / dh;
         int dy = sh % dh;
-        int ey = 0;
 
+
+#pragma omp parallel for
         for(y = 0; y < dh; y += yadd) {
-                ex = 0;
+                int ey = (y / yadd * dy) % dh;
+                int ex = 0;
+                int x;
+                int *dst = d + dw * y / yadd;
+                int *src = s + sw * y;
                 int *line = dst;
+
                 for(x = 0; x < dw; x += xadd) {
                         *(line++) = *(src+x);
                         ex += dx;
