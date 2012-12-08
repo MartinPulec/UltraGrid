@@ -79,6 +79,7 @@ const long client_guiFrame::PlayButton = wxNewId();
 const long client_guiFrame::ID_BUTTON1 = wxNewId();
 const long client_guiFrame::ID_HD = wxNewId();
 const long client_guiFrame::ID_J2K_QUALITY_LABEL = wxNewId();
+const long client_guiFrame::ID_J2KBitrateVal = wxNewId();
 const long client_guiFrame::ID_J2K_QUALITY_SLIDER = wxNewId();
 const long client_guiFrame::idMenuQuit = wxNewId();
 const long client_guiFrame::idServerSetting = wxNewId();
@@ -167,14 +168,17 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Pause = new wxButton(this, ID_BUTTON1, _("▶"), wxDefaultPosition, wxSize(60,27), 0, wxDefaultValidator, _T("ID_BUTTON1"));
     FlexGridSizer2->Add(Pause, 1, wxTOP|wxBOTTOM|wxRIGHT|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FlexGridSizer1->Add(FlexGridSizer2, 1, wxALL|wxEXPAND|wxFIXED_MINSIZE|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    FlexGridSizer3 = new wxFlexGridSizer(1, 3, 0, 0);
-    FlexGridSizer3->AddGrowableCol(1);
+    FlexGridSizer3 = new wxFlexGridSizer(1, 4, 0, 0);
+    FlexGridSizer3->AddGrowableCol(3);
     FlexGridSizer3->AddGrowableRow(0);
     HD = new wxToggleButton(this, ID_HD, _("HD"), wxDefaultPosition, wxSize(43,29), 0, wxDefaultValidator, _T("ID_HD"));
     FlexGridSizer3->Add(HD, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    J2KQualityLabel = new wxStaticText(this, ID_J2K_QUALITY_LABEL, _("J2K quality"), wxDefaultPosition, wxDefaultSize, 0, _T("ID_J2K_QUALITY_LABEL"));
+    J2KQualityLabel = new wxStaticText(this, ID_J2K_QUALITY_LABEL, _("J2K bitrate:"), wxDefaultPosition, wxSize(81,17), 0, _T("ID_J2K_QUALITY_LABEL"));
     FlexGridSizer3->Add(J2KQualityLabel, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
-    J2KQualitySlider = new wxSlider(this, ID_J2K_QUALITY_SLIDER, 1000, 0, 1000, wxDefaultPosition, wxSize(618,29), 0, wxDefaultValidator, _T("ID_J2K_QUALITY_SLIDER"));
+    J2KBitrateVal = new J2KBitrate(this, ID_J2KBitrateVal, _("N/A"), wxDefaultPosition, wxSize(54,17), 0, _T("ID_J2KBitrateVal"));
+    FlexGridSizer3->Add(J2KBitrateVal, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
+    J2KQualitySlider = new wxSlider(this, ID_J2K_QUALITY_SLIDER, 1000, 0, 1000, wxDefaultPosition, wxSize(606,29), 0, wxDefaultValidator, _T("ID_J2K_QUALITY_SLIDER"));
+    J2KQualitySlider->SetMaxSize(wxSize(-1,-1));
     FlexGridSizer3->Add(J2KQualitySlider, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     FlexGridSizer1->Add(FlexGridSizer3, 1, wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     SetSizer(FlexGridSizer1);
@@ -228,13 +232,20 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Connect(idKeyBindings,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnKeyBindingsHelp);
     Connect(idOtherSettings,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnOtherSettings);
 
-    J2KQualitySlider->Connect(
+    wxEventType sliderEvent;
 #ifdef __WXMAC__
-    wxEVT_SCROLL_THUMBRELEASE
+    sliderEvent = wxEVT_SCROLL_THUMBRELEASE;
 #else
-    wxEVT_SCROLL_CHANGED
+    sliderEvent = wxEVT_SCROLL_CHANGED;
 #endif
-        , (wxObjectEventFunction)&Player::QualityChanged, 0, &player);
+
+    J2KQualitySlider->Connect(sliderEvent,
+        (wxObjectEventFunction)&Player::QualityChanged, 0, &player);
+    J2KQualitySlider->Connect(sliderEvent,
+        (wxObjectEventFunction)&J2KBitrate::QualityChanged, 0, J2KBitrateVal);
+    fps->Connect(wxEVT_COMMAND_TEXT_UPDATED,
+        (wxObjectEventFunction)&J2KBitrate::FPSChanged, 0, J2KBitrateVal);
+    J2KBitrateVal->Update();
 
     gl->Connect(wxEVT_PAINT,(wxObjectEventFunction)&GLView::OnPaint,0,gl);
     /*int GLCanvasAttributes_1[] = {

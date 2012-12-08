@@ -1,0 +1,1 @@
+#define J2K_MAX_FRAME_MB 1.25
