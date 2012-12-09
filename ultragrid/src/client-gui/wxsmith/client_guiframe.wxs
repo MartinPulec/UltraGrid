@@ -221,6 +221,7 @@
 							<max>1000</max>
 							<size>606,29</size>
 							<maxsize>-1,-1</maxsize>
+							<handler function="OnJ2KQualitySliderCmdScroll" entry="EVT_COMMAND_SCROLL" />
 						</object>
 						<flag>wxALL|wxEXPAND|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
 						<border>5</border>

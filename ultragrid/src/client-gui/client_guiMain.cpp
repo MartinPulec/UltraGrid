@@ -247,10 +247,8 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     sliderEvent = wxEVT_SCROLL_CHANGED;
 #endif
 
-    J2KQualitySlider->Connect(sliderEvent,
-        (wxObjectEventFunction)&Player::QualityChanged, 0, &player);
-    J2KQualitySlider->Connect(sliderEvent,
-        (wxObjectEventFunction)&J2KBitrate::QualityChanged, 0, J2KBitrateVal);
+    Connect(ID_J2K_QUALITY_SLIDER,sliderEvent,(wxObjectEventFunction)&client_guiFrame::OnJ2KQualitySliderCmdScroll);
+
     fps->Connect(wxEVT_COMMAND_TEXT_UPDATED,
         (wxObjectEventFunction)&J2KBitrate::FPSChanged, 0, J2KBitrateVal);
     J2KBitrateVal->Update();
@@ -909,4 +907,10 @@ void client_guiFrame::OnDownsampleSelect(wxCommandEvent& event)
     int selectedVal = Downsample->GetCurrentSelection();
 
     player.SetDownscaling(1<<selectedVal);
+}
+
+void client_guiFrame::OnJ2KQualitySliderCmdScroll(wxScrollEvent& event)
+{
+    player.QualityChanged(event);
+    J2KBitrateVal->QualityChanged(event);
 }

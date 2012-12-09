@@ -83,6 +83,7 @@ class client_guiFrame: public wxFrame
         void OnBackwardFastClick(wxCommandEvent& event);
         void OnHDToggle(wxCommandEvent& event);
         void OnDownsampleSelect(wxCommandEvent& event);
+        void OnJ2KQualitySliderCmdScroll(wxScrollEvent& event);
         //*)
         void OnKeyBindingsHelp(wxCommandEvent& event);
         void OnOtherSettings(wxCommandEvent& event);
