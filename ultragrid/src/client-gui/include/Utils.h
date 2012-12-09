@@ -5,6 +5,8 @@
 #include <netinet/in.h>
 #include <wx/string.h>
 
+#include "video.h"
+
 class Utils
 {
     public:
@@ -17,7 +19,10 @@ class Utils
         static int conn_nonb(struct sockaddr_in sa, int sock, int timeout);
 
         static void toV210(char *src, char *dst, int width, int height);
-        static void scale(int sw, int sh, int *src, int dw, int dh, int *dst);
+        static void scale(int sw, int sh, int src_pitch_pix, int *src, int dw, int dh, int *dst);
+
+        static std::string VideoDescSerialize(struct video_desc *mode);
+        static struct video_desc VideoDescDeserialize(std::string modeStr);
     protected:
     private:
 };

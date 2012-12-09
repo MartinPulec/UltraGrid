@@ -1,8 +1,10 @@
 #include "config.h"
 #include "config_unix.h"
 
+#include <cstring>
 #include <errno.h>
 #include <fcntl.h>
+#include <sstream>
 #include <string>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -12,6 +14,7 @@
 
 #include "../include/Utils.h"
 
+#include "video.h"
 
 using namespace std;
 
@@ -302,7 +305,7 @@ void Utils::toV210(char *src, char *dst, int width, int height)
     }
 }
 
-void Utils::scale(int sw, int sh, int *s, int dw, int dh, int *d)
+void Utils::scale(int sw, int sh, int src_pitch_pix, int *s, int dw, int dh, int *d)
 {
 	float yadd = (float)sh/dh;
 	float xadd = (float)sw/dw;
@@ -312,9 +315,76 @@ void Utils::scale(int sw, int sh, int *s, int dw, int dh, int *d)
 #pragma omp parallel for
     for(y = 0; y < dh; y += 1) {
 		int *dst = d + y * dw;
-		int *src_line = s + dw * (int) (y * yadd);
+		int *src_line = s + src_pitch_pix * (int) (y * yadd);
 		for(int x = 0; x < dw; ++x) {
 			*dst++ = src_line[(int) (x * xadd)];
 		}
     }
+}
+
+string Utils::VideoDescSerialize(struct video_desc *mode)
+{
+    ostringstream ostr;
+
+    string interlacingFlag;
+    switch (mode->interlacing) {
+        case PROGRESSIVE:       interlacingFlag = "p"; break;
+        case UPPER_FIELD_FIRST: interlacingFlag = "uff"; break;
+        case LOWER_FIELD_FIRST: interlacingFlag = "lff"; break;
+        case INTERLACED_MERGED: interlacingFlag = "i"; break;
+        case SEGMENTED_FRAME:   interlacingFlag = "psf"; break;
+    }
+
+    ostr << mode->width << "_" << mode->height << "_" << interlacingFlag << "_"<< mode->fps;
+    return ostr.str();
+}
+
+struct video_desc Utils::VideoDescDeserialize(string modeStr)
+{
+    char *str = strdup(modeStr.c_str());
+    char *to_be_deleted = str;
+    char *item, *save_ptr;
+    int counter = 0;
+    struct video_desc ret;
+
+    const char *interlacingFlag;
+
+    while((item = strtok_r(str, "_", &save_ptr))) {
+        switch(counter++) {
+            case 0:
+                ret.width = atoi(item);
+                break;
+            case 1:
+                ret.height = atoi(item);
+                break;
+            case 2:
+                interlacingFlag = item;
+                break;
+            case 3:
+                ret.fps = atof(item);
+        }
+
+        str = NULL;
+    }
+
+    if(counter != 4) {
+        memset(&ret, 0, sizeof(ret));
+        return ret;
+    }
+
+    if(strcmp(interlacingFlag, "p") == 0) {
+        ret.interlacing = PROGRESSIVE;
+    } else if(strcmp(interlacingFlag, "uff") == 0) {
+        ret.interlacing = UPPER_FIELD_FIRST;
+    } else if(strcmp(interlacingFlag, "lff") == 0) {
+        ret.interlacing = LOWER_FIELD_FIRST;
+    } else if(strcmp(interlacingFlag, "i") == 0) {
+        ret.interlacing = INTERLACED_MERGED;
+    } else if(strcmp(interlacingFlag, "psf") == 0) {
+        ret.interlacing = SEGMENTED_FRAME;
+    }
+
+    free(to_be_deleted);
+
+    return ret;
 }

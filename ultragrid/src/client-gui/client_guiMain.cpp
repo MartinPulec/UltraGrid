@@ -23,7 +23,6 @@
 #include "audio/audio_playback.h"
 
 #include <wx/msgdlg.h>
-#include <sstream>
 #include <string>
 #include <iostream>
 #include <stdexcept>
@@ -390,9 +389,7 @@ void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
             } else {
                 struct video_desc *mode = (struct video_desc *)
                     dynamic_cast<ClientDataWeakGenericPtr *>(dlg.HwFormat->GetClientObject(dlg.HwDevice->GetSelection()))->get();
-                ostringstream ostr;
-                ostr << mode->width << "_" << mode->height << "_" << get_interlacing_flag(mode->interlacing) << "_"<< mode->fps;
-                modeStr = ostr.str();
+                modeStr = Utils::VideoDescSerialize(mode);
             }
             settings.SetValue("hw_display_prefs", modeStr);
         }

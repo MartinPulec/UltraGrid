@@ -534,13 +534,28 @@ void Player::reconfigure(int width, int height, int codec, int data_len, struct 
 
     buffer.reconfigure(width, height, codec, data_len, maxAudioDataLen);
 
-    desc.width = width;
-    desc.height = height;
-    desc.color_spec = v210;
-    desc.fps = currentVideo->fps;
-    desc.interlacing = PROGRESSIVE;
-    desc.tile_count = 1;
-    //desc.colorspace;
+    int viewport_width, viewport_height;
+
+    string display_pref = settings->GetValue(std::string("hw_display_prefs"), std::string("auto"));
+    if(display_pref == string("auto")) {
+        desc.width = width;
+        desc.height = height;
+        viewport_width = width;
+        viewport_height = height;
+        desc.color_spec = v210;
+        desc.fps = currentVideo->fps;
+        desc.interlacing = PROGRESSIVE;
+        desc.tile_count = 1;
+        //desc.colorspace;
+    } else {
+        desc = Utils::VideoDescDeserialize(display_pref);
+        viewport_width = desc.width;
+        viewport_height = desc.height;
+        desc.color_spec = v210;
+        desc.tile_count = 1;
+    }
+
+    this->view->reconfigure(viewport_width, viewport_height, codec,  width, height);
 
     if(display_reconfigure(this->hw_display, desc)) {
         display_configured = true;

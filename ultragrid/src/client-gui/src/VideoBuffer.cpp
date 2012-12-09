@@ -61,8 +61,6 @@ void VideoBuffer::reconfigure(int width, int height, int codec, int videoDataLen
 
         buffered_frames.clear();
         last_frame = -1;
-
-        this->view->reconfigure(width, height, codec);
     }
     pthread_mutex_unlock(&lock);
 }

@@ -518,7 +518,8 @@ GLView::~GLView()
     //dtor
 }
 
-void GLView::reconfigure(int width, int height, int codec)
+void GLView::reconfigure(int width, int height, int codec,
+                         int video_width, int video_height)
 {
     wxCommandEvent event(wxEVT_RECONF, GetId());
 
@@ -527,6 +528,10 @@ void GLView::reconfigure(int width, int height, int codec)
     this->width = data_width = width;
     this->height = data_height = height;
     this->codec = data_codec = codec;
+
+    this->video_width = video_width;
+    this->video_height = video_height;
+
     this->dxt_height = (height + 3) / 4 * 4;
     this->aspect = (double) width / height;
     // we deffer the event (this method is called from "wrong" thread
@@ -822,7 +827,6 @@ void GLView::Render(bool toHW)
         frame = display_get_frame(this->hw_display);
     }
 
-
     wxGLCanvas::SetCurrent(*context);
 
     glBindTexture(GL_TEXTURE_2D, texture_display);
@@ -831,7 +835,7 @@ void GLView::Render(bool toHW)
     shared_ptr<char> res(new char[width * height * 4], CharPtrDeleter());
     if(this->data != (char *) cesnet_logo.pixel_data) {
         glDisable(GL_BLEND);
-        Utils::scale(width * zoom, height * zoom, (int *) data + x + y * width, width, height, (int *) res.get());
+        Utils::scale(video_width * zoom, video_height * zoom, video_width, (int *) data + x + y * width, width, height, (int *) res.get());
         render_data = res.get();
     } else {
         render_data = this->data;
@@ -1009,7 +1013,7 @@ void GLView::Render(bool toHW)
         RenderScrollbars();
 
         if(frame) {
-            Utils::toV210(data, frame->tiles[0].data, width, height);
+            Utils::toV210(render_data, frame->tiles[0].data, width, height);
             display_put_frame(this->hw_display, (char *) frame);
 
 #if 0

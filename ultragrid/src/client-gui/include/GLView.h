@@ -42,7 +42,7 @@ class GLView : public wxGLCanvas
         /*
          * @returns buffer size
          */
-        void reconfigure(int width, int height, int codec);
+        void reconfigure(int width, int height, int codec, int viewport_width, int viewport_height);
         void putframe(std::tr1::shared_ptr<char> data, bool outputToHWDisplay);
         void PostInit(wxWindowCreateEvent&);
 
@@ -91,6 +91,7 @@ class GLView : public wxGLCanvas
         wxGLContext *context;
         wxFrame* parent;
         int width, height, codec;
+        int video_width, video_height;
         int data_width, data_height, data_codec;
         int dxt_height; /* ceiled to multiples of 4 */
         double aspect;
