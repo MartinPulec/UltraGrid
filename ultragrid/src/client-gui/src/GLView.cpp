@@ -837,7 +837,7 @@ void GLView::Render(bool toHW)
     shared_ptr<char> res(new char[width * height * 4], CharPtrDeleter());
     if(this->data != (char *) cesnet_logo.pixel_data) {
         glDisable(GL_BLEND);
-        Utils::scale(video_width * zoom, video_height * zoom, video_width, (int *) data + x + y * width, width, height, (int *) res.get());
+        Utils::scale(video_width * zoom, video_height * zoom, video_width, (int *) data + x + y * width, width, height, (int *) res.get(), color);
         render_data = res.get();
     } else {
         render_data = this->data;
@@ -1202,21 +1202,40 @@ void GLView::KeyDown(wxKeyEvent& evt)
 
 void GLView::ToggleLightness()
 {
+#if 0
     if(CurrentFilterIdx >= lightness_count)
         CurrentFilterIdx = 0;
     else
         CurrentFilterIdx = (CurrentFilterIdx + 1) % lightness_count;
     CurrentFilter = Filters[CurrentFilterIdx];
+#else
+    if(color == LUMA) {
+        color = MONO;
+    } else if(color == MONO) {
+        color = R|G|B;
+    } else {
+        color = LUMA;
+    }
+
+    Render(true);
+#endif
 }
 
 void GLView::DefaultLightness()
 {
+#if 0
     CurrentFilterIdx = 0;
     CurrentFilter = Filters[CurrentFilterIdx];
+#else
+    color = R|G|B;
+
+    Render(true);
+#endif
 }
 
 void GLView::ShowOnlyChannel(int val)
 {
+#if 0
     switch(val) {
         case 'R':
             CurrentFilterIdx = lightness_count + 0;
@@ -1229,12 +1248,26 @@ void GLView::ShowOnlyChannel(int val)
             break;
     }
     CurrentFilter = Filters[CurrentFilterIdx];
+#else
+    switch(val) {
+        case 'R':
+            color = R;
+            break;
+        case 'G':
+            color = G;
+            break;
+        case 'B':
+            color = B;
+            break;
+    }
+#endif
 
     Render(true);
 }
 
 void GLView::HideChannel(int val)
 {
+#if 0
     switch(val) {
         case 'R':
             CurrentFilterIdx = lightness_count + channel_count + 0;
@@ -1247,6 +1280,19 @@ void GLView::HideChannel(int val)
             break;
     }
     CurrentFilter = Filters[CurrentFilterIdx];
+#else
+    switch(val) {
+        case 'R':
+            color = G|B;
+            break;
+        case 'G':
+            color = R|B;
+            break;
+        case 'B':
+            color = R|G;
+            break;
+    }
+#endif
 
     Render(true);
 }
@@ -1286,6 +1332,7 @@ void GLView::ResetDefaults()
     vpXMultiplier = vpYMultiplier = 1.0;
     zoom = 1.0;
     x = y = 0;
+    color = R|G|B;
 
     CurrentFilterIdx = 0;
     CurrentFilter = Filters[CurrentFilterIdx];

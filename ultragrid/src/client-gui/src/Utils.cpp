@@ -305,21 +305,91 @@ void Utils::toV210(char *src, char *dst, int width, int height)
     }
 }
 
-void Utils::scale(int sw, int sh, int src_pitch_pix, int *s, int dw, int dh, int *d)
+void Utils::scale(int sw, int sh, int src_pitch_pix, int *s, int dw, int dh, int *d, int color)
 {
 	float yadd = (float)sh/dh;
 	float xadd = (float)sw/dw;
 
 	int y;
 
+	if(color == (R|G|B)) {
+	    // simple case
 #pragma omp parallel for
-    for(y = 0; y < dh; y += 1) {
-		int *dst = d + y * dw;
-		int *src_line = s + src_pitch_pix * (int) (y * yadd);
-		for(int x = 0; x < dw; ++x) {
-			*dst++ = src_line[(int) (x * xadd)];
-		}
-    }
+        for(y = 0; y < dh; y += 1) {
+            int *dst = d + y * dw;
+            int *src_line = s + src_pitch_pix * (int) (y * yadd);
+            for(int x = 0; x < dw; ++x) {
+                *dst++ = src_line[(int) (x * xadd)];
+            }
+        }
+	} else if(color < LUMA) {
+	    // color selection
+
+        unsigned int mask = 0;
+        if(color & R) {
+            mask |= 0x3ff << 22;
+        }
+        if(color & G) {
+            mask |= 0x3ff << 12;
+        }
+        if(color & B) {
+            mask |= 0x3ff << 2;
+        }
+
+#pragma omp parallel for
+        for(y = 0; y < dh; y += 1) {
+            unsigned int *dst = (unsigned int *) d + y * dw;
+            unsigned int *src_line = (unsigned int *) s + src_pitch_pix * (int) (y * yadd);
+            for(int x = 0; x < dw; ++x) {
+                *dst++ = src_line[(int) (x * xadd)] & mask;
+            }
+        }
+	} else if(color == LUMA) {
+#pragma omp parallel for
+        for(y = 0; y < dh; y += 1) {
+            struct packed {
+                unsigned a:10;
+                unsigned b:10;
+                unsigned c:10;
+                unsigned p1:2;
+            };
+
+            struct packed *dst = (struct packed *) d + y * dw;
+            struct packed *src_line = (struct packed *) s + src_pitch_pix * (int) (y * yadd);
+            for(int x = 0; x < dw; ++x) {
+                struct packed packed = src_line[(int) (x * xadd)];
+                register unsigned int val = packed.a * 0.0722f + packed.b * 0.7152f + packed.c * 0.2126f;
+
+                packed.a = val;
+                packed.b = val;
+                packed.c = val;
+
+                *dst++ = packed;
+            }
+        }
+	} else if(color == MONO) {
+#pragma omp parallel for
+        for(y = 0; y < dh; y += 1) {
+            struct packed {
+                unsigned a:10;
+                unsigned b:10;
+                unsigned c:10;
+                unsigned p1:2;
+            };
+
+            unsigned int *dst = (unsigned int *) d + y * dw;
+            struct packed *src_line = (struct packed *) s + src_pitch_pix * (int) (y * yadd);
+            for(int x = 0; x < dw; ++x) {
+                struct packed packed = src_line[(int) (x * xadd)];
+                register unsigned int val = packed.a * 0.0722f + packed.b * 0.7152f + packed.c * 0.2126f;
+                if(val > 1024/2) {
+                    *dst++ = 0xffffffffu;
+                } else {
+                    *dst++ = 0u;
+                }
+            }
+        }
+	}
 }
 
 string Utils::VideoDescSerialize(struct video_desc *mode)

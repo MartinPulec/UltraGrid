@@ -129,6 +129,7 @@ class GLView : public wxGLCanvas
 
         double zoom;
         int x, y;
+        int color;
 
         bool init;
 
