@@ -906,7 +906,7 @@ void client_guiFrame::OnDownsampleSelect(wxCommandEvent& event)
 {
     int selectedVal = Downsample->GetCurrentSelection();
 
-    player.SetDownscaling(1<<selectedVal);
+    player.SetDownscaling(selectedVal);
 }
 
 void client_guiFrame::OnJ2KQualitySliderCmdScroll(wxScrollEvent& event)

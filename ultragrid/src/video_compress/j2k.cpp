@@ -74,7 +74,7 @@ using namespace std;
 bool j2k_reconfigure(struct j2k_video_compress *state, struct video_desc video_description);
 
 struct j2k_video_compress: public observer {
-        j2k_video_compress() : downscaled(1) {
+        j2k_video_compress() : downscaled(0) {
                 message_manager.register_observer(this);
         }
 
@@ -180,14 +180,14 @@ void j2k_push(void *arg, struct video_frame * tx, double requested_quality)
 
                 int subsample_factor = s->downscaled;
 
-                tx->tiles[0].width /= subsample_factor;
-                tx->tiles[0].height /= subsample_factor;
+                tx->tiles[0].width /= 1<<subsample_factor;
+                tx->tiles[0].height /= 1<<subsample_factor;
 
                 demo_enc_submit(s->j2k_encoder, (void *) tx,
                                 tx->tiles[0].data, tx->tiles[0].data_len,
                                 tx->tiles[0].data, quality,
                                 0.7,
-                                subsample_factor - 1);
+                                subsample_factor);
 
                 s->counter += 1;
         }
