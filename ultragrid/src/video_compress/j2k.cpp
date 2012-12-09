@@ -187,7 +187,7 @@ void j2k_push(void *arg, struct video_frame * tx, double requested_quality)
                                 tx->tiles[0].data, tx->tiles[0].data_len,
                                 tx->tiles[0].data, quality,
                                 0.7,
-                                subsample_factor);
+                                subsample_factor - 1);
 
                 s->counter += 1;
         }
