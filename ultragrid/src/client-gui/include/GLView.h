@@ -126,6 +126,9 @@ class GLView : public wxGLCanvas
         double vpXMultiplier, vpYMultiplier;
         double xoffset, yoffset;
 
+        double zoom;
+        int x, y;
+
         bool init;
 
         bool displayGL;

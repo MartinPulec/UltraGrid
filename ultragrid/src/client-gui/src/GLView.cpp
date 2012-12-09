@@ -24,6 +24,7 @@ extern "C" {
 #include "video_codec.h"
 #include "x11_common.h"
 
+#include "Frame.h" // CharPtrDeleter
 #include "Utils.h"
 
 #endif /* HAVE_MACOSX */
@@ -33,6 +34,7 @@ extern "C" {
 #include "cesnet-logo-2.c"
 
 using namespace std;
+using namespace std::tr1;
 
 static char fp_display_rgba_to_yuv422_legacy[] =
 "#define GL_legacy 1\n"
@@ -127,8 +129,7 @@ GLView::GLView(wxFrame *p, wxWindowID id, const wxPoint &pos, const wxSize &size
     useHWDisplay(false),
     displayGL(true)
 {
-    vpXMultiplier = vpYMultiplier = 1.0;
-    xoffset = yoffset = 0.0;
+    ResetDefaults();
 }
 
 // source code for a shader unit (xsedmik)
@@ -821,12 +822,20 @@ void GLView::Render(bool toHW)
         frame = display_get_frame(this->hw_display);
     }
 
+
     wxGLCanvas::SetCurrent(*context);
 
     glBindTexture(GL_TEXTURE_2D, texture_display);
 
-    if(this->data != (char *) cesnet_logo.pixel_data)
+    char *render_data;
+    shared_ptr<char> res(new char[width * height * 4], CharPtrDeleter());
+    if(this->data != (char *) cesnet_logo.pixel_data) {
         glDisable(GL_BLEND);
+        Utils::scale(width * zoom, height * zoom, (int *) data + x + y * width, width, height, (int *) res.get());
+        render_data = res.get();
+    } else {
+        render_data = this->data;
+    }
 
     switch(codec) {
         case DXT1:
@@ -834,7 +843,7 @@ void GLView::Render(bool toHW)
                             (width + 3) / 4 * 4, dxt_height,
                             GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
                             ((width + 3) / 4 * 4 * dxt_height)/2,
-                            data);
+                            render_data);
             break;
         case DXT1_YUV:
             dxt_bind_texture();
@@ -846,13 +855,13 @@ void GLView::Render(bool toHW)
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                             width, height,
                             GL_RGBA, GL_UNSIGNED_BYTE,
-                            data);
+                            render_data);
             break;
         case RGB:
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                             width, height,
                             GL_RGB, GL_UNSIGNED_BYTE,
-                            data);
+                            render_data);
             break;
         case DXT5:
             glUseProgram(PHandle_dxt5);
@@ -860,25 +869,25 @@ void GLView::Render(bool toHW)
                             (width + 3) / 4 * 4, dxt_height,
                             GL_COMPRESSED_RGBA_S3TC_DXT5_EXT,
                             (width + 3) / 4 * 4 * dxt_height,
-                            data);
+                            render_data);
             break;
         case DPX10:
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                             width, height,
                             GL_RGBA, GL_UNSIGNED_INT_10_10_10_2,
-                            data);
+                            render_data);
             break;
         case XPD10:
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                             width, height,
                             GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV,
-                            data);
+                            render_data);
             break;
         case R10k:
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
                             width, height,
                             GL_BGRA, GL_UNSIGNED_INT_2_10_10_10_REV,
-                            data);
+                            render_data);
             break;
         default:
             cerr << "Error - received unsupported codec" << endl;
@@ -1000,10 +1009,7 @@ void GLView::Render(bool toHW)
         RenderScrollbars();
 
         if(frame) {
-            char *tmp = (char *) malloc(width * height * 4);
-            Utils::scale(3840, 2160, (int *) data, 3840, 2160, (int *) tmp);
-            Utils::toV210(tmp, frame->tiles[0].data, width, height);
-            free(tmp);
+            Utils::toV210(data, frame->tiles[0].data, width, height);
             display_put_frame(this->hw_display, (char *) frame);
 
 #if 0
@@ -1238,24 +1244,39 @@ void GLView::HideChannel(int val)
 
 void GLView::Zoom(double ratio)
 {
+#if 0
     vpXMultiplier *= (1 + ratio);
     vpYMultiplier *= (1 + ratio);
     Recompute();
     resize();
+#else
+    zoom *= (1 + ratio);
+    Recompute();
+    Render(true);
+#endif
 }
 
 void GLView::Go(double x, double y)
 {
+#if 0
     xoffset += x;
     yoffset += y;
     Recompute();
     resize();
+#else
+    this->x += x * width;
+    this->y += y * height;
+    Recompute();
+    Render(true);
+#endif
 }
 
 void GLView::ResetDefaults()
 {
     xoffset = yoffset = 0;
     vpXMultiplier = vpYMultiplier = 1.0;
+    zoom = 1.0;
+    x = y = 0;
 
     CurrentFilterIdx = 0;
     CurrentFilter = Filters[CurrentFilterIdx];
@@ -1263,6 +1284,7 @@ void GLView::ResetDefaults()
 
 void GLView::Recompute()
 {
+#if 0
     if(vpXMultiplier < 1.0 || vpYMultiplier < 1.0) {
         vpXMultiplier = vpYMultiplier = 1.0;
     }
@@ -1278,6 +1300,19 @@ void GLView::Recompute()
 
     if(yoffset > (vpYMultiplier - 1) / vpYMultiplier / aspect)
         yoffset = (vpYMultiplier - 1) /vpYMultiplier / aspect;
+#else
+    if(zoom > 1.0)
+        zoom = 1.0;
+    if(x + width * zoom > width) {
+        x = width - width * zoom;
+    }
+
+    if(y + height * zoom > height) {
+        y = height - height * zoom;
+    }
+    if(x < 0) x = 0;
+    if(y < 0) y = 0;
+#endif
 }
 
 void GLView::Wheel(wxMouseEvent& evt)
@@ -1287,10 +1322,17 @@ void GLView::Wheel(wxMouseEvent& evt)
 
 void GLView::GoPixels(int xdelta, int ydelta)
 {
+#if 0
     xoffset += (double) xdelta / GetSize().x / vpXMultiplier;
     yoffset += (double) ydelta / GetSize().y / vpYMultiplier;
     Recompute();
     resize();
+#else
+    this->x += xdelta;
+    this->y += ydelta;
+    Recompute();
+    Render(true);
+#endif
 }
 
 void GLView::setHWDisplay(struct display* hw_display)
