@@ -69,8 +69,9 @@ demo_enc_destroy
  *                             0.7f = good
  *                             1.2f = perfect
  *                         (also bound by encoder-creation-time quality limit)
- * @param subsampled       0 for full resolution frame (same as input)
- *                         or nonzero to subdivide input data along both axes
+ * @param subsampling      0 for full resolution frame (same as input)
+ *                         1 for half width and height, 2 for quarter, ...
+ *                         (up to dwt level count given to constructor)
  */
 void
 demo_enc_submit
@@ -79,10 +80,10 @@ demo_enc_submit
     void * custom_data_ptr,
     void * out_buffer_ptr,
     int out_buffer_size,
-    const void * src_ptr,
+    void * src_ptr,
     int required_size,
     float quality,
-    int subsampled
+    int subsampling
 );
 
 

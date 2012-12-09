@@ -103,8 +103,8 @@ static void * saving_thread_impl(void * param) {
 
 
 /** Reads given file and submits it for encoding. */
-static void submit_input(const char * const filename) {
-    static int subsampled = 1;
+static void submit_input(const char * const filename, const int dwt_level_count) {
+    static int subsampling;
     struct work_item * item = 0;
     FILE * file = 0;
     int load_size = size_x * size_y * 4; /* 4 bytes per pixel */
@@ -114,36 +114,38 @@ static void submit_input(const char * const filename) {
         /* get file size and set read offset */
         fseek(file, -load_size, SEEK_END);
         if(ftell(file) >= 0) {
-            /* get unused work item. */
-            pthread_mutex_lock(&mutex);
-            while(0 == unused)
-                pthread_cond_wait(&cond, &mutex);
-            item = unused;
-            unused = item->next;
-            pthread_mutex_unlock(&mutex);
-            
-            /* compose output filename */
-            snprintf(item->path, MAX_PATH_LEN, "%s%s.j2k", filename, subsampled ? ".sub" : ".full");
-            
-            /* load the file */
-            if(1 == fread(item->buffer, load_size, 1, file)) {
-                /* show status message */
-                printf("Loaded %d bytes from file %s.\n", load_size, filename);
-                
-                /* submit the work item for encoding */
-                demo_enc_submit(enc, item, item->buffer, buffer_size, 
-                                item->buffer, 0, 1.0f, subsampled);
-                subsampled = !subsampled;
-            } else {
-                /* show error message */
-                printf("Cannot read %d bytes from file %s.\n", load_size, filename);
-                
-                /* return the item back to queue */
+            for(subsampling = 0; subsampling <= dwt_level_count; subsampling++) {
+                /* get unused work item. */
                 pthread_mutex_lock(&mutex);
-                item->next = unused;
-                unused = item;
-                pthread_cond_signal(&cond);
+                while(0 == unused)
+                    pthread_cond_wait(&cond, &mutex);
+                item = unused;
+                unused = item->next;
                 pthread_mutex_unlock(&mutex);
+                
+                /* compose output filename */
+                snprintf(item->path, MAX_PATH_LEN, "%s.sub%d.j2k", filename, subsampling);
+                
+                /* load the file */
+                fseek(file, -load_size, SEEK_END);
+                if(1 == fread(item->buffer, load_size, 1, file)) {
+                    /* show status message */
+                    printf("Loaded %d bytes from file %s.\n", load_size, filename);
+                    
+                    /* submit the work item for encoding */
+                    demo_enc_submit(enc, item, item->buffer, buffer_size, 
+                                    item->buffer, 0, 1.0f, subsampling);
+                } else {
+                    /* show error message */
+                    printf("Cannot read %d bytes from file %s.\n", load_size, filename);
+                    
+                    /* return the item back to queue */
+                    pthread_mutex_lock(&mutex);
+                    item->next = unused;
+                    unused = item;
+                    pthread_cond_signal(&cond);
+                    pthread_mutex_unlock(&mutex);
+                }
             }
         } else 
             printf("File too short or not seekable: %s.\n", filename);
@@ -156,13 +158,13 @@ static void submit_input(const char * const filename) {
 
 
 /** Traverses given list of arguments and adds them to encoder. */
-static void load_input(char ** argv) {
+static void load_input(char ** argv, int dwt_level_count) {
     char path[MAX_PATH_LEN + 1], *newline;
     
     /* submit all command line arguments first. */
     while(*argv) {
         /* submit and advance to next argument */
-        submit_input(*(argv++));
+        submit_input(*(argv++), dwt_level_count);
     }
 }
 
@@ -170,6 +172,7 @@ static void load_input(char ** argv) {
 /** Main - allocates stuff, starts encoding and then frees the stuff */
 int main(int argn, char ** argv) {
     pthread_t saving_thread;
+    const int dwt_level_count = 4;
     const int gpu_idx_array[] = {0};
     const int gpu_idx_count = sizeof(gpu_idx_array) / sizeof(*gpu_idx_array);
     int i;
@@ -189,7 +192,8 @@ int main(int argn, char ** argv) {
         usage("Height must be positive integer.");
     
     /* initialize encoder instance */
-    enc = demo_enc_create(gpu_idx_array, gpu_idx_count, size_x, size_y, 4, 0.8f);
+    enc = demo_enc_create(gpu_idx_array, gpu_idx_count, size_x, size_y,
+                          dwt_level_count, 0.8f);
     if(0 == enc)
         usage("Encoder initialization ERROR.");
     
@@ -210,7 +214,7 @@ int main(int argn, char ** argv) {
     pthread_create(&saving_thread, 0, saving_thread_impl, 0);
     
     /* traverse all inputs and push them to encoder */
-    load_input(argv + 3);
+    load_input(argv + 3, dwt_level_count);
         
     /* destroy all work items */
     for(i = gpu_idx_count * 6; i--; ) {

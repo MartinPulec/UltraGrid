@@ -74,7 +74,7 @@ using namespace std;
 bool j2k_reconfigure(struct j2k_video_compress *state, struct video_desc video_description);
 
 struct j2k_video_compress: public observer {
-        j2k_video_compress() : downscaled(false) {
+        j2k_video_compress() : downscaled(1) {
                 message_manager.register_observer(this);
         }
 
@@ -90,7 +90,7 @@ struct j2k_video_compress: public observer {
 
         uint32_t magic;
 
-        volatile bool downscaled;
+        volatile int downscaled;
 
         void notify(message *msg) {
                 if(dynamic_cast<text_message *>(msg)) {
@@ -101,11 +101,7 @@ struct j2k_video_compress: public observer {
                                 const char *data = text_msg->text.c_str() + 4;
                                 const char *token = "HDDownscalling ";
                                 if(strncasecmp(data, token, strlen(token)) == 0) {
-                                        if(strncasecmp(data + strlen(token), "true", 4) == 0) {
-                                                downscaled = true;
-                                        } else {
-                                                downscaled = false;
-                                        }
+                                        downscaled = atoi(data + strlen(token));
                                 }
                         }
                 }
@@ -182,18 +178,16 @@ void j2k_push(void *arg, struct video_frame * tx, double requested_quality)
                         quality = 1;
                 }
 
-                bool subsampled = s->downscaled;
+                int subsample_factor = s->downscaled;
 
-                if(subsampled) {
-                        tx->tiles[0].width /= 2;
-                        tx->tiles[0].height /= 2;
-                }
+                tx->tiles[0].width /= subsample_factor;
+                tx->tiles[0].height /= subsample_factor;
 
                 demo_enc_submit(s->j2k_encoder, (void *) tx,
                                 tx->tiles[0].data, tx->tiles[0].data_len,
                                 tx->tiles[0].data, quality,
                                 0.7,
-                                subsampled ? 1 : 0);
+                                subsample_factor);
 
                 s->counter += 1;
         }
