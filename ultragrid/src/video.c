@@ -232,6 +232,24 @@ const char *get_interlacing_description(enum interlacing_t interlacing)
         return NULL;
 }
 
+const char *get_interlacing_flag(enum interlacing_t interlacing)
+{
+        switch (interlacing) {
+                case PROGRESSIVE:
+                        return "p";
+                case UPPER_FIELD_FIRST:
+                        return "uff";
+                case LOWER_FIELD_FIRST:
+                        return "lff";
+                case INTERLACED_MERGED:
+                        return "i";
+                case SEGMENTED_FRAME:
+                        return "psf";
+        }
+
+        return NULL;
+}
+
 const char *get_video_mode_description(int video_mode)
 {
         switch (video_mode) {

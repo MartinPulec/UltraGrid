@@ -16,12 +16,14 @@
 #include "include/ClientDataIntPair.h"
 #include "include/ClientDataCStr.h"
 #include "include/ClientDataHWDisplay.h"
+#include "ClientDataWeakGenericPtr.h"
 #include "include/Utils.h"
 
 #include "video_display.h"
 #include "audio/audio_playback.h"
 
 #include <wx/msgdlg.h>
+#include <sstream>
 #include <string>
 #include <iostream>
 #include <stdexcept>
@@ -381,6 +383,19 @@ void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
     if ( dlg.ShowModal() == wxID_OK ) {
         settings.SetValue("use_tcp", dlg.UseTCP->GetValue() ? "true" : "false");
         settings.SetValue("hw_display", dynamic_cast<ClientDataHWDisplay *>(dlg.HwDevice->GetClientObject(dlg.HwDevice->GetSelection()))->identifier);
+        {
+            string modeStr;
+            if(!dlg.HwFormat->HasClientObjectData()) {
+                modeStr = "auto";
+            } else {
+                struct video_desc *mode = (struct video_desc *)
+                    dynamic_cast<ClientDataWeakGenericPtr *>(dlg.HwFormat->GetClientObject(dlg.HwDevice->GetSelection()))->get();
+                ostringstream ostr;
+                ostr << mode->width << "_" << mode->height << "_" << get_interlacing_flag(mode->interlacing) << "_"<< mode->fps;
+                modeStr = ostr.str();
+            }
+            settings.SetValue("hw_display_prefs", modeStr);
+        }
         settings.SetValue("disable_gl_preview", dlg.DisableGL->GetValue() ? "true" : "false");
         settings.SetValue("audio_playback", dynamic_cast<ClientDataCStr *>(dlg.AudioDevice->GetClientObject(dlg.AudioDevice->GetSelection()))->get());
     } else {

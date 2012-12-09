@@ -35,7 +35,7 @@ OtherSettingsDialog::OtherSettingsDialog(wxWindow* parent,wxWindowID id,const wx
 	wxFlexGridSizer* FlexGridSizer2;
 	wxFlexGridSizer* FlexGridSizer3;
 	wxStdDialogButtonSizer* StdDialogButtonSizer1;
-	
+
 	Create(parent, wxID_ANY, _("Other Settings"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE, _T("wxID_ANY"));
 	SetClientSize(wxSize(317,203));
 	FlexGridSizer1 = new wxFlexGridSizer(4, 1, 0, 0);
@@ -91,7 +91,9 @@ void OtherSettingsDialog::OnHwDeviceSelect(wxCommandEvent& event)
 
     for(int i = 0; i < count; ++i) {
         wxString item;
-        item << modes[i].width << _T("x") << modes[i].height << _T("@") << modes[i].fps;
+        wxString fieldDominanceFlag = wxString::FromUTF8(get_interlacing_flag(modes[i].interlacing));
+
+        item << modes[i].width << _T("x") << modes[i].height << fieldDominanceFlag << _T("@") << modes[i].fps;
         HwFormat->Append(item, new ClientDataWeakGenericPtr((void *) &modes[i]));
     }
 

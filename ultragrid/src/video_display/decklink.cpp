@@ -74,6 +74,7 @@ extern "C" {
 } // END of extern "C"
 #endif
 
+#include <iostream>
 #include <list>
 #include <map>
 #include <string>
@@ -290,10 +291,23 @@ static struct video_desc *get_mode_list(IDeckLink *deckLink, ssize_t *count)
                 deckLinkDisplayMode->GetFrameRate(&frameRateDuration,
                                 &frameRateScale);
                 ret[curMode].fps = (double) frameRateScale / frameRateDuration;
-                ret[curMode].interlacing = 
-                                (deckLinkDisplayMode->GetFieldDominance() == bmdLowerFieldFirst ||
-                                 deckLinkDisplayMode->GetFieldDominance() == bmdUpperFieldFirst ?
-                                 INTERLACED_MERGED : PROGRESSIVE);
+                BMDFieldDominance dominance = deckLinkDisplayMode->GetFieldDominance();
+                switch(dominance) {
+                        case bmdLowerFieldFirst:
+                        case bmdUpperFieldFirst:
+                                ret[curMode].interlacing = INTERLACED_MERGED;
+                                break;
+                        case bmdProgressiveFrame:
+                                ret[curMode].interlacing = PROGRESSIVE;
+                                break;
+                        case bmdProgressiveSegmentedFrame:
+                                ret[curMode].interlacing = SEGMENTED_FRAME;
+                                break;
+                        default:
+                                cerr << "[Decklink] Unknown mode encountered!!!!" << endl;
+                                ret[curMode].interlacing = PROGRESSIVE; // whatever it is
+                                // should be skipped
+                }
                 ret[curMode].tile_count = 0;
         }
         displayModeIterator->Release();
