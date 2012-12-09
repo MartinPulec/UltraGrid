@@ -642,16 +642,12 @@ void Player::SetQuality(double val)
     connection.set_parameter(wxT("quality"), wxString::Format(wxT("%2.2f"),val));
 }
 
-void Player::SetHDDownscaling(bool val)
+void Player::SetDownscaling(int val)
 {
     ostringstream param;
     param << "J2K HDDownscalling ";
 
-    if(val) {
-        param << "true";
-    } else {
-        param << "false";
-    }
+    param << val;
 
     additional_parameters["J2K_HDDownscaling"] = param.str();
 

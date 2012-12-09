@@ -171,15 +171,27 @@
 			</object>
 			<object class="sizeritem">
 				<object class="wxFlexGridSizer" variable="FlexGridSizer3" member="no">
-					<cols>4</cols>
+					<cols>5</cols>
 					<rows>1</rows>
-					<growablecols>3</growablecols>
+					<growablecols>4</growablecols>
 					<growablerows>0</growablerows>
 					<object class="sizeritem">
-						<object class="wxToggleButton" name="ID_HD" variable="HD" member="yes">
-							<label>HD</label>
-							<size>43,29</size>
-							<handler function="OnHDToggle" entry="EVT_TOGGLEBUTTON" />
+						<object class="wxStaticText" name="ID_STATICTEXT1" variable="StaticText1" member="yes">
+							<label>Downsample</label>
+						</object>
+						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
+						<border>5</border>
+						<option>1</option>
+					</object>
+					<object class="sizeritem">
+						<object class="wxChoice" name="ID_DOWNSAMPLE" variable="Downsample" member="yes">
+							<content>
+								<item>none</item>
+								<item>1/2</item>
+								<item>1/4</item>
+								<item>1/8</item>
+							</content>
+							<handler function="OnDownsampleSelect" entry="EVT_CHOICE" />
 						</object>
 						<flag>wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL</flag>
 						<border>5</border>

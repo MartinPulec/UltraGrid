@@ -141,7 +141,7 @@ class Player : public wxTimer
         // this is for quality control
         void QualityChanged(wxScrollEvent&);
 
-        void SetHDDownscaling(bool val);
+        void SetDownscaling(int divisor);
 
     protected:
         DECLARE_EVENT_TABLE()
