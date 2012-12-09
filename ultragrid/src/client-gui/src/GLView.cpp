@@ -1014,90 +1014,90 @@ void GLView::Render(bool toHW)
 
             RenderScrollbars();
         }
+    }
 
-        if(frame) {
-            Utils::toV210(render_data, frame->tiles[0].data, width, height);
-            display_put_frame(this->hw_display, (char *) frame);
+
+    if(frame) {
+        Utils::toV210(render_data, frame->tiles[0].data, width, height);
+        display_put_frame(this->hw_display, (char *) frame);
 
 #if 0
-            glDisable(GL_BLEND);
-            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_device);
-            glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_device, 0);
+        glDisable(GL_BLEND);
+        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_device);
+        glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_device, 0);
 
-            glPushAttrib(GL_VIEWPORT_BIT);
-            glViewport( 0, 0, width / 2, height);
+        glPushAttrib(GL_VIEWPORT_BIT);
+        glViewport( 0, 0, width / 2, height);
 
-            glMatrixMode( GL_PROJECTION );
-            glPushMatrix();
-            glLoadIdentity( );
+        glMatrixMode( GL_PROJECTION );
+        glPushMatrix();
+        glLoadIdentity( );
 
-            glScalef(vpXMultiplier, vpYMultiplier, 1);
+        glScalef(vpXMultiplier, vpYMultiplier, 1);
 
-            glOrtho(-1 + xoffset, 1 + xoffset,-1 + yoffset * aspect, 1 +  yoffset * aspect,10,-10);
-            //glOrtho(-1,1,-1,1,10,-10);
+        glOrtho(-1 + xoffset, 1 + xoffset,-1 + yoffset * aspect, 1 +  yoffset * aspect,10,-10);
+        //glOrtho(-1,1,-1,1,10,-10);
 
-            glMatrixMode( GL_MODELVIEW );
-            glPushMatrix();
-            glLoadIdentity( );
+        glMatrixMode( GL_MODELVIEW );
+        glPushMatrix();
+        glLoadIdentity( );
 
-            glUseProgram(program_rgba_to_yuv422);
-            glUniform1f(glGetUniformLocation(program_rgba_to_yuv422, "imageWidth"),
-                        (GLfloat) width * vpXMultiplier);
+        glUseProgram(program_rgba_to_yuv422);
+        glUniform1f(glGetUniformLocation(program_rgba_to_yuv422, "imageWidth"),
+                    (GLfloat) width * vpXMultiplier);
 
-            glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT);
+        glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT);
 
-            glBegin(GL_QUADS);
-                glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0);
-                glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0);
-                glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0);
-                glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
-            glEnd();
+        glBegin(GL_QUADS);
+            glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0);
+            glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0);
+            glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0);
+            glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
+        glEnd();
 
-            glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
+        glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
 #ifdef USE_PBO
-            char *ptr;
-            // glReadPixels() should return immediately.
-            glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pbo);
-            glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
-            glReadPixels(0, 0, width / 2, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+        char *ptr;
+        // glReadPixels() should return immediately.
+        glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pbo);
+        glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
+        glReadPixels(0, 0, width / 2, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
 
-            // map the PBO to process its data by CPU
-            glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pbo);
-            ptr = (char *) glMapBufferARB(GL_PIXEL_PACK_BUFFER_ARB,
-                            GL_READ_ONLY_ARB);
-            if(ptr)
-            {
-                    memcpy(frame->tiles[0].data, ptr, width * height * 2);
-                    glUnmapBufferARB(GL_PIXEL_PACK_BUFFER_ARB);
-            }
+        // map the PBO to process its data by CPU
+        glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, pbo);
+        ptr = (char *) glMapBufferARB(GL_PIXEL_PACK_BUFFER_ARB,
+                        GL_READ_ONLY_ARB);
+        if(ptr)
+        {
+                memcpy(frame->tiles[0].data, ptr, width * height * 2);
+                glUnmapBufferARB(GL_PIXEL_PACK_BUFFER_ARB);
+        }
 
-            // back to conventional pixel operation
-            glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, 0);
+        // back to conventional pixel operation
+        glBindBufferARB(GL_PIXEL_PACK_BUFFER_ARB, 0);
 #else
-            glReadPixels(0, 0, width / 2, height, GL_RGBA, GL_UNSIGNED_BYTE, frame->tiles[0].data);
+        glReadPixels(0, 0, width / 2, height, GL_RGBA, GL_UNSIGNED_BYTE, frame->tiles[0].data);
 #endif
-            glMatrixMode( GL_PROJECTION );
-            glPopMatrix();
-            glMatrixMode( GL_MODELVIEW );
-            glPopMatrix();
+        glMatrixMode( GL_PROJECTION );
+        glPopMatrix();
+        glMatrixMode( GL_MODELVIEW );
+        glPopMatrix();
 
-            glPopAttrib();
-            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+        glPopAttrib();
+        glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
 
-            glEnable(GL_BLEND);
-            //memcpy(frame->tiles[0].data, data, frame->tiles[0].data_len);
-            display_put_frame(this->hw_display, (char *) frame);
+        glEnable(GL_BLEND);
+        //memcpy(frame->tiles[0].data, data, frame->tiles[0].data_len);
+        display_put_frame(this->hw_display, (char *) frame);
 #endif /* 8 */
-        }
-
-        if(this->displayGL) {
-            glUseProgram(0);
-
-            SwapBuffers();
-        }
-        //gl_check_error();
-
     }
+
+    if(this->displayGL) {
+        glUseProgram(0);
+
+        SwapBuffers();
+    }
+    //gl_check_error();
 }
 
 void GLView::gl_bind_texture()
