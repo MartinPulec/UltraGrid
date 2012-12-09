@@ -827,9 +827,11 @@ void GLView::Render(bool toHW)
         frame = display_get_frame(this->hw_display);
     }
 
-    wxGLCanvas::SetCurrent(*context);
+    if(this->displayGL) {
+        wxGLCanvas::SetCurrent(*context);
 
-    glBindTexture(GL_TEXTURE_2D, texture_display);
+        glBindTexture(GL_TEXTURE_2D, texture_display);
+    }
 
     char *render_data;
     shared_ptr<char> res(new char[width * height * 4], CharPtrDeleter());
@@ -841,162 +843,162 @@ void GLView::Render(bool toHW)
         render_data = this->data;
     }
 
-    switch(codec) {
-        case DXT1:
-            glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                            (width + 3) / 4 * 4, dxt_height,
-                            GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
-                            ((width + 3) / 4 * 4 * dxt_height)/2,
-                            render_data);
-            break;
-        case DXT1_YUV:
-            dxt_bind_texture();
-            break;
-        case UYVY:
-            gl_bind_texture();
-            break;
-        case RGBA:
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                            width, height,
-                            GL_RGBA, GL_UNSIGNED_BYTE,
-                            render_data);
-            break;
-        case RGB:
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                            width, height,
-                            GL_RGB, GL_UNSIGNED_BYTE,
-                            render_data);
-            break;
-        case DXT5:
-            glUseProgram(PHandle_dxt5);
-            glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                            (width + 3) / 4 * 4, dxt_height,
-                            GL_COMPRESSED_RGBA_S3TC_DXT5_EXT,
-                            (width + 3) / 4 * 4 * dxt_height,
-                            render_data);
-            break;
-        case DPX10:
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                            width, height,
-                            GL_RGBA, GL_UNSIGNED_INT_10_10_10_2,
-                            render_data);
-            break;
-        case XPD10:
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                            width, height,
-                            GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV,
-                            render_data);
-            break;
-        case R10k:
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-                            width, height,
-                            GL_BGRA, GL_UNSIGNED_INT_2_10_10_10_REV,
-                            render_data);
-            break;
-        default:
-            cerr << "Error - received unsupported codec" << endl;
-            //exit_uv(128);
-            //return;
-    }
+    if(this->displayGL) {
+        switch(codec) {
+            case DXT1:
+                glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                                (width + 3) / 4 * 4, dxt_height,
+                                GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
+                                ((width + 3) / 4 * 4 * dxt_height)/2,
+                                render_data);
+                break;
+            case DXT1_YUV:
+                dxt_bind_texture();
+                break;
+            case UYVY:
+                gl_bind_texture();
+                break;
+            case RGBA:
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                                width, height,
+                                GL_RGBA, GL_UNSIGNED_BYTE,
+                                render_data);
+                break;
+            case RGB:
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                                width, height,
+                                GL_RGB, GL_UNSIGNED_BYTE,
+                                render_data);
+                break;
+            case DXT5:
+                glUseProgram(PHandle_dxt5);
+                glCompressedTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                                (width + 3) / 4 * 4, dxt_height,
+                                GL_COMPRESSED_RGBA_S3TC_DXT5_EXT,
+                                (width + 3) / 4 * 4 * dxt_height,
+                                render_data);
+                break;
+            case DPX10:
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                                width, height,
+                                GL_RGBA, GL_UNSIGNED_INT_10_10_10_2,
+                                render_data);
+                break;
+            case XPD10:
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                                width, height,
+                                GL_RGBA, GL_UNSIGNED_INT_2_10_10_10_REV,
+                                render_data);
+                break;
+            case R10k:
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                                width, height,
+                                GL_BGRA, GL_UNSIGNED_INT_2_10_10_10_REV,
+                                render_data);
+                break;
+            default:
+                cerr << "Error - received unsupported codec" << endl;
+                //exit_uv(128);
+                //return;
+        }
 
-    {
         {
-            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_uncompressed);
-            glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_uncompressed, 0);
+            {
+                glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_uncompressed);
+                glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_uncompressed, 0);
+
+                /* Clear the screen */
+                glClear(GL_COLOR_BUFFER_BIT);
+
+                glMatrixMode( GL_PROJECTION );
+                glPushMatrix();
+                glLoadIdentity( );
+                glOrtho(-1,1,-1,1,10,-10);
+                glMatrixMode( GL_MODELVIEW );
+                glPushMatrix();
+                glLoadIdentity( );
+                glPushAttrib(GL_VIEWPORT_BIT);
+                glViewport( 0, 0, width, height);
+
+                glBindTexture(GL_TEXTURE_2D, texture_display);
+
+                glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT);
+                glBegin(GL_QUADS);
+                glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0);
+                glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0);
+                glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0);
+                glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
+                glEnd( );
+
+                glPopAttrib();
+                glMatrixMode( GL_PROJECTION );
+                glPopMatrix();
+                glMatrixMode( GL_MODELVIEW );
+                glPopMatrix();
+
+
+                glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+                glBindTexture(GL_TEXTURE_2D, texture_uncompressed);
+
+                glUseProgram(0);
+            }
 
             /* Clear the screen */
             glClear(GL_COLOR_BUFFER_BIT);
 
-            glMatrixMode( GL_PROJECTION );
-            glPushMatrix();
+            float bottom;
+
             glLoadIdentity( );
-            glOrtho(-1,1,-1,1,10,-10);
-            glMatrixMode( GL_MODELVIEW );
-            glPushMatrix();
-            glLoadIdentity( );
-            glPushAttrib(GL_VIEWPORT_BIT);
-            glViewport( 0, 0, width, height);
+            glTranslatef( 0.0f, 0.0f, -1.35f );
 
-            glBindTexture(GL_TEXTURE_2D, texture_display);
+            /* Reflect that we may have taller texture than reasonable data
+             * if we use DXT and source height was not divisible by 4
+             * In normal case, there would be 1.0 */
+            if(codec == DXT1 || codec == DXT5 || codec == DXT1_YUV) {
+                bottom = 1.0f - (dxt_height - height) / (float) dxt_height * 2;
+            } else {
+                bottom = 1.0f;
+            }
 
-            glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT);
-            glBegin(GL_QUADS);
-            glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0);
-            glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0);
-            glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0);
-            glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0);
-            glEnd( );
+            if(CurrentFilter) {
 
-            glPopAttrib();
-            glMatrixMode( GL_PROJECTION );
-            glPopMatrix();
-            glMatrixMode( GL_MODELVIEW );
-            glPopMatrix();
+                glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_display_id);
+                glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_final, 0);
 
 
-            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
-            glBindTexture(GL_TEXTURE_2D, texture_uncompressed);
+                glMatrixMode( GL_PROJECTION );
+                glPushMatrix();
+                glLoadIdentity( );
+                glOrtho(-1,1,-1/aspect,1/aspect,10,-10);
+                glMatrixMode( GL_MODELVIEW );
+                glPushMatrix();
+                glLoadIdentity( );
+                glPushAttrib(GL_VIEWPORT_BIT);
+                glViewport( 0, 0, width, height);
 
-            glUseProgram(0);
-        }
+                glUseProgram(CurrentFilter);
 
-        /* Clear the screen */
-        glClear(GL_COLOR_BUFFER_BIT);
+                glBegin(GL_QUADS);
+                glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0/aspect);
+                glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0/aspect);
+                glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0/aspect);
+                glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0/aspect);
+                glEnd( );
 
-        float bottom;
-
-        glLoadIdentity( );
-        glTranslatef( 0.0f, 0.0f, -1.35f );
-
-        /* Reflect that we may have taller texture than reasonable data
-         * if we use DXT and source height was not divisible by 4
-         * In normal case, there would be 1.0 */
-        if(codec == DXT1 || codec == DXT5 || codec == DXT1_YUV) {
-            bottom = 1.0f - (dxt_height - height) / (float) dxt_height * 2;
-        } else {
-            bottom = 1.0f;
-        }
-
-        if(CurrentFilter) {
-
-            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_display_id);
-            glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture_final, 0);
+                glPopAttrib();
+                glMatrixMode( GL_PROJECTION );
+                glPopMatrix();
+                glMatrixMode( GL_MODELVIEW );
+                glPopMatrix();
 
 
-            glMatrixMode( GL_PROJECTION );
-            glPushMatrix();
-            glLoadIdentity( );
-            glOrtho(-1,1,-1/aspect,1/aspect,10,-10);
-            glMatrixMode( GL_MODELVIEW );
-            glPushMatrix();
-            glLoadIdentity( );
-            glPushAttrib(GL_VIEWPORT_BIT);
-            glViewport( 0, 0, width, height);
+                glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+                glBindTexture(GL_TEXTURE_2D, texture_final);
 
-            glUseProgram(CurrentFilter);
+                glUseProgram(0);
+            } else {
+            }
 
-            glBegin(GL_QUADS);
-            glTexCoord2f(0.0, 0.0); glVertex2f(-1.0, -1.0/aspect);
-            glTexCoord2f(1.0, 0.0); glVertex2f(1.0, -1.0/aspect);
-            glTexCoord2f(1.0, 1.0); glVertex2f(1.0, 1.0/aspect);
-            glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, 1.0/aspect);
-            glEnd( );
-
-            glPopAttrib();
-            glMatrixMode( GL_PROJECTION );
-            glPopMatrix();
-            glMatrixMode( GL_MODELVIEW );
-            glPopMatrix();
-
-
-            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
-            glBindTexture(GL_TEXTURE_2D, texture_final);
-
-            glUseProgram(0);
-        } else {
-        }
-
-        if(this->displayGL) {
             glBegin(GL_QUADS);
               /* Front Face */
               /* Bottom Left Of The Texture and Quad */
@@ -1008,9 +1010,10 @@ void GLView::Render(bool toHW)
               /* Top Left Of The Texture and Quad */
               glTexCoord2f( 0.0f, 0.0f ); glVertex2f( -1.0f,  1/aspect);
             glEnd( );
-        }
 
-        RenderScrollbars();
+
+            RenderScrollbars();
+        }
 
         if(frame) {
             Utils::toV210(render_data, frame->tiles[0].data, width, height);
@@ -1087,9 +1090,11 @@ void GLView::Render(bool toHW)
 #endif /* 8 */
         }
 
-        glUseProgram(0);
+        if(this->displayGL) {
+            glUseProgram(0);
 
-        SwapBuffers();
+            SwapBuffers();
+        }
         //gl_check_error();
 
     }
