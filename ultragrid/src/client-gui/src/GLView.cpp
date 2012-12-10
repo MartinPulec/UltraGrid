@@ -343,6 +343,9 @@ void GLView::PostInit(wxWindowCreateEvent&)
 
     init = true;
 
+    glClearColor(0.0, 0.0, 0.0, 1.0);
+    glClear(GL_COLOR_BUFFER_BIT);
+
     LoadSplashScreen();
 }
 
