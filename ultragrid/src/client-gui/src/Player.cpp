@@ -22,6 +22,7 @@
 #include "audio/audio.h"
 #include "audio/audio_playback.h"
 #include "audio/playback/sdi.h"
+#include "video_codec.h"
 
 #define SIGN(x) ((int) (x / fabs(x)))
 #define ROUND_FROM_ZERO(x) (ceil(fabs(x)) * SIGN(x))
@@ -198,6 +199,9 @@ void Player::Notify()
                 }
                 last_frame = t;
             }
+
+            this->Reconfigure(res->video_desc, res->audio_desc, res->audio_len != 0);
+
             view->putframe(res->video, display_configured);
 
             struct audio_frame audio;
@@ -247,6 +251,7 @@ bool Player::Playone()
 
     res = buffer.GetFrame(GetCurrentFrame());
     if(res.get()) { // not empty
+        this->Reconfigure(res->video_desc, res->audio_desc, res->audio_len != 0);
         view->putframe(res->video, display_configured);
 
         DropOutOfBoundFrames(OOB_FRAMES);
@@ -532,7 +537,7 @@ void Player::reconfigure(int width, int height, int codec, int data_len, struct 
         maxAudioDataLen = audio_desc->ch_count * audio_desc->bps * audio_desc->sample_rate;
     }
 
-    buffer.reconfigure(width, height, codec, data_len, maxAudioDataLen);
+    //buffer.reconfigure(width, height, codec, data_len, maxAudioDataLen);
 
     int viewport_width, viewport_height;
 
@@ -662,5 +667,66 @@ void Player::SetDownscaling(int val)
         wxString msg = wxString::FromUTF8(e.what());
 
         wxLogError(msg);
+    }
+}
+
+
+void Player::Reconfigure(struct video_desc video_desc, struct audio_desc audio_desc, bool audio_present)
+{
+    bool videoDiffers = false;
+    bool audioDiffers = false;
+
+    if (!(m_savedVideoDesc.width == video_desc.width &&
+              m_savedVideoDesc.height == video_desc.height &&
+              m_savedVideoDesc.color_spec == video_desc.color_spec &&
+              m_savedVideoDesc.interlacing == video_desc.interlacing  &&
+              //savedVideoDesc.video_type == video_type &&
+              m_savedVideoDesc.fps == video_desc.fps
+              )) {
+                  videoDiffers = true;
+    }
+
+    if(audio_present) {
+        if(m_savedAudioDesc.bps != audio_desc.bps ||
+           m_savedAudioDesc.sample_rate != audio_desc.sample_rate ||
+          m_savedAudioDesc.ch_count != audio_desc.ch_count) {
+               audioDiffers = true;
+        }
+    }
+
+    codec_t out_codec;
+
+    if(videoDiffers) {
+        m_savedVideoDesc.width = video_desc.width;
+        m_savedVideoDesc.height = video_desc.height;
+        m_savedVideoDesc.color_spec = video_desc.color_spec;
+        m_savedVideoDesc.interlacing = video_desc.interlacing;
+        m_savedVideoDesc.fps = video_desc.fps;
+
+        switch(video_desc.color_spec) {
+            case J2K:
+                out_codec = R10k;
+                break;
+            case JPEG:
+                out_codec = RGB;
+                break;
+            default:
+                out_codec = video_desc.color_spec;
+        }
+    }
+
+    if(audioDiffers) {
+        m_savedAudioDesc.bps = audio_desc.bps;
+        m_savedAudioDesc.sample_rate = audio_desc.sample_rate;
+        m_savedAudioDesc.ch_count = audio_desc.ch_count;
+    } else {
+        //memset(&m_savedAudioDesc, 0, sizeof(m_savedAudioDesc));
+    }
+
+    if(videoDiffers || audioDiffers) {
+        cerr << "RECONFIGURED" << endl;
+        this->reconfigure(video_desc.width, video_desc.height, (int) out_codec,
+                                vc_get_linesize(video_desc.width, out_codec) * video_desc.height,
+                                audio_present ? &audio_desc : 0);
     }
 }

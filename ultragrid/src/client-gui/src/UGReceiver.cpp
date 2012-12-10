@@ -516,6 +516,7 @@ static void *receiver_thread(void *arg)
                     ///decoder_reconfigure(video_desc, &pbuf_data);
                     //decoder_get_buffer(&pbuf_data, &buffer, &len);
 
+#if 0
                     try {
                         if(!audio_len) {
                             UGReceiver::Reconfigure(uv, video_desc, NULL);
@@ -526,6 +527,7 @@ static void *receiver_thread(void *arg)
                         error = str;
                         goto error;
                     }
+#endif
 
 #if 0
                     shared_ptr<Frame> buffer_data = uv->player->getframe();
