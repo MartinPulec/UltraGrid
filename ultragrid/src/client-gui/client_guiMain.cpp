@@ -180,6 +180,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Downsample->Append(_("1/2"));
     Downsample->Append(_("1/4"));
     Downsample->Append(_("1/8"));
+    Downsample->Append(_("1/16"));
     FlexGridSizer3->Add(Downsample, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     J2KQualityLabel = new wxStaticText(this, ID_J2K_QUALITY_LABEL, _("J2K bitrate:"), wxDefaultPosition, wxSize(81,17), 0, _T("ID_J2K_QUALITY_LABEL"));
     FlexGridSizer3->Add(J2KQualityLabel, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -232,6 +233,7 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     Connect(PlayButton,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnStopBtnClick);
     Connect(ID_BUTTON1,wxEVT_COMMAND_BUTTON_CLICKED,(wxObjectEventFunction)&client_guiFrame::OnPauseClick);
     Connect(ID_DOWNSAMPLE,wxEVT_COMMAND_CHOICE_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnDownsampleSelect);
+    Connect(ID_J2K_QUALITY_SLIDER,wxEVT_SCROLL_TOP|wxEVT_SCROLL_BOTTOM|wxEVT_SCROLL_LINEUP|wxEVT_SCROLL_LINEDOWN|wxEVT_SCROLL_PAGEUP|wxEVT_SCROLL_PAGEDOWN|wxEVT_SCROLL_THUMBTRACK|wxEVT_SCROLL_THUMBRELEASE|wxEVT_SCROLL_CHANGED,(wxObjectEventFunction)&client_guiFrame::OnJ2KQualitySliderCmdScroll);
     Connect(idMenuQuit,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnQuit);
     Connect(idMenuAbout,wxEVT_COMMAND_MENU_SELECTED,(wxObjectEventFunction)&client_guiFrame::OnAbout);
     //*)

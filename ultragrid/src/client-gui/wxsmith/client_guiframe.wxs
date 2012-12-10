@@ -190,6 +190,7 @@
 								<item>1/2</item>
 								<item>1/4</item>
 								<item>1/8</item>
+								<item>1/16</item>
 							</content>
 							<handler function="OnDownsampleSelect" entry="EVT_CHOICE" />
 						</object>

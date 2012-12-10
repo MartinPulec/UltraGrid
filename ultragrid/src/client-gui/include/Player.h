@@ -195,6 +195,8 @@ class Player : public wxTimer
         std::queue<PlayerMessage *> messageQueue;
         wxMutex                     messageQueueLock;
 
+        int     J2Kdownscaling;
+
         struct video_desc m_savedVideoDesc;
         struct audio_desc m_savedAudioDesc;
         void Reconfigure(struct video_desc video_desc, struct audio_desc audio_desc, bool audio_present);

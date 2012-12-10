@@ -57,7 +57,8 @@ Player::Player() :
     scheduledPlayone(false),
     display_configured(false),
     hw_display(NULL),
-    audio_playback_device(NULL)
+    audio_playback_device(NULL),
+    J2Kdownscaling(0)
 {
     //ctor
 }
@@ -363,6 +364,8 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
 
         failedPart = wxT("setting quality");
         this->SetQuality(parent->J2KQualitySlider->GetValue() / 1000.0);
+        if(J2Kdownscaling != 0)
+            SetDownscaling(J2Kdownscaling);
 
         failedPart = wxT("setting module parameters");
         for(std::map<std::string, std::string>::iterator it = additional_parameters.begin();
@@ -668,6 +671,8 @@ void Player::SetDownscaling(int val)
 
         wxLogError(msg);
     }
+
+    J2Kdownscaling = val;
 }
 
 
