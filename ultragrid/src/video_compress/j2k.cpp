@@ -180,6 +180,8 @@ void j2k_push(void *arg, struct video_frame * tx, double requested_quality)
 
                 float quality = 0.7;
 
+                int subsample_factor = s->downscaled;
+
                 if(subsample_factor == 1) {
                         quality = 0.9;
                 } else if (subsample_factor == 2) {
@@ -189,8 +191,6 @@ void j2k_push(void *arg, struct video_frame * tx, double requested_quality)
                 } else if (subsample_factor == 4) {
                         quality = 1.3;
                 }
-
-                int subsample_factor = s->downscaled;
 
                 tx->tiles[0].width /= 1<<subsample_factor;
                 tx->tiles[0].height /= 1<<subsample_factor;
