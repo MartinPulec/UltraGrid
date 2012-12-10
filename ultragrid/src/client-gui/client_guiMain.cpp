@@ -800,10 +800,10 @@ void client_guiFrame::KeyDown(wxKeyEvent& evt)
                 ToggleLoop->SetValue(!ToggleLoop->GetValue());
                 break;
             case 'W':
-                gl->Zoom(1/0.8);
+                gl->Zoom(0.3);
                 break;
             case 'S':
-                gl->Zoom(0.8);
+                gl->Zoom(-0.15);
                 break;
             case WXK_LEFT:
                 gl->Go(-0.03, 0);
