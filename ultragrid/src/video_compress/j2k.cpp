@@ -117,7 +117,7 @@ bool j2k_reconfigure(struct j2k_video_compress *s, struct video_desc video_descr
         s->j2k_encoder = demo_enc_create(NULL, 0, video_description.width,
                         video_description.height,
                         4,
-                        1.0f);
+                        1.3f);
 
         s->initialized = true;
         pthread_cond_signal(&s->out_cv);
@@ -173,9 +173,21 @@ void j2k_push(void *arg, struct video_frame * tx, double requested_quality)
                         assert(ret);
                 }
 
-                int quality = J2K_MAX_FRAME_MB * 1000 * 1000 * requested_quality;
-                if(quality == 0) {
-                        quality = 1;
+                int bw = J2K_MAX_FRAME_MB * 1000 * 1000 * requested_quality;
+                if(bw == 0) {
+                        bw = 1;
+                }
+
+                float quality = 0.7;
+
+                if(subsample_factor == 1) {
+                        quality = 0.9;
+                } else if (subsample_factor == 2) {
+                        quality = 1.1;
+                } else if (subsample_factor == 3) {
+                        quality = 1.3;
+                } else if (subsample_factor == 4) {
+                        quality = 1.3;
                 }
 
                 int subsample_factor = s->downscaled;
@@ -185,8 +197,8 @@ void j2k_push(void *arg, struct video_frame * tx, double requested_quality)
 
                 demo_enc_submit(s->j2k_encoder, (void *) tx,
                                 tx->tiles[0].data, tx->tiles[0].data_len,
-                                tx->tiles[0].data, quality,
-                                0.7,
+                                tx->tiles[0].data, bw,
+                                quality,
                                 subsample_factor);
 
                 s->counter += 1;
