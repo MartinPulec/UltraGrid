@@ -142,7 +142,9 @@ decoder_table_t decoders[] = {
 #endif
 #if defined HAVE_JPEG || defined BUILD_LIBRARIES
         { JPEG_MAGIC, "jpeg", MK_NAME(jpeg_decompress_init), MK_NAME(jpeg_decompress_reconfigure),
-                MK_NAME(jpeg_push), MK_NAME(jpeg_pop), MK_NAME(jpeg_decompress_done), NULL},
+                MK_NAME(jpeg_push), MK_NAME(jpeg_pop), MK_NAME(jpeg_decompress_done),
+                MK_STATIC(jpeg_wait_free),
+                NULL},
 #endif 
 #ifdef HAVE_J2K
         { J2K_DECOMPRESS_MAGIC, NULL, MK_STATIC(j2k_decompress_init), MK_STATIC(j2k_decompress_reconfigure),

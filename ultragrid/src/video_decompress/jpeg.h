@@ -60,4 +60,5 @@ int jpeg_decompress_reconfigure(void *state, struct video_desc desc,
 void jpeg_push(void *state, std::tr1::shared_ptr<Frame> src);
 std::tr1::shared_ptr<Frame> jpeg_pop(void *state);
 void jpeg_decompress_done(void *state);
+void jpeg_wait_free(void *state);
 

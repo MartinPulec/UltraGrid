@@ -85,6 +85,9 @@ struct state_decompress_jpeg {
         pthread_cond_t worker_in_cv;
         pthread_cond_t boss_in_cv;
         pthread_cond_t boss_out_cv;
+        pthread_cond_t wait_free_cv;
+
+        int counter
 
         pthread_t thread_id;
 
@@ -183,7 +186,10 @@ void * jpeg_decompress_init(codec_t out_codec)
         pthread_cond_init(&s->worker_in_cv, NULL);
         pthread_cond_init(&s->boss_in_cv, NULL);
         pthread_cond_init(&s->boss_out_cv, NULL);
+        pthread_cond_init(&s->wait_free_cv, NULL);
         pthread_mutex_init(&s->lock, NULL);
+
+        s->counter = 0;
 
         memset(&s->saved_video_desc, 0, sizeof(s->saved_video_desc));
         s->decoder = 0;
@@ -289,6 +295,7 @@ void jpeg_push(void *state, std::tr1::shared_ptr<Frame> src)
         }
         s->in.push(src);
         pthread_cond_signal(&s->worker_in_cv);
+        s->counter += 1;
         pthread_mutex_unlock(&s->lock);
 }
 
@@ -305,6 +312,8 @@ std::tr1::shared_ptr<Frame> jpeg_pop(void *state)
         res = s->out.front();
         s->out.pop();
 
+        s->counter -= 1;
+        pthread_cond_signal(&s->wait_free_cv);
         pthread_mutex_unlock(&s->lock);
 
         return res;
@@ -318,5 +327,22 @@ void jpeg_decompress_done(void *state)
                 gpujpeg_decoder_destroy(s->decoder);
         }
 
+        pthread_cond_destroy(&s->worker_in_cv);
+        pthread_cond_destroy(&s->boss_in_cv);
+        pthread_cond_destroy(&s->boss_out_cv);
+        pthread_cond_destroy(&s->wait_free_cv);
+
         delete s;
 }
+
+void jpeg_wait_free(void *state)
+{
+        struct state_decompress_jpeg *s = (struct state_decompress_jpeg *) state;
+
+        pthread_mutex_lock(&s->lock);
+        while(s->counter > 0) {
+                pthread_cond_wait(&s->wait_free_cv, &s->lock);
+        }
+        pthread_mutex_unlock(&s->lock);
+}
+
