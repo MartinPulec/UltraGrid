@@ -51,6 +51,7 @@
 #ifdef HAVE_COREAUDIO
 
 #include "audio/audio.h"
+#include "audio/audio_playback.h"
 #include "audio/playback/coreaudio.h" 
 #include "utils/ring_buffer.h"
 #include "debug.h"
@@ -100,6 +101,51 @@ static OSStatus theRenderProc(void *inRefCon,
 		ioData->mBuffers[0].mDataByteSize = write_bytes;
         }  
         return noErr;
+}
+
+struct audio_playback_type *audio_play_ca_probe(void)
+{
+        struct audio_playback_type *ret = malloc(sizeof(struct audio_playback_type));
+        int count = 0;
+
+        OSErr res;
+        AudioDeviceID *dev_ids;
+        int dev_items;
+        int i;
+        UInt32 size;
+
+        printf("\tcoreaudio : default CoreAudio output\n");
+        res = AudioHardwareGetPropertyInfo(kAudioHardwarePropertyDevices, &size, NULL);
+        if(res) goto error;
+        dev_ids = malloc(size);
+        dev_items = size / sizeof(AudioDeviceID);
+        res = AudioHardwareGetProperty(kAudioHardwarePropertyDevices, &size, dev_ids);
+        if(res) goto error;
+
+        for(i = 0; i < dev_items; ++i)
+        {
+                char *name = malloc(128);
+                char *identifier = malloc(128);
+                
+                size = 128;
+                res = AudioDeviceGetProperty(dev_ids[i], 0, 0, kAudioDevicePropertyDeviceName, &size, name);
+                snprintf(identifier, 128, "coreaudio:%d", (int) dev_ids[i]);
+
+                int cur_index = count;
+                count += 1;
+
+                ret = realloc(ret, (count + 1) * sizeof(struct audio_playback_type));
+                ret[cur_index].name = strdup(name);
+                ret[cur_index].driver_identifier = identifier;
+        }
+        free(dev_ids);
+
+        ret[count].name = ret[count].driver_identifier = NULL;
+
+        return ret;
+
+error:
+        return NULL;
 }
 
 int audio_play_ca_reconfigure(void *state, int quant_samples, int channels,
@@ -321,5 +367,11 @@ void audio_play_ca_done(void *state)
         free(s);
 }
 
+void audio_play_ca_reset(void *state)
+{
+        // TODO!!!!!!!!!!!!!!!1
+}
+
 #endif /* HAVE_COREAUDIO */
+
 
