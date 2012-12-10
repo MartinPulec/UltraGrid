@@ -1015,6 +1015,8 @@ AC_CHECK_PROG([NVCC], [nvcc], [$CUDA_PATH/bin/nvcc],
 
 AC_CHECK_SIZEOF([int *])
 
+NVCC=nvcc
+
 if test -n "$NVCC"
 then
 	AC_MSG_CHECKING([CUDA Toolkit version - major])
@@ -1079,7 +1081,7 @@ then
         fi
 fi
 
-if test "$jpeg_req" = yes -a -n "$NVCC" -a "$FOUND_NPP_H" = yes -a "$jpeg_cuda_version_ok" = yes -a $ac_cv_file____libgpujpeg_libgpujpeg_a = yes
+if test "$jpeg_req" = yes -a -n "$NVCC"
 then
         jpeg=yes
         JPEG_LIB="../libgpujpeg/libgpujpeg.a $CUDA_LIB -lnpp"

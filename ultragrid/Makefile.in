@@ -44,6 +44,7 @@ OBJS	      = @OBJS@ \
 	        src/cuda_memory_pool.o \
 		src/debug.o \
 		src/perf.o \
+		src/messaging.o \
 		src/ntp.o \
 		src/pdb.o \
 		src/tile.o \
@@ -92,6 +93,8 @@ OBJS	      = @OBJS@ \
 	     	src/client-gui/src/ClientDataWeakGenericPtr.o \
 		@X_OBJ@ \
 		src/utils/thread_pool.o \
+	     @J2K_DECOMPRESS_OBJ@ \
+		@J2K_COMPRESS_OBJ@ \
 		src/gl_context.o \
 		src/color_transform.o \
 		src/watermark.o \
@@ -274,7 +277,6 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 	     src/client-gui/src/Decompress.o \
 	     src/client-gui/src/GLView.o \
 	     src/client-gui/src/J2KBitrate.o \
-	     @J2K_DECOMPRESS_OBJ@ \
 	     src/client-gui/src/Player.o \
 	     src/client-gui/src/ProgressSlider.o \
 	     src/client-gui/src/Settings.o \
@@ -293,14 +295,12 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 
 
 SERVER_OBJ = src/server/sp_server.o \
-	     src/messaging.o \
 	     src/server/streaming_server.o \
 	     src/server/streaming_server_handlers.o \
 	     src/client-gui/src/Utils.o \
 		src/audio_source.o \
 		src/video_compress.o \
 		src/video_compress/none.o \
-		@J2K_COMPRESS_OBJ@ \
 		src/aes_encrypt.o \
 
 SERVER_GUI_OBJ = src/serv-gui/serv_guiApp.o \
