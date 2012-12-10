@@ -320,3 +320,11 @@ void jpeg_decompress_done(void *state)
 
         delete s;
 }
+
+void jpeg_wait_free(void *state)
+{
+        struct state_decompress_jpeg *s = (struct state_decompress_jpeg *) state;
+
+        // TODO !!!!!!!!!!!!!!!!!!
+}
+
