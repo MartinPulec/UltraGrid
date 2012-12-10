@@ -246,7 +246,7 @@ static display_table_t display_device_table[] = {
          MK_NAME(display_quicktime_get_audio_frame),
          MK_NAME(display_quicktime_put_audio_frame),
          MK_NAME(display_quicktime_reconfigure_audio),
-         MK_NAME(display_quicktime_audio_reset),
+         MK_NAME(0),
          NULL
          },
 #endif                          /* HAVE_MACOSX */

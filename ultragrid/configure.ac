@@ -1330,7 +1330,7 @@ coreaudio=no
 AC_ARG_ENABLE(coreaudio, 
       AS_HELP_STRING([--disable-coreaudio], [disable CoreAudio support(default is auto)]), 
     [coreaudio_req=$enableval],
-    [coreaudio_req=yes]
+    [coreaudio_req=no]
     )
 
 case $host_os in
