@@ -799,10 +799,10 @@ void client_guiFrame::KeyDown(wxKeyEvent& evt)
             case 'P':
                 ToggleLoop->SetValue(!ToggleLoop->GetValue());
                 break;
-            case '+':
+            case 'W':
                 gl->Zoom(1/0.8);
                 break;
-            case '-':
+            case 'S':
                 gl->Zoom(0.8);
                 break;
             case WXK_LEFT:

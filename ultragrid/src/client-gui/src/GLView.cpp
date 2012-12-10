@@ -1305,7 +1305,14 @@ void GLView::Zoom(double ratio)
     Recompute();
     resize();
 #else
+    int orig_width = width * zoom;
+    int orig_height = height * zoom;
     zoom *= (1 + ratio);
+    int curr_width = width * zoom;
+    int curr_height = height * zoom;
+    this->x += (orig_width - width) / 2;
+    this->y += (orig_height - height) / 2;
+
     Recompute();
     Render(true);
 #endif
