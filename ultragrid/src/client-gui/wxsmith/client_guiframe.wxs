@@ -186,11 +186,11 @@
 					<object class="sizeritem">
 						<object class="wxChoice" name="ID_DOWNSAMPLE" variable="Downsample" member="yes">
 							<content>
-								<item>none</item>
-								<item>1/2</item>
-								<item>1/4</item>
-								<item>1/8</item>
-								<item>1/16</item>
+								<item>2160p</item>
+								<item>1080p</item>
+								<item>540p</item>
+								<item>280p</item>
+								<item>140p</item>
 							</content>
 							<handler function="OnDownsampleSelect" entry="EVT_CHOICE" />
 						</object>
