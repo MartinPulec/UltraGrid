@@ -719,6 +719,12 @@ void GLView::resize()
     glEnd( );
 #endif
 
+    if(!displayGL) {
+        glClearColor(0.0, 0.0, 0.0, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT);
+        SwapBuffers();
+    }
+
     Refresh();
     //SwapBuffers();
 }
