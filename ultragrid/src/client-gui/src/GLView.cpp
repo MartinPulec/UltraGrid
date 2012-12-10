@@ -1105,6 +1105,10 @@ void GLView::Render(bool toHW)
         glUseProgram(0);
 
         SwapBuffers();
+    } else {
+        glClearColor(0.0, 0.0, 0.0, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT);
+        SwapBuffers();
     }
     //gl_check_error();
 }
