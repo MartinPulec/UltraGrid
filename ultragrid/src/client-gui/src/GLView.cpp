@@ -837,8 +837,12 @@ void GLView::Render(bool toHW)
     shared_ptr<char> res(new char[width * height * 4], CharPtrDeleter());
     if(this->data != (char *) cesnet_logo.pixel_data) {
         glDisable(GL_BLEND);
+#if 0
         Utils::scale(video_width * zoom, video_height * zoom, video_width, (int *) data + x + y * width, width, height, (int *) res.get(), color);
         render_data = res.get();
+#else
+        render_data = this->data;
+#endif
     } else {
         render_data = this->data;
     }
