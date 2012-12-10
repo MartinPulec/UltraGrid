@@ -77,7 +77,7 @@ if expr "$host_os" : ".*darwin.*" > /dev/null; then
         AC_SUBST(MACOSX_DEPLOYMENT_TARGET)
 else
         system=Linux
-	LIBS+=" -lGLEW"
+	LIBS+=" -lGLEW "
 	LINKER=$CC
 fi
 
@@ -1103,6 +1103,23 @@ AC_SUBST(JPEG_COMPRESS_OBJ)
 AC_SUBST(JPEG_DECOMPRESS_OBJ)
 AC_SUBST(JPEG_INC)
 AC_SUBST(JPEG_LIB)
+
+# -------------------------------------------------------------------------------------------------
+# J2K
+if test $system = Linux
+then
+        J2K_COMPRESS_LIB="../demo_enc/demo_enc.a"
+        J2K_DECOMPRESS_LIB="../demo_dec/demo_dec.a"
+        J2K_COMPRESS_OBJ="src/video_compress/j2k.o"
+        J2K_DECOMPRESS_OBJ="src/video_decompress/j2k.o"
+        AC_DEFINE([HAVE_J2K], [1], [We can build J2K])
+fi
+
+AC_SUBST(J2K_COMPRESS_OBJ)
+AC_SUBST(J2K_DECOMPRESS_OBJ)
+AC_SUBST(J2K_COMPRESS_LIB)
+AC_SUBST(J2K_DECOMPRESS_LIB)
+
 
 # -------------------------------------------------------------------------------------------------
 # SAGE stuff
