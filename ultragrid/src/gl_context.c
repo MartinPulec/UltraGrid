@@ -26,7 +26,6 @@ void init_gl_context(struct gl_context *context) {
         }
 #else
         context->context = NULL;
-        context->context = mac_gl_init(MAC_GL_PROFILE_LEGACY);
         context->legacy = TRUE;
 #endif
 }
@@ -70,7 +69,6 @@ void init_gl_context(struct gl_context *context) {
 
 void destroy_gl_context(struct gl_context *context) {
 #ifdef HAVE_MACOSX
-        mac_gl_free(context->context);
 #else
 #endif
 }
