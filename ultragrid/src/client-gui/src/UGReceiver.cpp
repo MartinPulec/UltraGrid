@@ -37,7 +37,6 @@ extern "C" {
 #include "video_decompress/jpeg.h"
 
 #include "audio/utils.h"
-#include <malloc.h>
 
 #define USE_CUSTOM_TRANSMIT
 

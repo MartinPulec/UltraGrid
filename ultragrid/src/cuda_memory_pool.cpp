@@ -15,24 +15,24 @@ using namespace std;
 class cuda_memory_pool {
         public:
                 cuda_memory_pool() {
-                        pthread_spin_init(&spin, PTHREAD_PROCESS_PRIVATE);
+                        pthread_mutex_init(&mutex, NULL);
                 }
 
                 virtual ~cuda_memory_pool() {
-                        pthread_spin_destroy(&spin);
+                        pthread_mutex_destroy(&mutex);
                 }
 
                 void *alloc(size_t size) {
                         void *buffer = NULL;
 
-                        pthread_spin_lock(&spin);
+                        pthread_mutex_lock(&mutex);
                         if(available_memory.find(size) != available_memory.end()) {
                                 if(!available_memory[size].empty()) {
                                         buffer = available_memory[size].top();
                                         available_memory[size].pop();
                                 }
                         }
-                        pthread_spin_unlock(&spin);
+                        pthread_mutex_unlock(&mutex);
 
                         if(buffer) {
                                 return buffer;
@@ -49,16 +49,16 @@ class cuda_memory_pool {
 
                 void free(void *ptr, size_t size)
                 {
-                        pthread_spin_lock(&spin);
+                        pthread_mutex_lock(&mutex);
                         if(available_memory.find(size) == available_memory.end()) {
                                 available_memory[size] = stack<void *>();
                         }
                         available_memory[size].push(ptr);
-                        pthread_spin_unlock(&spin);
+                        pthread_mutex_unlock(&mutex);
                 }
         private:
                 map<int, stack<void *> > available_memory;
-                pthread_spinlock_t      spin;
+                pthread_mutex_t      mutex;
 };
 
 static struct cuda_memory_pool pool;

@@ -20,6 +20,7 @@ extern "C" {
 #else /* HAVE_MACOSX */
 #include <GL/gl.h>
 #include <GL/glext.h>
+#endif /* HAVE_MACOSX */
 
 #include "video_codec.h"
 #include "x11_common.h"
@@ -27,7 +28,6 @@ extern "C" {
 #include "Frame.h" // CharPtrDeleter
 #include "Utils.h"
 
-#endif /* HAVE_MACOSX */
 
 #define STRINGIFY(A) #A
 
