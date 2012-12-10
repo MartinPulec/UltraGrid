@@ -144,11 +144,13 @@ decoder_table_t decoders[] = {
         { JPEG_MAGIC, "jpeg", MK_NAME(jpeg_decompress_init), MK_NAME(jpeg_decompress_reconfigure),
                 MK_NAME(jpeg_push), MK_NAME(jpeg_pop), MK_NAME(jpeg_decompress_done), NULL},
 #endif 
+#ifdef HAVE_J2K
         { J2K_DECOMPRESS_MAGIC, NULL, MK_STATIC(j2k_decompress_init), MK_STATIC(j2k_decompress_reconfigure),
                 MK_STATIC(j2k_push), MK_STATIC(j2k_pop),
                 MK_STATIC(j2k_decompress_done),
                 MK_STATIC(j2k_wait_free),
                 NULL},
+#endif
         { NULL_MAGIC, NULL, MK_STATIC(null_decompress_init), MK_STATIC(null_decompress_reconfigure),
                 MK_STATIC(null_push), MK_STATIC(null_pop),
                 MK_STATIC(null_decompress_done),

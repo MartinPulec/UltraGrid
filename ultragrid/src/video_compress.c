@@ -100,10 +100,12 @@ struct compress_t compress_modules[] = {
                 MK_NAME(jpeg_pop),
                 MK_NAME(jpeg_compress_done), NULL},
 #endif
+#ifdef HAVE_J2K
         {"J2K", "j2k", MK_NAME(j2k_compress_init),
                 MK_NAME(j2k_push),
                 MK_NAME(j2k_pop),
                 MK_NAME(j2k_compress_done), NULL},
+#endif
         {"NONE", NULL, MK_STATIC(none_compress_init),
                 MK_STATIC(none_push),
                 MK_STATIC(none_pop),

@@ -11,7 +11,7 @@ NVCCFLAGS     = @NVCCFLAGS@ -Xcompiler -fPIC
 LDFLAGS      =  @LDFLAGS@ -fopenmp
 LIBS         += @LIBS@ @JACK_TRANS_LIB@ @MATHLIBS@ @COREAUDIO_LIB@ \
 		@X_PRE_LIBS@ @X_LIBS@ @X_EXTRA_LIBS@ -lm -pthread -ltiff -L/opt/local/lib \
-		../udt4/src/libudt.a ../demo_enc/demo_enc.a ../demo_dec/demo_dec.a -lcudart \
+		../udt4/src/libudt.a -lcudart \
 		-lcrypto
 SERVER_LIBS   = -lsndfile
 INC           = -I.. -Isrc -Itest @DVS_INC@ @DELTACAST_INC@ @QUICKTIME_INC@ @DECKLINK_INC@ @PORTAUDIO_INC@ \
@@ -81,7 +81,6 @@ OBJS	      = @OBJS@ \
 		src/video_capture/tiff.o \
 		src/video_capture/null.o \
 		src/video_decompress.o \
-		src/video_decompress/j2k.o \
 		src/video_decompress/null.o \
 		src/vo_postprocess.o \
 		src/vo_postprocess/3d-interlaced.o \
@@ -275,6 +274,7 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 	     src/client-gui/src/Decompress.o \
 	     src/client-gui/src/GLView.o \
 	     src/client-gui/src/J2KBitrate.o \
+	     @J2K_DECOMPRESS_OBJ@ \
 	     src/client-gui/src/Player.o \
 	     src/client-gui/src/ProgressSlider.o \
 	     src/client-gui/src/Settings.o \
@@ -300,7 +300,7 @@ SERVER_OBJ = src/server/sp_server.o \
 		src/audio_source.o \
 		src/video_compress.o \
 		src/video_compress/none.o \
-		src/video_compress/j2k.o \
+		@J2K_COMPRESS_OBJ@ \
 		src/aes_encrypt.o \
 
 SERVER_GUI_OBJ = src/serv-gui/serv_guiApp.o \
