@@ -62,6 +62,7 @@
 #include <stdlib.h>
 #include <sys/prctl.h>
 
+#include "aes_encrypt.h"
 #include "audio_source.h"
 #include "color_transform.h"
 #include "compat/platform_semaphore.h"
@@ -357,10 +358,19 @@ static void *sender_thread(void *arg)
         struct state_uv *uv = (struct state_uv *) arg;
         struct video_frame *tx_frame;
 
+        aes_encrypt enc;
+
         prctl(PR_SET_NAME, (unsigned long) __func__, 0, 0);
 
         while(1) {
                 tx_frame = compress_frame_pop(uv->compression);
+                int len = tx_frame->tiles[0].data_len;
+                unsigned char *enc_data = enc.encrypt((unsigned char *) tx_frame->tiles[0].data,
+                                &len);
+                tx_frame->deleter(tx_frame->tiles[0].data, tx_frame->tiles[0].data_len);
+                tx_frame->deleter = default_free;
+                tx_frame->tiles[0].data = (char *) enc_data;
+                tx_frame->tiles[0].data_len = len;
 
                 if(!tx_frame) {
                         break;

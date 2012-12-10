@@ -217,7 +217,7 @@ double compute_fps(int fps, int fpsd, int fd, int fi);
 
 void dump_video_desc(struct video_desc *desc);
 
-
+void default_free(void *ptr, size_t size);
 
 #define AUX_INTERLACED  (1<<0)
 #define AUX_PROGRESSIVE (1<<1)
