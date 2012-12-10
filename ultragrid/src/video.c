@@ -60,7 +60,9 @@
 
 #include "video_codec.h"
 
-void default_free(void *ptr, size_t size) {
+static void default_free(void *ptr, size_t size);
+
+static void default_free(void *ptr, size_t size) {
         UNUSED(size);
         free(ptr);
 }

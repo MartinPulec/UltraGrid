@@ -11,8 +11,7 @@ NVCCFLAGS     = @NVCCFLAGS@ -Xcompiler -fPIC
 LDFLAGS      =  @LDFLAGS@ -fopenmp
 LIBS         += @LIBS@ @JACK_TRANS_LIB@ @MATHLIBS@ @COREAUDIO_LIB@ \
 		@X_PRE_LIBS@ @X_LIBS@ @X_EXTRA_LIBS@ -lm -pthread -ltiff -L/opt/local/lib \
-		../udt4/src/libudt.a -lcudart \
-		-lcrypto
+		../udt4/src/libudt.a -lcudart
 SERVER_LIBS   = -lsndfile
 INC           = -I.. -Isrc -Itest @DVS_INC@ @DELTACAST_INC@ @QUICKTIME_INC@ @DECKLINK_INC@ @PORTAUDIO_INC@ \
                 @GL_INC@ @SAGE_INC@ @QUAD_INC@ @JACK_TRANS_INC@ @JPEG_INC@ @COREAUDIO_INC@ @SPEEX_INC@ \
@@ -289,7 +288,6 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 		src/audio/audio_playback.o \
 		src/audio/playback/none.o \
 		src/audio/playback/sdi.o \
-		src/aes_decrypt.o \
 		#src/rtp/decoders.o \
 		#src/video_display/wxgl.o \
 
@@ -301,7 +299,6 @@ SERVER_OBJ = src/server/sp_server.o \
 		src/audio_source.o \
 		src/video_compress.o \
 		src/video_compress/none.o \
-		src/aes_encrypt.o \
 
 SERVER_GUI_OBJ = src/serv-gui/serv_guiApp.o \
 		 src/serv-gui/serv_guiMain.o \

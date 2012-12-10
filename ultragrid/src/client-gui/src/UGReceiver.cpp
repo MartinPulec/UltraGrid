@@ -12,8 +12,6 @@
 #include "Decompress.h"
 #include "VideoBuffer.h"
 
-#include "aes_decrypt.h"
-
 /* UltraGrid bits */
 extern "C" {
 #include "debug.h"
@@ -102,8 +100,6 @@ struct state_uv {
     Player *player;
 
     Decompress decompress;
-
-    aes_decrypt dec;
 };
 
 volatile int should_exit = FALSE;
@@ -539,9 +535,7 @@ static void *receiver_thread(void *arg)
 #endif
                     len = video_len;
 
-                    unsigned char *ciphertext = (unsigned char *) malloc(video_len);
-
-                    res = uv->receive(uv->receive_state, (char *) ciphertext, &len);
+                    res = uv->receive(uv->receive_state, receivedFrame->video.get(), &len);
                     if(!res) {
                         std::cerr << "(res: " << res << ")" << std::endl;
                         error = string("Incomplete video data");
@@ -552,13 +546,6 @@ static void *receiver_thread(void *arg)
                         error = string("Incomplete video data");
                         goto error;
                     }
-
-                    int aes_len = video_len;
-                    uv->dec.decrypt(ciphertext, &aes_len, (unsigned char *) receivedFrame->video.get());
-                    receivedFrame->video_len = aes_len;
-
-                    free(ciphertext);
-
 
                     len = audio_len;
 
