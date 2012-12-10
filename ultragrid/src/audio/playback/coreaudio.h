@@ -47,6 +47,7 @@
  */
 
 struct audio_frame;
+struct audio_playback_type;
 
 void audio_play_ca_help(void);
 void * audio_play_ca_init(char *cfg);
@@ -55,4 +56,6 @@ void audio_play_ca_put_frame(void *state, struct audio_frame *frame);
 void audio_play_ca_done(void *state);
 int audio_play_ca_reconfigure (void *state, int quant_samples, int channels,
                                                 int sample_rate);
+struct audio_playback_type *audio_play_ca_probe(void);
 
+void audio_play_ca_reset(void *state);

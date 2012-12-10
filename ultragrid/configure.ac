@@ -1399,7 +1399,7 @@ coreaudio=no
 AC_ARG_ENABLE(coreaudio, 
       AS_HELP_STRING([--disable-coreaudio], [disable CoreAudio support(default is auto)]), 
     [coreaudio_req=$enableval],
-    [coreaudio_req=no]
+    [coreaudio_req=yes]
     )
 
 case $host_os in
@@ -1410,7 +1410,7 @@ case $host_os in
 		then
 			COREAUDIO_INC=
 			COREAUDIO_LIB="-framework CoreAudio -framework AudioUnit"
-			COREAUDIO_OBJ="src/audio/capture/coreaudio.o src/audio/playback/coreaudio.o"
+			COREAUDIO_OBJ="src/audio/playback/coreaudio.o"
                         coreaudio=yes
                         AC_DEFINE([HAVE_COREAUDIO], [1], [Build with ALSA support])
 		fi

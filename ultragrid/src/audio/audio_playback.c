@@ -139,20 +139,18 @@ static struct audio_playback_t audio_playback_table[] = {
                 NULL
         },
 #endif
-#if 0
 #if defined HAVE_COREAUDIO
         { "coreaudio",
                 NULL,
-                MK_STATIC(audio_play_ca_help),
                 MK_STATIC(audio_play_ca_init),
                 MK_STATIC(audio_play_ca_get_frame),
                 MK_STATIC(audio_play_ca_put_frame),
                 MK_STATIC(audio_play_ca_done),
+                MK_STATIC(audio_play_ca_reset),
                 MK_STATIC(audio_play_ca_reconfigure),
                 MK_STATIC(audio_play_ca_probe),
                 NULL
         },
-#endif
 #endif
 #if 0
 #if defined HAVE_JACK || defined BUILD_LIBRARIES
