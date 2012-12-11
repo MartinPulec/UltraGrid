@@ -77,6 +77,7 @@ extern "C" {
 #include <iostream>
 #include <list>
 #include <map>
+#include <queue>
 #include <string>
 #include <utility>
 
@@ -90,6 +91,8 @@ void print_output_modes(IDeckLink *);
 #endif
 
 #define MAX_DEVICES 4
+
+#define MAX_QUEUE_LEN 10
 
 using namespace std;
 
@@ -219,6 +222,23 @@ struct device_state {
 };
 
 struct state_decklink {
+        state_decklink() : 
+                        timecode(0), play_audio(0) {
+                pthread_mutex_init(&lock, NULL);
+                pthread_cond_init(&in_cv, NULL);
+                pthread_cond_init(&out_cv, NULL);
+
+                memset(&audio, 0, sizeof(audio));
+                memset(&desc, 0, sizeof(desc));
+        }
+        virtual ~state_decklink() {
+                pthread_mutex_destroy(&lock);
+                pthread_cond_destroy(&in_cv);
+                pthread_cond_destroy(&out_cv);
+        }
+
+        pthread_t           worker_id;
+
         uint32_t            magic;
 
         struct timeval      tv;
@@ -231,8 +251,7 @@ struct state_decklink {
         DeckLinkTimecode    *timecode;
 
         struct audio_frame  audio;
-        struct video_frame *frame;
-        struct tile        *tile;
+        struct video_desc   desc;
 
         unsigned long int   frames;
         unsigned long int   frames_last;
@@ -245,7 +264,77 @@ struct state_decklink {
         BMDPixelFormat                    pixelFormat;
 
         int                 dev_x, dev_y;
+
+        pthread_mutex_t     lock;
+        pthread_cond_t      in_cv;
+        pthread_cond_t      out_cv;
+        queue<struct video_frame *> frame_queue;
  };
+
+static void update_timecode(DeckLinkTimecode *tc, double fps);
+static void *worker(void *args);
+
+static void *worker(void *args) {
+        struct state_decklink *s = (struct state_decklink *) args;
+
+        while(1) {
+                struct video_frame *frame;
+                pthread_mutex_lock(&s->lock);
+                while(s->frame_queue.empty()) {
+                        pthread_cond_wait(&s->in_cv, &s->lock);
+                }
+                frame = s->frame_queue.front();
+                s->frame_queue.pop();
+                pthread_cond_signal(&s->out_cv);
+                pthread_mutex_unlock(&s->lock);
+
+                if(!frame) {
+                        // received poisoned pill
+                        break;
+                }
+
+                uint32_t i;
+                for(int i = 0; i < s->devices_cnt; ++i) {
+                        s->state[i].deckLinkFrame = DeckLinkFrame::Create(s->desc.width / s->dev_x,
+                                        s->desc.height / s->dev_y,
+                                        vc_get_linesize(s->desc.width, s->desc.color_spec) / s->dev_x, s->pixelFormat);
+                }
+
+                for(int x = 0; x < s->dev_x; ++x) {
+                        for(int y = 0; y < s->dev_y; ++y) {
+                                char *data;
+                                s->state[x + y * s->dev_x].deckLinkFrame->GetBytes((void **) &data);
+                                int untiled_linesize = vc_get_linesize(s->desc.width, s->desc.color_spec);
+                                for (int line = y * (s->desc.height / s->dev_y);
+                                                line < (y + 1) * (s->desc.height / s->dev_y);
+                                                ++line) {
+                                        int linesize = untiled_linesize / s->dev_x;
+                                        //char *src = data + line * s->tile->linesize;
+                                        char *src = frame->tiles[0].data + line * untiled_linesize;
+                                        src += x * linesize;
+                                        memcpy(data, src, linesize);
+                                        data += linesize;
+                                }
+                        }
+                }
+
+                vf_free_data(frame);
+
+                for (int j = 0; j < s->devices_cnt; ++j) {
+                        if(s->emit_timecode) {
+                                s->state[j].deckLinkFrame->SetTimecode(bmdVideoOutputRP188, s->timecode);
+                        }
+                        s->state[j].deckLinkOutput->ScheduleVideoFrame(s->state[j].deckLinkFrame,
+                                        s->frames * s->frameRateDuration, s->frameRateDuration, s->frameRateScale);
+                }
+
+                if(s->emit_timecode) {
+                        update_timecode(s->timecode, s->desc.fps);
+                }
+        }
+
+        return NULL;
+}
 
 
 static struct display_device *get_devices();
@@ -562,11 +651,13 @@ struct video_frame *
 display_decklink_getf(void *state)
 {
         struct state_decklink *s = (struct state_decklink *)state;
+        struct video_frame *ret = NULL;
 
         assert(s->magic == DECKLINK_MAGIC);
 
         if (s->initialized) {
                 if(s->stereo) {
+#if 0
                         assert(s->devices_cnt == 0);
                         s->state[0].deckLinkFrame = DeckLink3DFrame::Create(s->frame->tiles[0].width, s->frame->tiles[0].height,
                                                 s->frame->tiles[0].linesize, s->pixelFormat);
@@ -576,17 +667,13 @@ display_decklink_getf(void *state)
                         
                         dynamic_cast<DeckLink3DFrame *>(s->state[0].deckLinkFrame)->GetFrameForRightEye(&right);
                         right->GetBytes((void **) &s->frame->tiles[1].data);
+#endif
                 } else {
-                        for(int i = 0; i < s->devices_cnt; ++i) {
-                                s->state[i].deckLinkFrame = DeckLinkFrame::Create(s->frame->tiles[0].width / s->dev_x,
-                                                s->frame->tiles[0].height / s->dev_y,
-                                                s->frame->tiles[0].linesize / s->dev_x, s->pixelFormat);
-                        }
+                        ret = vf_alloc_desc_data(s->desc);
                 }
         }
 
-        /* stub -- real frames are taken with get_sub_frame call */
-        return s->frame;
+        return ret;
 }
 
 static void update_timecode(DeckLinkTimecode *tc, double fps)
@@ -640,9 +727,8 @@ int display_decklink_putf(void *state, char *frame)
 
         assert(s->magic == DECKLINK_MAGIC);
 
-        gettimeofday(&tv, NULL);
 
-
+#if 0
         uint32_t i;
         s->state[0].deckLinkOutput->GetBufferedVideoFrameCount(&i);
         //if (i > 2) 
@@ -679,6 +765,17 @@ int display_decklink_putf(void *state, char *frame)
                         update_timecode(s->timecode, s->frame->fps);
                 }
         }
+#endif
+        pthread_mutex_lock(&s->lock);
+        while(s->frame_queue.size() > MAX_QUEUE_LEN) {
+                pthread_cond_wait(&s->out_cv, &s->lock);
+        }
+
+        s->frame_queue.push((struct video_frame *) frame);
+        pthread_cond_signal(&s->in_cv);
+        pthread_mutex_unlock(&s->lock);
+
+        s->frames++;
 
 
         gettimeofday(&tv, NULL);
@@ -762,10 +859,13 @@ display_decklink_reconfigure(void *state, struct video_desc desc)
         int h_align = 0;
 
         assert(s->magic == DECKLINK_MAGIC);
+
+        pthread_mutex_lock(&s->lock);
+        while(!s->frame_queue.empty()) {
+                pthread_cond_wait(&s->out_cv, &s->lock);
+        }
         
-        s->frame->color_spec = desc.color_spec;
-        s->frame->interlacing = desc.interlacing;
-        s->frame->fps = desc.fps;
+        s->desc = desc;
 
 	switch (desc.color_spec) {
                 case UYVY:
@@ -782,6 +882,7 @@ display_decklink_reconfigure(void *state, struct video_desc desc)
         }
 
 	if(s->stereo) {
+#if 0
 		for (int i = 0; i < 2; ++i) {
 			struct tile  *tile = vf_get_tile(s->frame, i);
 			tile->width = desc.width;
@@ -805,6 +906,7 @@ display_decklink_reconfigure(void *state, struct video_desc desc)
 
                 s->state[0].deckLinkOutput->EnableVideoOutput(displayMode,  bmdVideoOutputDualStream3D);
                 s->state[0].deckLinkOutput->StartScheduledPlayback(0, s->frameRateScale, (double) s->frameRateDuration);
+#endif
         } else {
                 if(desc.tile_count > s->devices_cnt) {
                         fprintf(stderr, "[decklink] Expected at most %d streams. Got %d.\n", s->devices_cnt,
@@ -817,12 +919,6 @@ display_decklink_reconfigure(void *state, struct video_desc desc)
                 if(s->devices_cnt == 4) {
                         s->dev_x = s->dev_y = 2;
                 }
-
-                s->tile->width = desc.width;
-                s->tile->height = desc.height;
-                s->tile->linesize = vc_get_linesize(s->tile->width, s->frame->color_spec);
-                s->tile->data_len = s->tile->linesize * s->tile->height;
-                s->tile->data = (char *) malloc(s->tile->data_len);
 
 	        for(int i = 0; i < s->devices_cnt; ++i) {
                         BMDVideoOutputFlags outputFlags= bmdVideoOutputFlagDefault;
@@ -845,7 +941,7 @@ display_decklink_reconfigure(void *state, struct video_desc desc)
 	                {
                                 fprintf(stderr, "[decklink] Requested parameters "
                                                 "combination not supported - %d * %dx%d@%f, timecode %s.\n",
-                                                desc.tile_count, s->tile->width, s->tile->height, desc.fps,
+                                                desc.tile_count, desc.width, desc.height, desc.fps,
                                                 (outputFlags & bmdVideoOutputRP188 ? "ON": "OFF"));
 	                        goto error;
 	                }
@@ -859,9 +955,11 @@ display_decklink_reconfigure(void *state, struct video_desc desc)
 	}
 
         s->initialized = true;
+        pthread_mutex_unlock(&s->lock);
         return TRUE;
 
 error:
+        pthread_mutex_unlock(&s->lock);
         return FALSE;
 }
 
@@ -874,7 +972,7 @@ void *display_decklink_init(char *fmt, unsigned int flags)
         int                                             cardIdx[MAX_DEVICES];
         int                                             dnum = 0;
 
-        s = (struct state_decklink *)calloc(1, sizeof(struct state_decklink));
+        s = new state_decklink;
         s->magic = DECKLINK_MAGIC;
         s->stereo = FALSE;
         s->emit_timecode = false;
@@ -966,14 +1064,6 @@ void *display_decklink_init(char *fmt, unsigned int flags)
                 s->play_audio = FALSE;
         }
         
-        if(s->stereo) {
-        	s->frame = vf_alloc(2);
-	} else {
-		s->frame = vf_alloc(1);
-        }
-        s->tile = &s->frame->tiles[0];
-	
-
         if(s->emit_timecode) {
                 s->timecode = new DeckLinkTimecode;
         } else {
@@ -998,6 +1088,11 @@ void *display_decklink_init(char *fmt, unsigned int flags)
         s->frames = 0;
         s->initialized = false;
 
+        if(pthread_create(&s->worker_id, NULL, worker, (void*)s) != 0) {
+                fprintf(stderr, "[Decklink] Error creating thread!!!!");
+                return NULL;
+        }
+
         return (void *)s;
 }
 
@@ -1015,9 +1110,12 @@ void display_decklink_done(void *state)
 {
         struct state_decklink *s = (struct state_decklink *)state;
 
+        // NULL is poisoned pill
+        display_decklink_putf(s, NULL);
+        pthread_join(s->worker_id, NULL);
+
         delete s->timecode;
-        vf_free(s->frame);
-        free(s);
+        delete s;
 }
 
 display_type_t *display_decklink_probe(void)
