@@ -107,7 +107,7 @@ using namespace std;
 #define USE_CUSTOM_TRANSMIT 1
 
 const char * volatile video_directory = 0;
-volatile bool logo_hidden = false;
+volatile int logo_hidden = 0;
 
 struct state_uv {
 #ifndef USE_CUSTOM_TRANSMIT
@@ -827,7 +827,7 @@ int main(int argc, char *argv[])
                                         uv->compress_quality =
                                                 atof(buff + strlen("QUALITY") + 1);
                                 } else if(strncmp(buff, "HIDE_LOGO", strlen("HIDE_LOGO")) == 0) {
-                                        logo_hidden = true;
+                                        logo_hidden = 1;
                                 }
                         }
                 }
