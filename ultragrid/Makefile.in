@@ -11,9 +11,9 @@ NVCCFLAGS     = @NVCCFLAGS@ -Xcompiler -fPIC
 LDFLAGS      =  @LDFLAGS@ -fopenmp
 LIBS         += @LIBS@ @JACK_TRANS_LIB@ @MATHLIBS@ @COREAUDIO_LIB@ \
 		@X_PRE_LIBS@ @X_LIBS@ @X_EXTRA_LIBS@ -lm -pthread -ltiff -L/opt/local/lib \
-		../udt4/src/libudt.a ../demo_enc/demo_enc.a ../demo_dec/demo_dec.a -lcudart -lMagickWand \
+		../udt4/src/libudt.a ../demo_enc/demo_enc.a ../demo_dec/demo_dec.a -lcudart \
 		-lcrypto
-SERVER_LIBS   = -lsndfile
+SERVER_LIBS   = -lsndfile -lMagickWand
 INC           = -I.. -Isrc -Itest @DVS_INC@ @DELTACAST_INC@ @QUICKTIME_INC@ @DECKLINK_INC@ @PORTAUDIO_INC@ \
                 @GL_INC@ @SAGE_INC@ @QUAD_INC@ @JACK_TRANS_INC@ @JPEG_INC@ @COREAUDIO_INC@ @SPEEX_INC@ \
 		-I../udt4/src/ -Isrc/client-gui -Isrc/client-gui/include -I../demo_enc/ -I../demo_dec/
@@ -43,6 +43,7 @@ OBJS	      = @OBJS@ \
 	        src/bitstream.o \
 	        src/cuda_memory_pool.o \
 		src/debug.o \
+		src/messaging.o \
 		src/perf.o \
 		src/ntp.o \
 		src/pdb.o \
@@ -56,8 +57,6 @@ OBJS	      = @OBJS@ \
 		src/rtp/net_udp.o \
 		src/rtp/rtp.o \
 		src/rtp/rtp_callback.o \
-		src/audio/capture/none.o \
-		src/audio/capture/sdi.o \
 		src/audio/utils.o \
 		@COREAUDIO_OBJ@ \
 		@JACK_TRANS_OBJ@ \
@@ -78,9 +77,6 @@ OBJS	      = @OBJS@ \
 		@OPENEXR_OBJ@ \
 		src/video_capture/tiff.o \
 		src/video_capture/null.o \
-		src/video_decompress.o \
-		src/video_decompress/j2k.o \
-		src/video_decompress/null.o \
 		src/vo_postprocess.o \
 		src/vo_postprocess/3d-interlaced.o \
 		src/vo_postprocess/double-framerate.o \
@@ -285,19 +281,23 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 		src/audio/audio_playback.o \
 		src/audio/playback/none.o \
 		src/audio/playback/sdi.o \
+		src/video_decompress.o \
+		src/video_decompress/null.o \
+		src/video_decompress/j2k.o \
 		src/aes_decrypt.o \
 		#src/rtp/decoders.o \
 		#src/video_display/wxgl.o \
 
 
 SERVER_OBJ = src/server/sp_server.o \
-	     src/messaging.o \
 	     src/server/streaming_server.o \
 	     src/server/streaming_server_handlers.o \
 	     src/client-gui/src/Utils.o \
 		src/audio_source.o \
 		src/video_capture.o \
 		src/video_capture/dpx.o \
+		src/audio/capture/none.o \
+		src/audio/capture/sdi.o \
 		src/video_compress.o \
 		src/video_compress/none.o \
 		src/video_compress/j2k.o \
