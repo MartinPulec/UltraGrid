@@ -104,10 +104,10 @@ static void * saving_thread_impl(void * param) {
 
 /** Reads given file and submits it for encoding. */
 static void submit_input(const char * const filename, const int dwt_level_count) {
-    static int subsampling;
+    int subsampling;
     struct work_item * item = 0;
     FILE * file = 0;
-    int load_size = size_x * size_y * 4; /* 4 bytes per pixel */
+    int logo, load_size = size_x * size_y * 4; /* 4 bytes per pixel */
     
     /* open the file for reading and check the size. */
     if(file = fopen(filename, "r")) {
@@ -115,36 +115,38 @@ static void submit_input(const char * const filename, const int dwt_level_count)
         fseek(file, -load_size, SEEK_END);
         if(ftell(file) >= 0) {
             for(subsampling = 0; subsampling <= dwt_level_count; subsampling++) {
-                /* get unused work item. */
-                pthread_mutex_lock(&mutex);
-                while(0 == unused)
-                    pthread_cond_wait(&cond, &mutex);
-                item = unused;
-                unused = item->next;
-                pthread_mutex_unlock(&mutex);
-                
-                /* compose output filename */
-                snprintf(item->path, MAX_PATH_LEN, "%s.sub%d.j2k", filename, subsampling);
-                
-                /* load the file */
-                fseek(file, -load_size, SEEK_END);
-                if(1 == fread(item->buffer, load_size, 1, file)) {
-                    /* show status message */
-                    printf("Loaded %d bytes from file %s.\n", load_size, filename);
-                    
-                    /* submit the work item for encoding */
-                    demo_enc_submit(enc, item, item->buffer, buffer_size, 
-                                    item->buffer, 0, 1.0f, subsampling);
-                } else {
-                    /* show error message */
-                    printf("Cannot read %d bytes from file %s.\n", load_size, filename);
-                    
-                    /* return the item back to queue */
+                for(logo = 0; logo < 2; logo++) {
+                    /* get unused work item. */
                     pthread_mutex_lock(&mutex);
-                    item->next = unused;
-                    unused = item;
-                    pthread_cond_signal(&cond);
+                    while(0 == unused)
+                        pthread_cond_wait(&cond, &mutex);
+                    item = unused;
+                    unused = item->next;
                     pthread_mutex_unlock(&mutex);
+                    
+                    /* compose output filename */
+                    snprintf(item->path, MAX_PATH_LEN, "%s.sub%d.%s.j2k", filename, subsampling, logo ? "l" : "n");
+                    
+                    /* load the file */
+                    fseek(file, -load_size, SEEK_END);
+                    if(1 == fread(item->buffer, load_size, 1, file)) {
+                        /* show status message */
+                        printf("Loaded %d bytes from file %s.\n", load_size, filename);
+                        
+                        /* submit the work item for encoding */
+                        demo_enc_submit(enc, item, item->buffer, buffer_size, 
+                                        item->buffer, 0, 1.0f, subsampling, logo ? filename : 0);
+                    } else {
+                        /* show error message */
+                        printf("Cannot read %d bytes from file %s.\n", load_size, filename);
+                        
+                        /* return the item back to queue */
+                        pthread_mutex_lock(&mutex);
+                        item->next = unused;
+                        unused = item;
+                        pthread_cond_signal(&cond);
+                        pthread_mutex_unlock(&mutex);
+                    }
                 }
             }
         } else 

@@ -50,6 +50,7 @@
 #include "config_win32.h"
 
 #include "debug.h"
+#include "host.h"
 #include "video_codec.h"
 #include "video_capture.h"
 
@@ -62,6 +63,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <glob.h>
+#include <libgen.h>
 #include <math.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -401,6 +403,10 @@ vidcap_dpx_init(char *fmt, unsigned int flags)
         while(item) {
                 if(strncmp("files=", item, strlen("files=")) == 0) {
                         glob_pattern = item + strlen("files=");
+                        // global variable in main.c
+                        char *tmp = strdup(glob_pattern);
+                        video_directory = strdup(dirname(tmp));
+                        free(tmp);
                 } else if(strncmp("fps=", item, strlen("fps=")) == 0) {
                         s->video_prop.fps = atof(item + strlen("fps="));
                 } else if(strncmp("gamma=", item, strlen("gamma=")) == 0) {

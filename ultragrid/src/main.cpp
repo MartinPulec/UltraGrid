@@ -106,6 +106,8 @@ using namespace std;
 
 #define USE_CUSTOM_TRANSMIT 1
 
+const char * volatile video_directory = 0;
+
 struct state_uv {
 #ifndef USE_CUSTOM_TRANSMIT
         struct rtp **network_devices;

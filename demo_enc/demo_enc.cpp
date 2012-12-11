@@ -8,13 +8,16 @@
 #include <queue>
 #include <map>
 #include <cstdio>
+#include <ctime>
 #include <pthread.h>
 #include <cuda_runtime_api.h>
 #include "cuj2k/j2k_encoder_extended.h"
 #include "demo_enc.h"
+#include "demo_wmark.h"
 
 
 #define MAX_SUBSAMPLING_INSTANCES 10
+#define MAX_INFO_LEN (3 * 1024)
 
 
 /// Decoding work item.
@@ -26,6 +29,9 @@ struct work_item {
     void * src_ptr;                // source data pointer
     j2k_image_params params;       // encoding parameters for the image
     int out_size;                  // output codestream size or -1 for error
+    int ss_level;                  // subsampling level
+    int logo;                      // 0 = no logo, nonzero = add logo
+    char info[MAX_INFO_LEN + 1];   // info message
 };
 
 
@@ -202,6 +208,7 @@ struct demo_enc {
     // input and output queues
     thread_safe_input_queue input[MAX_SUBSAMPLING_INSTANCES];
     thread_safe_output_queue output;
+    thread_safe_input_queue watermark;
     
     // JPEG 2000 encoder parameters
     j2k_encoder_params enc_params;
@@ -347,6 +354,49 @@ static void * enc_thread_impl(void * data) {
 
 
 
+/// Watermarking thread implementation.
+static void * watermark_thread_impl(void * data) {
+    // cast the pointer to encoder instance
+    demo_enc * const enc = (demo_enc*)data;
+    
+    // initialize and check watermarker
+    demo_wmark * const watermarker = demo_wmark_create();
+    
+    // send initialization result work item to main thread using output queue
+    work_item * item = new work_item;
+    item->out_size = watermarker ? 0 : -1;
+    item->index = 0;
+    enc->output.put(item);
+    
+    // start watermarking if OK
+    if(watermarker) {
+        // wait for next input image (null == stop)
+        while((item = enc->watermark.get())) {
+            // possibly add the watermark
+            if(item->logo) {
+                demo_wmark_add(
+                        watermarker, 
+                        item->src_ptr, 
+                        item->info,
+                        enc->enc_params.size.width,
+                        enc->enc_params.size.height
+                );
+            }
+            
+            // put the work item into the right queue
+            enc->input[item->ss_level].put(item);
+        }
+        
+        // release the watermarker
+        demo_wmark_destroy(watermarker);
+    }
+    
+    // return value ignored
+    return 0;
+}
+
+
+
 /// Creates and initializes new instance of JPEG 2000 encoder.
 /// Output codestreams are 4K DCI compatible (24fps 2K for subsampled frames).
 /// @param gpu_indices_ptr   pointer to array of indices of GPUs to be used 
@@ -423,6 +473,13 @@ struct demo_enc * demo_enc_create(const int * gpu_indices_ptr,
             gpu_indices_count = indices.size();
         }
         
+        // start watermarking thread and remember its ID
+        pthread_t wm_thread;
+        if(pthread_create(&wm_thread, 0, watermark_thread_impl, (void*)enc)) {
+            throw "pthread_create";
+        }
+        enc->threads.push_back(wm_thread);
+        
         // start one thread for each listed GPU and for each subsampling level
         for(int ss_idx = ss_count; ss_idx--;) {
             for(int gpu_idx = gpu_indices_count; gpu_idx--;) {
@@ -430,7 +487,7 @@ struct demo_enc * demo_enc_create(const int * gpu_indices_ptr,
                 thread_params * const params = new thread_params(
                         gpu_indices_ptr[gpu_idx],
                         enc,
-                        ss_idx + gpu_idx * ss_count,
+                        1 + ss_idx + gpu_idx * ss_count,
                         ss_idx
                 );
                 
@@ -511,6 +568,7 @@ void demo_enc_destroy(struct demo_enc * enc_ptr) {
 /// @param subsampling      0 for full resolution frame (same as input)
 ///                         1 for half width and height, 2 for quarter, ...
 ///                         (up to dwt level count given to constructor)
+/// @param logo_text        text added to logo
 void demo_enc_submit(struct demo_enc * enc_ptr,
                      void * custom_data_ptr,
                      void * out_buffer_ptr,
@@ -518,7 +576,8 @@ void demo_enc_submit(struct demo_enc * enc_ptr,
                      void * src_ptr,
                      int required_size,
                      float quality,
-                     int subsampling) {
+                     int subsampling,
+                     const char * logo_text) {
     // compose new work item
     work_item * const item = new work_item;
     j2k_image_params_set_default(&item->params);
@@ -531,6 +590,16 @@ void demo_enc_submit(struct demo_enc * enc_ptr,
     item->params.output_byte_count = required_size;
     item->params.quality = quality;
     item->out_size = -1;
+    item->ss_level = subsampling >> 1;
+    item->logo = logo_text ? 1 : 0;
+    
+    // get current time
+    time_t t = std::time(0);
+    struct tm * now = std::localtime(&t);
+    
+    // copy logo text
+    snprintf(item->info, MAX_INFO_LEN, "Brno to CineGrid   %04d-%02d-%02d   %s  ",
+             now->tm_year + 1900, now->tm_mon + 1, now->tm_mday, logo_text);
     
     // assign an index to the item
     pthread_mutex_lock(&enc_ptr->next_idx_lock);
@@ -538,7 +607,7 @@ void demo_enc_submit(struct demo_enc * enc_ptr,
     pthread_mutex_unlock(&enc_ptr->next_idx_lock);
     
     // submit the work item into the queue
-    enc_ptr->input[subsampling >> 1].put(item);
+    enc_ptr->watermark.put(item);
 }
 
 
@@ -551,6 +620,7 @@ void demo_enc_stop(struct demo_enc * enc_ptr) {
         enc_ptr->input[i].stop();
     }
     enc_ptr->output.stop();
+    enc_ptr->watermark.stop();
 }
 
 

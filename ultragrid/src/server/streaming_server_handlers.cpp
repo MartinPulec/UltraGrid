@@ -65,7 +65,6 @@
 #include <sys/socket.h>
 
 
-#define PATH_PREFIX "/"
 #define MAX_PATH_LEN 4096
 
 extern int uv_argc;
@@ -115,7 +114,11 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                         char path_buff[MAX_PATH_LEN + 1];
                         struct stat sb;
 
+#if 0
                         snprintf(path_buff, MAX_PATH_LEN, "%s/%s/", PATH_PREFIX, message->data);
+#else
+                        snprintf(path_buff, MAX_PATH_LEN, "%s/", message->data);
+#endif
                         if(stat(path_buff, &sb) == -1) {
                                 response.code = 503;
                                 response.message = "Service Unavailable";

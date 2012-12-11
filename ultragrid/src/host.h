@@ -61,4 +61,6 @@ extern volatile int should_exit;
 
 extern void (*exit_uv)(int status);
 
+extern const char * volatile video_directory;
+
 #endif

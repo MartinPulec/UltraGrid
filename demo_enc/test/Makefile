@@ -5,7 +5,7 @@
 # Configure
 TARGET := test
 CFILES := test.c
-MODULES := ../demo_enc.a
+MODULES := ../demo_enc.a -lMagickWand
 
 # Include Common Makefile
 include ../common.mk

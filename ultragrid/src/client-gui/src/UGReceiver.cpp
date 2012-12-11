@@ -120,9 +120,6 @@ void _exit_uv(int status) {
 
 void (*exit_uv)(int status) = _exit_uv;
 
-struct vidcap *initialize_video_capture(const char *requested_capture,
-                                               char *fmt, unsigned int flags);
-
 struct display *client_initialize_video_display(const char *requested_display,
                                                 char *fmt, unsigned int flags)
 {
@@ -153,34 +150,6 @@ struct display *client_initialize_video_display(const char *requested_display,
 
         d = display_init(id, fmt, flags);
         return d;
-}
-
-struct vidcap *initialize_video_capture(const char *requested_capture,
-                                               char *fmt, unsigned int flags)
-{
-        struct vidcap_type *vt;
-        vidcap_id_t id = 0;
-        int i;
-
-        if(!strcmp(requested_capture, "none"))
-                id = vidcap_get_null_device_id();
-
-        vidcap_init_devices();
-        for (i = 0; i < vidcap_get_device_count(); i++) {
-                vt = vidcap_get_device_details(i);
-                if (strcmp(vt->name, requested_capture) == 0) {
-                        id = vt->id;
-                        break;
-                }
-        }
-        if(i == vidcap_get_device_count()) {
-                fprintf(stderr, "WARNING: Selected '%s' capture card "
-                        "was not found.\n", requested_capture);
-                return NULL;
-        }
-        vidcap_free_devices();
-
-        return vidcap_init(id, fmt, flags);
 }
 
 static struct rtp **initialize_network(char *addrs, int port_base, struct pdb *participants)

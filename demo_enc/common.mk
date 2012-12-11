@@ -25,7 +25,7 @@ ifeq ($(DEBUG_CUDA),1)
 endif
 
 # Includes
-INCLUDES := -I. -I$(CUDA_INSTALL_PATH)/include
+INCLUDES := -I. -I$(CUDA_INSTALL_PATH)/include -I/usr/include/ImageMagick
 
 # Common flags
 COMMONFLAGS += $(INCLUDES) 
@@ -89,7 +89,7 @@ endif
 CC := gcc
 CXX := g++
 LINK := g++ -fPIC
-NVCC := $(CUDA_INSTALL_PATH)/bin/nvcc
+NVCC := nvcc
 
 # Possibly append compatibility flag (only if nvcc accepts it).
 ifeq (Copyright,$(findstring Copyright, $(shell $(NVCC) --version --open64)))

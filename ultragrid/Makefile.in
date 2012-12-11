@@ -11,7 +11,7 @@ NVCCFLAGS     = @NVCCFLAGS@ -Xcompiler -fPIC
 LDFLAGS      =  @LDFLAGS@ -fopenmp
 LIBS         += @LIBS@ @JACK_TRANS_LIB@ @MATHLIBS@ @COREAUDIO_LIB@ \
 		@X_PRE_LIBS@ @X_LIBS@ @X_EXTRA_LIBS@ -lm -pthread -ltiff -L/opt/local/lib \
-		../udt4/src/libudt.a ../demo_enc/demo_enc.a ../demo_dec/demo_dec.a -lcudart \
+		../udt4/src/libudt.a ../demo_enc/demo_enc.a ../demo_dec/demo_dec.a -lcudart -lMagickWand \
 		-lcrypto
 SERVER_LIBS   = -lsndfile
 INC           = -I.. -Isrc -Itest @DVS_INC@ @DELTACAST_INC@ @QUICKTIME_INC@ @DECKLINK_INC@ @PORTAUDIO_INC@ \
@@ -75,8 +75,6 @@ OBJS	      = @OBJS@ \
 		src/utils/ring_buffer.o \
 		src/video.o \
 		src/video_codec.o \
-		src/video_capture.o \
-		src/video_capture/dpx.o \
 		@OPENEXR_OBJ@ \
 		src/video_capture/tiff.o \
 		src/video_capture/null.o \
@@ -298,6 +296,8 @@ SERVER_OBJ = src/server/sp_server.o \
 	     src/server/streaming_server_handlers.o \
 	     src/client-gui/src/Utils.o \
 		src/audio_source.o \
+		src/video_capture.o \
+		src/video_capture/dpx.o \
 		src/video_compress.o \
 		src/video_compress/none.o \
 		src/video_compress/j2k.o \

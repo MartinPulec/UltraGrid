@@ -87,6 +87,7 @@ struct j2k_video_compress: public observer {
         pthread_cond_t in_cv;
         pthread_cond_t out_cv;
         size_t counter;
+        string path;
 
         uint32_t magic;
 
@@ -199,7 +200,9 @@ void j2k_push(void *arg, struct video_frame * tx, double requested_quality)
                                 tx->tiles[0].data, tx->tiles[0].data_len,
                                 tx->tiles[0].data, bw,
                                 quality,
-                                subsample_factor);
+                                subsample_factor,
+                                video_directory // defined in main.c
+                                );
 
                 s->counter += 1;
         }

@@ -72,6 +72,7 @@ demo_enc_destroy
  * @param subsampling      0 for full resolution frame (same as input)
  *                         1 for half width and height, 2 for quarter, ...
  *                         (up to dwt level count given to constructor)
+ * @param logo_text        overlay text pointer or null not to overlay at all
  */
 void
 demo_enc_submit
@@ -83,7 +84,8 @@ demo_enc_submit
     void * src_ptr,
     int required_size,
     float quality,
-    int subsampling
+    int subsampling,
+    const char * logo_text
 );
 
 
