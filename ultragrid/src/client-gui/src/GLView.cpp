@@ -33,6 +33,8 @@ extern "C" {
 
 #include "cesnet-logo-2.c"
 
+#define GL_PROCESSING 1
+
 using namespace std;
 using namespace std::tr1;
 
@@ -1219,7 +1221,7 @@ void GLView::KeyDown(wxKeyEvent& evt)
 
 void GLView::ToggleLightness()
 {
-#if 0
+#if GL_PROCESSING
     if(CurrentFilterIdx >= lightness_count)
         CurrentFilterIdx = 0;
     else
@@ -1240,7 +1242,7 @@ void GLView::ToggleLightness()
 
 void GLView::DefaultLightness()
 {
-#if 0
+#if GL_PROCESSING
     CurrentFilterIdx = 0;
     CurrentFilter = Filters[CurrentFilterIdx];
 #else
@@ -1252,7 +1254,7 @@ void GLView::DefaultLightness()
 
 void GLView::ShowOnlyChannel(int val)
 {
-#if 0
+#if GL_PROCESSING
     switch(val) {
         case 'R':
             CurrentFilterIdx = lightness_count + 0;
@@ -1284,7 +1286,7 @@ void GLView::ShowOnlyChannel(int val)
 
 void GLView::HideChannel(int val)
 {
-#if 0
+#if GL_PROCESSING
     switch(val) {
         case 'R':
             CurrentFilterIdx = lightness_count + channel_count + 0;
@@ -1316,7 +1318,7 @@ void GLView::HideChannel(int val)
 
 void GLView::Zoom(double ratio)
 {
-#if 0
+#if GL_PROCESSING
     vpXMultiplier *= (1 + ratio);
     vpYMultiplier *= (1 + ratio);
     Recompute();
@@ -1337,7 +1339,7 @@ void GLView::Zoom(double ratio)
 
 void GLView::Go(double x, double y)
 {
-#if 0
+#if GL_PROCESSING
     xoffset += x;
     yoffset += y;
     Recompute();
@@ -1364,7 +1366,7 @@ void GLView::ResetDefaults()
 
 void GLView::Recompute()
 {
-#if 0
+#if GL_PROCESSING
     if(vpXMultiplier < 1.0 || vpYMultiplier < 1.0) {
         vpXMultiplier = vpYMultiplier = 1.0;
     }
@@ -1402,7 +1404,7 @@ void GLView::Wheel(wxMouseEvent& evt)
 
 void GLView::GoPixels(int xdelta, int ydelta)
 {
-#if 0
+#if GL_PROCESSING
     xoffset += (double) xdelta / GetSize().x / vpXMultiplier;
     yoffset += (double) ydelta / GetSize().y / vpYMultiplier;
     Recompute();

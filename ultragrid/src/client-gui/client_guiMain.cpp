@@ -176,11 +176,11 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     StaticText1 = new wxStaticText(this, ID_STATICTEXT1, _("Downsample"), wxDefaultPosition, wxDefaultSize, 0, _T("ID_STATICTEXT1"));
     FlexGridSizer3->Add(StaticText1, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     Downsample = new wxChoice(this, ID_DOWNSAMPLE, wxDefaultPosition, wxDefaultSize, 0, 0, 0, wxDefaultValidator, _T("ID_DOWNSAMPLE"));
-    Downsample->Append(_("2160p"));
-    Downsample->Append(_("1080p"));
-    Downsample->Append(_("540p"));
-    Downsample->Append(_("280p"));
-    Downsample->Append(_("140p"));
+    Downsample->Append(_("none"));
+    Downsample->Append(_("1/2"));
+    Downsample->Append(_("1/4"));
+    Downsample->Append(_("1/8"));
+    Downsample->Append(_("1/16"));
     FlexGridSizer3->Add(Downsample, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
     J2KQualityLabel = new wxStaticText(this, ID_J2K_QUALITY_LABEL, _("J2K bitrate:"), wxDefaultPosition, wxSize(81,17), 0, _T("ID_J2K_QUALITY_LABEL"));
     FlexGridSizer3->Add(J2KQualityLabel, 1, wxALL|wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL, 5);
@@ -799,10 +799,10 @@ void client_guiFrame::KeyDown(wxKeyEvent& evt)
             case 'P':
                 ToggleLoop->SetValue(!ToggleLoop->GetValue());
                 break;
-            case 'W':
+            case '+':
                 gl->Zoom(0.3);
                 break;
-            case 'S':
+            case '-':
                 gl->Zoom(-0.15);
                 break;
             case WXK_LEFT:
