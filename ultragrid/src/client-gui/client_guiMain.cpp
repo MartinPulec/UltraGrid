@@ -255,6 +255,9 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
         (wxObjectEventFunction)&J2KBitrate::FPSChanged, 0, J2KBitrateVal);
     J2KBitrateVal->Update();
 
+    FlexGridSizer1->Hide(FlexGridSizer3);
+    FlexGridSizer1->Layout();
+
     gl->Connect(wxEVT_PAINT,(wxObjectEventFunction)&GLView::OnPaint,0,gl);
     /*int GLCanvasAttributes_1[] = {
     	WX_GL_RGBA,
