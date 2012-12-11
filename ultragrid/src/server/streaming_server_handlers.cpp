@@ -233,6 +233,16 @@ launch_err:
                                                                 response.body_len = strlen(response.body);
                                                         }
 
+                                                        char nologo_flag[MAX_PATH_LEN + 8];
+                                                        strcpy(nologo_flag, path_buff);
+                                                        strcat(nologo_flag, ".nologo");
+                                                        if(stat(nologo_flag, &sb) == 0) {
+                                                                char msg_text[] = "HIDE_LOGO";
+                                                                int len = strlen(msg_text);
+                                                                write(comm_fd, &len, sizeof(len));
+                                                                write(comm_fd, msg_text, len);
+                                                        }
+
                                                 }
                                         }
                                 }

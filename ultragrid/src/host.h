@@ -63,4 +63,6 @@ extern void (*exit_uv)(int status);
 
 extern const char * volatile video_directory;
 
+extern volatile bool logo_hidden;
+
 #endif

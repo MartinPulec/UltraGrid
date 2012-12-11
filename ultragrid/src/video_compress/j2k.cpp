@@ -201,7 +201,7 @@ void j2k_push(void *arg, struct video_frame * tx, double requested_quality)
                                 tx->tiles[0].data, bw,
                                 quality,
                                 subsample_factor,
-                                video_directory // defined in main.c
+                                logo_hidden ? 0 : video_directory // defined in main.c
                                 );
 
                 s->counter += 1;
