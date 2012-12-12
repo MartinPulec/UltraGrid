@@ -98,7 +98,7 @@ struct tcp_recv {
                     }
 
                     struct timeval tv;
-                    tv.tv_sec = 1;  /* 5 Secs Timeout */
+                    tv.tv_sec = 5;  /* 5 Secs Timeout */
                     tv.tv_usec = 0;
                     setsockopt(this->socket_fd, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
                     setsockopt(this->socket_fd, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
@@ -142,8 +142,8 @@ struct tcp_recv {
                         FD_SET(this->socket_fd, &set);
 
                         struct timeval timeout;
-                        timeout.tv_sec = 0;
-                        timeout.tv_usec = 500 * 1000;
+                        timeout.tv_sec = 5;
+                        timeout.tv_usec = 0;
                         if(select(this->socket_fd + 1, &set, NULL, NULL, &timeout) >= 1) {
                         //if(UDT::epoll_wait(udt_epoll_id, &readfds, NULL, 500, NULL, NULL) >= 1) {
                                 int res = read(this->socket_fd, buffer + total, *len - total);

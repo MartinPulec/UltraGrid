@@ -91,10 +91,6 @@ OBJS	      = @OBJS@ \
 		src/gl_context.o \
 		src/color_transform.o \
 		src/watermark.o \
-		src/tcp_receive.o \
-		src/tcp_transmit.o \
-		src/udt_transmit.o \
-		src/udt_receive.o \
 	     	src/client-gui/src/Observable.o \
 		#src/audio/audio.o \
 		#src/audio/audio_capture.o \
@@ -286,6 +282,8 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 		src/video_decompress/null.o \
 		src/video_decompress/j2k.o \
 		src/aes_decrypt.o \
+		src/tcp_receive.o \
+		src/udt_receive.o \
 		#src/rtp/decoders.o \
 		#src/video_display/wxgl.o \
 
@@ -302,7 +300,10 @@ SERVER_OBJ = src/server/sp_server.o \
 		src/video_compress.o \
 		src/video_compress/none.o \
 		src/video_compress/j2k.o \
+		src/abstract_transmit.o \
 		src/aes_encrypt.o \
+		src/tcp_transmit.o \
+		src/udt_transmit.o \
 
 SERVER_GUI_OBJ = src/serv-gui/serv_guiApp.o \
 		 src/serv-gui/serv_guiMain.o \

@@ -31,6 +31,8 @@ extern "C" {
 #include "tcp_receive.h"
 };
 
+#include "abstract_transmit.h"
+
 #include "video_decompress.h"
 #include "video_decompress/jpeg.h"
 

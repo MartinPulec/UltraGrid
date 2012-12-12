@@ -1,5 +1,5 @@
 /*
- * FILE:    tcp_transmit.h
+ * FILE:     udt.c
  * AUTHOR:  Colin Perkins <csp@csperkins.org>
  *          Ladan Gharai
  *          Martin Benes     <martinbenesh@gmail.com>
@@ -50,22 +50,59 @@
  *
  */
 
-#include "abstract_transmit.h"
+#ifndef _abstract_transmit_h_
+#define _abstract_transmit_h_
 
-using namespace std;
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#include "config_win32.h"
+#endif
 
-struct tcp_transmit : public abstract_transmit {
-        tcp_transmit(char *address, unsigned int *port);
-        ~tcp_transmit();
+/* VIDEO PART */
+#define PCKT_LENGTH             0
+#define PCKT_HRES_VRES          1       /* bits 0 - 15 - horizontal resolution
+                                           bits 15 - 31 - vertical resolution */
+#define PCKT_FOURCC             2
+#define PCKT_IL_FPS             3       /* bits 0 - 2 interlace flag
+                                           bits 3 - 12 FPS
+                                           bits 13 - 16 FPSd
+                                           bit 17 Fd
+                                           bit 18 Fi */
+#define PCKT_SEQ_NEXT_HDR       4       /* bits 0 - 30 packet seq
+                                           bit 31 next header */
 
-        void accept();
-        bool send(struct video_frame *frame, struct audio_frame *audio);
+#define PCKT_HDR_BASE_LEN       5
 
+/* EXTENSIONS */
+#define PCKT_EXT_INFO           0       /* bits 0 - 4 type
+                                           bits 5 - 20 ext hdr length
+                                           bit 31 next header */
+#define PCKT_EXT_INFO_LEN       1
 
-        private:
-        bool send_description(struct video_frame *frame, struct audio_frame *audio);
+/* AUDIO */
+#define PCKT_EXT_AUDIO_TYPE     0x1
 
-        int socket_fd;
-        int data_socket_fd;
+#define PCKT_EXT_AUDIO_LENGTH   0
+#define PCKT_EXT_AUDIO_QUANT_SAMPLE_RATE   1 /* bits 0 - 5 audio quant.
+                                                 bits 6 - 31 audio sample rate */
+#define PCKT_EXT_AUDIO_CHANNEL_COUNT  2
+#define PCKT_EXT_AUDIO_TAG      3
+
+#define PCKT_HDR_AUDIO_LEN      4
+ 
+
+#define PCKT_HDR_MAX_LEN        (PCKT_HDR_BASE_LEN + PCKT_EXT_INFO_LEN + PCKT_HDR_AUDIO_LEN)
+
+struct abstract_transmit {
+        virtual ~abstract_transmit() {
+        }
+
+        virtual void accept() = 0;
+        virtual bool send(struct video_frame *frame, struct audio_frame *audio) = 0;
+
+        bool format_description(struct video_frame *frame, struct audio_frame *audio, uint32_t *payload_hdr, size_t *len);
 };
+
+#endif // _abstract_transmit_h_
 

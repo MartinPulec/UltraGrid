@@ -1,15 +1,16 @@
 /*
- * FILE:   transmit.h
- * AUTHOR: Colin Perkins <csp@isi.edu>
- *         Martin Benes     <martinbenesh@gmail.com>
- *         Lukas Hejtmanek  <xhejtman@ics.muni.cz>
- *         Petr Holub       <hopet@ics.muni.cz>
- *         Milos Liska      <xliska@fi.muni.cz>
- *         Jiri Matela      <matela@ics.muni.cz>
- *         Dalibor Matura   <255899@mail.muni.cz>
- *         Ian Wesley-Smith <iwsmith@cct.lsu.edu>
+ * FILE:     udt.c
+ * AUTHOR:  Colin Perkins <csp@csperkins.org>
+ *          Ladan Gharai
+ *          Martin Benes     <martinbenesh@gmail.com>
+ *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
+ *          Petr Holub       <hopet@ics.muni.cz>
+ *          Milos Liska      <xliska@fi.muni.cz>
+ *          Jiri Matela      <matela@ics.muni.cz>
+ *          Dalibor Matura   <255899@mail.muni.cz>
+ *          Ian Wesley-Smith <iwsmith@cct.lsu.edu>
  *
- * Copyright (c) 2001-2002 University of Southern California
+ * Copyright (c) 2001-2004 University of Southern California
  * Copyright (c) 2005-2010 CESNET z.s.p.o.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -49,18 +50,27 @@
  *
  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-struct video_frame;
-struct audio_frame;
+#ifndef _udt_transmit_h_
+#define _udt_transmit_h_
 
-void *udt_transmit_init(char *address, unsigned int *port);
-void		 udt_transmit_done(void *udt_transmit);
-void		 udt_transmit_accept(void *udt_transmit);
-void             udt_send(void *udt_transmit, struct video_frame *frame, struct audio_frame *audio);
+#include "abstract_transmit.h"
 
-#ifdef __cplusplus
-}
-#endif
+#include <udt.h>
+
+struct udt_transmit : public abstract_transmit {
+        udt_transmit(char *address, unsigned int port);
+        void accept();
+        ~udt_transmit();
+        bool send(struct video_frame *frame, struct audio_frame *audio);
+
+        private:
+        bool send_description(struct video_frame *frame, struct audio_frame *audio);
+
+        char * address;
+        int port;
+
+        UDTSOCKET socket;
+};
+
+#endif // _udt_transmit_h_
 

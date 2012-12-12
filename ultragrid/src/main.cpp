@@ -75,6 +75,7 @@
 #include "rtp/rtp_callback.h"
 #include "rtp/pbuf.h"
 #include "server/streaming_server.h"
+#include "abstract_transmit.h"
 #include "tcp_transmit.h"
 #include "tfrc.h"
 #include "tile.h"
@@ -116,11 +117,7 @@ struct state_uv {
         struct pdb *participants;
         struct tx *tx;
 #else
-        void  *transmit_state;
-        void * (*transmit_init)(char *address, unsigned int *port);
-        void (*transmit_accept)(void *state);
-        void (*transmit_done)(void *state);
-        void (*transmit_send)(void *state, struct video_frame *frame, struct audio_frame *);
+        abstract_transmit *transmit;
 #endif
         unsigned int port_number;
         unsigned int connections_count;
@@ -367,6 +364,10 @@ static void *sender_thread(void *arg)
 
         while(1) {
                 tx_frame = compress_frame_pop(uv->compression);
+                // poisoned pill
+                if(!tx_frame) {
+                        break;
+                }
                 int len = tx_frame->tiles[0].data_len;
                 unsigned char *enc_data = enc.encrypt((unsigned char *) tx_frame->tiles[0].data,
                                 &len);
@@ -381,7 +382,7 @@ static void *sender_thread(void *arg)
 
 #ifdef USE_CUSTOM_TRANSMIT
                 struct audio_frame *audio = audio_source_read(uv->audio_source, tx_frame->frames);
-                uv->transmit_send(uv->transmit_state, tx_frame, audio);
+                uv->transmit->send(tx_frame, audio);
 #else
                 tx_send(uv->tx, tx_frame,
                                 uv->network_devices[0]);
@@ -463,7 +464,7 @@ static void *grab_thread(void *arg)
         pthread_join(sender_thread_id, NULL);
 
 #ifdef USE_CUSTOM_TRANSMIT
-        uv->transmit_done(uv->transmit_state);
+        delete uv->transmit;
 #endif
 
         compress_done(uv->compression);
@@ -500,6 +501,7 @@ int main(int argc, char *argv[])
 
         struct state_uv *uv;
         int ch;
+        bool use_tcp = false;
 
         pthread_t grab_thread_id;
         unsigned vidcap_flags = 0;
@@ -535,12 +537,7 @@ int main(int argc, char *argv[])
         uv->compress_quality = 1.0;
         uv->postprocess = NULL;
         uv->requested_mtu = 0;
-#ifdef USE_CUSTOM_TRANSMIT
-        uv->transmit_init = udt_transmit_init;
-        uv->transmit_accept = udt_transmit_accept;
-        uv->transmit_done = udt_transmit_done;
-        uv->transmit_send = udt_send;
-#else
+#ifndef USE_CUSTOM_TRANSMIT
         uv->participants = NULL;
         uv->tx = NULL;
         uv->network_devices = NULL;
@@ -603,10 +600,7 @@ int main(int argc, char *argv[])
                         break;
 #ifdef USE_CUSTOM_TRANSMIT
                 case 'T':
-                        uv->transmit_init = tcp_transmit_init;
-                        uv->transmit_accept = tcp_transmit_accept;
-                        uv->transmit_done = tcp_transmit_done;
-                        uv->transmit_send = tcp_send;
+                        use_tcp = true;
                         break;
 #endif
                 case '?':
@@ -706,8 +700,12 @@ int main(int argc, char *argv[])
         }
 #else
         uv->connections_count = 1;
-        uv->transmit_state = uv->transmit_init(network_device, &uv->port_number);
-        if(!uv->transmit_state) {
+        if(use_tcp) {
+                uv->transmit = new tcp_transmit(network_device, &uv->port_number);
+        } else {
+                uv->transmit = new udt_transmit(network_device, uv->port_number);
+        }
+        if(!uv->transmit) {
                 exit_status = EXIT_FAILURE;
                 fprintf(stderr, "Unable to connect to peer.\n");
                 goto cleanup;
@@ -770,7 +768,7 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Sent port\n");
 #endif
 
-        uv->transmit_accept(uv->transmit_state);
+        uv->transmit->accept();
 
         uv->accepted = TRUE;
 

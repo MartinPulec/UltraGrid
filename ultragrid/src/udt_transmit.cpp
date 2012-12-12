@@ -49,13 +49,9 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#include "config_unix.h"
-#include "config_win32.h"
-#endif /* HAVE_CONFIG_H */
 
-#include <udt.h>
+#include "udt_transmit.h"
+
 #include <ccc.h>
 #include <stdexcept>
 #include <iostream>
@@ -86,209 +82,136 @@ class CUDPBlast: public CCC
                 }
 };
 
-struct udt_transmit {
-        udt_transmit(char *address, unsigned int port)
-        {
-                this->address = strdup(address);
-                this->port = port;
+udt_transmit::udt_transmit(char *address, unsigned int port)
+{
+        this->address = strdup(address);
+        this->port = port;
 
-                UDT::startup();
-                socket = UDT::socket(AF_INET, SOCK_STREAM, 0);
+        UDT::startup();
+        socket = UDT::socket(AF_INET, SOCK_STREAM, 0);
+}
+
+void udt_transmit::accept() {
+        struct addrinfo hints, *res;
+        int err;
+
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_DGRAM;
+        char port_str[6];
+        snprintf(port_str, 5, "%u", port);
+
+        err = getaddrinfo(address, port_str, &hints, &res);
+
+        if(err) {
+                throw std::runtime_error(std::string("getaddrinfo: ") + gai_strerror(err) + " (" + address + ")");
         }
 
-        void accept() {
-                struct addrinfo hints, *res;
-                int err;
+        std::string what;
 
-                memset(&hints, 0, sizeof(hints));
-                hints.ai_family = AF_INET;
-                hints.ai_socktype = SOCK_DGRAM;
-                char port_str[6];
-                snprintf(port_str, 5, "%u", port);
+        err = UDT::ERROR;
 
-                err = getaddrinfo(address, port_str, &hints, &res);
+        int timeout = 3;
+        //UDT::setsockopt(socket, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
+        //UDT::setsockopt(socket, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
 
-                if(err) {
-                        throw std::runtime_error(std::string("getaddrinfo: ") + gai_strerror(err) + " (" + address + ")");
-                }
+        CCCFactory<CUDPBlast> *factory = new CCCFactory<CUDPBlast>();
+        int ret = UDT::setsockopt(socket, /* unused */ 0, UDT_CC, (char *) factory, sizeof(CCCFactory<CUDPBlast>));
+        assert(ret == 0);
 
-                std::string what;
+        int buf = BUFFER_SIZE;
+        ret = UDT::setsockopt(socket, /* unused */ 0, UDT_SNDBUF, (const char *) &buf, sizeof(buf));
+        assert(ret == 0);
 
-                err = UDT::ERROR;
+        err = UDT::connect(socket, res->ai_addr, res->ai_addrlen);
 
-                int timeout = 3;
-                //UDT::setsockopt(socket, /* unused */ 0, UDT_SNDTIMEO, (const char *) &timeout, sizeof(int));
-                //UDT::setsockopt(socket, /* unused */ 0, UDT_RCVTIMEO, (const char *) &timeout, sizeof(int));
-                
-                CCCFactory<CUDPBlast> *factory = new CCCFactory<CUDPBlast>();
-                int ret = UDT::setsockopt(socket, /* unused */ 0, UDT_CC, (char *) factory, sizeof(CCCFactory<CUDPBlast>));
-                assert(ret == 0);
-                
-                int buf = BUFFER_SIZE;
-                ret = UDT::setsockopt(socket, /* unused */ 0, UDT_SNDBUF, (const char *) &buf, sizeof(buf));
-                assert(ret == 0);
-
-                err = UDT::connect(socket, res->ai_addr, res->ai_addrlen);
-
-                if (err == UDT::ERROR) {
-                        throw std::runtime_error(std::string("connect: ") + UDT::getlasterror().getErrorMessage());
-                }
-
-
-                freeaddrinfo(res);
+        if (err == UDT::ERROR) {
+                throw std::runtime_error(std::string("connect: ") + UDT::getlasterror().getErrorMessage());
         }
 
-        ~udt_transmit() {
-                UDT::close(socket);
-                UDT::cleanup();
 
+        freeaddrinfo(res);
+}
+
+udt_transmit::~udt_transmit() {
+        UDT::close(socket);
+        UDT::cleanup();
+
+}
+
+bool udt_transmit::send(struct video_frame *frame, struct audio_frame *audio)
+{
+        size_t total = 0;
+        if(!send_description(frame, audio)) {
+                return false;
         }
 
-        void send(struct video_frame *frame, struct audio_frame *audio)
-        {
-                size_t total = 0;
-                send_description(frame, audio);
-
-                CUDPBlast *ccc;
-                int optlen = sizeof(&ccc);
-                int ret = UDT::getsockopt(socket, /* unused */ 0, UDT_CC, (char *) &ccc, &optlen);
-                assert(ret == 0);
+        CUDPBlast *ccc;
+        int optlen = sizeof(&ccc);
+        int ret = UDT::getsockopt(socket, /* unused */ 0, UDT_CC, (char *) &ccc, &optlen);
+        if(ret == 0) {
                 ccc->setRate(RATE);
+        }
 
-                while(total < frame->tiles[0].data_len) {
-                        int res = UDT::send(socket, frame->tiles[0].data + total,
-                                        frame->tiles[0].data_len - total, 0);
+        while(total < frame->tiles[0].data_len) {
+                int res = UDT::send(socket, frame->tiles[0].data + total,
+                                frame->tiles[0].data_len - total, 0);
+                if(res == UDT::ERROR) {
+                        std::cerr << res << " " << UDT::getlasterror().getErrorMessage();
+                        return false;
+                }
+                total += res;
+        }
+#if 0
+        if(res != frame->tiles[0].data_len) {
+                std::cerr << "Sent only " << res << "B, " << frame->tiles[0].data_len << "B was scheduled!" << std::endl;
+        }
+#endif
+        if(audio) {
+                total = 0;
+                while(total < audio->data_len) {
+                        int res = UDT::send(socket, audio->data + total,
+                                        audio->data_len - total, 0);
                         if(res == UDT::ERROR) {
                                 std::cerr << res << " " << UDT::getlasterror().getErrorMessage();
-                                return;
+                                return false;
                         }
                         total += res;
                 }
 #if 0
-                if(res != frame->tiles[0].data_len) {
-                        std::cerr << "Sent only " << res << "B, " << frame->tiles[0].data_len << "B was scheduled!" << std::endl;
+                if(res != audio->data_len) {
+                        std::cerr << "Sent only " << res << "B, " << audio->data_len << "B was scheduled!" << std::endl;
                 }
 #endif
-                if(audio) {
-                        total = 0;
-                        while(total < audio->data_len) {
-                                int res = UDT::send(socket, audio->data + total,
-                                                audio->data_len - total, 0);
-                                if(res == UDT::ERROR) {
-                                        std::cerr << res << " " << UDT::getlasterror().getErrorMessage();
-                                }
-                                total += res;
-                        }
-#if 0
-                        if(res != audio->data_len) {
-                                std::cerr << "Sent only " << res << "B, " << audio->data_len << "B was scheduled!" << std::endl;
-                        }
-#endif
-                }
         }
-
-        void send_description(struct video_frame *frame, struct audio_frame *audio)
-        {
-                assert(frame->tile_count == 1);
-
-                struct tile *tile = vf_get_tile(frame, 0);
-                uint32_t payload_hdr[PCKT_HDR_BASE_LEN + 
-                        PCKT_EXT_INFO_LEN +
-                        PCKT_HDR_AUDIO_LEN];
-                uint32_t tmp;
-                unsigned int fps, fpsd, fd, fi;
-
-                payload_hdr[PCKT_LENGTH] = htonl(tile->data_len);
-                payload_hdr[PCKT_HRES_VRES] = htonl(tile->width << 16 | tile->height);
-                payload_hdr[PCKT_FOURCC] = htonl(get_fourcc(frame->color_spec));
-                tmp = frame->interlacing << 29;
-                fps = round(frame->fps);
-                fpsd = 1;
-                if(fabs(frame->fps - round(frame->fps) / 1.001) < 0.005)
-                        fd = 1;
-                else
-                        fd = 0;
-                fi = 0;
-
-                tmp |= fps << 19;
-                tmp |= fpsd << 15;
-                tmp |= fd << 14;
-                tmp |= fi << 13;
-                payload_hdr[PCKT_IL_FPS] = htonl(tmp);
-
-                int next_header = audio == NULL ? 0 : 1;
-                payload_hdr[PCKT_SEQ_NEXT_HDR] = htonl(frame->frames << 1 | next_header);
-
-                if(audio) {
-                        payload_hdr[PCKT_HDR_BASE_LEN] = htonl(PCKT_EXT_AUDIO_TYPE << 28 |
-                                        PCKT_HDR_AUDIO_LEN * sizeof(uint32_t) << 12 |
-                                        0); 
-
-                        uint32_t *audio_hdr = payload_hdr + PCKT_HDR_BASE_LEN + PCKT_EXT_INFO_LEN;
-                        audio_hdr[PCKT_EXT_AUDIO_LENGTH] = htonl(audio->data_len);
-                        audio_hdr[PCKT_EXT_AUDIO_QUANT_SAMPLE_RATE] = htonl((audio->bps * 8) << 26 |
-                                        audio->sample_rate);
-                        audio_hdr[PCKT_EXT_AUDIO_CHANNEL_COUNT] = htonl(audio->ch_count);
-                        audio_hdr[PCKT_EXT_AUDIO_TAG] = htonl(0x1); // PCM
-                }
-
-                size_t length = PCKT_HDR_BASE_LEN * sizeof(uint32_t);
-                if(audio) {
-                        length += (PCKT_EXT_INFO_LEN + PCKT_HDR_AUDIO_LEN) * sizeof(uint32_t);
-                }
-                size_t total = 0;
-                while(total < length) {
-                        int res = UDT::send(socket, (char *) &payload_hdr + total,
-                                        length - total, 0);
-                        if(res == UDT::ERROR) {
-                                std::cerr << res << " " << UDT::getlasterror().getErrorMessage();
-                                return;
-                        }
-                        total += res;
-                }
-        }
-
-        private:
-
-        char * address;
-        int port;
-
-        UDTSOCKET socket;
-};
-
-void *udt_transmit_init(char *address, unsigned int *port)
-{
-        udt_transmit *s = 0;
-
-        try {
-            s = new udt_transmit(address, *port);
-        } catch (std::exception &e) {
-                std::cerr << "UDT: unable to initalize transmit: " << e.what() << std::endl;
-        }
-
-        return s;
+        return true;
 }
 
-void udt_transmit_accept(void *state)
+bool udt_transmit::send_description(struct video_frame *frame, struct audio_frame *audio)
 {
-        udt_transmit *s = (udt_transmit *) state;
+        assert(frame->tile_count == 1);
 
-        try {
-            s->accept();
-        } catch (std::exception &e) {
-                std::cerr << "UDT: unable to accept: " << e.what() << std::endl;
+        uint32_t payload_hdr[PCKT_HDR_BASE_LEN + 
+                PCKT_EXT_INFO_LEN +
+                PCKT_HDR_AUDIO_LEN];
+
+        size_t length = sizeof(payload_hdr);
+
+        if(!format_description(frame, audio, payload_hdr, &length)) {
+                return false;
         }
-}
+        size_t total = 0;
 
-void udt_transmit_done(void *state)
-{
-    udt_transmit *s = (udt_transmit *) state;
-    delete s;
-}
+        while(total < length) {
+                int res = UDT::send(socket, (char *) &payload_hdr + total,
+                                length - total, 0);
+                if(res == UDT::ERROR) {
+                        std::cerr << res << " " << UDT::getlasterror().getErrorMessage();
+                        return false;
+                }
+                total += res;
+        }
 
-void udt_send(void *state, struct video_frame *frame, struct audio_frame *audio)
-{
-    udt_transmit *s = (udt_transmit *) state;
-    s->send(frame, audio);
+        return true;
 }
 
