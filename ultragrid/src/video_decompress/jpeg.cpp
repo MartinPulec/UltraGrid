@@ -87,7 +87,7 @@ struct state_decompress_jpeg {
         pthread_cond_t boss_out_cv;
         pthread_cond_t wait_free_cv;
 
-        int counter
+        int counter;
 
         pthread_t thread_id;
 
