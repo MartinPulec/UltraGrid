@@ -996,35 +996,85 @@ AC_SUBST(DXT_GLSL_CFLAGS)
 
 # -------------------------------------------------------------------------------------------------
 # CUDA staff
-CUDA_PATH=
+#
+# CUDA lookup order:
+# 1) --with-cuda
+# 2) CUDA_DIRECTORY env variable
+# 3) default system path (PATH, LD_LIBRARY_PATH, C_INCLUDE_PATH/CPATH)
+# 4) default CUDA path
+
 CUDA_INC=
 CUDA_LIB=
 NVCC=
 NVCCFLAGS=
 CUDA_LIB_PATH=
+FOUND_CUDA=no
+HAVE_CUDA=no
+CUDA_PATH=$CUDA_DIRECTORY
 
 AC_ARG_WITH(cuda,
             [  --with-cuda=DIR         specify location of CUDA Toolkit],
             [CUDA_PATH=$withval
-            ],
-            [CUDA_PATH=/usr/local/cuda/])
-
-AC_CHECK_PROG([NVCC], [nvcc], [$CUDA_PATH/bin/nvcc],
-                  [],
-     [$CUDA_PATH/bin])
+            ])
 
 AC_CHECK_SIZEOF([int *])
 
-if test -n "$NVCC"
+SAVED_LIBS=$LIBS
+LIBS="$LIBS -lcudart"
+if test -z "$CUDA_PATH"
 then
-	AC_MSG_CHECKING([CUDA Toolkit version - major])
-        nvcc_major=`$NVCC --version |grep release|sed  's/^.*release \(@<:@0-9@:>@@<:@0-9@:>@*\).*$/\1/'`
-	AC_MSG_RESULT($nvcc_major)
-	AC_MSG_CHECKING([CUDA Toolkit version - minor])
-        nvcc_minor=`$NVCC --version |grep release|sed  's/^.*release @<:@0-9@:>@@<:@0-9@:>@*\.\(@<:@0-9@:>@@<:@0-9@:>@*\).*$/\1/'`
-	AC_MSG_RESULT($nvcc_minor)
+        AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <cuda_runtime_api.h>
+                           ]],
+                           [[int devices_count;
+                            cudaGetDeviceCount(&devices_count);
+                            ]])],FOUND_CUDA=yes,FOUND_CUDA=no)
+        AC_CHECK_PROG([NVCC], [nvcc], [nvcc],
+                      [])
+fi
 
-        CUDA_INC=-I$CUDA_PATH/include
+if test $FOUND_CUDA = no -o -z "$NVCC"
+then
+        FOUND_CUDA=no
+        NVCC=
+        if test -z "$CUDA_PATH"; then
+                CUDA_PATH=/usr/local/cuda
+        fi
+        SAVED_CFLAGS=$CFLAGS
+        CFLAGS="$CFLAGS -I$CUDA_PATH/include/"
+        if test $ac_cv_sizeof_int_p -eq 8 -a $system = Linux
+        then
+                LIBS="$LIBS -L$CUDA_PATH/lib64"
+        else
+                LIBS="$LIBS -L$CUDA_PATH/lib"
+        fi
+        AC_LINK_IFELSE([AC_LANG_PROGRAM([[#include <cuda_runtime_api.h>
+                           ]],
+                           [[int devices_count;
+                            cudaGetDeviceCount(&devices_count);
+                            ]])],FOUND_CUDA=yes,FOUND_CUDA=no)
+        CFLAGS=$SAVED_CFLAGS
+        AC_CHECK_PROG([NVCC], [nvcc], [$CUDA_PATH/bin/nvcc],
+                      [],
+                      [$CUDA_PATH/bin])
+fi
+
+LIBS=$SAVED_LIBS
+
+if test -n "$NVCC" -a $FOUND_CUDA = yes
+then
+        HAVE_CUDA=yes
+        AC_MSG_CHECKING([CUDA Toolkit version - major])
+        nvcc_major=`$NVCC --version |grep release|sed  's/^.*release \(@<:@0-9@:>@@<:@0-9@:>@*\).*$/\1/'`
+        AC_MSG_RESULT($nvcc_major)
+        AC_MSG_CHECKING([CUDA Toolkit version - minor])
+        nvcc_minor=`$NVCC --version |grep release|sed  's/^.*release @<:@0-9@:>@@<:@0-9@:>@*\.\(@<:@0-9@:>@@<:@0-9@:>@*\).*$/\1/'`
+        AC_MSG_RESULT($nvcc_minor)
+
+        if test -n "$CUDA_PATH"; then
+                CUDA_INC=-I$CUDA_PATH/include
+        else
+                CUDA_INC=
+        fi
         if test $ac_cv_sizeof_int_p -eq 8 -a $system = Linux
         then
                 CUDA_LIB_PATH="$CUDA_PATH/lib64"
@@ -1035,7 +1085,9 @@ then
         CUDA_LIB="-L$CUDA_LIB_PATH -lcudart"
 fi
 
+AC_SUBST(HAVE_CUDA)
 AC_SUBST(NVCC)
+AC_SUBST(FOUND_CUDA)
 AC_SUBST(NVCCFLAGS)
 AC_SUBST(CUDA_PATH)
 AC_SUBST(CUDA_LIB)
