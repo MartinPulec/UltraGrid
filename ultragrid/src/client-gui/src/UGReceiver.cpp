@@ -510,9 +510,13 @@ static void *receiver_thread(void *arg)
 #endif
                     len = video_len;
 
+#ifdef AES
                     unsigned char *ciphertext = (unsigned char *) malloc(video_len);
 
                     res = uv->receive(uv->receive_state, (char *) ciphertext, &len);
+#else
+                    res = uv->receive(uv->receive_state, (char *) receivedFrame->video.get(), &len);
+#endif
                     if(!res) {
                         std::cerr << "(res: " << res << ")" << std::endl;
                         error = string("Incomplete video data");
@@ -524,12 +528,13 @@ static void *receiver_thread(void *arg)
                         goto error;
                     }
 
+#ifdef AES
                     int aes_len = video_len;
                     uv->dec.decrypt(ciphertext, &aes_len, (unsigned char *) receivedFrame->video.get());
                     receivedFrame->video_len = aes_len;
 
                     free(ciphertext);
-
+#endif
 
                     len = audio_len;
 

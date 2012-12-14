@@ -368,6 +368,7 @@ static void *sender_thread(void *arg)
                 if(!tx_frame) {
                         break;
                 }
+#ifdef AES
                 int len = tx_frame->tiles[0].data_len;
                 unsigned char *enc_data = enc.encrypt((unsigned char *) tx_frame->tiles[0].data,
                                 &len);
@@ -375,6 +376,7 @@ static void *sender_thread(void *arg)
                 tx_frame->deleter = default_free;
                 tx_frame->tiles[0].data = (char *) enc_data;
                 tx_frame->tiles[0].data_len = len;
+#endif
 
                 if(!tx_frame) {
                         break;
