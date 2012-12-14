@@ -280,7 +280,7 @@ CLIENT_OBJ = src/client-gui/client_guiApp.o \
 		src/audio/playback/sdi.o \
 		src/video_decompress.o \
 		src/video_decompress/null.o \
-		src/video_decompress/j2k.o \
+		@J2K_DECOMPRESS_OBJ@ \
 		src/aes_decrypt.o \
 		src/tcp_receive.o \
 		src/udt_receive.o \
@@ -299,7 +299,7 @@ SERVER_OBJ = src/server/sp_server.o \
 		src/audio/capture/sdi.o \
 		src/video_compress.o \
 		src/video_compress/none.o \
-		src/video_compress/j2k.o \
+		@J2K_COMPRESS_OBJ@ \
 		src/abstract_transmit.o \
 		src/aes_encrypt.o \
 		src/tcp_transmit.o \
