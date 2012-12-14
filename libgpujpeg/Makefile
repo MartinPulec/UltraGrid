@@ -35,7 +35,7 @@ HUFFMAN_CODER_TABLES_IN_CONSTANT ?= 1
 # but for non-fermi GPUs it is slower
 DCT_FROM_NPP ?= 1
 # Flag if use OpenGL
-USE_OPENGL ?= 1
+USE_OPENGL ?= 0
 # Debug
 DEBUG ?= 0
 # CUDA install path
@@ -70,41 +70,26 @@ CC := gcc -fPIC
 LINK := g++ -fPIC
 NVCC := $(CUDA_INSTALL_PATH)/bin/nvcc -Xcompiler -fPIC
 
-# Common flags
-COMMONFLAGS += -I. -I$(CUDA_INSTALL_PATH)/include -O2 -g
-
-# Ultragrid changes
-ARCH := $(shell uname -s)
-ifeq ($(ARCH),Darwin)
-    COMMONFLAGS += -m32 -DHAVE_MACOSX
+# Debug
+ifeq ($(DEBUG),1)
+    COMMONFLAGS += -g -D_DEBUG -O0
+    NVCCFLAGS += -G
+else
+    COMMONFLAGS += -O2
 endif
 
+# Common flags
+COMMONFLAGS += -I. -I.. -I$(CUDA_INSTALL_PATH)/include
 # C flags
 CFLAGS += $(COMMONFLAGS) -std=c99
 # CUDA flags
 NVCCFLAGS += $(COMMONFLAGS) \
-	-gencode arch=compute_20,code=sm_20 \
-	-gencode arch=compute_13,code=sm_13 \
+	--ptxas-options="-v" -gencode arch=compute_20,code=sm_20 \
+	-gencode arch=compute_11,code=sm_11 \
 	-gencode arch=compute_10,code=sm_10 \
-	-gencode arch=compute_10,code=sm_10 \
-
-NVCC_VERSION_MAJOR := $(shell $(NVCC) --version |grep release|sed  's/^.*release \([0-9][0-9]*\).*$$/\1/')
-NVCC_VERSION_MINOR := $(shell $(NVCC) --version |grep release|sed  's/^.*release [0-9][0-9]*\.\([0-9][0-9]*\).*$$/\1/')
-NVCC_VERSION_GE_4_2 := $(shell test $(NVCC_VERSION_MAJOR) -ge 4 -a $(NVCC_VERSION_MINOR) -ge 2 && echo yes)
-
-ifeq ($(NVCC_VERSION_GE_4_2),yes)
-NVCCFLAGS += \
-	-gencode arch=compute_30,code=sm_30 
-endif
-
 
 # Linker flags
 LDFLAGS += -shared
-
-# Debug
-ifeq ($(DEBUG),1)
-    COMMONFLAGS += -g -D_DEBUG
-endif    
 
 # Other Flags
 ifeq ($(HUFFMAN_CODER_TABLES_IN_CONSTANT),1)
@@ -135,6 +120,10 @@ build: $(TARGET)
 # Clean
 clean:
 	rm -f *.o $(TARGET)
+	rm -f *.i *.ii 
+	rm -f *.cudafe1.c *.cudafe1.cpp *.cudafe1.gpu *.cudafe1.stub.c
+	rm -f *.cudafe2.c *.cudafe2.gpu *.cudafe2.stub.c
+	rm -f *.fatbin *.fatbin.c *.ptx *.hash *.cubin *.cu.cpp
 
 # Lists of object files
 COBJS=$(CFILES:.c=.c.o)

@@ -35,13 +35,13 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif 
+#endif
 
 /** Contants */
 #define GPUJPEG_BLOCK_SIZE                      8
 #define GPUJPEG_BLOCK_SQUARED_SIZE              64
 #define GPUJPEG_MAX_COMPONENT_COUNT             3
-#define GPUJPEG_MAX_BLOCK_COMPRESSED_SIZE       (GPUJPEG_BLOCK_SIZE * GPUJPEG_BLOCK_SIZE * 2)
+#define GPUJPEG_MAX_BLOCK_COMPRESSED_SIZE       (GPUJPEG_BLOCK_SIZE * GPUJPEG_BLOCK_SIZE * 4)
 
 /** Maximum JPEG header size (MUST be divisible by 4!!!) */
 #define GPUJPEG_MAX_HEADER_SIZE                 (65536 - 100)
@@ -205,7 +205,7 @@ enum gpujpeg_marker_code {
  * @param code
  * @return marker name
  */
-static inline const char* 
+static const char* 
 gpujpeg_marker_name(enum gpujpeg_marker_code code)
 {
     switch (code) {

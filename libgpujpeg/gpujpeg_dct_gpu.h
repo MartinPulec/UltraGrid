@@ -30,8 +30,8 @@
 #ifndef GPUJPEG_DCT_GPU_H
 #define GPUJPEG_DCT_GPU_H
 
-#include "gpujpeg_encoder.h"
-#include "gpujpeg_decoder.h"
+#include <libgpujpeg/gpujpeg_encoder.h>
+#include <libgpujpeg/gpujpeg_decoder.h>
 
 #ifdef __cplusplus
 extern "C" {

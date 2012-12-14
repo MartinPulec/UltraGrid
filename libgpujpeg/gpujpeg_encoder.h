@@ -30,9 +30,9 @@
 #ifndef GPUJPEG_ENCODER_H
 #define GPUJPEG_ENCODER_H
 
-#include "gpujpeg_common.h"
-#include "gpujpeg_table.h"
-#include "gpujpeg_writer.h"
+#include <libgpujpeg/gpujpeg_common.h>
+#include <libgpujpeg/gpujpeg_table.h>
+#include <libgpujpeg/gpujpeg_writer.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -99,9 +99,7 @@ struct gpujpeg_encoder
     
     // Huffman coder tables
     struct gpujpeg_table_huffman_encoder table_huffman[GPUJPEG_COMPONENT_TYPE_COUNT][GPUJPEG_HUFFMAN_TYPE_COUNT];
-    // Huffman coder tables in device memory
-    struct gpujpeg_table_huffman_encoder* d_table_huffman[GPUJPEG_COMPONENT_TYPE_COUNT][GPUJPEG_HUFFMAN_TYPE_COUNT];
-
+    
     // Timers
     GPUJPEG_CUSTOM_TIMER_DECLARE(def)
     GPUJPEG_CUSTOM_TIMER_DECLARE(in_gpu)

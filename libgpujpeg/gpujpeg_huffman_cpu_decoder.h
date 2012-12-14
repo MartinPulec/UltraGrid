@@ -30,11 +30,7 @@
 #ifndef GPUJPEG_HUFFMAN_CPU_DECODER_H
 #define GPUJPEG_HUFFMAN_CPU_DECODER_H
 
-#include "gpujpeg_decoder.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif 
+#include <libgpujpeg/gpujpeg_decoder.h>
 
 /**
  * Perform huffman decoding
@@ -43,9 +39,5 @@ extern "C" {
  */
 int
 gpujpeg_huffman_cpu_decoder_decode(struct gpujpeg_decoder* decoder);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif // GPUJPEG_HUFFMAN_CPU_DECODER_H

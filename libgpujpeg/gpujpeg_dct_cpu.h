@@ -30,12 +30,8 @@
 #ifndef GPUJPEG_DCT_CPU_H
 #define GPUJPEG_DCT_CPU_H
 
-#include "gpujpeg_encoder.h"
-#include "gpujpeg_decoder.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif 
+#include <libgpujpeg/gpujpeg_encoder.h>
+#include <libgpujpeg/gpujpeg_decoder.h>
 
 /**
  * Peform inverse DCT on CPU
@@ -44,9 +40,5 @@ extern "C" {
  */
 void
 gpujpeg_idct_cpu(struct gpujpeg_decoder* decoder);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif // GPUJPEG_DCT_CPU_H

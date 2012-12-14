@@ -37,11 +37,11 @@
 #include <strings.h>
 #include <assert.h>
 #include <cuda_runtime.h>
-    
+
 #ifdef __cplusplus
 extern "C" {
-#endif 
-
+#endif
+    
 // CUDA check error
 #define gpujpeg_cuda_check_error(msg) \
     { \

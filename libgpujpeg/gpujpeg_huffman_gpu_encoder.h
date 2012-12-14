@@ -30,7 +30,7 @@
 #ifndef GPUJPEG_HUFFMAN_GPU_ENCODER_H
 #define GPUJPEG_HUFFMAN_GPU_ENCODER_H
 
-#include "gpujpeg_encoder.h"
+#include <libgpujpeg/gpujpeg_encoder.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,19 +39,21 @@ extern "C" {
 /**
  * Init huffman encoder
  * 
+ * @param table_huffman  pointer to initialized huffman tables in CPU memory
  * @return 0 if succeeds, otherwise nonzero
  */
 int
-gpujpeg_huffman_gpu_encoder_init();
+gpujpeg_huffman_gpu_encoder_init(const struct gpujpeg_encoder * encoder);
 
 /**
  * Perform huffman encoding
  * 
  * @param encoder  Encoder structure
+ * @param output_byte_count  pointer to place in main system memory, where size of output buffer part, which contains all output data, should be saved
  * @return 0 if succeeds, otherwise nonzero
  */
 int
-gpujpeg_huffman_gpu_encoder_encode(struct gpujpeg_encoder* encoder);
+gpujpeg_huffman_gpu_encoder_encode(struct gpujpeg_encoder* encoder, unsigned int * output_byte_count);
 
 #ifdef __cplusplus
 }

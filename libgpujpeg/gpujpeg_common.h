@@ -31,7 +31,7 @@
 #define GPUJPEG_COMMON_H
 
 #include <stdint.h>
-#include "gpujpeg_type.h"
+#include <libgpujpeg/gpujpeg_type.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -195,7 +195,9 @@ enum gpujpeg_image_file_format {
     // RGB file format, simple data format without header [R G B] [R G B] ...
     GPUJPEG_IMAGE_FILE_RGB = 1 | 4,
     // YUV file format, simple data format without header [Y U V] [Y U V] ...
-    GPUJPEG_IMAGE_FILE_YUV = 1 | 8
+    GPUJPEG_IMAGE_FILE_YUV = 1 | 8,
+    // Gray file format
+    GPUJPEG_IMAGE_FILE_GRAY = 1 | 16
 };
 
 /**
@@ -223,8 +225,15 @@ struct gpujpeg_segment
     
     // Data compressed index (output/input data from/to segment for encoder/decoder)
     int data_compressed_index;
+    // Date temp index (temporary data of segment in CC 2.0 encoder)
+    int data_temp_index;
     // Data compressed size (output/input data from/to segment for encoder/decoder)
     int data_compressed_size;
+    
+    // Offset of first block index
+    int block_index_list_begin;
+    // Number of blocks of the segment
+    int block_count;
 };
 
 /**
@@ -278,6 +287,8 @@ struct gpujpeg_component
     int16_t* data_quantized;
     // DCT and quantizer data in device memory (output/input for encoder/decoder)
     int16_t* d_data_quantized;
+    // Index of DCT and quantizer data in device and host buffers
+    unsigned int data_quantized_index;
 };
 
 /**
@@ -346,6 +357,17 @@ struct gpujpeg_coder
     // Compressed allocated data size
     int data_compressed_size;
     
+    // Number od 8x8 blocks in all components
+    int block_count;
+    
+    // List of block indices in host memory (lower 7 bits are index of component, 
+    // 8th bit is 0 for luminance block or 1 for chroma block and bits from 9 
+    // above are base index of the block in quantized buffer data)
+    uint64_t* block_list;
+    // List of block indices in device memory (same format as host-memory block list)
+    uint64_t* d_block_list;
+    
+    
     // Raw image data in host memory (loaded from file for encoder, saved to file for decoder)
     uint8_t* data_raw;
     // Raw image data in device memory (loaded from file for encoder, saved to file for decoder)
@@ -363,6 +385,12 @@ struct gpujpeg_coder
     uint8_t* data_compressed;
     // Huffman coder data in device memory (output/input for encoder/decoder)
     uint8_t* d_data_compressed;
+    // Huffman coder temporary data (in device memory only)
+    uint8_t* d_temp_huffman;
+    
+    // CUDA Compute capability (major and minor version)
+    int cuda_cc_major;
+    int cuda_cc_minor;
 
     // Operation durations
     float duration_memory_to;
