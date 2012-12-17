@@ -119,7 +119,6 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     wxMenu* Menu1;
     wxMenu* Menu3;
     wxMenuItem* MenuItem3;
-    wxFlexGridSizer* FlexGridSizer3;
     wxMenuItem* MenuItem5;
     wxMenuBar* MenuBar1;
     wxMenu* Menu2;
@@ -255,9 +254,6 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
         (wxObjectEventFunction)&J2KBitrate::FPSChanged, 0, J2KBitrateVal);
     J2KBitrateVal->Update();
 
-    FlexGridSizer1->Hide(FlexGridSizer3);
-    FlexGridSizer1->Layout();
-
     gl->Connect(wxEVT_PAINT,(wxObjectEventFunction)&GLView::OnPaint,0,gl);
     /*int GLCanvasAttributes_1[] = {
     	WX_GL_RGBA,
@@ -293,6 +289,8 @@ client_guiFrame::client_guiFrame(wxWindow* parent,wxWindowID id) :
     player.Init(gl, this, &settings);
 
     SpeedStr->SetLabel(Utils::FromCDouble(player.GetSpeed(), 2));
+
+    Update();
 }
 
 client_guiFrame::~client_guiFrame()
@@ -338,6 +336,8 @@ void client_guiFrame::OnCompressSetting(wxCommandEvent& event)
     } else {
         //else: dialog was cancelled or some another button pressed
     }
+
+    Update();
 }
 
 void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
@@ -918,4 +918,15 @@ void client_guiFrame::OnJ2KQualitySliderCmdScroll(wxScrollEvent& event)
 {
     player.QualityChanged(event);
     J2KBitrateVal->QualityChanged(event);
+}
+
+void client_guiFrame::Update()
+{
+    if(settings.GetValue("compression", std::string("none")) != string("J2K")) {
+        FlexGridSizer1->Hide(FlexGridSizer3);
+        FlexGridSizer1->Layout();
+    } else {
+        FlexGridSizer1->Show(FlexGridSizer3);
+        FlexGridSizer1->Layout();
+    }
 }

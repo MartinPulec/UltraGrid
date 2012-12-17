@@ -170,7 +170,7 @@
 				<option>1</option>
 			</object>
 			<object class="sizeritem">
-				<object class="wxFlexGridSizer" variable="FlexGridSizer3" member="no">
+				<object class="wxFlexGridSizer" variable="FlexGridSizer3" member="yes">
 					<cols>5</cols>
 					<rows>1</rows>
 					<growablecols>4</growablecols>

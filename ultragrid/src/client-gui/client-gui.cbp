@@ -93,7 +93,12 @@
 		<Unit filename="src/VideoBufferOnFlyManager.cpp" />
 		<Unit filename="src/VideoEntry.cpp" />
 		<Unit filename="src/sp_client.cpp" />
+		<Unit filename="wxsmith/About.wxs" />
+		<Unit filename="wxsmith/CompressionSetting.wxs" />
+		<Unit filename="wxsmith/KeyBindingsHelp.wxs" />
+		<Unit filename="wxsmith/OtherSettingsDialog.wxs" />
 		<Unit filename="wxsmith/ServerSelectionDialog.wxs" />
+		<Unit filename="wxsmith/VideoSelection.wxs" />
 		<Unit filename="wxsmith/client_guiframe.wxs" />
 		<Unit filename="../include/ConnectionClosedException.h" />
 		<Unit filename="../include/Player.h">

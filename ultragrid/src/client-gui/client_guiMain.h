@@ -113,6 +113,8 @@ class client_guiFrame: public wxFrame
 
         wxString FromCDouble(double value, int precision);
 
+        void Update();
+
         //(*Identifiers(client_guiFrame)
         static const long ID_GLCANVAS1;
         static const long ID_BUTTON2;
@@ -158,6 +160,7 @@ class client_guiFrame: public wxFrame
         wxStaticText* SpeedStr;
         wxButton* Forward;
         wxChoice* Downsample;
+        wxFlexGridSizer* FlexGridSizer3;
         GLView* gl;
         wxStaticText* J2KQualityLabel;
         ProgressSlider* Slider1;
