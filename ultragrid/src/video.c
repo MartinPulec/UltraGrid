@@ -50,7 +50,6 @@
 #include "config_win32.h"
 #include "debug.h"
 
-#include <cuda_runtime.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -126,10 +125,11 @@ struct video_frame * vf_alloc_desc_data(struct video_desc desc)
 
 struct video_frame * vf_alloc_desc_data_cuda(struct video_desc desc)
 {
+#ifdef CUDA_RECYCLE_BUFFERS
         struct video_frame *buf;
 
         buf = vf_alloc_desc(desc);
-        buf->deleter = cuda_free;
+        buf->deleter = cuda_pool_dispose;
 
         if(buf) {
                 for(unsigned int i = 0; i < desc.tile_count; ++i) {
@@ -137,11 +137,14 @@ struct video_frame * vf_alloc_desc_data_cuda(struct video_desc desc)
                                         desc.color_spec);
                         buf->tiles[i].data_len = buf->tiles[i].linesize *
                                 desc.height;
-                        buf->tiles[i].data = (char *) cuda_alloc(buf->tiles[i].data_len);
+                        buf->tiles[i].data = (char *) cuda_pool_alloc(buf->tiles[i].data_len);
                 }
         }
 
         return buf;
+#else
+        return vf_alloc_desc_data(desc);
+#endif // CUDA_RECYCLE_BUFFERS
 }
 
 void vf_free(struct video_frame *buf)

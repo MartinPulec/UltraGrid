@@ -6,8 +6,8 @@ extern "C" {
 void cuda_memory_pool_init();
 void cuda_memory_pool_destroy();
 
-void * cuda_alloc(size_t size);
-void cuda_free(void *ptr, size_t size);
+void * cuda_pool_alloc(size_t size);
+void cuda_pool_dispose(void *ptr, size_t size);
 
 #ifdef __cplusplus
 }

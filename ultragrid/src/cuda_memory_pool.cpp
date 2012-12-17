@@ -63,12 +63,12 @@ class cuda_memory_pool {
 
 static struct cuda_memory_pool pool;
 
-void * cuda_alloc(size_t size)
+void * cuda_pool_alloc(size_t size)
 {
         return pool.alloc(size);
 }
 
-void cuda_free(void *ptr, size_t size)
+void cuda_pool_dispose(void *ptr, size_t size)
 {
         pool.free(ptr, size);
 }

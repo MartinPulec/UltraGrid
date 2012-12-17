@@ -7,6 +7,7 @@
 #include "cuda_memory_pool.h"
 #include "video.h"
 
+#include <stdexcept>
 
 struct CharPtrDeleter
 {
@@ -24,7 +25,7 @@ struct CudaDeleter
 
     void operator()(char *ptr) const
     {
-        cuda_free(ptr, size);
+        cuda_pool_dispose(ptr, size);
     }
 
     size_t size;
@@ -33,9 +34,18 @@ struct CudaDeleter
 struct Frame {
     Frame(size_t maxAudioLen_, size_t maxVideoLen_) :
             audio(std::tr1::shared_ptr<char> (new char[maxAudioLen_], CharPtrDeleter())),
-            video(std::tr1::shared_ptr<char> ((char *) cuda_alloc(maxVideoLen_), CudaDeleter(maxVideoLen_))),
-            max_video_len(maxVideoLen_), max_audio_len(maxAudioLen_) {}
-
+#ifdef CUDA_RECYCLE_BUFFERS
+            video(std::tr1::shared_ptr<char> ((char *) cuda_pool_alloc(maxVideoLen_), CudaDeleter(maxVideoLen_))),
+#else
+            video(std::tr1::shared_ptr<char> (new char[maxVideoLen_], CharPtrDeleter())),
+#endif // CUDA_RECYCLE_BUFFERS
+            max_video_len(maxVideoLen_), max_audio_len(maxAudioLen_)
+    {
+        if((maxAudioLen_ && !audio) ||
+           (maxVideoLen_ && !video)) {
+               throw std::runtime_error("Unable to allocate memory");
+           }
+    }
 
     std::tr1::shared_ptr<char> video;
     std::tr1::shared_ptr<char> audio;

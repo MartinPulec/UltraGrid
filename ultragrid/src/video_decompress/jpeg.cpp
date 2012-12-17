@@ -155,9 +155,15 @@ static void *worker(void *args) {
 
                 size_t new_length = vc_get_linesize(frame->video_desc.width, s->out_codec) *
                         frame->video_desc.height;
+#ifdef CUDA_RECYCLE_BUFFERS
                 shared_ptr<char> out_data(std::tr1::shared_ptr<char> (
-                                        (char *) cuda_alloc(new_length),
+                                        (char *) cuda_pool_alloc(new_length),
                                         CudaDeleter(new_length)));
+#else
+                shared_ptr<char> out_data(std::tr1::shared_ptr<char> (
+                                        new char[new_length],
+                                        CharPtrDeleter()));
+#endif
 
                 ///out_frame = jpeg_compress(s, frame);
                 jpeg_decompress((void *) s, (unsigned char *) out_data.get(),

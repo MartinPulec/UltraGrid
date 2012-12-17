@@ -139,10 +139,16 @@ void j2k_push(void *state, std::tr1::shared_ptr<Frame> frame)
 
         size_t new_length = vc_get_linesize(frame->video_desc.width, s->out_codec) *
                 frame->video_desc.height;
-        cerr << "NEW lenght " << new_length << endl;
+#ifdef CUDA_RECYCLE_BUFFERS
         shared_ptr<char> decompressed(std::tr1::shared_ptr<char> (
-                                (char *) cuda_alloc(new_length),
+                                (char *) cuda_pool_alloc(new_length),
                                 CudaDeleter(new_length)));
+#else
+        shared_ptr<char> decompressed(std::tr1::shared_ptr<char> (
+                                new char[new_length],
+                                CharPtrDeleter()));
+#endif // CUDA_RECYCLE_BUFFERS
+
 
         struct j2k_decompress_data *new_item;
         new_item = new j2k_decompress_data(frame, decompressed);
