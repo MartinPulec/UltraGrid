@@ -87,13 +87,13 @@ void OtherSettingsDialog::OnHwDeviceSelect(wxCommandEvent& event)
     struct video_desc * modes = dynamic_cast<ClientDataHWDisplay *>(HwDevice->GetClientObject(HwDevice->GetSelection()))->modes;
     ssize_t count = dynamic_cast<ClientDataHWDisplay *>(HwDevice->GetClientObject(HwDevice->GetSelection()))->modes_count;
 
-    HwFormat->Append(_T("auto"));
+    HwFormat->Append(_T("auto"), (ClientDataWeakGenericPtr *) NULL);
 
     for(int i = 0; i < count; ++i) {
         wxString item;
         wxString fieldDominanceFlag = wxString::FromUTF8(get_interlacing_flag(modes[i].interlacing));
 
-        item << modes[i].width << _T("x") << modes[i].height << fieldDominanceFlag << _T("@") << modes[i].fps;
+        item << modes[i].width << _T("x") << modes[i].height << _T("@") << modes[i].fps << fieldDominanceFlag;
         HwFormat->Append(item, new ClientDataWeakGenericPtr((void *) &modes[i]));
     }
 

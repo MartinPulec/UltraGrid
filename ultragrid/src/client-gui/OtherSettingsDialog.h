@@ -48,6 +48,8 @@ class OtherSettingsDialog: public wxDialog
 		void OnHwDeviceSelect(wxCommandEvent& event);
 		//*)
 
+		friend class client_guiFrame;
+
 		DECLARE_EVENT_TABLE()
 };
 

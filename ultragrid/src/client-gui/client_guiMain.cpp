@@ -372,6 +372,21 @@ void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
         }
     }
 
+    // select video mode
+    wxCommandEvent unused;
+    dlg.OnHwDeviceSelect(unused);
+    string modeStr = settings.GetValue("hw_display_prefs", "auto");
+    for(int i = 0; i < dlg.HwFormat->GetCount(); ++i) {
+        ClientDataWeakGenericPtr *data =
+            dynamic_cast<ClientDataWeakGenericPtr *>(dlg.HwFormat->GetClientObject(i));
+        if(data) {
+            struct video_desc *mode =  (struct video_desc *) data->get();
+            if(modeStr == Utils::VideoDescSerialize(mode)) {
+                dlg.HwFormat->Select(i);
+            }
+        }
+    }
+
     deviceIndex = 0u;
     for(int i = 0; i < audio_playback_get_device_count(); ++i) {
         audio_playback_type *it = audio_playback_get_device_details(i);;
@@ -394,7 +409,7 @@ void client_guiFrame::OnOtherSettings(wxCommandEvent& event)
         settings.SetValue("hw_display", dynamic_cast<ClientDataHWDisplay *>(dlg.HwDevice->GetClientObject(dlg.HwDevice->GetSelection()))->identifier);
         {
             string modeStr;
-            if(!dlg.HwFormat->HasClientObjectData()) {
+            if(!dlg.HwFormat->GetClientObject(dlg.HwDevice->GetSelection())) {
                 modeStr = "auto";
             } else {
                 struct video_desc *mode = (struct video_desc *)
