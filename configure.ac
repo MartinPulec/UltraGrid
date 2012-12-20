@@ -1898,11 +1898,7 @@ LIB_MODULES="$LIB_MODULES $V4L2_LIBS"
 # -------------------------------------------------------------------------------------------------
 
 # the shared behaviour is faulty, but it saves resources when restarting sender (different SSRC).
-# In case of shortage UltraGrid fails, because of that, shared is default
-shared_decoder=yes
-AC_ARG_ENABLE(shared-decoder,
-              AS_HELP_STRING([--enable-shared-decoder], [use distinct decoder state for each participant (default is disable)]),
-	[dvs_req=$enableval])
+shared_decoder=no
 if test $shared_decoder = yes
 then
         AC_DEFINE([SHARED_DECODER], [1], [use shared decoder for all participants])
