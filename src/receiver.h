@@ -1,5 +1,5 @@
 /*
- * FILE:    host.h
+ * FILE:    receiver.h
  * AUTHORS: Martin Benes     <martinbenesh@gmail.com>
  *          Lukas Hejtmanek  <xhejtman@ics.muni.cz>
  *          Petr Holub       <hopet@ics.muni.cz>
@@ -44,41 +44,27 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#ifndef __host_h
-#define __host_h
+#ifndef __receiver_h
+#define __receiver_h
 
-/* TODO: remove these variables (should be safe) */
-extern unsigned int hd_size_x;
-extern unsigned int hd_size_y;
-extern unsigned int hd_color_spc;
-extern unsigned int hd_color_bpp;
+#ifdef HAVE_MACOSX
+#define INITIAL_VIDEO_RECV_BUFFER_SIZE  5944320
+#else
+#define INITIAL_VIDEO_RECV_BUFFER_SIZE  ((4*1920*1080)*110/100)
+#endif
 
-extern unsigned int bitdepth;
+struct state_receiver {
+        char *decoder_mode;
+        char *postprocess;
+        struct display *display_device;
+        struct rtp **network_devices;
+        pthread_mutex_t *master_lock;
+        unsigned int connections_count;
+        struct pdb *participants;
+};
 
-extern unsigned int progressive;
-
-extern void (*exit_uv)(int status);
-
-extern unsigned int audio_capture_channels;
-
-#define MAX_CUDA_DEVICES 4
-extern unsigned int cuda_devices[];
-extern unsigned int cuda_devices_count;
-
-// for aggregate.c
-struct vidcap;
-struct display;
-struct display *initialize_video_display(const char *requested_display,
-                                                char *fmt, unsigned int flags);
-struct vidcap *initialize_video_capture(const char *requested_capture,
-                                               char *fmt, unsigned int flags);
-struct vcodec_state;
-
-// if not NULL, data should be exported
-extern char *export_dir;
-
-extern int should_exit_receiver;
-
-void recv_buf_increase_warning(int size);
+void *receiver_thread(void *arg);
+void destroy_decoder(struct vcodec_state *video_decoder_state);
 
 #endif
+
