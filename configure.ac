@@ -1894,6 +1894,20 @@ AC_SUBST(V4L2_OBJ)
 LIB_MODULES="$LIB_MODULES $V4L2_LIBS"
 
 # -------------------------------------------------------------------------------------------------
+# iHDTV
+# -------------------------------------------------------------------------------------------------
+AC_ARG_ENABLE(ihdtv,
+      AS_HELP_STRING([--enable-ihdtv], [enable iHDTV support (default is disabled)]),
+    [ihdtv_req=$enableval],
+    [ihdtv_req=no]
+    )
+
+if test $ihdtv_req = yes
+then
+        AC_DEFINE([HAVE_IHDTV], [1], [Build with iHDTV support])
+fi
+
+# -------------------------------------------------------------------------------------------------
 # use shared decoder
 # -------------------------------------------------------------------------------------------------
 

@@ -244,8 +244,10 @@ static void usage(void)
         printf("\n");
         printf("\t-c <cfg>                 \tcompress video (see '-c help')\n");
         printf("\n");
+#ifdef HAVE_IHDTV
         printf("\t-i                       \tiHDTV compatibility mode\n");
         printf("\n");
+#endif
 #ifdef HAVE_IPv6
         printf("\t-6                       \tUse IPv6\n");
         printf("\n");
@@ -514,6 +516,7 @@ static struct tx *initialize_transmit(unsigned requested_mtu, char *fec)
         return tx_init(requested_mtu, fec);
 }
 
+#ifdef HAVE_IHDTV
 static void *ihdtv_receiver_thread(void *arg)
 {
         ihdtv_connection *connection = (ihdtv_connection *) ((void **)arg)[0];
@@ -549,6 +552,7 @@ static void *ihdtv_sender_thread(void *arg)
 
         return 0;
 }
+#endif
 
 static struct vcodec_state *new_decoder(struct state_uv *uv) {
         struct vcodec_state *state = malloc(sizeof(struct vcodec_state));
@@ -1006,7 +1010,9 @@ int main(int argc, char *argv[])
                 {"mode", required_argument, 0, 'M'},
                 {"version", no_argument, 0, 'v'},
                 {"compress", required_argument, 0, 'c'},
+#ifdef HAVE_IDHTV
                 {"ihdtv", no_argument, 0, 'i'},
+#endif
                 {"receive", required_argument, 0, 'r'},
                 {"send", required_argument, 0, 's'},
                 {"help", no_argument, 0, 'h'},
@@ -1064,7 +1070,11 @@ int main(int argc, char *argv[])
         init_lib_common();
 
         while ((ch =
-                getopt_long(argc, argv, "d:t:m:r:s:v6c:ihj:M:p:f:P:l:", getopt_options,
+                getopt_long(argc, argv, "d:t:m:r:s:v6c:hj:M:p:f:P:l:"
+#ifdef HAVE_IHDTV
+                        "i"
+#endif
+                        , getopt_options,
                             &option_index)) != -1) {
                 switch (ch) {
                 case 'd':
@@ -1106,10 +1116,12 @@ int main(int argc, char *argv[])
                 case 'c':
                         uv->requested_compression = optarg;
                         break;
+#ifdef HAVE_IHDTV
                 case 'i':
                         uv->use_ihdtv_protocol = 1;
                         printf("setting ihdtv protocol\n");
                         break;
+#endif
                 case 'r':
                         audio_recv = optarg;                       
                         break;
@@ -1307,6 +1319,7 @@ int main(int argc, char *argv[])
 #endif /* USE_RT */         
 
         if (uv->use_ihdtv_protocol) {
+#ifdef HAVE_IHDTV
                 ihdtv_connection tx_connection, rx_connection;
 
                 printf("Initializing ihdtv protocol\n");
@@ -1377,6 +1390,7 @@ int main(int argc, char *argv[])
 
                 while (!0) // was 'should_exit'
                         sleep(1);
+#endif
         } else {
                 if ((uv->network_devices =
                      initialize_network(network_device, uv->recv_port_number,
