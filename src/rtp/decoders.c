@@ -70,7 +70,8 @@ static void restrict_returned_codecs(codec_t *display_codecs,
                 size_t *display_codecs_count, codec_t *pp_codecs,
                 int pp_codecs_count);
 static void decoder_set_video_mode(struct state_decoder *decoder, unsigned int video_mode);
-static int check_for_mode_change(struct state_decoder *decoder, uint32_t *hdr, int packet_type);
+static int check_for_mode_change(struct state_decoder *decoder, uint32_t *hdr,
+                int packet_type, int max_substream);
 
 enum decoder_type_t {
         UNSET,
@@ -917,9 +918,14 @@ static struct video_frame * reconfigure_decoder(struct state_decoder * const dec
         return frame_display;
 }
 
-static int check_for_mode_change(struct state_decoder *decoder, uint32_t *hdr, int packet_type)
+static int check_for_mode_change(struct state_decoder *decoder, uint32_t *hdr,
+                int packet_type, int max_substreams)
 {
         int mode_changed = FALSE;
+
+        decoder->max_substreams = max_substreams;
+        memset(&decoder->received_vid_desc, 0, sizeof(decoder->received_vid_desc));
+        memset(&decoder->received_ldgm_desc, 0, sizeof(decoder->received_ldgm_desc));
 
         if(packet_type == PT_VIDEO) {
                 uint32_t tmp;
@@ -1048,48 +1054,41 @@ int decode_frame(struct coded_data *cdata, void *decode_data)
                         goto cleanup;
                 }
 
-                if(substream >= decoder->max_substreams) {
-                        fprintf(stderr, "[decoder] received substream ID %d. Expecting at most %d substreams. Did you set -M option?\n",
-                                        substream, decoder->max_substreams);
-                        // the guess is valid - we start with highest substream number (anytime - since it holds a m-bit)
-                        // in next iterations, index is valid
-                        if(substream == 1 || substream == 3) {
-                                fprintf(stderr, "[decoder] Guessing mode: ");
-                                if(substream == 1) {
-                                        decoder_set_video_mode(decoder, VIDEO_STEREO);
-                                } else {
-                                        decoder_set_video_mode(decoder, VIDEO_4K);
-                                }
-                                decoder->received_vid_desc.width = 0; // just for sure, that we reconfigure in next iteration
-                                fprintf(stderr, "%s\n", get_video_mode_description(decoder->video_mode));
-                        } else {
-                                exit_uv(1);
-                        }
-                        // we need skip this frame (variables are illegal in this iteration
-                        // and in case that we got unrecognized number of substreams - exit
-                        ret = FALSE;
-                        goto cleanup;
-                }
-
-
                 buffer_num[substream] = buffer_number;
                 buffer_len[substream] = buffer_length;
 
                 ll_insert(pckt_list[substream], data_pos, len);
                 
-                if(check_for_mode_change(decoder, (uint32_t *) pckt->data, pt)) {
-                        pbuf_data = (struct vcodec_state *) update_decoder_state(
+                if(substream >= decoder->max_substreams ||
+                                check_for_mode_change(decoder, (uint32_t *) pckt->data, pt, substream)) {
+                        /* This strange assignment is correct.
+                         * Assuming that whole packet has the same video description
+                         * ergo the format change is detected with the first packet.
+                         * The first packet is the one with m-bit set (last one transmitted).
+                         * And we know that substreams are transmitted sequentionally, thus has
+                         * the higher substream number.
+                         */
+                        int max_substreams = substream;
+
+                        update_decoder_state(
                                         pbuf_data,
                                         pt == PT_VIDEO ? &decoder->received_vid_desc : NULL,
                                         pt == PT_VIDEO ? NULL : &decoder->received_ldgm_desc,
-                                        decoder->max_substreams);
-                        frame = pbuf_data->frame_buffer;
-                        decoder = pbuf_data->decoder;
+                                        max_substreams);
 
                         pbuf_data->reconfigured = true;
                         pbuf_data->max_frame_size = 0u;
                         pbuf_data->decoded = 0u;
+
+                        return;
                 }
+
+                if(pt == PT_VIDEO_LDGM) {
+                        if(!frame->tiles[substream].data) {
+                                frame->tiles[substream].data = (char *) malloc(buffer_length);
+                        }
+                }
+
 #if 0
                 if (pt == PT_VIDEO) {
                 } else if (pt == PT_VIDEO_LDGM) {

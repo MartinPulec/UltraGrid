@@ -75,10 +75,11 @@ enum interlacing_t {
         SEGMENTED_FRAME = 4
 };
 
-#define VIDEO_NORMAL                    0u
-#define VIDEO_DUAL                      1u
-#define VIDEO_STEREO                    2u
-#define VIDEO_4K                        3u
+#define VIDEO_UNSET                     0u
+#define VIDEO_NORMAL                    1u
+#define VIDEO_DUAL                      2u
+#define VIDEO_STEREO                    3u
+#define VIDEO_4K                        4u
 
 #define PARAM_WIDTH                     (1<<0u)
 #define PARAM_HEIGHT                    (1<<2u)
