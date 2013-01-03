@@ -65,6 +65,7 @@
 #include "config_win32.h"
 #endif // HAVE_CONFIG_H
 
+#include "video_codec.h"
 #include "video_display.h"
 
 #include "audio/audio.h"
@@ -81,6 +82,7 @@ struct coded_data {
 struct pbuf;
 struct state_decoder;
 struct state_audio_decoder;
+struct state_receiver;
 
 struct vcodec_state {
         struct video_frame *frame_buffer;
@@ -89,6 +91,8 @@ struct vcodec_state {
         unsigned int max_frame_size; // maximal frame size
                                      // to be returned to caller by a decoder to allow him adjust buffers accordingly
         unsigned int decoded;
+        struct line_decoder line_decoder;
+        struct state_receiver *receiver_state;
 
         bool reconfigured;
 };

@@ -75,6 +75,20 @@ struct line_decode_from_to {
         decoder_t line_decoder;
 };
 
+struct line_decoder {
+        int                  base_offset; /* from the beginning of buffer */
+        double               src_bpp;
+        double               dst_bpp;
+        int                  rshift;
+        int                  gshift;
+        int                  bshift;
+        decoder_t            decode_line;
+        unsigned int         dst_linesize; /* framebuffer pitch */
+        unsigned int         dst_pitch; /* framebuffer pitch - it can be larger if SDL resolution is larger than data */
+        unsigned int         src_linesize; /* display data pitch */
+};
+
+
 extern const struct codec_info_t codec_info[];           /* defined int .c */
 extern const struct line_decode_from_to line_decoders[]; /* defined int .c */
 

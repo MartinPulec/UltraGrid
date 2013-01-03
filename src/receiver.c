@@ -70,13 +70,18 @@
 #include "video_decompress.h"
 #include "video_display.h"
 
-static struct vcodec_state *new_decoder(struct state_receiver *uv) {
+struct state_receiver {
+        void *ldgm_state;
+};
+
+static struct vcodec_state *new_decoder(struct receiver_param *uv, struct state_receiver *receiver_state) {
         struct vcodec_state *state = malloc(sizeof(struct vcodec_state));
 
         if(state) {
                 state->decoder = decoder_init(uv->decoder_mode, uv->postprocess, uv->display_device);
                 state->reconfigured = false;
                 state->frame_buffer = NULL; // no frame until reconfiguration
+                state->receiver_state = receiver_state;
 
                 if(!state->decoder) {
                         fprintf(stderr, "Error initializing decoder (incorrect '-M' or '-p' option).\n");
@@ -101,14 +106,48 @@ void destroy_decoder(struct vcodec_state *video_decoder_state) {
         free(video_decoder_state);
 }
 
+void reconfigure_video(struct state_receiver *receiver_state,
+                struct video_desc *desc) {
+        abort();
+}
+
+struct vcodec_state *update_decoder_state(struct vcodec_state *original_vcodec_state,
+                struct video_desc *video_desc, 
+                struct ldgm_desc *ldgm_desc,
+                int max_substreams
+                )
+{
+        struct state_receiver *receiver_state = original_vcodec_state->receiver_state;
+
+        if(video_desc) {
+                reconfigure_video(receiver_state, video_desc);
+        } else if (ldgm_desc) {
+                if(receiver_state->ldgm_state) {
+                        ldgm_decoder_destroy(receiver_state->ldgm_state);
+                }
+                receiver_state->ldgm_state = ldgm_decoder_init(ldgm_desc->k,
+                                ldgm_desc->m, ldgm_desc->c, ldgm_desc->seed);
+                original_vcodec_state->line_decoder.base_offset = 0;
+                original_vcodec_state->line_decoder.src_bpp = 1.0;
+                original_vcodec_state->line_decoder.dst_bpp = 1.0;
+                /// {r,g,b}shift unused
+                original_vcodec_state->line_decoder.decode_line = NULL;
+
+                        //a jeste rict, ze se bude potreba zreinicializovat prilezitostne
+        }
+
+        return original_vcodec_state;
+}
+
 void *receiver_thread(void *arg)
 {
-        struct state_receiver *uv = (struct state_receiver *)arg;
+        struct receiver_param *uv = (struct receiver_param *)arg;
+        struct state_receiver receiver_state = { .ldgm_state = 0 };
 
         struct pdb_e *cp;
         struct timeval timeout;
-        struct timeval curr_time;
         struct timeval start_time;
+        struct timeval curr_time;
         uint32_t ts;
         int fr;
         int ret;
@@ -116,7 +155,7 @@ void *receiver_thread(void *arg)
         struct timeval last_tile_received = {0, 0};
         int last_buf_size = INITIAL_VIDEO_RECV_BUFFER_SIZE;
 #ifdef SHARED_DECODER
-        struct vcodec_state *shared_decoder = new_decoder(uv);
+        struct vcodec_state *shared_decoder = new_decoder(uv, &receiver_state);
         if(shared_decoder == NULL) {
                 fprintf(stderr, "Unable to create decoder!\n");
                 exit_uv(1);
@@ -171,7 +210,7 @@ void *receiver_thread(void *arg)
 #ifdef SHARED_DECODER
                                 cp->video_decoder_state = shared_decoder;
 #else
-                                cp->video_decoder_state = new_decoder(uv);
+                                cp->video_decoder_state = new_decoder(uv, &receiver_state);
 #endif // SHARED_DECODER
                                 if(cp->video_decoder_state == NULL) {
                                         fprintf(stderr, "Fatal: unable to find decoder state for "

@@ -53,7 +53,7 @@
 #define INITIAL_VIDEO_RECV_BUFFER_SIZE  ((4*1920*1080)*110/100)
 #endif
 
-struct state_receiver {
+struct receiver_param {
         char *decoder_mode;
         char *postprocess;
         struct display *display_device;
@@ -65,6 +65,20 @@ struct state_receiver {
 
 void *receiver_thread(void *arg);
 void destroy_decoder(struct vcodec_state *video_decoder_state);
+
+struct video_desc;
+struct ldgm_desc;
+
+/**
+ * @param video_desc NULL or video description. If NULL, LDGM desc must be set.
+ * @param ldgm_desc NULL or LDGM description. If NULL, video desc must be set.
+ * @return new vcodec state
+ */
+struct vcodec_state *update_decoder_state(struct vcodec_state *original_vcodec_state,
+                struct video_desc *video_desc, 
+                struct ldgm_desc *ldgm_desc,
+                int max_substreams
+                );
 
 #endif
 

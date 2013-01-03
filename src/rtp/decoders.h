@@ -50,6 +50,11 @@ struct video_frame;
 enum codec_t;
 struct tile;
 
+struct ldgm_desc {
+        int k, m, c;
+        int seed;
+};
+
 /* 
  * External interface: 
  */
