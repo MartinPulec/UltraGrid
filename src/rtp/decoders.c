@@ -47,6 +47,7 @@
 #include "debug.h"
 #include "host.h"
 #include "perf.h"
+#include "receiver.h"
 #include "rtp/ldgm.h"
 #include "rtp/ll.h"
 #include "rtp/rtp.h"
@@ -72,6 +73,8 @@ static void restrict_returned_codecs(codec_t *display_codecs,
 static void decoder_set_video_mode(struct state_decoder *decoder, unsigned int video_mode);
 static int check_for_mode_change(struct state_decoder *decoder, uint32_t *hdr, struct video_frame **frame,
                 struct vcodec_state *pbuf_data);
+static void decoder_register_frame_buffer(struct state_decoder *decoder,
+                struct state_receiver *receiver);
 
 enum decoder_type_t {
         UNSET,
@@ -112,7 +115,7 @@ struct state_decoder {
         int               rshift, gshift, bshift;
         unsigned int      max_substreams;
         
-        struct display   *display;
+        struct state_receiver *receiver;
         codec_t          *native_codecs;
         size_t            native_count;
         enum interlacing_t    *disp_supported_il;
@@ -244,8 +247,8 @@ void *decompress_thread(void *args) {
                         }
 
                         for (i = 1; i < decoder->pp_output_frames_count; ++i) {
-                                display_put_frame(decoder->display, decoder->frame);
-                                decoder->frame = display_get_frame(decoder->display);
+                                receiver_fb_put_frame(decoder->receiver, decoder->frame);
+                                decoder->frame = receiver_fb_get_frame(decoder->receiver);
                                 pp_ret = vo_postprocess(decoder->postprocess,
                                                 NULL,
                                                 decoder->frame,
@@ -268,10 +271,10 @@ void *decompress_thread(void *args) {
                         }
                 }
 
-                display_put_frame(decoder->display,
+                receiver_fb_put_frame(decoder->receiver,
                                 decoder->frame);
                 decoder->frame =
-                        display_get_frame(decoder->display);
+                        receiver_fb_get_frame(decoder->receiver);
 
 skip_frame:
 
@@ -313,7 +316,8 @@ static void decoder_set_video_mode(struct state_decoder *decoder, unsigned int v
                         * get_video_mode_tiles_y(decoder->video_mode);
 }
 
-struct state_decoder *decoder_init(char *requested_mode, char *postprocess, struct display *display)
+struct state_decoder *decoder_init(char *requested_mode, char *postprocess,
+                struct state_receiver *receiver)
 {
         struct state_decoder *s;
         
@@ -322,7 +326,6 @@ struct state_decoder *decoder_init(char *requested_mode, char *postprocess, stru
         s->disp_supported_il = NULL;
         s->postprocess = NULL;
         s->change_il = NULL;
-        s->display = display;
 
         s->fec_state.state = NULL;
         s->fec_state.k = s->fec_state.m = s->fec_state.c = s->fec_state.seed = 0;
@@ -375,7 +378,7 @@ struct state_decoder *decoder_init(char *requested_mode, char *postprocess, stru
                 }
         }
 
-        decoder_register_video_display(s, display);
+        decoder_register_frame_buffer(s, receiver);
 
         if(pthread_create(&s->decompress_thread_id, NULL, decompress_thread, s) != 0) {
                 perror("Unable to create thread");
@@ -411,16 +414,17 @@ static void restrict_returned_codecs(codec_t *display_codecs,
         }
 }
 
-void decoder_register_video_display(struct state_decoder *decoder, struct display *display)
+static void decoder_register_frame_buffer(struct state_decoder *decoder,
+                struct state_receiver *receiver)
 {
         int ret, i;
-        decoder->display = display;
+        decoder->receiver = receiver;
         
         free(decoder->native_codecs);
         decoder->native_count = 20 * sizeof(codec_t);
         decoder->native_codecs = (codec_t *)
                 malloc(decoder->native_count * sizeof(codec_t));
-        ret = display_get_property(decoder->display, DISPLAY_PROPERTY_CODECS, decoder->native_codecs, &decoder->native_count);
+        ret = receiver_fb_get_property(decoder->receiver, DISPLAY_PROPERTY_CODECS, decoder->native_codecs, &decoder->native_count);
         decoder->native_count /= sizeof(codec_t);
         if(!ret) {
                 fprintf(stderr, "Failed to query codecs from video display.\n");
@@ -456,7 +460,7 @@ void decoder_register_video_display(struct state_decoder *decoder, struct displa
         free(decoder->disp_supported_il);
         decoder->disp_supported_il_cnt = 20 * sizeof(enum interlacing_t);
         decoder->disp_supported_il = malloc(decoder->disp_supported_il_cnt);
-        ret = display_get_property(decoder->display, DISPLAY_PROPERTY_SUPPORTED_IL_MODES, decoder->disp_supported_il, &decoder->disp_supported_il_cnt);
+        ret = receiver_fb_get_property(decoder->receiver, DISPLAY_PROPERTY_SUPPORTED_IL_MODES, decoder->disp_supported_il, &decoder->disp_supported_il_cnt);
         if(ret) {
                 decoder->disp_supported_il_cnt /= sizeof(enum interlacing_t);
         } else {
@@ -711,7 +715,7 @@ static struct video_frame * reconfigure_decoder(struct state_decoder * const dec
         size_t len = sizeof(int);
         int ret;
 
-        ret = display_get_property(decoder->display, DISPLAY_PROPERTY_VIDEO_MODE,
+        ret = receiver_fb_get_property(decoder->receiver, DISPLAY_PROPERTY_VIDEO_MODE,
                         &display_mode, &len);
         if(!ret) {
                 debug_msg("Failed to get video display mode.");
@@ -772,13 +776,13 @@ static struct video_frame * reconfigure_decoder(struct state_decoder * const dec
                  */
                 //display_put_frame(decoder->display, frame);
                 /* reconfigure VO and give it opportunity to pass us pitch */        
-                ret = display_reconfigure(decoder->display, display_desc);
+                ret = receiver_fb_reconfigure(decoder->receiver, display_desc);
                 if(!ret) {
                         fprintf(stderr, "[decoder] Unable to reconfigure display.\n");
                         exit_uv(128);
                         return NULL;
                 }
-                frame_display = display_get_frame(decoder->display);
+                frame_display = receiver_fb_get_frame(decoder->receiver);
                 decoder->display_desc = display_desc;
         }
         /*if(decoder->postprocess) {
@@ -787,26 +791,26 @@ static struct video_frame * reconfigure_decoder(struct state_decoder * const dec
                 frame = frame_display;
         }*/
         
-        ret = display_get_property(decoder->display, DISPLAY_PROPERTY_RSHIFT,
+        ret = receiver_fb_get_property(decoder->receiver, DISPLAY_PROPERTY_RSHIFT,
                         &decoder->rshift, &len);
         if(!ret) {
                 debug_msg("Failed to get rshift property from video driver.\n");
                 decoder->rshift = 0;
         }
-        ret = display_get_property(decoder->display, DISPLAY_PROPERTY_GSHIFT,
+        ret = receiver_fb_get_property(decoder->receiver, DISPLAY_PROPERTY_GSHIFT,
                         &decoder->gshift, &len);
         if(!ret) {
                 debug_msg("Failed to get gshift property from video driver.\n");
                 decoder->gshift = 8;
         }
-        ret = display_get_property(decoder->display, DISPLAY_PROPERTY_BSHIFT,
+        ret = receiver_fb_get_property(decoder->receiver, DISPLAY_PROPERTY_BSHIFT,
                         &decoder->bshift, &len);
         if(!ret) {
                 debug_msg("Failed to get bshift property from video driver.\n");
                 decoder->bshift = 16;
         }
         
-        ret = display_get_property(decoder->display, DISPLAY_PROPERTY_BUF_PITCH,
+        ret = receiver_fb_get_property(decoder->receiver, DISPLAY_PROPERTY_BUF_PITCH,
                         &decoder->requested_pitch, &len);
         if(!ret) {
                 debug_msg("Failed to get pitch from video driver.\n");

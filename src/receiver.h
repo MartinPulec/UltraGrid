@@ -53,6 +53,11 @@
 #define INITIAL_VIDEO_RECV_BUFFER_SIZE  ((4*1920*1080)*110/100)
 #endif
 
+struct state_receiver;
+
+struct video_desc;
+struct video_frame;
+
 struct receiver_param {
         char                   *decoder_mode;
         char                   *postprocess;
@@ -65,6 +70,15 @@ struct receiver_param {
 
 void *receiver_thread(void *arg);
 void destroy_decoder(struct vcodec_state *video_decoder_state);
+
+struct video_frame *receiver_fb_get_frame(struct state_receiver *receiver);
+void receiver_fb_put_frame(struct state_receiver *receiver,
+                struct video_frame *frame);
+int receiver_fb_reconfigure(struct state_receiver *receiver,
+                struct video_desc desc);
+int receiver_fb_get_property(struct state_receiver *receiver, int property,
+                void *val, size_t *len);
+
 
 #endif
 

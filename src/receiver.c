@@ -70,12 +70,37 @@
 #include "video_decompress.h"
 #include "video_display.h"
 
-static struct vcodec_state *new_decoder(struct receiver_param *param) {
+struct state_receiver {
+        struct receiver_param  *param;
+        struct display         *display;
+};
+
+static struct state_receiver *receiver_state_alloc(struct receiver_param *param);
+static void receiver_state_destroy(struct state_receiver *receiver_state);
+static struct state_receiver *receiver_state_alloc(struct receiver_param *param)
+{
+        struct state_receiver *ret;
+
+        ret = (struct state_receiver *) malloc(sizeof(struct state_receiver));
+        ret->param = param;
+        ret->display = param->display_device;
+
+        return ret;
+}
+
+static void receiver_state_destroy(struct state_receiver *receiver_state)
+{
+        free(receiver_state);
+}
+
+static struct vcodec_state *new_decoder(struct state_receiver *receiver_state) {
         struct vcodec_state *state = malloc(sizeof(struct vcodec_state));
 
         if(state) {
-                state->decoder = decoder_init(param->decoder_mode,
-                                param->postprocess, param->display_device);
+                state->decoder = decoder_init(receiver_state->param->decoder_mode,
+                                receiver_state->param->postprocess,
+                                receiver_state);
+                state->receiver = receiver_state;
                 state->reconfigured = false;
                 state->frame_buffer = NULL; // no frame until reconfiguration
 
@@ -105,6 +130,7 @@ void destroy_decoder(struct vcodec_state *video_decoder_state) {
 void *receiver_thread(void *arg)
 {
         struct receiver_param *param = (struct receiver_param *)arg;
+        static struct state_receiver *receiver_state;
 
         struct pdb_e *cp;
         struct timeval timeout;
@@ -116,15 +142,16 @@ void *receiver_thread(void *arg)
         unsigned int tiles_post = 0;
         struct timeval last_tile_received = {0, 0};
         int last_buf_size = INITIAL_VIDEO_RECV_BUFFER_SIZE;
+
+        receiver_state = receiver_state_alloc(param);
 #ifdef SHARED_DECODER
-        struct vcodec_state *shared_decoder = new_decoder(param);
+        struct vcodec_state *shared_decoder = new_decoder(receiver_state);
         if(shared_decoder == NULL) {
                 fprintf(stderr, "Unable to create decoder!\n");
                 exit_uv(1);
                 return NULL;
         }
 #endif // SHARED_DECODER
-
 
         initialize_video_decompress();
 
@@ -172,7 +199,7 @@ void *receiver_thread(void *arg)
 #ifdef SHARED_DECODER
                                 cp->video_decoder_state = shared_decoder;
 #else
-                                cp->video_decoder_state = new_decoder(param);
+                                cp->video_decoder_state = new_decoder(receiver_state);
 #endif // SHARED_DECODER
                                 if(cp->video_decoder_state == NULL) {
                                         fprintf(stderr, "Fatal: unable to find decoder state for "
@@ -255,6 +282,32 @@ void *receiver_thread(void *arg)
 
         display_finish(param->display_device);
 
+        receiver_state_destroy(receiver_state);
+
         return 0;
+}
+
+struct video_frame *receiver_fb_get_frame(struct state_receiver *receiver)
+{
+        return display_get_frame(receiver->display);
+}
+
+void receiver_fb_put_frame(struct state_receiver *receiver,
+                                struct video_frame *frame)
+{
+        display_put_frame(receiver->display, frame);
+}
+
+int receiver_fb_reconfigure(struct state_receiver *receiver,
+                                struct video_desc desc)
+{
+        return display_reconfigure(receiver->display, desc);
+}
+
+int receiver_fb_get_property(struct state_receiver *receiver, int property,
+                                void *val, size_t *len)
+{
+        return display_get_property(receiver->display, property,
+                        val, len);
 }
 

@@ -49,14 +49,14 @@ struct state_decoder;
 struct video_frame;
 enum codec_t;
 struct tile;
+struct state_receiver;
 
 /* 
  * External interface: 
  */
 int decode_frame(struct coded_data *compressed_frame, void *decode_data);
 
-struct state_decoder *decoder_init(char *requested_mode, char *postprocess, struct display *display);
+struct state_decoder *decoder_init(char *requested_mode, char *postprocess,
+                struct state_receiver *receiver);
 void decoder_destroy(struct state_decoder *decoder);
-
-void decoder_register_video_display(struct state_decoder *decoder, struct display *display);
 
