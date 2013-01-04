@@ -98,7 +98,7 @@ static int parse_video_mode(const char *requested_mode) {
 }
 
 struct state_receiver {
-        struct video_display   *display;
+        struct display         *display;
 
         codec_t                *native_codecs;
         size_t                  native_count;
@@ -136,7 +136,7 @@ static struct state_receiver *receiver_state_alloc(struct receiver_param *param)
         struct state_receiver *ret = (struct state_receiver *)
                 calloc(1, sizeof(struct state_receiver));
 
-        ret->display = param->display;
+        ret->display = param->display_device;
 
         ret->ext_recv_buffer[0] = ret->ext_recv_buffer[1] = NULL;
         ret->ext_recv_buffer_index_network = 0;
@@ -429,8 +429,7 @@ void reconfigure_video(struct state_receiver *receiver_state,
                         exit_uv(128);
                         return NULL;
                 }
-                frame_display = display_get_frame(receiver_state->display);
-                decoder->display_desc = display_desc;
+                receiver_state->display_desc = display_desc;
         }
         /*if(decoder->postprocess) {
                 frame = decoder->pp_frame;
@@ -438,8 +437,8 @@ void reconfigure_video(struct state_receiver *receiver_state,
                 frame = frame_display;
         }*/
         
-        ret = display_get_property(decoder->display, DISPLAY_PROPERTY_RSHIFT,
-                        &decoder->rshift, &len);
+        ret = display_get_property(receiver_state->display, DISPLAY_PROPERTY_RSHIFT,
+                        &receiver_state->rshift, &len);
         if(!ret) {
                 debug_msg("Failed to get rshift property from video driver.\n");
                 decoder->rshift = 0;
@@ -587,13 +586,13 @@ void reconfigure_video(struct state_receiver *receiver_state,
 
 }
 
-void update_decoder_state(struct vcodec_state *original_vcodec_state,
+void update_decoder_state(struct vcodec_state *vcodec_state,
                 struct video_desc *video_desc, 
                 struct ldgm_desc *ldgm_desc,
                 int max_substreams
                 )
 {
-        struct state_receiver *receiver_state = original_vcodec_state->receiver_state;
+        struct state_receiver *receiver_state = vcodec_state->receiver_state;
 
         if(max_substreams >= decoder->max_substreams) {
                 fprintf(stderr, "[decoder] received substream ID %d. Expecting at most %d substreams. Did you
@@ -613,7 +612,7 @@ void update_decoder_state(struct vcodec_state *original_vcodec_state,
         }
 
         if(video_desc) {
-                reconfigure_video(receiver_state, video_desc);
+                reconfigure_video(receiver_state, video_desc, vcodec_state);
         } else if (ldgm_desc) {
                 if(receiver_state->ldgm_state) {
                         ldgm_decoder_destroy(receiver_state->ldgm_state);
@@ -623,18 +622,18 @@ void update_decoder_state(struct vcodec_state *original_vcodec_state,
                 }
                 receiver_state->ldgm_state = ldgm_decoder_init(ldgm_desc->k,
                                 ldgm_desc->m, ldgm_desc->c, ldgm_desc->seed);
-                original_vcodec_state->line_decoder.base_offset = 0;
-                original_vcodec_state->line_decoder.src_bpp = 1.0;
-                original_vcodec_state->line_decoder.dst_bpp = 1.0;
+                vcodec_state->line_decoder.base_offset = 0;
+                vcodec_state->line_decoder.src_bpp = 1.0;
+                vcodec_state->line_decoder.dst_bpp = 1.0;
                 /// {r,g,b}shift unused
-                original_vcodec_state->line_decoder.decode_line = NULL;
+                vcodec_state->line_decoder.decode_line = NULL;
 
                 struct video_desc ldgm_desc;
                 memset(&ldgm_desc, 0, sizeof(ldgm_desc));
                 ldgm_desc.tile_count = max_substreams;
                 // data will be allocated by decoder itself according to size
                 receiver_state->ldgm_frame = vf_alloc_desc(ldgm_desc);
-                original_vcodec_state->frame_buffer = receiver_state->ldgm_frame;
+                vcodec_state->frame_buffer = receiver_state->ldgm_frame;
 
 
 

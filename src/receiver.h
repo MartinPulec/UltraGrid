@@ -54,13 +54,13 @@
 #endif
 
 struct receiver_param {
-        char *decoder_mode;
-        char *postprocess;
-        struct display *display_device;
-        struct rtp **network_devices;
-        pthread_mutex_t *master_lock;
-        unsigned int connections_count;
-        struct pdb *participants;
+        char             *decoder_mode;
+        char             *postprocess;
+        struct display   *display_device;
+        struct rtp      **network_devices;
+        pthread_mutex_t  *master_lock;
+        unsigned int      connections_count;
+        struct pdb       *participants;
 };
 
 void *receiver_thread(void *arg);
