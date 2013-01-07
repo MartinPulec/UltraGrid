@@ -60,6 +60,7 @@
 #include "video_compress/fastdxt.h"
 #include "video_compress/jpeg.h"
 #include "video_compress/none.h"
+#include "video_compress/uyvy.h"
 #include "lib_common.h"
 
 
@@ -100,6 +101,9 @@ struct compress_t compress_modules[] = {
 #endif
 #if defined HAVE_JPEG || defined  BUILD_LIBRARIES
         {"JPEG", "jpeg", MK_NAME(jpeg_compress_init), MK_NAME(jpeg_compress), MK_NAME(jpeg_compress_done), NULL},
+#endif
+#if defined HAVE_COMPRESS_UYVY || defined  BUILD_LIBRARIES
+        {"UYVY", "uyvy", MK_NAME(uyvy_compress_init), MK_NAME(uyvy_compress), MK_NAME(uyvy_compress_done), NULL},
 #endif
         {"none", NULL, MK_STATIC(none_compress_init), MK_STATIC(none_compress), MK_STATIC(none_compress_done), NULL},
 };

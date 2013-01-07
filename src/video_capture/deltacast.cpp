@@ -67,8 +67,10 @@ extern "C" {
 #include <unistd.h>
 #include <string.h>
 #include <sys/stat.h>
+#ifndef WIN32
 #include <sys/poll.h>
 #include <sys/ioctl.h>
+#endif
 #include <sys/time.h>
 #include <semaphore.h>
 
@@ -82,6 +84,8 @@ extern "C" {
 #include <VideoMasterHD_Core.h>
 #include <VideoMasterHD_Sdi.h>
 #include <VideoMasterHD_Sdi_Audio.h>
+
+static volatile bool should_exit = false;
 
 struct vidcap_deltacast_state {
         struct video_frame *frame;
@@ -439,6 +443,7 @@ void
 vidcap_deltacast_finish(void *state)
 {
         UNUSED(state);
+        should_exit = true;
 }
 
 void

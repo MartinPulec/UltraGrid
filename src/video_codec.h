@@ -68,11 +68,6 @@ struct codec_info_t {
         unsigned opaque:1;
 };
 
-struct alternate_fourcc {
-        uint32_t primary_fcc;
-        uint32_t alias;
-};
-
 struct line_decode_from_to {
         codec_t from;
         codec_t to;
@@ -82,13 +77,15 @@ struct line_decode_from_to {
 extern const struct codec_info_t codec_info[];           /* defined int .c */
 extern const struct line_decode_from_to line_decoders[]; /* defined int .c */
 
-extern const struct alternate_fourcc fourcc_aliases[];           /* defined int .c */
-
 void show_codec_help(char *mode);
 double get_bpp(codec_t codec);
 uint32_t get_fourcc(codec_t codec);
 const char * get_codec_name(codec_t codec);
 int is_codec_opaque(codec_t codec);
+/*
+ * @return found codec
+ *         (codec_t) -1 if not found
+ */
 codec_t get_codec_from_fcc(uint32_t fourcc);
 int get_haligned(int width_pixels, codec_t codec);
 
@@ -102,6 +99,8 @@ void vc_copyliner10k(unsigned char *dst, const unsigned char *src, int len, int 
 void vc_copylineRGBA(unsigned char *dst, const unsigned char *src, int len, int rshift, int gshift, int bshift);
 void vc_copylineDVS10toV210(unsigned char *dst, const unsigned char *src, int dst_len);
 void vc_copylineRGBAtoRGB(unsigned char *dst, const unsigned char *src, int len);
+void vc_copylineABGRtoRGB(unsigned char *dst, const unsigned char *src, int len);
+void vc_copylineRGBAtoRGBwithShift(unsigned char *dst, const unsigned char *src, int len, int rshift, int gshift, int bshift);
 void vc_copylineRGBtoRGBA(unsigned char *dst, const unsigned char *src, int len, int rshift, int gshift, int bshift);
 void vc_copylineDPX10toRGBA(unsigned char *dst, const unsigned char *src, int dst_len, int rshift, int gshift, int bshift);
 void vc_copylineDPX10toRGB(unsigned char *dst, const unsigned char *src, int dst_len);

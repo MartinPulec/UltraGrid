@@ -34,6 +34,10 @@
 #include <libgpujpeg/gpujpeg_table.h>
 #include <libgpujpeg/gpujpeg_reader.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Decoder output type
  */
@@ -44,6 +48,8 @@ enum gpujpeg_decoder_output_type {
     GPUJPEG_DECODER_OUTPUT_CUSTOM_BUFFER,
     // Decoder will use OpenGL Texture PBO Resource as output buffer
     GPUJPEG_DECODER_OUTPUT_OPENGL_TEXTURE,
+    // Decoder will use CUDA buffer as output buffer
+    GPUJPEG_DECODER_OUTPUT_CUDA_BUFFER,
 };
 
 /**
@@ -91,6 +97,14 @@ gpujpeg_decoder_output_set_custom(struct gpujpeg_decoder_output* output, uint8_t
  */
 void
 gpujpeg_decoder_output_set_texture(struct gpujpeg_decoder_output* output, struct gpujpeg_opengl_texture* texture);
+
+/**
+ * Sets output to CUDA buffer
+ * 
+ * @param output  Decoder output structure
+ */
+void
+gpujpeg_decoder_output_set_cuda_buffer(struct gpujpeg_decoder_output* output);
 
 /**
  * JPEG decoder structure
@@ -164,5 +178,9 @@ gpujpeg_decoder_decode(struct gpujpeg_decoder* decoder, uint8_t* image, int imag
  */
 int
 gpujpeg_decoder_destroy(struct gpujpeg_decoder* decoder);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // GPUJPEG_DECODER_H

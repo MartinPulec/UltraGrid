@@ -59,16 +59,20 @@
 #include <OpenGL/OpenGL.h> // CGL
 #include <OpenGL/glext.h>
 #include <GLUT/glut.h>
-#else /* HAVE_MACOSX */
+#elif defined HAVE_LINUX
 #include <GL/glew.h>
 #include <GL/gl.h>
 #include <GL/glx.h>
 #include <GL/glut.h>
 #include "x11_common.h"
+#else // WIN32
+#include <GL/glew.h>
+#include <GL/glut.h>
+#endif /* HAVE_MACOSX */
+
 #ifdef FREEGLUT
 #include <GL/freeglut_ext.h>
 #endif /* FREEGLUT */
-#endif /* HAVE_MACOSX */
 
 #include <signal.h>
 #include <assert.h>
@@ -86,6 +90,8 @@
 #define WIN_NAME        "Ultragrid - OpenGL Display"
 
 #define STRINGIFY(A) #A
+
+static volatile bool should_exit_main_loop = false;
 
 // source code for a shader unit (xsedmik)
 static char * yuv422_to_rgb_fp = STRINGIFY(
@@ -283,7 +289,7 @@ void * display_gl_init(char *fmt, unsigned int flags, void *udata) {
         UNUSED(flags);
         UNUSED(udata);
 	struct state_gl        *s;
-#ifdef HAVE_LINUX
+#if defined HAVE_LINUX || defined WIN32
         GLenum err;
 #endif // HAVE_LINUX
         
@@ -355,7 +361,7 @@ void * display_gl_init(char *fmt, unsigned int flags, void *udata) {
         char *tmp, *gl_ver_major;
         char *save_ptr = NULL;
 
-#ifndef HAVE_MACOSX
+#ifdef HAVE_LINUX
         x11_enter_thread();
 #endif
 
@@ -368,7 +374,7 @@ void * display_gl_init(char *fmt, unsigned int flags, void *udata) {
         NSApplicationLoad();
 #endif
 
-#ifndef HAVE_MACOSX
+#ifdef HAVE_LINUX
         glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_CONTINUE_EXECUTION);
 #endif
         glutIdleFunc(glut_idle_callback);
@@ -379,7 +385,7 @@ void * display_gl_init(char *fmt, unsigned int flags, void *udata) {
 	glutDisplayFunc(glutSwapBuffers);
 #ifdef HAVE_MACOSX
         glutWMCloseFunc(glut_close_callback);
-#else
+#elif HAVE_LINUX
         glutCloseFunc(glut_close_callback);
 #endif
 	glutReshapeFunc(gl_resize);
@@ -395,12 +401,12 @@ void * display_gl_init(char *fmt, unsigned int flags, void *udata) {
         }
         free(tmp);
 
-#ifdef HAVE_LINUX
+#if defined HAVE_LINUX || defined WIN32
         err = glewInit();
         if (GLEW_OK != err)
         {
                 /* Problem: glewInit failed, something is seriously wrong. */
-                fprintf(stderr, "GLEW Error: %s\n", glewGetErrorString(err));
+                fprintf(stderr, "GLEW Error: %d\n", err);
                 goto error;
         }
 #endif /* HAVE_LINUX */
@@ -611,7 +617,7 @@ static void display_gl_enable_sync_on_vblank() {
         int swap_interval = 1;
         CGLContextObj cgl_context = CGLGetCurrentContext();
         CGLSetParameter(cgl_context, kCGLCPSwapInterval, &swap_interval);
-#else
+#elif HAVE_LINUX
         /* using GLX_SGI_swap_control
          *
          * Also it is worth considering to use GLX_EXT_swap_control (instead?).
@@ -675,7 +681,11 @@ void gl_reconfigure_screen(struct state_gl *s)
                                 GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
                                 (s->tile->width + 3) / 4 * 4, s->dxt_height, 0,
                                 ((s->tile->width + 3) / 4 * 4* s->dxt_height)/2,
-                                NULL);
+                                /* passing NULL here isn't allowed and some rigid implementations
+                                 * will crash here. We just pass some egliable buffer to fulfil
+                                 * this requirement. glCompressedSubTexImage2D works as expected.
+                                 */
+                                s->buffers[0]);
                 if(s->frame->color_spec == DXT1_YUV) {
                         glBindTexture(GL_TEXTURE_2D,s->texture_display);
                         glUseProgramObjectARB(s->PHandle_dxt);
@@ -835,9 +845,12 @@ static void glut_key_callback(unsigned char key, int x, int y)
                         glut_resize_window(gl);
                         break;
                 case 'q':
-                        if(gl->window != -1)
-                                glutDestroyWindow(gl->window);
+#if defined FREEGLUT || defined HAVE_MACOSX
                         exit_uv(0);
+#else
+			glutDestroyWindow(gl->window);
+			exit(1);
+#endif
                         break;
                 case 'd':
                         gl->deinterlace = gl->deinterlace ? FALSE : TRUE;
@@ -850,7 +863,8 @@ void display_gl_run(void *arg)
 {
         UNUSED(arg);
 
-        while(!should_exit) {
+#if defined HAVE_MACOSX || defined FREEGLUT
+        while(!should_exit_main_loop) {
                 glut_idle_callback();
 #ifndef HAVE_MACOSX
                 glutMainLoopEvent();
@@ -858,6 +872,9 @@ void display_gl_run(void *arg)
                 glutCheckLoop();
 #endif
         }
+#else /* defined HAVE_MACOSX || defined FREEGLUT */
+	glutMainLoop();
+#endif
 }
 
 
@@ -1077,7 +1094,7 @@ void display_gl_finish(void *state)
 
         assert(s->magic == MAGIC_GL);
 
-        s->processed = TRUE;
+        should_exit_main_loop = true;
 }
 
 struct video_frame * display_gl_getf(void *state)
@@ -1103,7 +1120,7 @@ int display_gl_putf(void *state, struct video_frame *frame)
         UNUSED(frame);
 
         if(s->double_buf) {
-                while(!s->processed && !should_exit) 
+                while(!s->processed) 
                         ;
                 s->processed = FALSE;
 
@@ -1111,10 +1128,9 @@ int display_gl_putf(void *state, struct video_frame *frame)
                 s->image_display = (s->image_display + 1) % 2;
         }
 
-
         /* ...and signal the worker */
         pthread_mutex_lock(&s->lock);
-        s->new_frame = TRUE;
+        s->new_frame = 1;
         pthread_mutex_unlock(&s->lock);
         return 0;
 }

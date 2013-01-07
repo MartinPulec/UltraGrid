@@ -302,10 +302,11 @@ void * vidcap_v4l2_init(char *init_fmt, unsigned int flags)
                                         height = atoi(item);
                                         break;
                                 case 4:
-                                        numerator = atoi(item);
-                                        break;
-                                case 5:
-                                        denominator = atoi(item);
+                                        if(strchr(item, '/')) {
+                                                numerator = atoi(item);
+                                                denominator = atoi(strchr(item, '/') + 1);
+                                        }
+
                                         break;
 
                         }
@@ -459,7 +460,8 @@ void * vidcap_v4l2_init(char *init_fmt, unsigned int flags)
                         fprintf(stderr, "[V4L2] Unsupported interlacing format reported from driver.\n");
                         goto free_frame;
         }
-        s->frame->fps = (double) denominator / numerator;
+        s->frame->fps = (double) stream_params.parm.capture.timeperframe.denominator /
+                stream_params.parm.capture.timeperframe.numerator;
         s->tile->width = fmt.fmt.pix.width;
         s->tile->height = fmt.fmt.pix.height;
 

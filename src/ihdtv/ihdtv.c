@@ -52,16 +52,12 @@
 #include "config_win32.h"
 #endif // HAVE_CONFIG_H
 
+#ifndef WIN32
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <fcntl.h>
 #include <errno.h>
-#include <netdb.h>
 
 #include "ihdtv.h"
 #include "debug.h"
@@ -515,3 +511,6 @@ ihdtv_receive(ihdtv_connection * connection, char *buffer,
 
         return 0;
 }
+
+#endif // WIN32
+

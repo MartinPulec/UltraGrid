@@ -67,11 +67,19 @@ extern "C" {
 } // END of extern "C"
 #endif
 
+#ifdef WIN32
+#include <objbase.h>
+#endif
+
 #ifdef HAVE_DECKLINK		/* From config.h */
 
 #include "video_capture/decklink.h"
 
+#ifdef WIN32
+#include "DeckLinkAPI_h.h" /* From DeckLink SDK */ 
+#else
 #include "DeckLinkAPI.h" /* From DeckLink SDK */ 
+#endif
 #include "DeckLinkAPIVersion.h" /* From DeckLink SDK */ 
 
 #define FRAME_TIMEOUT 60000000 // 30000000 // in nanoseconds
@@ -80,14 +88,22 @@ extern "C" {
 
 #ifdef HAVE_MACOSX
 #define STRING CFStringRef
+#elif defined WIN32
+#define STRING BSTR
 #else
 #define STRING const char *
+#endif
+
+#ifndef WIN32
+#define STDMETHODCALLTYPE
 #endif
 
 // static int	device = 0; // use first BlackMagic device
 // static int	mode = 5; // for Intensity
 // static int	mode = 6; // for Decklink  6) HD 1080i 59.94; 1920 x 1080; 29.97 FPS 7) HD 1080i 60; 1920 x 1080; 30 FPS
 //static int	connection = 0; // the choice of BMDVideoConnection // It should be 0 .... bmdVideoConnectionSDI
+
+static volatile bool should_exit = false;
 
 struct timeval t, t0;
 
@@ -352,8 +368,18 @@ static int blackmagic_api_version_check(STRING *current_version)
         int ret = TRUE;
         *current_version = NULL;
 
-        IDeckLinkAPIInformation *APIInformation = CreateDeckLinkAPIInformationInstance();
-        if(APIInformation == NULL) {
+        IDeckLinkAPIInformation *APIInformation = NULL;
+
+#ifdef WIN32
+	HRESULT result;
+	result = CoCreateInstance(CLSID_CDeckLinkAPIInformation, NULL, CLSCTX_ALL,
+		IID_IDeckLinkAPIInformation, (void **) &APIInformation);
+	if(FAILED(result))
+#else
+	APIInformation = CreateDeckLinkAPIInformationInstance();
+        if(APIInformation == NULL)
+#endif
+	{
                 return FALSE;
         }
         int64_t value;
@@ -388,8 +414,14 @@ decklink_help()
 	printf("\t\t(You can ommit device index, mode and color space provided that your cards supports format autodetection.)\n");
 	
 	// Create an IDeckLinkIterator object to enumerate all DeckLink cards in the system
+#ifdef WIN32
+	result = CoCreateInstance(CLSID_CDeckLinkIterator, NULL, CLSCTX_ALL,
+		IID_IDeckLinkIterator, (void **) &deckLinkIterator);
+	if (FAILED(result))
+#else
 	deckLinkIterator = CreateDeckLinkIteratorInstance();
 	if (deckLinkIterator == NULL)
+#endif
 	{
 		fprintf(stderr, "\nA DeckLink iterator could not be created. The DeckLink drivers may not be installed or are outdated.\n");
 		fprintf(stderr, "This UltraGrid version was compiled with DeckLink drivers %s. You should have at least this version.\n\n",
@@ -408,6 +440,9 @@ decklink_help()
 #ifdef HAVE_MACOSX
                 deviceNameCString = (char *) malloc(128);
                 CFStringGetCString(deviceNameString, (char *)deviceNameCString, 128, kCFStringEncodingMacRoman);
+#elif defined WIN32
+                deviceNameCString = (char *) malloc(128);
+		wcstombs((char *) deviceNameCString, deviceNameString, 128);
 #else
                 deviceNameCString = deviceNameString;
 #endif
@@ -504,6 +539,7 @@ settings_init(void *state, char *fmt)
         }
 
         if(fmt) {
+		char *save_ptr_top = NULL;
                 if(strcmp(fmt, "help") == 0) {
                         decklink_help();
                         return 0;
@@ -512,7 +548,7 @@ settings_init(void *state, char *fmt)
                 char *tmp;
 
                 // choose device
-                tmp = strtok(fmt, ":");
+                tmp = strtok_r(fmt, ":", &save_ptr_top);
                 if(!tmp) {
                         fprintf(stderr, "Wrong config %s\n", fmt);
                         return 0;
@@ -531,11 +567,11 @@ settings_init(void *state, char *fmt)
                 }
 
                 // choose mode
-                tmp = strtok(NULL, ":");
+                tmp = strtok_r(NULL, ":", &save_ptr_top);
                 if(tmp) {
                         s->mode = atoi(tmp);
 
-                        tmp = strtok(NULL, ":");
+                        tmp = strtok_r(NULL, ":", &save_ptr_top);
                         s->c_info = 0;
                         if(!tmp) {
                                 int i;
@@ -558,7 +594,7 @@ settings_init(void *state, char *fmt)
                                         return 0;
                                 }
                         }
-                        while((tmp = strtok(NULL, ":"))) {
+                        while((tmp = strtok_r(NULL, ":", &save_ptr_top))) {
                                 if(strcasecmp(tmp, "3D") == 0) {
                                         s->stereo = TRUE;
                                 } else if(strcasecmp(tmp, "timecode") == 0) {
@@ -673,6 +709,9 @@ static HRESULT set_display_mode_properties(struct vidcap_decklink_state *s, stru
 #ifdef HAVE_MACOSX
                 displayModeCString = (char *) malloc(128);
                 CFStringGetCString(displayModeString, (char *) displayModeCString, 128, kCFStringEncodingMacRoman);
+#elif defined WIN32
+                displayModeCString = (char *) malloc(128);
+		wcstombs((char *) displayModeCString, displayModeString, 128);
 #else
                 displayModeCString = displayModeString;
 #endif
@@ -715,10 +754,21 @@ vidcap_decklink_init(char *fmt, unsigned int flags)
 	IDeckLinkConfiguration*		deckLinkConfiguration = NULL;
         BMDAudioConnection              audioConnection;
 
+#ifdef WIN32
+	// Initialize COM on this thread
+	result = CoInitialize(NULL);
+	if(FAILED(result)) {
+		fprintf(stderr, "Initialization of COM failed - result = "
+				"08x.\n", result);
+		return NULL;
+	}
+#endif
+
+
         STRING current_version; 
         if(!blackmagic_api_version_check(&current_version)) {
-                fprintf(stderr, "\nThe DeckLink drivers may not be installed or are outdated.\n");
-                fprintf(stderr, "This UltraGrid version was compiled against DeckLink drivers %s. You should have at least this version.\n\n",
+		fprintf(stderr, "\nThe DeckLink drivers may not be installed or are outdated.\n");
+		fprintf(stderr, "This UltraGrid version was compiled against DeckLink drivers %s. You should have at least this version.\n\n",
                                 BLACKMAGIC_DECKLINK_API_VERSION_STRING);
                 fprintf(stderr, "Vendor download page is http://http://www.blackmagic-design.com/support/ \n");
                 if(current_version) {
@@ -726,6 +776,9 @@ vidcap_decklink_init(char *fmt, unsigned int flags)
 #ifdef HAVE_MACOSX
                         currentVersionCString = (char *) malloc(128);
                         CFStringGetCString(current_version, (char *) currentVersionCString, 128, kCFStringEncodingMacRoman);
+#elif defined WIN32
+                        currentVersionCString = (char *) malloc(128);
+			wcstombs((char *) currentVersionCString, current_version, 128);
 #else
                         currentVersionCString = current_version;
 #endif
@@ -737,7 +790,7 @@ vidcap_decklink_init(char *fmt, unsigned int flags)
                 } else {
                         fprintf(stderr, "No installed drivers detected\n");
                 }
-                        fprintf(stderr, "\n");
+                fprintf(stderr, "\n");
                 return NULL;
         }
 
@@ -754,7 +807,7 @@ vidcap_decklink_init(char *fmt, unsigned int flags)
         s->stereo = FALSE;
         s->use_timecode = FALSE;
         s->autodetect_mode = FALSE;
-        s->connection = 0;
+        s->connection = (BMDVideoConnection) 0;
         s->flags = 0;
 
 	// SET UP device and mode
@@ -810,8 +863,14 @@ vidcap_decklink_init(char *fmt, unsigned int flags)
                 dnum = 0;
                 deckLink = NULL;
                 // Create an IDeckLinkIterator object to enumerate all DeckLink cards in the system
-                deckLinkIterator = CreateDeckLinkIteratorInstance();
+#ifdef WIN32
+		result = CoCreateInstance(CLSID_CDeckLinkIterator, NULL, CLSCTX_ALL,
+			IID_IDeckLinkIterator, (void **) &deckLinkIterator);
+		if (FAILED(result))
+#else
+		deckLinkIterator = CreateDeckLinkIteratorInstance();
                 if (deckLinkIterator == NULL)
+#endif
                 {
                         fprintf(stderr, "\nA DeckLink iterator could not be created. The DeckLink drivers may not be installed or are outdated.\n");
                         fprintf(stderr, "This UltraGrid version was compiled with DeckLink drivers %s. You should have at least this version.\n\n",
@@ -845,6 +904,9 @@ vidcap_decklink_init(char *fmt, unsigned int flags)
 #ifdef HAVE_MACOSX
                                 deviceNameCString = (char *) malloc(128);
                                 CFStringGetCString(deviceNameString, (char *) deviceNameCString, 128, kCFStringEncodingMacRoman);
+#elif defined WIN32
+                                deviceNameCString = (char *) malloc(128);
+				wcstombs((char *) deviceNameCString, deviceNameString, 128);
 #else
                                 deviceNameCString = deviceNameString;
 #endif
@@ -906,7 +968,11 @@ vidcap_decklink_init(char *fmt, unsigned int flags)
                                         }
 
                                         if(s->autodetect_mode) {
+#ifdef WIN32
+                                                BOOL autodetection;
+#else
                                                 bool autodetection;
+#endif
                                                 if(deckLinkAttributes->GetFlag(BMDDeckLinkSupportsInputFormatDetection, &autodetection) != S_OK) {
                                                         fprintf(stderr, "[DeckLink] Could not verify if device supports autodetection.\n");
                                                         goto error;
@@ -1072,6 +1138,7 @@ void
 vidcap_decklink_finish(void *state)
 {
         UNUSED(state);
+        should_exit = true;
 }
 
 void
@@ -1351,6 +1418,9 @@ print_output_modes (IDeckLink* deckLink)
 #ifdef HAVE_MACOSX
                 displayModeCString = (char *) malloc(128);
                 CFStringGetCString(displayModeString, (char *) displayModeCString, 128, kCFStringEncodingMacRoman);
+#elif defined WIN32
+                displayModeCString = (char *) malloc(128);
+		wcstombs((char *) displayModeCString, displayModeString, 128);
 #else
                 displayModeCString = displayModeString;
 #endif

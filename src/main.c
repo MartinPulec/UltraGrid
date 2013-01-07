@@ -51,15 +51,16 @@
  *
  */
 
-#include <string.h>
-#include <stdlib.h>
-#include <getopt.h>
-#include <pthread.h>
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #include "config_unix.h"
 #include "config_win32.h"
 #endif // HAVE_CONFIG_H
+
+#include <string.h>
+#include <stdlib.h>
+#include <getopt.h>
+#include <pthread.h>
 #include "debug.h"
 #include "host.h"
 #include "perf.h"
@@ -77,6 +78,7 @@
 #include "tv.h"
 #include "transmit.h"
 #include "tfrc.h"
+#include "ihdtv/ihdtv.h"
 #include "lib_common.h"
 #include "compat/platform_semaphore.h"
 #include "audio/audio.h"
@@ -168,10 +170,11 @@ struct state_uv {
 };
 
 long packet_rate;
-volatile int should_exit = FALSE;
 volatile int wait_to_finish = FALSE;
 volatile int threads_joined = FALSE;
 static int exit_status = EXIT_SUCCESS;
+static bool should_exit_receiver = false;
+static bool should_exit_sender = false;
 
 unsigned int cuda_device = 0;
 unsigned int audio_capture_channels = 2;
@@ -188,7 +191,7 @@ static struct state_uv *uv_state;
 //
 // prototypes
 //
-static struct rtp *initialize_network(char *addrs, int recv_port,
+static struct rtp *initialize_network(char *addr, int recv_port,
                 int send_port, struct pdb *participants, bool use_ipv6,
                 char *mcast_if);
 
@@ -211,22 +214,9 @@ static void _exit_uv(int status);
 static void _exit_uv(int status) {
         exit_status = status;
         wait_to_finish = TRUE;
-        should_exit = TRUE;
         if(!threads_joined) {
-                for(int i = 0; i < CAP_DEV_COUNT; ++i) {
-                        if(uv_state->send[i].capture_device) {
-                                vidcap_finish(uv_state->send[i].capture_device);
-
-                                pthread_mutex_lock(&uv_state->send[i].sender_lock);
-                                uv_state->send[i].has_item_to_send = FALSE;
-                                if(uv_state->send[i].compress_thread_waiting) {
-                                        pthread_cond_signal(&uv_state->send[i].compress_thread_cv);
-                                }
-                                pthread_mutex_unlock(&uv_state->send[i].sender_lock);
-                        }
-                }
-                if(uv_state->display_device)
-                        display_finish(uv_state->display_device);
+                should_exit_sender = true;
+                should_exit_receiver = true;
                 if(uv_state->audio)
                         audio_finish(uv_state->audio);
         }
@@ -284,7 +274,7 @@ static void usage(void)
         printf("\t                         \twill be used for receiving, second one\n");
         printf("\t                         \tfor sending.\n");
         printf("\n");
-        printf("\t-l <limit_bitrate>       \tlimit sending bitrate (aggregate)\n");
+        printf("\t-l <limit_bitrate> | unlimited\tlimit sending bitrate (aggregate)\n");
         printf("\t                         \tto limit_bitrate Mb/s\n");
         printf("\n");
         printf("\t--audio-channel-map      <mapping> | help\n");
@@ -522,7 +512,7 @@ static void *receiver_thread(void *arg)
 
         fr = 1;
 
-        while (!should_exit) {
+        while (!should_exit_receiver) {
                 /* Housekeeping and RTCP... */
                 gettimeofday(&uv->curr_time, NULL);
                 uv->ts = tv_diff(uv->curr_time, uv->start_time) * 90000;
@@ -573,7 +563,7 @@ static void *receiver_thread(void *arg)
                                 fr = 1;
                                 cp->video_decoder_state->frame_buffer->ssrc = cp->ssrc;
                                 display_put_frame(uv->display_device,
-                                                  (char *) cp->video_decoder_state->frame_buffer);
+                                                cp->video_decoder_state->frame_buffer);
                                 cp->video_decoder_state->frame_buffer = NULL;
                         }
 
@@ -611,6 +601,8 @@ static void *receiver_thread(void *arg)
                 cp = pdb_iter_next(uv->participants);
         }
         pdb_iter_done(uv->participants);
+
+        display_finish(uv_state->display_device);
 
         return 0;
 }
@@ -701,7 +693,7 @@ static void *compress_thread(void *arg)
 
         
 
-        while (!should_exit) {
+        while (!should_exit_sender) {
                 /* Capture and transmit video... */
                 tx_frame = vidcap_grab(send->capture_device, &audio);
                 if (tx_frame != NULL) {
@@ -728,7 +720,7 @@ static void *compress_thread(void *arg)
                                         pthread_cond_signal(&send->sender_cv);
                                 }
 
-                                if(should_exit) {
+                                if(should_exit_sender) {
                                         pthread_mutex_unlock(&send->sender_lock);
                                         goto join_thread;
                                 }
@@ -744,7 +736,7 @@ static void *compress_thread(void *arg)
                          * frames may overlap then */
                         {
                                 pthread_mutex_lock(&send->sender_lock);
-                                if(should_exit) {
+                                if(should_exit_sender) {
                                         pthread_mutex_unlock(&send->sender_lock);
                                         goto join_thread;
                                 }
@@ -764,6 +756,8 @@ static void *compress_thread(void *arg)
                         }
                 }
         }
+
+        vidcap_finish(send->capture_device);
 
 
 join_thread:
@@ -793,7 +787,6 @@ int main(int argc, char *argv[])
         char *audio_send = NULL;
         char *jack_cfg = NULL;
         char *requested_fec = NULL;
-        char *save_ptr = NULL;
         char *audio_channel_map = NULL;
         char *audio_scale = "mixauto";
 
@@ -806,11 +799,14 @@ int main(int argc, char *argv[])
         struct state_uv *uv;
         int ch;
         
-        pthread_t receiver_thread_id = 0,
-                  compress_thread_id[CAP_DEV_COUNT];
+        pthread_t receiver_thread_id,
+                  compress_thread_id[CAP_DEV_COUNT],
+                  ihdtv_sender_thread_id;
+	bool receiver_thread_started = false,
+		  compress_thread_started[CAP_DEV_COUNT],
+		  ihdtv_sender_started = false;
         unsigned vidcap_flags = 0,
                  display_flags = 0;
-
 
 #if defined DEBUG && defined HAVE_LINUX
         mtrace();
@@ -866,6 +862,7 @@ int main(int argc, char *argv[])
         for(int i = 0; i < CAP_DEV_COUNT; ++i) {
                 capture_cfg[i] = NULL;
                 compress_thread_id[i] = 0;
+                compress_thread_started[i] = false;
                 requested_capture[i] = "none";
                 uv->send[i].tx = NULL;
                 uv->send[i].network_device = NULL;
@@ -909,9 +906,12 @@ int main(int argc, char *argv[])
                                 list_video_display_devices();
                                 return 0;
                         }
-                        uv->requested_display = strtok_r(optarg, ":", &save_ptr);
-                        if(save_ptr && strlen(save_ptr) > 0)
-                                display_cfg = save_ptr;
+                        uv->requested_display = optarg;
+                        if(strchr(optarg, ':')) {
+                                char *delim = strchr(optarg, ':');
+                                *delim = '\0';
+                                display_cfg = delim + 1;
+                        }
                         break;
 #ifndef GCOLL
                 case 't':
@@ -919,9 +919,12 @@ int main(int argc, char *argv[])
                                 list_video_capture_devices();
                                 return 0;
                         }
-                        uv->requested_capture = strtok_r(optarg, ":", &save_ptr);
-                        if(save_ptr && strlen(save_ptr) > 0)
-                                capture_cfg = save_ptr;
+                        uv->requested_capture = optarg;
+                        if(strchr(optarg, ':')) {
+                                char *delim = strchr(optarg, ':');
+                                *delim = '\0';
+                                capture_cfg = delim + 1;
+                        }
                         break;
 #endif // ! GCOLL
                 case 'm':
@@ -975,10 +978,14 @@ int main(int argc, char *argv[])
                         }
                         break;
                 case 'l':
-                        bitrate = atoi(optarg);
-                        if(bitrate <= 0) {
-                                usage();
-                                return EXIT_FAIL_USAGE;
+                        if(strcmp(optarg, "unlimited") == 0) {
+                                bitrate = -1;
+                        } else {
+                                bitrate = atoi(optarg);
+                                if(bitrate <= 0) {
+                                        usage();
+                                        return EXIT_FAIL_USAGE;
+                                }
                         }
                         break;
                 case '6':
@@ -1022,28 +1029,36 @@ int main(int argc, char *argv[])
                                 list_video_capture_devices();
                                 return 0;
                         }
-                        requested_capture[GCOLL_FRONT] = strtok_r(optarg, ":", &save_ptr);
-                        if(save_ptr && strlen(save_ptr) > 0)
-                                capture_cfg[GCOLL_FRONT] = save_ptr;
+                        requested_capture[GCOLL_FRONT] = optarg;
+                        if(strchr(optarg, ':')) {
+                                char *delim = strchr(optarg, ':');
+                                *delim = '\0';
+                                capture_cfg[GCOLL_FRONT] = delim + 1;
+                        }
                         break;
                 case 'S':
                         if (!strcmp(optarg, "help")) {
                                 list_video_capture_devices();
                                 return 0;
                         }
-                        requested_capture[GCOLL_SIDE] = strtok_r(optarg, ":", &save_ptr);
-                        if(save_ptr && strlen(save_ptr) > 0)
-                                capture_cfg[GCOLL_SIDE] = save_ptr;
+                        requested_capture[GCOLL_SIDE] = optarg;
+                        if(strchr(optarg, ':')) {
+                                char *delim = strchr(optarg, ':');
+                                *delim = '\0';
+                                capture_cfg[GCOLL_SIDE] = delim + 1;
+                        }
                         break;
                 case 'G':
                         if (!strcmp(optarg, "help")) {
                                 list_video_capture_devices();
                                 return 0;
                         }
-                        requested_capture[GCOLL_GROUP] = strtok_r(optarg, ":", &save_ptr);
-                        if(save_ptr && strlen(save_ptr) > 0)
-                                capture_cfg[GCOLL_GROUP] = save_ptr;
-                        gcoll_params.send_group_camera = true;
+                        requested_capture[GCOLL_GROUP] = optarg;
+                        if(strchr(optarg, ':')) {
+                                char *delim = strchr(optarg, ':');
+                                *delim = '\0';
+                                capture_cfg[GCOLL_GROUP] = delim + 1;
+                        }
                         break;
                 case 'R':
                         gcoll_params.group_id = atoi(optarg);
@@ -1098,6 +1113,21 @@ int main(int argc, char *argv[])
                 network_device = (char *) argv[0];
         }
 
+#ifdef WIN32
+	WSADATA wsaData;
+	int err = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	if(err != 0) {
+		fprintf(stderr, "WSAStartup failed with error %d.", err);
+		return EXIT_FAILURE;
+	}
+	if(LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2) {
+		fprintf(stderr, "Counld not found usable version of Winsock.\n");
+		WSACleanup();
+		return EXIT_FAILURE;
+	}
+#endif
+	
+
         char *tmp_requested_fec = strdup(DEFAULT_AUDIO_FEC);
         uv->audio = audio_cfg_init (network_device, uv->recv_port_number + 2,
                         uv->send_port_number + 2, audio_send, audio_recv,
@@ -1142,7 +1172,11 @@ int main(int argc, char *argv[])
                         bitrate = 6618;
                 }
 
-                packet_rate = 1000 * uv->requested_mtu * 8 / bitrate;
+                if(bitrate != -1) {
+                        packet_rate = 1000 * uv->requested_mtu * 8 / bitrate;
+                } else {
+                        packet_rate = 0;
+                }
 
                 for(int i = 0; i < CAP_DEV_COUNT; ++i) {
                         if ((uv->send[i].tx = initialize_transmit(uv->requested_mtu, requested_fec)) == NULL) {
@@ -1150,9 +1184,10 @@ int main(int argc, char *argv[])
                                 abort();
                         }
                 }
+
                 if ((uv->tx = initialize_transmit(uv->requested_mtu, requested_fec)) == NULL) {
-                        fprintf(stderr, "Unable to initialize transmitter.\n");
-                        abort();
+                        printf("Unable to initialize transmitter.\n");
+                        exit(EXIT_FAIL_TRANSMIT);
                 }
 
                 /* following block only shows help (otherwise initialized in receiver thread */
@@ -1160,13 +1195,13 @@ int main(int argc, char *argv[])
                                 (uv->decoder_mode && strstr(uv->decoder_mode, "help") != NULL)) {
                         struct state_decoder *dec = decoder_init(uv->decoder_mode, uv->postprocess);
                         decoder_destroy(dec);
-                        abort();
+                        exit(0);
                 }
                 /* following block only shows help (otherwise initialized in sender thread */
                 if(strstr(uv->requested_compression,"help") != NULL) {
                         struct compress_state *compression = compress_init(uv->requested_compression);
                         compress_done(compression);
-                        abort();
+                        exit(0);
                 }
         }
 
@@ -1229,7 +1264,9 @@ int main(int argc, char *argv[])
                              (void *)uv) != 0) {
                                 perror("Unable to create display thread!\n");
                                 abort();
-                        }
+                        } else {
+				receiver_thread_started = true;
+			}
                 }
 
                 for(int i = 0; i < CAP_DEV_COUNT; ++i) {
@@ -1240,6 +1277,8 @@ int main(int argc, char *argv[])
                                                  (void *)uv) != 0) {
                                         perror("Unable to create capture thread!\n");
                                         abort();
+                                } else {
+                                        compress_thread_started[i] = true;
                                 }
                         }
                 }
@@ -1258,12 +1297,12 @@ int main(int argc, char *argv[])
                 display_run(uv->display_device);
 
 //cleanup_wait_display:
-        if (strcmp("none", uv->requested_display) != 0 && receiver_thread_id)
+        if (strcmp("none", uv->requested_display) != 0 && receiver_thread_started)
                 pthread_join(receiver_thread_id, NULL);
 
 //cleanup_wait_capture:
         for(int i = 0; i < CAP_DEV_COUNT; ++i) {
-                if (strcmp("none", requested_capture[i]) != 0 && compress_thread_id[i])
+                if (strcmp("none", requested_capture[i]) != 0 && compress_thread_started[i])
                         pthread_join(compress_thread_id[i],
                                         NULL);
         }
@@ -1324,6 +1363,10 @@ cleanup:
 
 #if defined DEBUG && defined HAVE_LINUX
         muntrace();
+#endif
+
+#ifdef WIN32
+	WSACleanup();
 #endif
 
         printf("Exit\n");

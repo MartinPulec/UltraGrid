@@ -78,6 +78,7 @@
 struct state_sage {
         struct video_frame *frame;
         struct tile *tile;
+        codec_t requestedDisplayCodec;
 
         /* Thread related information follows... */
         pthread_t thread_id;
@@ -99,6 +100,8 @@ struct state_sage {
         int                     frames;
         struct timeval          t, t0;
 };
+
+static volatile bool should_exit = false;
 
 /** Prototyping */
 int display_sage_handle_events(void)
@@ -152,12 +155,15 @@ void *display_sage_init(char *fmt, unsigned int flags, void *udata)
         assert(s != NULL);
 
         s->confName = "ultragrid.conf";
+        s->requestedDisplayCodec = (codec_t) -1;
 
         if(fmt) {
                 if(strcmp(fmt, "help") == 0) {
                         printf("SAGE usage:\n");
-                        printf("\tuv -t sage:[config=<config_file>]\n");
+                        printf("\tuv -t sage:[config=<config_file>][:codec=<fcc>]\n");
                         printf("\t                      <config_file> - SAGE app config file, default \"ultragrid.conf\"\n");
+                        printf("\t                      <fcc> - FourCC of codec that will be used to transmit to SAGE\n");
+                        printf("\t                              Supported options are UYVY, RGBA, RGB or DXT1\n");
                         return NULL;
                 } else {
                         char *save_ptr = NULL;
@@ -167,6 +173,26 @@ void *display_sage_init(char *fmt, unsigned int flags, void *udata)
                                 fmt = NULL;
                                 if(strncmp(item, "config=", strlen("config=")) == 0) {
                                         s->confName = item + strlen("config=");
+                                } else if(strncmp(item, "codec=", strlen("codec=")) == 0) {
+                                         strlen("codec=");
+                                         uint32_t fourcc;
+                                         if(strlen(item + strlen("codec=")) != sizeof(fourcc)) {
+                                                 fprintf(stderr, "Malformed FourCC code (wrong length).\n");
+                                                 free(s); return NULL;
+                                         }
+                                         memcpy((void *) &fourcc, item + strlen("codec="), sizeof(fourcc));
+                                         s->requestedDisplayCodec = get_codec_from_fcc(fourcc);
+                                         if(s->requestedDisplayCodec == (codec_t) -1) {
+                                                 fprintf(stderr, "Codec not found according to FourCC.\n");
+                                                 free(s); return NULL;
+                                         }
+                                         if(s->requestedDisplayCodec != UYVY ||
+                                                         s->requestedDisplayCodec != RGBA ||
+                                                         s->requestedDisplayCodec != RGB ||
+                                                         s->requestedDisplayCodec != DXT1) {
+                                                 fprintf(stderr, "Entered codec is not nativelly supported by SAGE.\n");
+                                                 free(s); return NULL;
+                                         }
                                 } else {
                                         fprintf(stderr, "[SAGE] unrecognized configuration: %s\n",
                                                         item);
@@ -219,18 +245,11 @@ void display_sage_finish(void *state)
 
         assert(s->magic == MAGIC_SAGE);
 
+        should_exit = true;
+
         // there was already issued should_exit...
         display_sage_putf(s, NULL);
         // .. so thread should exit after this call
-
-        // release grab
-        pthread_mutex_lock(&s->buffer_writable_lock);
-        s->buffer_writable = TRUE;
-        if(s->grab_waiting) {
-                pthread_cond_signal(&s->buffer_writable_cond);
-        }
-        pthread_mutex_unlock(&s->buffer_writable_lock);
-
 }
 
 void display_sage_done(void *state)
@@ -333,18 +352,27 @@ display_type_t *display_sage_probe(void)
 
 int display_sage_get_property(void *state, int property, void *val, size_t *len)
 {
+        struct state_sage *s = (struct state_sage *)state;
         UNUSED(state);
         codec_t codecs[] = {UYVY, RGBA, RGB, DXT1};
         
         switch (property) {
                 case DISPLAY_PROPERTY_CODECS:
-                        if(sizeof(codecs) <= *len) {
-                                memcpy(val, codecs, sizeof(codecs));
+                        if(s->requestedDisplayCodec != (codec_t) -1) {
+                                if(sizeof(codec_t) <= *len) {
+                                        memcpy(val, &s->requestedDisplayCodec, sizeof(codec_t));
+                                        *len = sizeof(codec_t);
+                                } else {
+                                        return FALSE;
+                                }
                         } else {
-                                return FALSE;
+                                if(sizeof(codecs) <= *len) {
+                                        memcpy(val, codecs, sizeof(codecs));
+                                        *len = sizeof(codecs);
+                                } else {
+                                        return FALSE;
+                                }
                         }
-                        
-                        *len = sizeof(codecs);
                         break;
                 case DISPLAY_PROPERTY_RSHIFT:
                         *(int *) val = 0;
