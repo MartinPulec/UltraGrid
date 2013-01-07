@@ -1225,6 +1225,145 @@ AC_SUBST(GL_INC)
 AC_SUBST(GL_LIB)
 AC_SUBST(GL_OBJ)
 
+# -------------------------------------------------------------------------------------------------
+# GColl stuff
+# -------------------------------------------------------------------------------------------------
+GCOLL_INC=
+GCOLL_OBJ=
+GCOLL_LIB=
+gcoll=no
+
+AC_ARG_ENABLE(gcoll,
+      AS_HELP_STRING([--disable-gcoll], [disable GColl (default is auto)]),
+    [gcoll_req=$enableval],
+    [gcoll_req=yes]
+    )
+
+SAVED_LIBS=$LIBS
+AC_CHECK_HEADER(GL/glew.h)
+AC_CHECK_LIB(GLEW, glewInit)
+LIBS=$SAVED_LIBS
+
+case "$host_os" in
+      *darwin*)
+      AC_CHECK_HEADERS([OpenGL/gl.h OpenGL/glext.h],
+                       [FOUND_GL_H=yes],
+                       [FOUND_GL_H=no],
+                       [
+                        #include <OpenGL/gl.h>
+                        #include <OpenGL/glext.h>
+                       ]
+                      )
+
+      if test $FOUND_GL_H = yes
+      then
+                AC_CHECK_FILE(/System/Library/Frameworks/OpenGL.framework/OpenGL, FOUND_GL_L=yes, echo "OpenGL framework not found.")
+
+              if test $gcoll_req = yes -a $FOUND_GL_L = yes
+              then
+                      case "$host_os" in
+                      *darwin8*)
+                              GCOLL_LIB="-framework GLUT -framework OpenGL -framework Cocoa"
+                      ;;
+                      *darwin9*)
+                              GCOLL_LIB="-framework GLUT -framework OpenGL -framework Cocoa -dylib_file /System/Library/Frameworks/OpenGL.framework/Versions/A/Libraries/libGL.dylib:/System/Library/Frameworks/OpenGL.framework/Versions/A/Libraries/libGL.dylib"
+                      ;;
+                      *)
+                              GCOLL_LIB="-framework GLUT -framework OpenGL -framework Cocoa"
+                      ;;
+                      esac
+
+                      #FOUND_GLEW_L=no
+                      #AC_CHECK_HEADERS([/opt/local/include/GL/glew.h],
+                      #                [AC_CHECK_LIB(GLEW, main, FOUND_GLEW_L=yes , echo "GLEW library not found or not usable.", -L/opt/local/lib)],
+                      #                [echo "GL/glew.h not found."]
+                      #               )
+                      AC_CHECK_HEADERS([GLUT/glut.h],
+                                       [AC_CHECK_FILE(/System/Library/Frameworks/GLUT.framework/GLUT, FOUND_GLUT=yes, echo "GLUT framework not found.")],
+                                       [echo "GLUT/glut.h not found."]
+                                    )
+                      if test "$FOUND_GLUT" = yes
+                      then
+                              GCOLL_INC="$GCOLL_INC -I/opt/local/include"
+                              GCOLL_OBJ="$GCOLL_OBJ src/video_display/gcoll.o"
+                              AC_DEFINE([HAVE_GCOLL], [1], [Build with GColl display])
+        AC_DEFINE([GCOLL], [1], [Build with GColl display])
+                                gcoll=yes
+                      else
+                                GCOLL_LIB=
+                              echo "OpenGL (GLUT) libraries not found or not usable."
+                    fi
+              else
+                      echo "OpenGL libraries not found or not usable."
+              fi
+
+      else
+              echo "OpenGL headers not found or not usable."
+      fi
+      ;;
+      *)
+      AC_CHECK_HEADERS([GL/gl.h GL/glx.h ],
+                       [FOUND_GL_H=yes],
+                       [FOUND_GL_H=no],
+                       [
+                        #include <GL/gl.h>
+                        #include <GL/glx.h>
+                       ]
+                      )
+
+      if test $FOUND_GL_H = yes
+      then
+              AC_CHECK_LIB(GL, glBindTexture, FOUND_GL_L=yes, FOUND_GL_L=no)
+
+              if test $gl_req = yes -a $FOUND_GL_L = yes
+              then
+                      GCOLL_LIB+=" -lGL"
+
+                      AC_CHECK_HEADERS([GL/glut.h],
+                                       [AC_CHECK_LIB(glut, glutInit, FOUND_GLUT=yes , echo "GLUT library not found or not usable.")],
+                                       [echo "GL/glut.h not found."]
+                                      )
+                      if test "$FOUND_GLUT" = yes -a $ac_cv_header_GL_glew_h = yes -a $ac_cv_lib_GLEW_glewInit = yes
+                      then
+                              GCOLL_LIB+=" -lglut -lGLEW"
+                              GCOLL_OBJ="$GCOLL_OBJ src/video_display/gcoll.o"
+                              AC_DEFINE([HAVE_GCOLL], [1], [Build with GColl display])
+        AC_DEFINE([GCOLL], [1], [Build with GColl display])
+                                gcoll=yes
+                      else
+                                if test "$FOUND_GLUT" = no
+                                then
+                                        AC_MSG_WARN([OpenGL (GLUT) libraries not found or not usable.])
+                                fi
+
+                                if test $ac_cv_header_GL_glew_h = no -o $ac_cv_lib_GLEW_glewInit = no
+                                then
+                                        AC_MSG_WARN([OpenGL GLEW libraries or headers not found or not usable.])
+                                fi
+                      fi
+              else
+                      AC_MSG_WARN([OpenGL libraries not found or not usable.])
+              fi
+
+      else
+              AC_MSG_WARN([OpenGL headers (gl.h, glx.h) not found or not usable.])
+      fi
+      ;;
+esac
+
+if test $gcoll = yes
+then
+        AC_SUBST(GCOLL_LIB_TARGET, "lib/ultragrid/display_gcoll.so.$video_display_abi_version")
+        LIB_TARGETS+=" $GCOLL_LIB_TARGET"
+        LIB_OBJS+=" $GCOLL_OBJ"
+fi
+
+LIB_MODULES+=" $GCOLL_LIB"
+
+AC_SUBST(GCOLL_INC)
+AC_SUBST(GCOLL_LIB)
+AC_SUBST(GCOLL_OBJ)
+
 
 # -------------------------------------------------------------------------------------------------
 # Screen capture stuff
@@ -2028,18 +2167,6 @@ AC_SUBST(V4L2_OBJ)
 LIB_MODULES="$LIB_MODULES $V4L2_LIBS"
 
 # -------------------------------------------------------------------------------------------------
-# GColl
-gcoll=yes
-AC_ARG_ENABLE(gcoll,
-    AS_HELP_STRING([--enable-gcoll], [enable GColl mode]),
-    [if test $enableval != no; then gcoll = yes; fi],
-    )
-
-if test $gcoll = yes; then
-        AC_DEFINE([GCOLL], [1], [Build GColl mode])
-fi
-
-# -------------------------------------------------------------------------------------------------
 # We need to add libraries then
 
 # this is only needed when passing to "clean" make target
@@ -2110,6 +2237,8 @@ RESULT=\
 
   scale postprocessor ......... $scale
   testcard extras ............. $testcard_extras_req
+
+  GColl mode .................. $gcoll
   "
 
 AC_MSG_RESULT(
