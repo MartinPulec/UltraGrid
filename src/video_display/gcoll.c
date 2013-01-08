@@ -706,7 +706,7 @@ static void * rum_communicator_main(void *s) {
 
   struct state_gcoll *sg = (struct state_gcoll *) s;
 
-  while (!should_exit && !sg->exit) {
+  while (!sg->exit) {
     if (rum_communicator_init(sg->rum, sg->params, sg) == FALSE) {
       fprintf(stderr, "RUM communicator initialization failed.\n");
       sg->exit = true;
@@ -718,7 +718,7 @@ static void * rum_communicator_main(void *s) {
       rum_communicator_heartbeat(sg->rum);
       sg->rum->heartbeats++;
       usleep(500 * 1000);
-      if (should_exit) break;
+      if (sg->exit) break;
     }
     if (sg->rum->heartbeats < 5) {
       fprintf(stderr, "Frequent RUM communicator failures, quitting.\n");
@@ -1198,7 +1198,7 @@ void display_gcoll_run(void *arg)
 
   struct state_gcoll *s = gcoll;
 
-  while (!should_exit && !gcoll->exit) {
+  while (!gcoll->exit) {
     glutMainLoopEvent();
     glut_idle_callback();
     gl_check_error();
@@ -1219,6 +1219,7 @@ void display_gcoll_done(void *state)
   assert(state != NULL);
   struct state_gcoll *s = (struct state_gcoll *)state;
 
+  s->exit = true;
   pthread_join(s->rum_thread, NULL);
   rum_communicator_done(s->rum);
   s->rum = NULL;
