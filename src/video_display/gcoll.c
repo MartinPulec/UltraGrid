@@ -52,16 +52,25 @@
 #include <math.h>
 #include <assert.h>
 #include <pthread.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 
 #include <tv.h>
 
+#ifdef HAVE_MACOSX
+#include <OpenGL/gl.h>
+#include <OpenGL/OpenGL.h> // CGL
+#include <OpenGL/glext.h>
+#include <GLUT/glut.h>
+#elif defined HAVE_LINUX
 #include <GL/glew.h>
 #include <GL/gl.h>
 #include <GL/glx.h>
 #include <GL/glut.h>
 #include "x11_common.h"
+#else // WIN32
+#include <GL/glew.h>
+#include <GL/glut.h>
+#endif /* HAVE_MACOSX */
+
 #ifdef FREEGLUT
 #include <GL/freeglut_ext.h>
 #endif /* FREEGLUT */

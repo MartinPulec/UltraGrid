@@ -87,9 +87,9 @@
 #include <mcheck.h>
 #endif
 
-#ifdef GCOLL
+#ifdef HAVE_GCOLL
 #include "video_display/gcoll.h"
-#endif // GCOLL
+#endif // HAVE_GCOLL
 
 #define EXIT_FAIL_USAGE		1
 #define EXIT_FAIL_UI   		2
@@ -120,7 +120,7 @@
 #define INITIAL_VIDEO_RECV_BUFFER_SIZE  ((4*1920*1080)*110/100)
 #endif
 
-#ifdef GCOLL
+#ifdef HAVE_GCOLL
 #define CAP_DEV_COUNT 3
 #else
 #define CAP_DEV_COUNT 1
@@ -779,9 +779,9 @@ int main(int argc, char *argv[])
 
         char *capture_cfg[CAP_DEV_COUNT];
         char *requested_capture[CAP_DEV_COUNT];
-#ifdef GCOLL
+#ifdef HAVE_GCOLL
         struct gcoll_init_params gcoll_params;
-#endif // GCOLL
+#endif // HAVE_GCOLL
         char *display_cfg = NULL;
         char *audio_recv = NULL;
         char *audio_send = NULL;
@@ -841,7 +841,7 @@ int main(int argc, char *argv[])
                 {"echo-cancellation", no_argument, 0, ECHO_CANCELLATION},
                 {"cuda-device", required_argument, 0, CUDA_DEVICE},
                 {"mcast-if", required_argument, 0, MCAST_IF},
-#ifdef GCOLL
+#ifdef HAVE_GCOLL
                 {"front-camera", required_argument, 0, 'F'},
                 {"side-camera", required_argument, 0, 'S'},
                 {"group-camera", required_argument, 0, 'G'},
@@ -892,10 +892,10 @@ int main(int argc, char *argv[])
 
         init_lib_common();
 
-#ifdef GCOLL
+#ifdef HAVE_GCOLL
         gcoll_params.send_group_camera = false;
         gcoll_params.send_audio = false;
-#endif // GCOLL
+#endif // HAVE_GCOLL
 
         while ((ch =
                 getopt_long(argc, argv, "d:t:m:r:s:v6c:ihj:M:p:f:P:l:F:S:G:R:", getopt_options,
@@ -913,7 +913,7 @@ int main(int argc, char *argv[])
                                 display_cfg = delim + 1;
                         }
                         break;
-#ifndef GCOLL
+#ifndef HAVE_GCOLL
                 case 't':
                         if (!strcmp(optarg, "help")) {
                                 list_video_capture_devices();
@@ -926,7 +926,7 @@ int main(int argc, char *argv[])
                                 capture_cfg = delim + 1;
                         }
                         break;
-#endif // ! GCOLL
+#endif // ! HAVE_GCOLL
                 case 'm':
                         uv->requested_mtu = atoi(optarg);
                         break;
@@ -953,9 +953,9 @@ int main(int argc, char *argv[])
                         break;
                 case 's':
                         audio_send = optarg;
-#ifdef GCOLL
+#ifdef HAVE_GCOLL
                         gcoll_params.send_audio = true;
-#endif // GCOLL
+#endif // HAVE_GCOLL
                         break;
                 case 'j':
                         jack_cfg = optarg;
@@ -1023,7 +1023,7 @@ int main(int argc, char *argv[])
                 case MCAST_IF:
                         mcast_if = optarg;
                         break;
-#ifdef GCOLL
+#ifdef HAVE_GCOLL
                 case 'F':
                         if (!strcmp(optarg, "help")) {
                                 list_video_capture_devices();
@@ -1063,20 +1063,20 @@ int main(int argc, char *argv[])
                 case 'R':
                         gcoll_params.group_id = atoi(optarg);
                         break;
-#endif // GCOLL
+#endif // HAVE_GCOLL
                 default:
                         usage();
                         return EXIT_FAIL_USAGE;
                 }
         }
 
-#ifdef GCOLL
+#ifdef HAVE_GCOLL
         if(strcmp(uv->requested_display, "none") != 0 &&
                         strcmp(uv->requested_display, "gcoll") != 0) {
                 fprintf(stderr, "Only allowed display in GColl mode is \"gcoll\".\n");
                 abort();
         }
-#endif // GCOLL
+#endif // HAVE_GCOLL
         
         argc -= optind;
         argv += optind;
@@ -1087,13 +1087,13 @@ int main(int argc, char *argv[])
 #endif
         printf("\n");
         printf("Display device: %s\n", uv->requested_display);
-#ifndef GCOLL
+#ifndef HAVE_GCOLL
         printf("Capture device: %s\n", uv->requested_capture[0]);
 #else
         printf("Front camera  : %s\n", requested_capture[GCOLL_FRONT]);
         printf("Side camera   : %s\n", requested_capture[GCOLL_SIDE]);
         printf("Group camera  : %s\n", requested_capture[GCOLL_GROUP]);
-#endif // ! GCOLL
+#endif // ! HAVE_GCOLL
         printf("MTU           : %d\n", uv->requested_mtu);
         printf("Compression   : %s\n", uv->requested_compression);
 
@@ -1205,14 +1205,14 @@ int main(int argc, char *argv[])
                 }
         }
 
-#ifdef GCOLL
+#ifdef HAVE_GCOLL
         gcoll_params.front_ssrc = rtp_my_ssrc(uv->send[GCOLL_FRONT].network_device);
         gcoll_params.side_ssrc = rtp_my_ssrc(uv->send[GCOLL_SIDE].network_device);
         gcoll_params.group_ssrc = rtp_my_ssrc(uv->send[GCOLL_GROUP].network_device);
         // gcoll.params.send_group_camera set in getopt loop
         gcoll_params.audio_ssrc = audio_net_get_ssrc(uv->audio);
         gcoll_params.reflector_addr = network_device;
-#endif // GCOLL
+#endif // HAVE_GCOLL
 
         for(int i = 0; i < CAP_DEV_COUNT; ++i) {
                 if ((uv->send[i].capture_device =
@@ -1225,9 +1225,9 @@ int main(int argc, char *argv[])
         }
 
         void *udata = NULL;
-#ifdef GCOLL
+#ifdef HAVE_GCOLL
         udata = &gcoll_params;
-#endif // GCOLL
+#endif // HAVE_GCOLL
 
         if ((uv->display_device =
              initialize_video_display(uv->requested_display, display_cfg, display_flags, udata)) == NULL) {
