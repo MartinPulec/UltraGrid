@@ -57,6 +57,7 @@
 #include "video_decompress.h"
 #include "video_decompress/dxt_glsl.h"
 #include "video_decompress/jpeg.h"
+#include "video_decompress/libavcodec.h"
 #include "video_decompress/null.h"
 #include "lib_common.h"
 
@@ -121,14 +122,16 @@ static int decompress_fill_symbols(decoder_table_t *device)
 
 
 struct decode_from_to decoders_for_codec[] = {
-        { DXT1, RGBA, RTDXT_MAGIC },
-        { DXT1_YUV, RGBA, RTDXT_MAGIC },
-        { DXT5, RGBA, RTDXT_MAGIC },
-        { DXT1, UYVY, RTDXT_MAGIC },
-        { DXT1_YUV, UYVY, RTDXT_MAGIC },
-        { DXT5, UYVY, RTDXT_MAGIC },
-        { JPEG, RGB, JPEG_MAGIC },
-        { JPEG, UYVY, JPEG_MAGIC },
+        { DXT1, RGBA, RTDXT_MAGIC, 500},
+        { DXT1_YUV, RGBA, RTDXT_MAGIC, 500 },
+        { DXT5, RGBA, RTDXT_MAGIC, 500 },
+        { DXT1, UYVY, RTDXT_MAGIC, 500 },
+        { DXT1_YUV, UYVY, RTDXT_MAGIC, 500 },
+        { DXT5, UYVY, RTDXT_MAGIC, 500 },
+        { JPEG, RGB, JPEG_MAGIC, 500 },
+        { JPEG, UYVY, JPEG_MAGIC, 500 },
+        { H264, UYVY, LIBAVCODEC_MAGIC, 500 },
+        { JPEG, UYVY, LIBAVCODEC_MAGIC, 600 },
         { (codec_t) -1, (codec_t) -1, NULL_MAGIC }
 };
 const int decoders_for_codec_count = (sizeof(decoders_for_codec) / sizeof(struct decode_from_to));
@@ -143,6 +146,15 @@ decoder_table_t decoders[] = {
         { JPEG_MAGIC, "jpeg", MK_NAME(jpeg_decompress_init), MK_NAME(jpeg_decompress_reconfigure),
                 MK_NAME(jpeg_decompress), MK_NAME(jpeg_decompress_get_property),
                 MK_NAME(jpeg_decompress_done), NULL},
+#endif 
+#if defined HAVE_LIBAVCODEC || defined BUILD_LIBRARIES
+        { LIBAVCODEC_MAGIC, "libavcodec",
+                MK_NAME(libavcodec_decompress_init),
+                MK_NAME(libavcodec_decompress_reconfigure),
+                MK_NAME(libavcodec_decompress),
+                MK_NAME(libavcodec_decompress_get_property),
+                MK_NAME(libavcodec_decompress_done),
+                NULL},
 #endif 
         { NULL_MAGIC, NULL, MK_STATIC(null_decompress_init), MK_STATIC(null_decompress_reconfigure),
                 MK_STATIC(null_decompress), MK_NAME(null_decompress_get_property),
@@ -175,6 +187,18 @@ void initialize_video_decompress(void)
         }
 }
 
+int decompress_is_available(unsigned int decoder_index)
+{
+        int i;
+
+        for(i = 0; i < available_decoders_count; ++i) {
+                if(available_decoders[i]->magic == decoder_index) {
+                        return TRUE;
+                }
+        }
+        return FALSE;
+}
+
 struct state_decompress *decompress_init(unsigned int decoder_index)
 {
         int i;
@@ -199,11 +223,12 @@ int decompress_reconfigure(struct state_decompress *s, struct video_desc desc, i
         return s->functions->reconfigure(s->state, desc, rshift, gshift, bshift, pitch, out_codec);
 }
 
-void decompress_frame(struct state_decompress *s, unsigned char *dst, unsigned char *buffer, unsigned int src_len)
+int decompress_frame(struct state_decompress *s, unsigned char *dst,
+                unsigned char *buffer, unsigned int src_len, int frame_seq)
 {
         assert(s->magic == DECOMPRESS_MAGIC);
 
-        s->functions->decompress(s->state, dst, buffer, src_len);
+        return s->functions->decompress(s->state, dst, buffer, src_len, frame_seq);
 }
 
 int decompress_get_property(struct state_decompress *s, int property, void *val, size_t *len)
