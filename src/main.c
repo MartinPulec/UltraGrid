@@ -127,6 +127,8 @@
 #endif
 
 struct state_send {
+        char *requested_capture;
+        char *capture_cfg;
         struct vidcap *capture_device;
         struct rtp *network_device;
         struct tx *tx;
@@ -673,6 +675,16 @@ static void *compress_thread(void *arg)
         int i = 0;
 
         struct compress_state *compression; 
+
+        if ((send->capture_device =
+                                initialize_video_capture(send->requested_capture,
+                                        send->capture_cfg, 0)) == NULL) {
+                fprintf(stderr, "Unable to open capture device: %s\n",
+                                send->requested_capture);
+                exit_uv(1);
+        }
+        printf("Video capture initialized-%s\n", send->requested_capture);
+
         compression = compress_init(uv->requested_compression);
         
         pthread_mutex_unlock(&uv->master_lock);
@@ -690,8 +702,6 @@ static void *compress_thread(void *arg)
                 exit_uv(EXIT_FAILURE);
                 goto join_thread;
         }
-
-        
 
         while (!should_exit_sender) {
                 /* Capture and transmit video... */
@@ -767,6 +777,9 @@ join_thread:
 compress_done:
         compress_done(compression);
 
+        if(send->capture_device)
+                vidcap_done(send->capture_device);
+
         return NULL;
 }
 
@@ -777,8 +790,6 @@ int main(int argc, char *argv[])
 #endif
         char *network_device = NULL;
 
-        char *capture_cfg[CAP_DEV_COUNT];
-        char *requested_capture[CAP_DEV_COUNT];
 #ifdef GCOLL
         struct gcoll_init_params gcoll_params;
 #endif // GCOLL
@@ -860,10 +871,10 @@ int main(int argc, char *argv[])
         uv->display_device = NULL;
         uv->requested_display = "none";
         for(int i = 0; i < CAP_DEV_COUNT; ++i) {
-                capture_cfg[i] = NULL;
+                uv->send[i].capture_cfg = NULL;
+                uv->send[i].requested_capture = "none";
                 compress_thread_id[i] = 0;
                 compress_thread_started[i] = false;
-                requested_capture[i] = "none";
                 uv->send[i].tx = NULL;
                 uv->send[i].network_device = NULL;
 
@@ -1029,11 +1040,11 @@ int main(int argc, char *argv[])
                                 list_video_capture_devices();
                                 return 0;
                         }
-                        requested_capture[GCOLL_FRONT] = optarg;
+                        uv->send[GCOLL_FRONT].requested_capture = optarg;
                         if(strchr(optarg, ':')) {
                                 char *delim = strchr(optarg, ':');
                                 *delim = '\0';
-                                capture_cfg[GCOLL_FRONT] = delim + 1;
+                                uv->send[GCOLL_FRONT].capture_cfg = delim + 1;
                         }
                         break;
                 case 'S':
@@ -1041,11 +1052,11 @@ int main(int argc, char *argv[])
                                 list_video_capture_devices();
                                 return 0;
                         }
-                        requested_capture[GCOLL_SIDE] = optarg;
+                        uv->send[GCOLL_SIDE].requested_capture = optarg;
                         if(strchr(optarg, ':')) {
                                 char *delim = strchr(optarg, ':');
                                 *delim = '\0';
-                                capture_cfg[GCOLL_SIDE] = delim + 1;
+                                uv->send[GCOLL_SIDE].capture_cfg = delim + 1;
                         }
                         break;
                 case 'G':
@@ -1053,11 +1064,11 @@ int main(int argc, char *argv[])
                                 list_video_capture_devices();
                                 return 0;
                         }
-                        requested_capture[GCOLL_GROUP] = optarg;
+                        uv->send[GCOLL_GROUP].requested_capture = optarg;
                         if(strchr(optarg, ':')) {
                                 char *delim = strchr(optarg, ':');
                                 *delim = '\0';
-                                capture_cfg[GCOLL_GROUP] = delim + 1;
+                                uv->send[GCOLL_GROUP].capture_cfg = delim + 1;
                         }
                         break;
                 case 'R':
@@ -1090,9 +1101,9 @@ int main(int argc, char *argv[])
 #ifndef GCOLL
         printf("Capture device: %s\n", uv->requested_capture[0]);
 #else
-        printf("Front camera  : %s\n", requested_capture[GCOLL_FRONT]);
-        printf("Side camera   : %s\n", requested_capture[GCOLL_SIDE]);
-        printf("Group camera  : %s\n", requested_capture[GCOLL_GROUP]);
+        printf("Front camera  : %s\n", uv->send[GCOLL_FRONT].requested_capture);
+        printf("Side camera   : %s\n", uv->send[GCOLL_SIDE].requested_capture);
+        printf("Group camera  : %s\n", uv->send[GCOLL_GROUP].requested_capture);
 #endif // ! GCOLL
         printf("MTU           : %d\n", uv->requested_mtu);
         printf("Compression   : %s\n", uv->requested_compression);
@@ -1214,16 +1225,6 @@ int main(int argc, char *argv[])
         gcoll_params.reflector_addr = network_device;
 #endif // GCOLL
 
-        for(int i = 0; i < CAP_DEV_COUNT; ++i) {
-                if ((uv->send[i].capture_device =
-                                        initialize_video_capture(requested_capture[i], capture_cfg[i], vidcap_flags)) == NULL) {
-                        fprintf(stderr, "Unable to open capture device: %s\n",
-                                        requested_capture[i]);
-                        abort();
-                }
-                printf("Video capture initialized-%s\n", requested_capture[i]);
-        }
-
         void *udata = NULL;
 #ifdef GCOLL
         udata = &gcoll_params;
@@ -1270,7 +1271,7 @@ int main(int argc, char *argv[])
                 }
 
                 for(int i = 0; i < CAP_DEV_COUNT; ++i) {
-                        if (strcmp("none", requested_capture[i]) != 0) {
+                        if (strcmp("none", uv->send[i].requested_capture) != 0) {
                                 pthread_mutex_lock(&uv->master_lock); 
                                 if (pthread_create
                                                 (&compress_thread_id[i], NULL, compress_thread,
@@ -1302,7 +1303,7 @@ int main(int argc, char *argv[])
 
 //cleanup_wait_capture:
         for(int i = 0; i < CAP_DEV_COUNT; ++i) {
-                if (strcmp("none", requested_capture[i]) != 0 && compress_thread_started[i])
+                if (strcmp("none", uv->send[i].requested_capture) != 0 && compress_thread_started[i])
                         pthread_join(compress_thread_id[i],
                                         NULL);
         }
@@ -1328,10 +1329,6 @@ cleanup:
                 tx_done(uv->tx);
 	if(uv->recv_network_device)
                 destroy_devices(uv->recv_network_device);
-        for(int i = 0; i < CAP_DEV_COUNT; ++i) {
-                if(uv->send[i].capture_device)
-                        vidcap_done(uv->send[i].capture_device);
-        }
         if(uv->display_device)
                 display_done(uv->display_device);
         if (uv->participants != NULL) {
