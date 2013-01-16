@@ -254,6 +254,7 @@ struct rtp {
         uint16_t rx_port;
         uint16_t tx_port;
         int ttl;
+        bool use_ipv6;
         uint32_t my_ssrc;
         int last_advertised_csrc;
         source *db[RTP_DB_SIZE];
@@ -1077,6 +1078,7 @@ struct rtp *rtp_init_if(const char *addr, char *iface,
         session->rx_port = rx_port;
         session->tx_port = tx_port;
         session->ttl = min(ttl, 127);
+        session->use_ipv6 = use_ipv6;
         session->rtp_socket = udp_init_if(addr, iface, rx_port, tx_port, ttl, use_ipv6);
         session->rtcp_socket =
             udp_init_if(addr, iface, (uint16_t) (rx_port + 1),
@@ -3777,5 +3779,19 @@ int rtp_set_send_buf(struct rtp *session, int bufsize)
 void rtp_flush_recv_buf(struct rtp *session)
 {
         return udp_flush_recv_buf(session->rtp_socket);
+}
+
+/**
+ * Sets new address.
+ * Do not use this socket for sending during address change
+ *
+ * @param session RTP session
+ * @param addr    new address
+ * @retval TRUE   if change succeeded
+ * @retval FALSE  if change failed. Previous values are preserved.
+ */
+int rtp_set_new_addr(struct rtp *session, const char *addr)
+{
+        return udp_set_new_addr(session->rtp_socket, addr, session->tx_port, session->use_ipv6);
 }
 

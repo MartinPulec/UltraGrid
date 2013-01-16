@@ -554,6 +554,51 @@ void udp_flush_recv_buf(socket_udp *s)
         free(buf);
 }
 
+int udp_set_new_addr(socket_udp *s, const char *c_addr, int tx_port, bool use_ipv6)
+{
+        char *addr = strdup(c_addr);
+ 
+        if (strchr(addr, ':') == NULL && !use_ipv6) {
+                struct in_addr addr4;
+                if (inet_pton(AF_INET, addr, &addr4) != 1) {
+                        struct hostent *h = gethostbyname(addr);
+                        if (h == NULL) {
+                                socket_error("Can't resolve IP address for %s", addr);
+                                free(s);
+                                return FALSE;
+                        }
+                        memcpy(&addr4, h->h_addr_list[0], sizeof(s->addr4));
+                }
+                s->addr4 = addr4;
+        } else {
+                struct addrinfo hints, *res0;
+                int err;
+
+                memset(&hints, 0, sizeof(hints));
+                hints.ai_family = AF_INET6;
+                hints.ai_socktype = SOCK_DGRAM;
+
+                char tx_port_str[7];
+                sprintf(tx_port_str, "%u", tx_port);
+                if ((err = getaddrinfo(addr, tx_port_str, &hints, &res0)) != 0) {
+                        /* We should probably try to do a DNS lookup on the name */
+                        /* here, but I'm trying to get the basics going first... */
+                        debug_msg("IPv6 address conversion failed: %s\n", gai_strerror(err));
+                        free(s);
+                        return FALSE;
+                } else {
+                        memcpy(&s->sock6, res0->ai_addr, res0->ai_addrlen);
+                        memcpy(&s->addr6, &((struct sockaddr_in6 *) res0->ai_addr)->sin6_addr,
+                                        sizeof(((struct sockaddr_in6 *) res0->ai_addr)->sin6_addr));
+                }
+                freeaddrinfo(res0);
+        }
+
+        free(addr);
+
+        return TRUE;
+}
+
 /*****************************************************************************/
 /* IPv6 specific functions...                                                */
 /*****************************************************************************/
