@@ -681,7 +681,9 @@ static void *compress_thread(void *arg)
                                         send->capture_cfg, 0)) == NULL) {
                 fprintf(stderr, "Unable to open capture device: %s\n",
                                 send->requested_capture);
-                exit_uv(1);
+                exit_uv(EXIT_FAIL_CAPTURE);
+                pthread_mutex_unlock(&uv->master_lock);
+                return NULL;
         }
         printf("Video capture initialized-%s\n", send->requested_capture);
 
@@ -708,6 +710,10 @@ static void *compress_thread(void *arg)
                 tx_frame = vidcap_grab(send->capture_device, &audio);
                 if (tx_frame != NULL) {
                         if(audio) {
+                                /* logic error, in GColl mode, capture should be V4L2
+                                 * or testcard etc. so this should not have embedded audio.
+                                 * Moreover, audio is never requeseted
+                                 */
                                 abort();
                                 audio_sdi_send(uv->audio, audio);
                         }
@@ -811,11 +817,9 @@ int main(int argc, char *argv[])
         int ch;
         
         pthread_t receiver_thread_id,
-                  compress_thread_id[CAP_DEV_COUNT],
-                  ihdtv_sender_thread_id;
+                  compress_thread_id[CAP_DEV_COUNT];
 	bool receiver_thread_started = false,
-		  compress_thread_started[CAP_DEV_COUNT],
-		  ihdtv_sender_started = false;
+		  compress_thread_started[CAP_DEV_COUNT];
         unsigned vidcap_flags = 0,
                  display_flags = 0;
 
@@ -1085,7 +1089,7 @@ int main(int argc, char *argv[])
         if(strcmp(uv->requested_display, "none") != 0 &&
                         strcmp(uv->requested_display, "gcoll") != 0) {
                 fprintf(stderr, "Only allowed display in GColl mode is \"gcoll\".\n");
-                abort();
+                exit(EXIT_FAIL_USAGE);
         }
 #endif // HAVE_GCOLL
         
@@ -1145,8 +1149,10 @@ int main(int argc, char *argv[])
                         jack_cfg, tmp_requested_fec, audio_channel_map,
                         audio_scale, echo_cancellation, use_ipv6, mcast_if);
         free(tmp_requested_fec);
-        if(!uv->audio)
+        if(!uv->audio) {
+                exit_uv(1);
                 goto cleanup;
+        }
 
         vidcap_flags |= audio_get_vidcap_flags(uv->audio);
         display_flags |= audio_get_display_flags(uv->audio);
@@ -1162,7 +1168,8 @@ int main(int argc, char *argv[])
                                                 uv->send_port_number, uv->participants, use_ipv6, mcast_if);
                         if (uv->send[i].network_device == NULL) {
                                 fprintf(stderr, "Unable to open network\n");
-                                abort();
+                                exit_uv(EXIT_FAIL_NETWORK);
+                                goto cleanup_wait_audio;
                         }
                 }
 
@@ -1171,7 +1178,8 @@ int main(int argc, char *argv[])
                                         uv->send_port_number, uv->participants, use_ipv6, mcast_if);
                 if (uv->recv_network_device == NULL) {
                         fprintf(stderr, "Unable to open network\n");
-                        abort();
+                        exit_uv(EXIT_FAIL_NETWORK);
+                        goto cleanup_wait_audio;
                 }
 
                 if (uv->requested_mtu == 0)     // mtu wasn't specified on the command line
@@ -1192,7 +1200,7 @@ int main(int argc, char *argv[])
                 for(int i = 0; i < CAP_DEV_COUNT; ++i) {
                         if ((uv->send[i].tx = initialize_transmit(uv->requested_mtu, requested_fec)) == NULL) {
                                 fprintf(stderr, "Unable to initialize transmitter.\n");
-                                abort();
+                                exit(EXIT_FAIL_TRANSMIT);
                         }
                 }
 
@@ -1234,7 +1242,8 @@ int main(int argc, char *argv[])
              initialize_video_display(uv->requested_display, display_cfg, display_flags, udata)) == NULL) {
                 fprintf(stderr, "Unable to open display device: %s\n",
                        uv->requested_display);
-                abort();
+                exit_uv(EXIT_FAIL_DISPLAY);
+                goto cleanup_wait_audio;
         }
 
         printf("Display initialized-%s\n", uv->requested_display);
@@ -1263,8 +1272,9 @@ int main(int argc, char *argv[])
                         if (pthread_create
                             (&receiver_thread_id, NULL, receiver_thread,
                              (void *)uv) != 0) {
-                                perror("Unable to create display thread!\n");
-                                abort();
+                                perror("Unable to create receiver thread!\n");
+                                exit_uv(EXIT_FAIL_DISPLAY);
+                                goto cleanup_wait_audio;
                         } else {
 				receiver_thread_started = true;
 			}
@@ -1277,7 +1287,8 @@ int main(int argc, char *argv[])
                                                 (&compress_thread_id[i], NULL, compress_thread,
                                                  (void *)uv) != 0) {
                                         perror("Unable to create capture thread!\n");
-                                        abort();
+                                        exit_uv(EXIT_FAIL_CAPTURE);
+                                        goto cleanup_wait_capture;
                                 } else {
                                         compress_thread_started[i] = true;
                                 }
@@ -1301,14 +1312,14 @@ int main(int argc, char *argv[])
         if (strcmp("none", uv->requested_display) != 0 && receiver_thread_started)
                 pthread_join(receiver_thread_id, NULL);
 
-//cleanup_wait_capture:
+cleanup_wait_capture:
         for(int i = 0; i < CAP_DEV_COUNT; ++i) {
                 if (strcmp("none", uv->send[i].requested_capture) != 0 && compress_thread_started[i])
                         pthread_join(compress_thread_id[i],
                                         NULL);
         }
 
-//cleanup_wait_audio:
+cleanup_wait_audio:
         /* also wait for audio threads */
         audio_join(uv->audio);
 
