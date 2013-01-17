@@ -46,6 +46,8 @@
 #define DISPLAY_GCOLL_ID       0x16e271fb
 #include "video.h"
 #include "video_display.h" // display_type_t
+#include "host.h"
+#include "rtp/rtp.h"
 
 #define GCOLL_FRONT  0
 #define GCOLL_SIDE   1
@@ -64,6 +66,9 @@ struct gcoll_init_params {
         uint32_t group_id;
 
         const char *reflector_addr;
+	int port_number;
+
+	struct rtp *rtp_session[CAP_DEV_COUNT];
 };
 
 

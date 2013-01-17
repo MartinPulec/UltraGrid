@@ -47,6 +47,12 @@
 #ifndef __host_h
 #define __host_h
 
+#ifdef HAVE_GCOLL
+#define CAP_DEV_COUNT 3
+#else
+#define CAP_DEV_COUNT 1
+#endif
+
 /* TODO: remove these variables (should be safe) */
 extern unsigned int hd_size_x;
 extern unsigned int hd_size_y;

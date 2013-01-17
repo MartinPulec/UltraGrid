@@ -120,12 +120,6 @@
 #define INITIAL_VIDEO_RECV_BUFFER_SIZE  ((4*1920*1080)*110/100)
 #endif
 
-#ifdef HAVE_GCOLL
-#define CAP_DEV_COUNT 3
-#else
-#define CAP_DEV_COUNT 1
-#endif
-
 struct state_send {
         char *requested_capture;
         char *capture_cfg;
@@ -1231,6 +1225,10 @@ int main(int argc, char *argv[])
         // gcoll.params.send_group_camera set in getopt loop
         gcoll_params.audio_ssrc = audio_net_get_ssrc(uv->audio);
         gcoll_params.reflector_addr = network_device;
+        gcoll_params.port_number = uv->send_port_number;
+        for (int i = 0; i < CAP_DEV_COUNT; i++) {
+                gcoll_params.rtp_session[i] = uv->send[i].network_device;
+        }
 #endif // HAVE_GCOLL
 
         void *udata = NULL;

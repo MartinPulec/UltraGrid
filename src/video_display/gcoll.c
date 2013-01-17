@@ -69,6 +69,7 @@
 #else // WIN32
 #include <GL/glew.h>
 #include <GL/glut.h>
+#include "compat/inet_ntop.h"
 #endif /* HAVE_MACOSX */
 
 #ifdef FREEGLUT
@@ -86,6 +87,8 @@
 #define DEFAULT_RAP_PORT 9876
 #define RAP_REQUEST_LENGTH_LIMIT 1024
 #define RAP_REPLY_LENGTH_LIMIT 1024
+#define RAP_MAGIC_CODE_START 1000
+#define RAP_MAGIC_CODE_REDIRECT (RAP_MAGIC_CODE_START + 1)
 #define UNDEFINED_FD -1
 #define MAX_CLIENTS 20
 #define MAX_GROUPS 4
@@ -352,6 +355,8 @@ struct rum_communicator {
   int                 rap_socket;
 
   char                local_addr[MAX_ADDRESS_LENGTH + 1];
+  char                remote_addr[MAX_ADDRESS_LENGTH + 1];
+  int                 port_number; 
 
   char                *client_msg;
   char                *group_msg;
@@ -360,6 +365,7 @@ struct rum_communicator {
   time_t              last_activity;
   int                 heartbeats;
   bool                failed;
+  bool                redirect; 
 
   struct state_gcoll *gcoll;
 };
@@ -385,8 +391,8 @@ static int rum_communicator_create_client_msg(struct rum_communicator *r, struct
     return FALSE;
   }
   snprintf(r->client_msg, RAP_REQUEST_LENGTH_LIMIT,
-      "GAZE-BIND RAP/1.0\nTarget: processor/gaze\nIp: %s\nFront-ssrc: %u\nSide-ssrc: %u \nRoom: %u\n\n",
-      r->local_addr, p->front_ssrc, p->side_ssrc, p->group_id);
+      "GAZE-BIND RAP/1.0\nTarget: processor/gaze\nIp: %s\nPort: %u\nFront-ssrc: %u\nSide-ssrc: %u \nRoom: %u\n\n",
+      r->local_addr, p->port_number, p->front_ssrc, p->side_ssrc, p->group_id);
   return TRUE;
 }
 
@@ -412,8 +418,31 @@ static int rum_communicator_create_group_msg(struct rum_communicator *r, struct 
     return FALSE;
   }
   snprintf(r->group_msg, RAP_REQUEST_LENGTH_LIMIT,
-      "GAZE-GROUP RAP/1.0\nTarget: processor/gaze\nIp: %s\nSsrc: %u \nRoom: %u\n\n",
-      r->local_addr, p->group_ssrc, p->group_id);
+      "GAZE-GROUP RAP/1.0\nTarget: processor/gaze\nIp: %s\nPort: %u\nSsrc: %u\nRoom: %u\n\n",
+      r->local_addr, p->port_number, p->group_ssrc, p->group_id);
+  return TRUE;
+}
+
+/**
+ * Create statistics requirement messages, which are periodically sent to reflector.
+ * @param r The rum_communicator structure
+ * @param p Gcoll parameters
+ * @return TRUE upon success, FALSE otherwise
+ */
+static int rum_communicator_create_stats_msg(struct rum_communicator *r, struct gcoll_init_params *p) {
+  assert(r != NULL &&
+      r->stats_msg == NULL &&
+      p != NULL
+      );
+
+  r->stats_msg = (char *) calloc(RAP_REQUEST_LENGTH_LIMIT, sizeof (char));
+  if (r->stats_msg == NULL) {
+    fprintf(stderr, "rum_communicator_create_stats_msg: Memory allocation error.\n");
+    return FALSE;
+  }
+  snprintf(r->stats_msg, RAP_REQUEST_LENGTH_LIMIT,
+      "STAT RAP/1.0\nTarget: processor/gaze\nPort: %u\nStat-type: 1n\n",
+      p->port_number);
   return TRUE;
 }
 
@@ -427,9 +456,10 @@ static int rum_communicator_init(struct rum_communicator *r, struct gcoll_init_p
   assert(r != NULL && p != NULL && p->reflector_addr != NULL);
 
   r->local_addr[0] = '\0';
-  r->stats_msg = strdup("STAT RAP/1.0\nTarget: processor/gaze\nStat-type: 1\n\n");
+  r->port_number = p->port_number;
   r->last_activity = time(NULL);
   r->failed = false;
+  r->redirect = false;
   r->gcoll = s;
 
   if ((r->rap_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -439,7 +469,7 @@ static int rum_communicator_init(struct rum_communicator *r, struct gcoll_init_p
   }
 
   struct hostent *hp;
-  if ((hp = gethostbyname(p->reflector_addr)) == NULL) {
+  if ((hp = gethostbyname((const char *) r->remote_addr)) == NULL) {
     fprintf(stderr, "rum_communicator_init: gethostbyname failed.\n");
     return FALSE;
   }
@@ -475,6 +505,11 @@ static int rum_communicator_init(struct rum_communicator *r, struct gcoll_init_p
 
   if (p->send_group_camera && rum_communicator_create_group_msg(r, p) == FALSE) {
     fprintf(stderr, "Can't create RAP group announcement.\n");
+    return FALSE;
+  }
+
+  if (rum_communicator_create_stats_msg(r, p) == FALSE) {
+    fprintf(stderr, "Can't create STAT RAP message.\n");
     return FALSE;
   }
 
@@ -555,12 +590,28 @@ static bool rum_communicator_parse_stats(struct rum_communicator *r, char *buf) 
   int groups_number_parsed = FALSE;
   int clients_number;
   int groups_number;
+  int magic = 0;
+  int magic_line;
 
   temp_str1 = buf;
   while (1) {
     line_ptr = strtok_r(temp_str1, "\r\n", &save_ptr1);
     if (line_ptr == NULL) break;
     temp_str1 = NULL;
+    // We are in "magic"mode
+    if (magic > RAP_MAGIC_CODE_START) {
+      if (magic == RAP_MAGIC_CODE_REDIRECT && magic_line == 1) {
+        char address_str[32];
+        char port_str[32];
+
+        sscanf(line_ptr, "%s", (char *) address_str);
+        sscanf(line_ptr + strlen(address_str) + 1, "%s", (char *) port_str);
+        strcpy(r->remote_addr, address_str);
+        break;
+      }
+      magic_line++;
+      continue;
+    }
     // Skip message headers. All relevant information is in lines starting with a digit.
     if (!isdigit(line_ptr[0])) {
       continue;
@@ -568,6 +619,10 @@ static bool rum_communicator_parse_stats(struct rum_communicator *r, char *buf) 
     if (strchr((const char *) line_ptr, ' ') == NULL) { // Current line represents either number of clients or number of groups
       if (clients_number_parsed == FALSE) {
         clients_number = atoi(line_ptr); // this might be slightly weak, but we trust reflector in general
+        if (clients_number > RAP_MAGIC_CODE_START) {
+          magic = clients_number;
+          magic_line = 1;
+        }
         if (clients_number < 0 || clients_number > MAX_CLIENTS) {
           fprintf(stderr, "rum_communicator_parse_stats: Bad clients number count: %d\n", clients_number);
           return false;
@@ -641,8 +696,8 @@ static void rum_communicator_build_gaze_msg(struct rum_communicator *r, char *bu
       r->gcoll->params != NULL &&
       buf != NULL);
 
-  sprintf(buf, "GAZE RAP/1.0\nTarget: processor/gaze\nGaze-who: %u\nGaze-at: %u\n\n",
-      r->gcoll->params->front_ssrc, r->gcoll->gaze_ssrc);
+  sprintf(buf, "GAZE RAP/1.0\nTarget: processor/gaze\nPort: %u\nGaze-who: %u\nGaze-at: %u\n\n",
+      r->port_number, r->gcoll->params->front_ssrc, r->gcoll->gaze_ssrc);
 }
 
 static void rum_communicator_heartbeat(struct rum_communicator *r) {
@@ -690,6 +745,9 @@ static void rum_communicator_heartbeat(struct rum_communicator *r) {
     }
   }
 
+  if (r->remote_addr[0] != '\0') {
+  }
+
   r->last_activity = time(NULL);
 }
 
@@ -716,20 +774,35 @@ static void * rum_communicator_main(void *s) {
   struct state_gcoll *sg = (struct state_gcoll *) s;
 
   while (!sg->exit) {
+    if (!sg->rum->redirect) {
+      strcpy(sg->rum->remote_addr, sg->params->reflector_addr);
+    }
+
     if (rum_communicator_init(sg->rum, sg->params, sg) == FALSE) {
       fprintf(stderr, "RUM communicator initialization failed.\n");
       sg->exit = true;
       return NULL;
     }
 
+    if (sg->rum->redirect) {
+      int retval = TRUE;
+
+      for (int i = 0; i < CAP_DEV_COUNT; i++) {
+        retval = retval && rtp_set_new_addr(sg->params->rtp_session[i], sg->rum->remote_addr);
+      }
+      if (retval == FALSE) {
+        fprintf(stderr, "New sending addresses could not be set, quitting.");
+        sg->exit = true;
+      }
+    }
+
     sg->rum->heartbeats = 0;
-    while (!sg->rum->failed) {
+    while (!sg->rum->failed && !sg->rum->redirect && !sg->exit) {
       rum_communicator_heartbeat(sg->rum);
       sg->rum->heartbeats++;
       usleep(500 * 1000);
-      if (sg->exit) break;
     }
-    if (sg->rum->heartbeats < 5) {
+    if (sg->rum->heartbeats < 2) {
       fprintf(stderr, "Frequent RUM communicator failures, quitting.\n");
       sg->exit = true;
     }
