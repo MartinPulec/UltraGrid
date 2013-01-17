@@ -281,5 +281,5 @@ int              rtp_set_recv_buf(struct rtp *session, int bufsize);
 int              rtp_set_send_buf(struct rtp *session, int bufsize);
 
 void             rtp_flush_recv_buf(struct rtp *session);
-void             rtp_set_new_addr(struct rtp *session, const char *addr);
+int              rtp_set_new_addr(struct rtp *session, const char *addr);
 #endif /* __RTP_H__ */
