@@ -108,12 +108,14 @@ extern char **uv_argv;
 
 static struct vidcap_screen_state *state;
 
+#ifdef HAVE_LINUX
 struct grabbed_data;
 
 struct grabbed_data {
         XImage *data;
         struct grabbed_data *next;
 };
+#endif
 
 struct vidcap_screen_state {
         struct video_frame       *frame; 
@@ -232,7 +234,7 @@ static void *grab_thread(void *args)
                 new_item->data = XGetImage(s->dpy,s->root, 0,0, s->tile->width, s->tile->height, AllPlanes, ZPixmap);
 
 #ifdef HAVE_XFIXES
-                uint32_t *image_data = (uint32_t *) new_item->data->data;
+                uint32_t *image_data = (uint32_t *)(void *) new_item->data->data;
                 for(int x = 0; x < cursor->width; ++x) {
                         for(int y = 0; y < cursor->height; ++y) {
                                 if(cursor->x + x >= (int) s->tile->width ||

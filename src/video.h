@@ -73,7 +73,9 @@ typedef enum {
         DPX10,
         JPEG,
         RAW,
-        H264
+        H264,
+        MJPG,
+        VP8
 } codec_t;
 
 enum interlacing_t {
@@ -133,6 +135,9 @@ struct tile {
         unsigned int         width;
         unsigned int         height;
         
+        /*
+         * data must be at least 4B aligned
+         */
         char                *data; /* this is not beginning of the frame buffer actually but beginning of displayed data,
                                      * it is the case display is centered in larger window, 
                                      * i.e., data = pixmap start + x_start + y_start*linesize

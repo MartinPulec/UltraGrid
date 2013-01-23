@@ -474,25 +474,14 @@ after_linedecoder_lookup:
                                 // if found, init decoder
                                 if(prio_cur != -1) {
                                         if(try_initialize_decompress(decoder, decompress_magic)) {
-                                                int res = 0, ret;
-                                                size_t size = sizeof(res);
-                                                ret = decompress_get_property(decoder->ext_decoder,
-                                                                DECOMPRESS_PROPERTY_ACCEPTS_CORRUPTED_FRAME,
-                                                                &res,
-                                                                &size);
-                                                if(ret && res) {
-                                                        decoder->accepts_corrupted_frame = TRUE;
-                                                } else {
-                                                        decoder->accepts_corrupted_frame = FALSE;
-                                                }
-
-                                                decoder->decoder_type = EXTERNAL_DECODER;
                                                 goto after_decoder_lookup;
+                                        } else {
                                                 // failed, try to find another one
                                                 prio_min = prio_cur + 1;
-                                        } else {
-                                                break;
+                                                continue;
                                         }
+                                } else {
+                                        break;
                                 }
                         }
 
@@ -901,7 +890,7 @@ int decode_frame(struct coded_data *cdata, void *decode_data)
                 pckt = cdata->data;
 
                 pt = pckt->pt;
-                hdr = (uint32_t *) pckt->data;
+                hdr = (uint32_t *)(void *) pckt->data;
                 data_pos = ntohl(hdr[1]);
                 tmp = ntohl(hdr[0]);
 
@@ -964,7 +953,8 @@ int decode_frame(struct coded_data *cdata, void *decode_data)
                         /* Critical section 
                          * each thread *MUST* wait here if this condition is true
                          */
-                        if(check_for_mode_change(decoder, (uint32_t *) pckt->data, &frame, pbuf_data)) {
+                        if(check_for_mode_change(decoder, (uint32_t *)(void *)
+                                                pckt->data, &frame, pbuf_data)) {
                                 if(!frame) {
                                         ret = FALSE;
                                         goto cleanup;
@@ -1124,8 +1114,8 @@ int decode_frame(struct coded_data *cdata, void *decode_data)
                                         goto cleanup;
                                 }
  
-                                check_for_mode_change(decoder, (uint32_t *) out_buffer, &frame,
-                                                pbuf_data);
+                                check_for_mode_change(decoder, (uint32_t *)(void *) out_buffer,
+                                                &frame, pbuf_data);
 
                                 if(!frame) {
                                         ret = FALSE;

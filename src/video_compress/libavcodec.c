@@ -63,7 +63,7 @@
 #include "video.h"
 #include "video_codec.h"
 
-#define DEFAULT_CODEC CODEC_ID_H264
+#define DEFAULT_CODEC MJPG
 
 struct libav_video_compress {
         struct video_frame *out[2];
@@ -79,15 +79,29 @@ struct libav_video_compress {
         unsigned char      *decoded;
         decoder_t           decoder;
 
+        codec_t             selected_codec_id;
+        int                 requested_bitrate;
+
         bool                configured;
 };
 
-static void to_yuv420(AVFrame *out_frame, unsigned char *in_data);
+static void to_yuv420(AVFrame *out_frame, unsigned char *in_data, int width, int height);
+static void usage(void);
+
+static void usage() {
+        printf("Libavcodec encoder usage:\n");
+        printf("\t-c libavcodec[:codec=<codec_name>][:bitrate=<bits_per_sec>]\n");
+        printf("\t\t<codec_name> may be "
+                        " one of \"H.264\", \"VP8\" or "
+                        "\"MJPEG\" (default)\n");
+        printf("\t\t<bits_per_sec> specifies requested bitrate\n");
+        printf("\t\t\t0 means codec default (same as when parameter omitted)\n");
+}
 
 void * libavcodec_compress_init(char * fmt)
 {
-        UNUSED(fmt);
         struct libav_video_compress *s;
+        char *item, *save_ptr = NULL;
         
         s = (struct libav_video_compress *) malloc(sizeof(struct libav_video_compress));
         s->out[0] = s->out[1] = NULL;
@@ -96,6 +110,57 @@ void * libavcodec_compress_init(char * fmt)
         s->codec = NULL;
         s->codec_ctx = NULL;
         s->in_frame = NULL;
+        s->selected_codec_id = DEFAULT_CODEC;
+
+        s->requested_bitrate = -1;
+
+        if(fmt) {
+                while((item = strtok_r(fmt, ":", &save_ptr)) != NULL) {
+                        if(strncasecmp("help", item, strlen("help")) == 0) {
+                                usage();
+                                return NULL;
+                        } else if(strncasecmp("codec=", item, strlen("codec=")) == 0) {
+                                char *codec = item + strlen("codec=");
+                                int i;
+                                for (i = 0; codec_info[i].name != NULL; i++) {
+                                        if (strcmp(codec, codec_info[i].name) == 0) {
+                                                s->selected_codec_id = codec_info[i].codec;
+                                                break;
+                                        }
+                                }
+                                if(codec_info[i].name == NULL) {
+                                        fprintf(stderr, "[lavd] Unable to find codec: \"%s\"\n", codec);
+                                        return NULL;
+                                }
+                        } else if(strncasecmp("bitrate=", item, strlen("bitrate=")) == 0) {
+                                char *bitrate_str = item + strlen("bitrate=");
+                                char *end_ptr;
+                                char unit_prefix_u;
+                                s->requested_bitrate = strtoul(bitrate_str, &end_ptr, 10);
+                                unit_prefix_u = toupper(*end_ptr);
+                                switch(unit_prefix_u) {
+                                        case 'G':
+                                                s->requested_bitrate *= 1000;
+                                        case 'M':
+                                                s->requested_bitrate *= 1000;
+                                        case 'K':
+                                                s->requested_bitrate *= 1000;
+                                                break;
+                                        case '\0':
+                                                break;
+                                        default:
+                                                fprintf(stderr, "[lavc] Error: unknown unit prefix %c.\n",
+                                                                *end_ptr);
+                                                return NULL;
+                                }
+                        } else {
+                                fprintf(stderr, "[lavc] Error: unknown option %s.\n",
+                                                item);
+                                return NULL;
+                        }
+                        fmt = NULL;
+                }
+        }
 
         s->decoded = NULL;
 
@@ -117,21 +182,60 @@ void * libavcodec_compress_init(char * fmt)
 static bool configure_with(struct libav_video_compress *s, struct video_frame *frame)
 {
         int ret;
-        int codec_id = DEFAULT_CODEC;
+        int codec_id;
+        int pix_fmt; 
+        double avg_bpp; // average bite per pixel
         // implement multiple tiles support if needed
         assert(frame->tile_count == 1);
         s->saved_desc = video_desc_from_frame(frame);
 
         struct video_desc compressed_desc;
         compressed_desc = video_desc_from_frame(frame);
-        switch(codec_id) {
-                case CODEC_ID_H264:
+        switch(s->selected_codec_id) {
+                case H264:
+#ifdef HAVE_GPL
+                        codec_id = CODEC_ID_H264;
+#ifdef HAVE_AVCODEC_ENCODE_VIDEO2
+                        pix_fmt = AV_PIX_FMT_YUV420P;
+#else
+                        pix_fmt = PIX_FMT_YUV420P;
+#endif
                         compressed_desc.color_spec = H264;
+                        // from H.264 Primer
+                        avg_bpp =
+                                4 * /* for H.264: 1 - low motion, 2 - medium motion, 4 - high motion */
+                                0.07;
+                        break;
+#else
+                        fprintf(stderr, "H.264 not available in UltraGrid BSD build. "
+                                        "Reconfigure UltraGrid with --enable-gpl if "
+                                        "needed.\n");
+                        exit_uv(1);
+                        return false;
+#endif
+                case MJPG:
+                        codec_id = CODEC_ID_MJPEG;
+#ifdef HAVE_AVCODEC_ENCODE_VIDEO2
+                        pix_fmt = AV_PIX_FMT_YUVJ420P;
+#else
+                        pix_fmt = PIX_FMT_YUVJ420P;
+#endif
+                        compressed_desc.color_spec = MJPG;
+                        avg_bpp = 0.7;
+                        break;
+                case VP8:
+                        codec_id = CODEC_ID_VP8;
+#ifdef HAVE_AVCODEC_ENCODE_VIDEO2
+                        pix_fmt = AV_PIX_FMT_YUV420P;
+#else
+                        pix_fmt = PIX_FMT_YUV420P;
+#endif
+                        compressed_desc.color_spec = VP8;
+                        avg_bpp = 0.5;
                         break;
                 default:
-                        fprintf(stderr, "[Libavcodec] Unable to match "
-                                        "desired codec to UltraGrid internal "
-                                        "one.\n");
+                        fprintf(stderr, "[lavc] Requested output codec isn't "
+                                        "supported by libavcodec.\n");
                         return false;
 
         }
@@ -147,7 +251,7 @@ static bool configure_with(struct libav_video_compress *s, struct video_frame *f
         /* find the video encoder */
         s->codec = avcodec_find_encoder(codec_id);
         if (!s->codec) {
-                fprintf(stderr, "Libavcodec doesn't contain specified codec (H.264).\n"
+                fprintf(stderr, "Libavcodec doesn't contain specified codec.\n"
                                 "Hint: Check if you have libavcodec-extra package installed.\n");
                 return false;
         }
@@ -160,9 +264,14 @@ static bool configure_with(struct libav_video_compress *s, struct video_frame *f
         }
 
         /* put parameters */
-        s->codec_ctx->bit_rate = frame->tiles[0].width * frame->tiles[0].height *
-                4 * /* for H.264: 1 - low motion, 2 - medium motion, 4 - high motion */
-                0.07 * frame->fps;
+        if(s->requested_bitrate > 0) {
+                s->codec_ctx->bit_rate = s->requested_bitrate;
+        } else {
+                s->codec_ctx->bit_rate = frame->tiles[0].width * frame->tiles[0].height *
+                        avg_bpp * frame->fps;
+        }
+        s->codec_ctx->bit_rate_tolerance = s->codec_ctx->bit_rate / 4;
+
         /* resolution must be a multiple of two */
         s->codec_ctx->width = frame->tiles[0].width;
         s->codec_ctx->height = frame->tiles[0].height;
@@ -187,11 +296,8 @@ static bool configure_with(struct libav_video_compress *s, struct video_frame *f
                                         "appropriate pixel format.\n");
                         return false;
         }
-#ifdef HAVE_AVCODEC_ENCODE_VIDEO2
-        s->codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-#else
-        s->codec_ctx->pix_fmt = PIX_FMT_YUV420P;
-#endif
+
+        s->codec_ctx->pix_fmt = pix_fmt;
 
         s->decoded = malloc(frame->tiles[0].width * frame->tiles[0].height * 4);
 
@@ -199,6 +305,28 @@ static bool configure_with(struct libav_video_compress *s, struct video_frame *f
                 av_opt_set(s->codec_ctx->priv_data, "preset", "ultrafast", 0);
                 //av_opt_set(s->codec_ctx->priv_data, "tune", "fastdecode", 0);
                 av_opt_set(s->codec_ctx->priv_data, "tune", "zerolatency", 0);
+        } else if(codec_id == CODEC_ID_VP8) {
+                s->codec_ctx->thread_count = 8;
+                s->codec_ctx->profile = 3;
+                s->codec_ctx->slices = 4;
+                s->codec_ctx->rc_buffer_size = s->codec_ctx->bit_rate / frame->fps;
+                s->codec_ctx->rc_buffer_aggressivity = 0.5;
+        } else {
+                // zero should mean count equal to the number of virtual cores
+                if(s->codec->capabilities & CODEC_CAP_SLICE_THREADS) {
+                        s->codec_ctx->thread_count = 0;
+                        s->codec_ctx->thread_type = FF_THREAD_SLICE;
+                } else {
+                        fprintf(stderr, "[lavd] Warning: Codec doesn't support slice-based multithreading.\n");
+#if 0
+                        if(s->codec->capabilities & CODEC_CAP_FRAME_THREADS) {
+                                s->codec_ctx->thread_count = 0;
+                                s->codec_ctx->thread_type = FF_THREAD_FRAME;
+                        } else {
+                                fprintf(stderr, "[lavd] Warning: Codec doesn't support frame-based multithreading.\n");
+                        }
+#endif
+                }
         }
 
         /* open it */
@@ -212,9 +340,11 @@ static bool configure_with(struct libav_video_compress *s, struct video_frame *f
                 fprintf(stderr, "Could not allocate video frame\n");
                 return false;
         }
+#if 0
         s->in_frame->format = s->codec_ctx->pix_fmt;
         s->in_frame->width = s->codec_ctx->width;
         s->in_frame->height = s->codec_ctx->height;
+#endif
 
         /* the image can be allocated by any means and av_image_alloc() is
          * just the most convenient way if av_malloc() is to be used */
@@ -229,24 +359,24 @@ static bool configure_with(struct libav_video_compress *s, struct video_frame *f
         return true;
 }
 
-static void to_yuv420(AVFrame *out_frame, unsigned char *in_data)
+static void to_yuv420(AVFrame *out_frame, unsigned char *in_data, int width, int height)
 {
-        for(int y = 0; y < (int) out_frame->height; ++y) {
-                unsigned char *src = in_data + out_frame->width * y * 2;
+        for(int y = 0; y < (int) height; ++y) {
+                unsigned char *src = in_data + width * y * 2;
                 unsigned char *dst_y = out_frame->data[0] + out_frame->linesize[0] * y;
-                for(int x = 0; x < out_frame->width; ++x) {
+                for(int x = 0; x < width; ++x) {
                         dst_y[x] = src[x * 2 + 1];
                 }
         }
 
-        for(int y = 0; y < (int) out_frame->height / 2; ++y) {
+        for(int y = 0; y < (int) height / 2; ++y) {
                 /*  every even row */
-                unsigned char *src1 = in_data + (y * 2) * (out_frame->width * 2);
+                unsigned char *src1 = in_data + (y * 2) * (width * 2);
                 /*  every odd row */
-                unsigned char *src2 = in_data + (y * 2 + 1) * (out_frame->width * 2);
+                unsigned char *src2 = in_data + (y * 2 + 1) * (width * 2);
                 unsigned char *dst_cb = out_frame->data[1] + out_frame->linesize[1] * y;
                 unsigned char *dst_cr = out_frame->data[2] + out_frame->linesize[2] * y;
-                for(int x = 0; x < out_frame->width / 2; ++x) {
+                for(int x = 0; x < width / 2; ++x) {
                         dst_cb[x] = (src1[x * 4] + src2[x * 4]) / 2;
                         dst_cr[x] = (src1[x * 4 + 2] + src1[x * 4 + 2]) / 2;
                 }
@@ -294,9 +424,10 @@ struct video_frame * libavcodec_compress(void *arg, struct video_frame * tx, int
                         line1 += src_linesize;
                         line2 += dst_linesize;
                 }
-                to_yuv420(s->in_frame, s->decoded);
+                to_yuv420(s->in_frame, s->decoded, tx->tiles[0].width, tx->tiles[0].height);
         } else {
-                to_yuv420(s->in_frame, (unsigned char *) tx->tiles[0].data);
+                to_yuv420(s->in_frame, (unsigned char *) tx->tiles[0].data,
+                                tx->tiles[0].width, tx->tiles[0].height);
         }
 
 
