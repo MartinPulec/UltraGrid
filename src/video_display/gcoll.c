@@ -1219,7 +1219,7 @@ void *display_gcoll_init(char *fmt, unsigned int flags, void *udata)
   pthread_mutex_init(&s->new_frames_lock, NULL);
 
   glutInit(&uv_argc, uv_argv);
-  glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
+  glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE);
   glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_CONTINUE_EXECUTION);
 
   glutIdleFunc(glut_idle_callback);
