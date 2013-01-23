@@ -441,7 +441,7 @@ static int rum_communicator_create_stats_msg(struct rum_communicator *r, struct 
     return FALSE;
   }
   snprintf(r->stats_msg, RAP_REQUEST_LENGTH_LIMIT,
-      "STAT RAP/1.0\nTarget: processor/gaze\nPort: %u\nStat-type: 1n\n",
+      "STAT RAP/1.0\nTarget: processor/gaze\nPort: %u\nStat-type: 1\n\n",
       p->port_number);
   return TRUE;
 }
