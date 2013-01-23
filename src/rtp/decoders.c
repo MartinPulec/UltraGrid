@@ -493,6 +493,8 @@ after_linedecoder_lookup:
                                         } else {
                                                 break;
                                         }
+                                } else {
+                                        break;
                                 }
                         }
 
