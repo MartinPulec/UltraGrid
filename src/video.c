@@ -110,7 +110,7 @@ struct video_frame * vf_alloc_desc_data(struct video_desc desc)
                                         desc.color_spec);
                         buf->tiles[i].data_len = buf->tiles[i].linesize *
                                 desc.height;
-                        buf->tiles[i].data = (char *) malloc(buf->tiles[i].data_len);
+                        buf->tiles[i].data = (char *) calloc(1, buf->tiles[i].data_len);
                 }
         }
 

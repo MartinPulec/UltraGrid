@@ -970,8 +970,7 @@ static void glut_idle_callback(void) {
   pthread_mutex_lock(&s->participants_lock);
   s->small_images_count = s->participants_count;
   float gap_width = (float) (1 - maximum_small_width * s->participants_count) / (s->participants_count + 1);
-  fprintf(stderr, "%f %d gw %f\n", maximum_small_width, s->participants_count, gap_width);
-  float left = -1.0 + 2 * gap_width;
+  float left = -1.0 +  2 * gap_width;
   for (int i = 0; i < s->participants_count; i++) {
     if (s->participants[i].frame == NULL) continue;
 
@@ -994,7 +993,6 @@ static void glut_idle_callback(void) {
 
     gl_check_error();
 
-    fprintf(stderr, "draw part: %d\n", i);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
         s->participants[i].frame->tiles[0].width,
         s->participants[i].frame->tiles[0].height,
@@ -1010,8 +1008,26 @@ static void glut_idle_callback(void) {
 
     float small_height = 0.0;
     float small_width = 0.0;
+    float frame_ratio = (float) s->participants[i].frame->tiles[0].width /
+      s->participants[i].frame->tiles[0].height;
     if (s->participants[i].ssrc != s->gaze_ssrc) {
-      float tile_ratio = (float) s->participants[i].frame->tiles[0].width / s->participants[i].frame->tiles[0].height;
+      float right = left + 2 * maximum_small_width;
+      float bottom = -1.0;
+      float top = -1.0 + 2 * maximum_small_height;
+
+  fprintf(stderr, "%f %f\n", bound_ratio, frame_ratio);
+      if (bound_ratio > frame_ratio) {
+        float center = (left + right) / 2;
+        float win_width = (right - left) * frame_ratio * (float) screen_height / screen_width;
+        left = center - win_width / 2;
+        right = center + win_width / 2;
+      } else {
+        float center = (bottom + top) / 2;
+        float win_height = (top - bottom) / frame_ratio * (float) screen_width / screen_height;
+        bottom = center - win_height / 2;
+        top = center + win_height / 2;
+      }
+/*
       if (tile_ratio > bound_ratio) {
         small_height = maximum_small_height;
         small_width = maximum_small_height * tile_ratio / screen_ratio;
@@ -1019,35 +1035,41 @@ static void glut_idle_callback(void) {
         small_width = maximum_small_width;
         small_height = small_width / tile_ratio * screen_ratio;
       }
+*/
 
       //float small_height = small_win_ratio * s->participants[i].frame->tiles[0].height / s->participants[i].frame->tiles[0].width * screen_width / screen_height * 2;
-      fprintf(stderr, "%f %f %f %d %d\n", left, small_win_ratio, small_height, screen_width, screen_height);
+      fprintf(stderr, "%f %f %f %f\n", left, right, bottom, top);
       glBegin(GL_QUADS);
+/*
       glTexCoord2f(0.0f, 1.0f); glVertex2f(left, -1.0f);
       glTexCoord2f(1.0f, 1.0f); glVertex2f(left + 2 * small_width, -1.0f);
       glTexCoord2f(1.0f, 0.0f); glVertex2f(left + 2 * small_width, -1.0f + small_height);
       glTexCoord2f(0.0f, 0.0f); glVertex2f(left, -1.0f + small_height);
+*/
+      glTexCoord2f(0.0f, 1.0f); glVertex2f(left, bottom);
+      glTexCoord2f(1.0f, 1.0f); glVertex2f(right, bottom);
+      glTexCoord2f(1.0f, 0.0f); glVertex2f(right, top);
+      glTexCoord2f(0.0f, 0.0f); glVertex2f(left, top);
       glEnd();
     } else {
-      float frame_ratio = (float) s->participants[i].frame->tiles[0].width /
-        s->participants[i].frame->tiles[0].height;
-      float top = 0.0;
+      float top = 1.0;
       float left = 0.0;
-      float bottom = 1.0;
+      float bottom = 0.0;
       float right = 1.0;
       if (screen_ratio > frame_ratio) {
-        float big_width = s->participants[i].frame->tiles[0].width / 
+        float big_width = (right - left) * (float) s->participants[i].frame->tiles[0].width / 
           s->participants[i].frame->tiles[0].height *
-          screen_height / screen_width;
+          (float) screen_height / screen_width;
         left = 0.5 - big_width / 2;
         right = 0.5 + big_width / 2;
       } else {
-        float big_height = s->participants[i].frame->tiles[0].height / 
+        float big_height = (top - bottom) * (float) s->participants[i].frame->tiles[0].height / 
           s->participants[i].frame->tiles[0].width *
-          screen_width / screen_height;
+          (float) screen_width / screen_height;
         bottom = 0.5 - big_height / 2;
         top = 0.5 + big_height / 2;
       }
+      fprintf(stderr, "%f %f %f %f\n", left, right, bottom, top);
       glBegin(GL_QUADS);
       glTexCoord2f(0.0f, 1.0f); glVertex2f(left, bottom);
       glTexCoord2f(1.0f, 1.0f); glVertex2f(right, bottom);
@@ -1069,10 +1091,10 @@ static void glut_idle_callback(void) {
     int i = 0;
     float frame_ratio = (float) s->groups[i].frame->tiles[0].width /
       s->groups[i].frame->tiles[0].height;
-    float top = 0.0;
-    float left = 0.0;
-    float bottom = 1.0;
-    float right = 1.0;
+    float top = 1.0;
+    float left = -1.0;
+    float bottom = 0.0;
+    float right = 0.0;
     if (screen_ratio > frame_ratio) {
       float big_width = s->participants[i].frame->tiles[0].width / 
         s->participants[i].frame->tiles[0].height *
@@ -1133,7 +1155,9 @@ static void clicked_coords(int x, int y) {
   int width = glutGet(GLUT_WINDOW_WIDTH);
   int height = glutGet(GLUT_WINDOW_HEIGHT);
 
-  float yr = y / height;
+  fprintf(stderr, "clicked: %d %d\n", x, y);
+  float yr = ((float) y) / height;
+  float xr = ((float ) x) / width;
 
   // Top part with big images
   if (yr < 0.6) {
@@ -1142,13 +1166,13 @@ static void clicked_coords(int x, int y) {
   } else {
     if (s->small_images_count == 0) return;
 
-    float xr = x / width;
     int order = floor(xr * s->small_images_count);
     if (s->gaze_ssrc != s->current_frames->ssrc[order]) {
       s->gaze_ssrc = s->current_frames->ssrc[order]; // this should be participant`s ssrc
       s->gaze_changed = true;
     }
   }
+  fprintf(stderr, "relative: %f %f\n", xr, yr);
 }
 
 static void glut_key_callback(unsigned char key, int x, int y)
@@ -1352,8 +1376,6 @@ int display_gcoll_putf(void *state, struct video_frame *frame)
      }
      pthread_mutex_unlock(&s->groups_lock);
      */
-
-  fprintf(stderr, "Received frame from SSRC %d\n", frame->ssrc);
 
   pthread_mutex_lock(&s->new_frames_lock);
   for (int i = 0; i < s->new_frames->count; i++) {
