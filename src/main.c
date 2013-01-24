@@ -1068,6 +1068,7 @@ int main(int argc, char *argv[])
                                 *delim = '\0';
                                 uv->send[GCOLL_GROUP].capture_cfg = delim + 1;
                         }
+                        gcoll_params.send_group_camera = true;
                         break;
                 case 'R':
                         gcoll_params.group_id = atoi(optarg);
