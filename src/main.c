@@ -139,6 +139,9 @@ struct state_send {
 };
 
 struct state_uv {
+        char *address;
+        bool use_ipv6;
+        char *mcast_if;
         int recv_port_number;
         int send_port_number;
         struct rtp *recv_network_device;
@@ -502,6 +505,18 @@ static void *receiver_thread(void *arg)
         int ret;
         int last_buf_size = INITIAL_VIDEO_RECV_BUFFER_SIZE;
 
+        sleep(3);
+
+        uv->recv_network_device =
+                initialize_network(uv->address, uv->recv_port_number,
+                                uv->send_port_number, uv->participants,
+                                uv->use_ipv6, uv->mcast_if);
+        if (uv->recv_network_device == NULL) {
+                fprintf(stderr, "Unable to open network\n");
+                exit_uv(EXIT_FAIL_NETWORK);
+                return NULL;
+        }
+
         initialize_video_decompress();
 
         pthread_mutex_unlock(&uv->master_lock);
@@ -788,7 +803,6 @@ int main(int argc, char *argv[])
 #if defined HAVE_SCHED_SETSCHEDULER && defined USE_RT
         struct sched_param sp;
 #endif
-        char *network_device = NULL;
 
 #ifdef HAVE_GCOLL
         struct gcoll_init_params gcoll_params;
@@ -802,8 +816,6 @@ int main(int argc, char *argv[])
         char *audio_scale = "mixauto";
 
         bool echo_cancellation = false;
-        bool use_ipv6 = false;
-        char *mcast_if = NULL;
 
         int bitrate = 0;
         
@@ -863,6 +875,10 @@ int main(int argc, char *argv[])
         //      uv = (struct state_uv *) calloc(1, sizeof(struct state_uv));
         uv = (struct state_uv *)malloc(sizeof(struct state_uv));
         uv_state = uv;
+
+        uv->address = NULL;
+        uv->mcast_if = NULL;
+        uv->use_ipv6 = false;
 
         uv->audio = NULL;
         uv->ts = 0;
@@ -998,7 +1014,7 @@ int main(int argc, char *argv[])
                         }
                         break;
                 case '6':
-                        use_ipv6 = true;
+                        uv->use_ipv6 = true;
                         break;
                 case '?':
                         break;
@@ -1030,7 +1046,7 @@ int main(int argc, char *argv[])
                         return EXIT_FAIL_USAGE;
 #endif // HAVE_CUDA
                 case MCAST_IF:
-                        mcast_if = optarg;
+                        uv->mcast_if = optarg;
                         break;
 #ifdef HAVE_GCOLL
                 case 'F':
@@ -1118,9 +1134,9 @@ int main(int argc, char *argv[])
         }
 
         if (argc == 0) {
-                network_device = strdup("localhost");
+                uv->address = strdup("localhost");
         } else {
-                network_device = (char *) argv[0];
+                uv->address = (char *) argv[0];
         }
 
 #ifdef WIN32
@@ -1139,10 +1155,10 @@ int main(int argc, char *argv[])
 	
 
         char *tmp_requested_fec = strdup(DEFAULT_AUDIO_FEC);
-        uv->audio = audio_cfg_init (network_device, uv->recv_port_number + 2,
+        uv->audio = audio_cfg_init (uv->address, uv->recv_port_number + 2,
                         uv->send_port_number + 2, audio_send, audio_recv,
                         jack_cfg, tmp_requested_fec, audio_channel_map,
-                        audio_scale, echo_cancellation, use_ipv6, mcast_if);
+                        audio_scale, echo_cancellation, uv->use_ipv6, uv->mcast_if);
         free(tmp_requested_fec);
         if(!uv->audio) {
                 exit_uv(1);
@@ -1159,22 +1175,14 @@ int main(int argc, char *argv[])
                 for(int i = 0; i < CAP_DEV_COUNT; ++i) {
                         rx_port += 2;
                         uv->send[i].network_device =
-                                initialize_network(network_device, rx_port,
-                                                uv->send_port_number, uv->participants, use_ipv6, mcast_if);
+                                initialize_network(uv->address, rx_port,
+                                                uv->send_port_number, uv->participants,
+                                                uv->use_ipv6, uv->mcast_if);
                         if (uv->send[i].network_device == NULL) {
                                 fprintf(stderr, "Unable to open network\n");
                                 exit_uv(EXIT_FAIL_NETWORK);
                                 goto cleanup_wait_audio;
                         }
-                }
-
-                uv->recv_network_device =
-                        initialize_network(network_device, uv->recv_port_number,
-                                        uv->send_port_number, uv->participants, use_ipv6, mcast_if);
-                if (uv->recv_network_device == NULL) {
-                        fprintf(stderr, "Unable to open network\n");
-                        exit_uv(EXIT_FAIL_NETWORK);
-                        goto cleanup_wait_audio;
                 }
 
                 if (uv->requested_mtu == 0)     // mtu wasn't specified on the command line
@@ -1225,7 +1233,7 @@ int main(int argc, char *argv[])
         gcoll_params.group_ssrc = rtp_my_ssrc(uv->send[GCOLL_GROUP].network_device);
         // gcoll.params.send_group_camera set in getopt loop
         gcoll_params.audio_ssrc = audio_net_get_ssrc(uv->audio);
-        gcoll_params.reflector_addr = network_device;
+        gcoll_params.reflector_addr = uv->address;
         gcoll_params.port_number = uv->send_port_number;
         for (int i = 0; i < CAP_DEV_COUNT; i++) {
                 gcoll_params.rtp_session[i] = uv->send[i].network_device;
