@@ -1077,7 +1077,7 @@ static void glut_idle_callback(void) {
       glTexCoord2f(0.0f, 0.0f); glVertex2f(left, top);
       glEnd();
     }
-    left += small_win_ratio + 2 * gap_width;
+    left += 2 * (maximum_small_width + gap_width);
 
     gl_check_error();
 
