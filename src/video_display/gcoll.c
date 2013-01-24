@@ -1096,15 +1096,15 @@ static void glut_idle_callback(void) {
     float bottom = 0.0;
     float right = 0.0;
     if (screen_ratio > frame_ratio) {
-      float big_width = s->participants[i].frame->tiles[0].width / 
-        s->participants[i].frame->tiles[0].height *
-        screen_height / screen_width;
-      left = 0.5 - big_width / 2;
-      right = 0.5 + big_width / 2;
+      float big_width = s->groups[i].frame->tiles[0].width / 
+        s->groups[i].frame->tiles[0].height *
+        (float) screen_height / screen_width;
+      left = -0.5 - big_width / 2;
+      right = -0.5 + big_width / 2;
     } else {
-      float big_height = s->participants[i].frame->tiles[0].height / 
-        s->participants[i].frame->tiles[0].width *
-        screen_width / screen_height;
+      float big_height = s->groups[i].frame->tiles[0].height / 
+        s->groups[i].frame->tiles[0].width *
+        (float) screen_width / screen_height;
       bottom = 0.5 - big_height / 2;
       top = 0.5 + big_height / 2;
     }
@@ -1123,10 +1123,10 @@ static void glut_idle_callback(void) {
     gl_check_error();
 
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
-        s->participants[i].frame->tiles[0].width,
-        s->participants[i].frame->tiles[0].height,
+        s->groups[i].frame->tiles[0].width,
+        s->groups[i].frame->tiles[0].height,
         GL_RGB, GL_UNSIGNED_BYTE,
-        s->participants[i].frame->tiles[0].data);
+        s->groups[i].frame->tiles[0].data);
 
     gl_check_error();
 
