@@ -1096,13 +1096,13 @@ static void glut_idle_callback(void) {
     float bottom = 0.0;
     float right = 0.0;
     if (screen_ratio > frame_ratio) {
-      float big_width = s->groups[i].frame->tiles[0].width / 
+      float big_width = (right - left) * (float) s->groups[i].frame->tiles[0].width / 
         s->groups[i].frame->tiles[0].height *
         (float) screen_height / screen_width;
       left = -0.5 - big_width / 2;
       right = -0.5 + big_width / 2;
     } else {
-      float big_height = s->groups[i].frame->tiles[0].height / 
+      float big_height = (top - bottom) * (float) s->groups[i].frame->tiles[0].height / 
         s->groups[i].frame->tiles[0].width *
         (float) screen_width / screen_height;
       bottom = 0.5 - big_height / 2;
