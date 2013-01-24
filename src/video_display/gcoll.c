@@ -1086,9 +1086,9 @@ static void glut_idle_callback(void) {
 
   // Just one group window now...
   pthread_mutex_lock(&s->groups_lock);
-  if (s->groups_count > 0)
+  for (int i = 0; i < s->groups_count; i++)
   {
-    int i = 0;
+    if (s->groups[i].frame == NULL) continue;
     float frame_ratio = (float) s->groups[i].frame->tiles[0].width /
       s->groups[i].frame->tiles[0].height;
     float top = 1.0;
