@@ -1006,10 +1006,11 @@ static void glut_idle_callback(void) {
   s->small_images_count = s->participants_count;
   float gap_width = (float) (1 - maximum_small_width * s->participants_count) / (s->participants_count + 1);
   float left = -1.0 +  2 * gap_width;
+fprintf(stderr, "pcount: %d\n", s->participants_count);
   for (int i = 0; i < s->participants_count; i++) {
-    if ((s->participants[i].frame == NULL && s->participants[i].ssrc == s->gaze_ssrc)) continue;
+    //if ((s->participants[i].frame == NULL && s->participants[i].ssrc == s->gaze_ssrc)) continue;
 
-    if (s->participants[i].ssrc == s->gaze_ssrc && s->participants[i].frame != NULL) {
+    if (s->participants[i].gaze_ssrc == s->params->front_ssrc && s->participants[i].frame != NULL) {
     if (s->participants[i].texture == 0) {
       glGenTextures(1, &s->participants[i].texture);
       gl_check_error();
@@ -1097,7 +1098,7 @@ static void glut_idle_callback(void) {
       glEnd();
     }
 } else 
-    if (s->participants[i].ssrc != s->gaze_ssrc && s->participants[i].side_frame != NULL) {
+    if (s->participants[i].gaze_ssrc != s->params->front_ssrc && s->participants[i].side_frame != NULL) {
     if (s->participants[i].side_texture == 0) {
       glGenTextures(1, &s->participants[i].side_texture);
       gl_check_error();
@@ -1456,7 +1457,7 @@ int display_gcoll_putf(void *state, struct video_frame *frame)
   struct state_gcoll *s = (struct state_gcoll *)state;
   assert(s->magic == MAGIC_GCOLL);
 
-fprintf(stderr, "frame: %d\n", frame->ssrc);
+//fprintf(stderr, "frame: %d\n", frame->ssrc);
   /* TODO: might this hapen? */
   if (frame == NULL) return 0;
 
@@ -1487,9 +1488,9 @@ fprintf(stderr, "frame: %d\n", frame->ssrc);
      */
 
   pthread_mutex_lock(&s->new_frames_lock);
-fprintf(stderr, "count: %d\n", s->new_frames->count);
+//fprintf(stderr, "count: %d\n", s->new_frames->count);
   for (int i = 0; i < s->new_frames->count; i++) {
-fprintf(stderr, "ssrc: %d\n", s->new_frames->ssrc[i]);
+//fprintf(stderr, "ssrc: %d\n", s->new_frames->ssrc[i]);
     if (frame->ssrc == s->new_frames->ssrc[i]) {
       s->new_frames->frames[i] = frame;
       s->received_frame = true;
