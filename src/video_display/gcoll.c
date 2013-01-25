@@ -246,6 +246,7 @@ static void add_or_update_participant(struct state_gcoll *s, uint32_t ssrc, uint
     s->participants[s->participants_count].frame = NULL;
     s->participants[s->participants_count].side_frame = NULL;
     s->participants[s->participants_count].texture = 0;
+    s->participants[s->participants_count].side_texture = 0;
     //glGenTextures(1, &s->participants[s->participants_count].texture);
     //glBindTexture(GL_TEXTURE_2D, s->participants[s->participants_count].texture);
     //setup_texture_parameters();
@@ -683,7 +684,7 @@ static bool rum_communicator_parse_stats(struct rum_communicator *r, char *buf) 
         int room = 0;
         int i;
         temp_str2 = line_ptr;
-        for (i = 1; i <= 3; i++) {
+        for (i = 1; i <= 4; i++) {
           token_ptr = strtok_r(temp_str2, " ", &save_ptr2);
           if (token_ptr == NULL) break;
           temp_str2 = NULL;
@@ -888,9 +889,9 @@ static void reset_frame_storage(struct state_gcoll *s) {
     s->current_frames->ssrc[i] = s->participants[i].ssrc;
     s->current_frames->frames[i] = NULL;
   }
-  for (int i = s->participants_count; i < 2 * s->participants_count; i++) {
-    s->current_frames->ssrc[i] = s->participants[i].side_ssrc;
-    s->current_frames->frames[i] = NULL;
+  for (int i = 0; i < s->participants_count; i++) {
+    s->current_frames->ssrc[i + s->participants_count] = s->participants[i].side_ssrc;
+    s->current_frames->frames[i + s->participants_count] = NULL;
   }
   for (int i = 0; i < s->groups_count; i++) {
     s->current_frames->ssrc[2 * s->participants_count + i] = s->groups[i].ssrc;
@@ -954,8 +955,7 @@ static void glut_idle_callback(void) {
   pthread_mutex_lock(&s->participants_lock);
   pthread_mutex_lock(&s->groups_lock);
   for (int i = 0; i < s->current_frames->count; i++) {
-    if ((s->current_frames->frames[i] == NULL && s->participants[i].ssrc == s->gaze_ssrc) ||
-        (s->current_frames->frames[i + MAX_CLIENTS] == NULL && s->participants[i].ssrc != s->gaze_ssrc))
+    if ((s->current_frames->frames[i] == NULL && s->participants[i].ssrc == s->gaze_ssrc))
       continue;
 
     int id = find_participant(s, s->current_frames->ssrc[i]);
@@ -968,7 +968,7 @@ static void glut_idle_callback(void) {
     id = find_participant_side(s, s->current_frames->ssrc[i]);
     if (id >= 0) {
       vf_free_data(s->participants[id].side_frame);
-      s->participants[id].side_frame = s->current_frames->frames[i + MAX_CLIENTS];
+      s->participants[id].side_frame = s->current_frames->frames[i];
       participant_update_ts(&s->participants[id]);
       continue;
     }
@@ -1456,6 +1456,7 @@ int display_gcoll_putf(void *state, struct video_frame *frame)
   struct state_gcoll *s = (struct state_gcoll *)state;
   assert(s->magic == MAGIC_GCOLL);
 
+fprintf(stderr, "frame: %d\n", frame->ssrc);
   /* TODO: might this hapen? */
   if (frame == NULL) return 0;
 
@@ -1486,7 +1487,9 @@ int display_gcoll_putf(void *state, struct video_frame *frame)
      */
 
   pthread_mutex_lock(&s->new_frames_lock);
+fprintf(stderr, "count: %d\n", s->new_frames->count);
   for (int i = 0; i < s->new_frames->count; i++) {
+fprintf(stderr, "ssrc: %d\n", s->new_frames->ssrc[i]);
     if (frame->ssrc == s->new_frames->ssrc[i]) {
       s->new_frames->frames[i] = frame;
       s->received_frame = true;
