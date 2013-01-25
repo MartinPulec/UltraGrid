@@ -82,7 +82,7 @@
 
 #define MAGIC_GCOLL     DISPLAY_GCOLL_ID
 // Length of participant timeout in seconds
-#define PARTICIPANT_TIMEOUT 30
+#define PARTICIPANT_TIMEOUT 5
 #define GROUP_TIMEOUT PARTICIPANT_TIMEOUT
 #define DEFAULT_RAP_PORT 9876
 #define RAP_REQUEST_LENGTH_LIMIT 1024
@@ -908,7 +908,6 @@ static void glut_idle_callback(void) {
   double seconds = tv_diff(tv, s->tv);
   if (seconds > 5) {
     double cps = s->calls / seconds;
-    fprintf(stderr, "idle_cb: %lu calls in %g seconds = %g CPS\n", s->calls, seconds, cps);
     s->calls = 0;
     s->tv = tv;
   }
@@ -1006,7 +1005,6 @@ static void glut_idle_callback(void) {
   s->small_images_count = s->participants_count;
   float gap_width = (float) (1 - maximum_small_width * s->participants_count) / (s->participants_count + 1);
   float left = -1.0 +  2 * gap_width;
-fprintf(stderr, "pcount: %d\n", s->participants_count);
   for (int i = 0; i < s->participants_count; i++) {
     //if ((s->participants[i].frame == NULL && s->participants[i].ssrc == s->gaze_ssrc)) continue;
 
@@ -1064,7 +1062,6 @@ fprintf(stderr, "pcount: %d\n", s->participants_count);
         bottom = center - win_height / 2;
         top = center + win_height / 2;
       }
-      fprintf(stderr, "%f %f %f %f\n", left, right, bottom, top);
       glBegin(GL_QUADS);
       glTexCoord2f(0.0f, 1.0f); glVertex2f(left, bottom);
       glTexCoord2f(1.0f, 1.0f); glVertex2f(right, bottom);
@@ -1089,7 +1086,6 @@ fprintf(stderr, "pcount: %d\n", s->participants_count);
         bottom = 0.5 - big_height / 2;
         top = 0.5 + big_height / 2;
       }
-      fprintf(stderr, "%f %f %f %f\n", left, right, bottom, top);
       glBegin(GL_QUADS);
       glTexCoord2f(0.0f, 1.0f); glVertex2f(left, bottom);
       glTexCoord2f(1.0f, 1.0f); glVertex2f(right, bottom);
@@ -1140,7 +1136,7 @@ fprintf(stderr, "pcount: %d\n", s->participants_count);
       float bottom = -1.0;
       float top = -1.0 + 2 * maximum_small_height;
 
-  //fprintf(stderr, "%f %f\n", bound_ratio, frame_ratio);
+  //fprintf(stderr, "f %f\n", bound_ratio, frame_ratio);
       if (bound_ratio > frame_ratio) {
         float center = (left + right) / 2;
         float win_width = (right - left) * frame_ratio * (float) screen_height / screen_width;
@@ -1152,7 +1148,6 @@ fprintf(stderr, "pcount: %d\n", s->participants_count);
         bottom = center - win_height / 2;
         top = center + win_height / 2;
       }
-      fprintf(stderr, "%f %f %f %f\n", left, right, bottom, top);
       glBegin(GL_QUADS);
       glTexCoord2f(0.0f, 1.0f); glVertex2f(left, bottom);
       glTexCoord2f(1.0f, 1.0f); glVertex2f(right, bottom);
@@ -1177,7 +1172,6 @@ fprintf(stderr, "pcount: %d\n", s->participants_count);
         bottom = 0.5 - big_height / 2;
         top = 0.5 + big_height / 2;
       }
-      fprintf(stderr, "%f %f %f %f\n", left, right, bottom, top);
       glBegin(GL_QUADS);
       glTexCoord2f(0.0f, 1.0f); glVertex2f(left, bottom);
       glTexCoord2f(1.0f, 1.0f); glVertex2f(right, bottom);
