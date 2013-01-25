@@ -1009,7 +1009,7 @@ static void glut_idle_callback(void) {
   for (int i = 0; i < s->participants_count; i++) {
     if ((s->participants[i].frame == NULL && s->participants[i].ssrc == s->gaze_ssrc)) continue;
 
-    if (s->participants[i].ssrc == s->gaze_ssrc && s->participants[i].frame == NULL) {
+    if (s->participants[i].ssrc == s->gaze_ssrc && s->participants[i].frame != NULL) {
     if (s->participants[i].texture == 0) {
       glGenTextures(1, &s->participants[i].texture);
       gl_check_error();
@@ -1097,7 +1097,7 @@ static void glut_idle_callback(void) {
       glEnd();
     }
 } else 
-    if (s->participants[i].ssrc != s->gaze_ssrc && s->participants[i].side_frame == NULL) {
+    if (s->participants[i].ssrc != s->gaze_ssrc && s->participants[i].side_frame != NULL) {
     if (s->participants[i].side_texture == 0) {
       glGenTextures(1, &s->participants[i].side_texture);
       gl_check_error();
