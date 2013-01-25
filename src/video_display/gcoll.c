@@ -106,12 +106,15 @@ static void setup_texture_parameters(void);
 
 struct participant {
   uint32_t ssrc;
+  uint32_t side_ssrc;
   uint32_t gaze_ssrc;
 
   unsigned int room;
 
   struct video_frame *frame;
+  struct video_frame *side_frame;
   GLuint texture;
+  GLuint side_texture;
 
   time_t ts;
 };
@@ -128,8 +131,8 @@ struct group {
 };
 
 struct frame_storage {
-  uint32_t ssrc[MAX_CLIENTS + MAX_GROUPS];
-  struct video_frame *frames[MAX_CLIENTS + MAX_GROUPS];
+  uint32_t ssrc[2 * MAX_CLIENTS + MAX_GROUPS];
+  struct video_frame *frames[2 * MAX_CLIENTS + MAX_GROUPS];
   int count;
 };
 
@@ -176,9 +179,10 @@ static struct state_gcoll *gcoll;
 static void participant_init(struct participant *p) {
   assert(p != NULL);
 
-  p->ssrc = p->gaze_ssrc = 0;
+  p->ssrc = p->side_ssrc = p->gaze_ssrc = 0;
   p->room = 0;
   p->frame = NULL;
+  p->side_frame = NULL;
   p->ts = 0;
 }
 
@@ -219,7 +223,7 @@ static void display_gcoll_remove_participant(struct state_gcoll *s, int index) {
   s->participants_modified = true;
 }
 
-static void add_or_update_participant(struct state_gcoll *s, uint32_t ssrc, uint32_t gaze_ssrc, unsigned int room) {
+static void add_or_update_participant(struct state_gcoll *s, uint32_t ssrc, uint32_t side_ssrc, uint32_t gaze_ssrc, unsigned int room) {
   assert(s != NULL &&
       s->participants != NULL);
 
@@ -228,6 +232,7 @@ static void add_or_update_participant(struct state_gcoll *s, uint32_t ssrc, uint
   pthread_mutex_lock(&s->participants_lock);
   for (int i = 0; i < s->participants_count; i++) {
     if (s->participants[i].ssrc == ssrc) {
+      s->participants[i].side_ssrc = side_ssrc;
       s->participants[i].gaze_ssrc = gaze_ssrc;
       found = true;
       break;
@@ -235,9 +240,11 @@ static void add_or_update_participant(struct state_gcoll *s, uint32_t ssrc, uint
   }
   if (!found && s->participants_count < MAX_CLIENTS) {
     s->participants[s->participants_count].ssrc = ssrc;
+    s->participants[s->participants_count].side_ssrc = side_ssrc;
     s->participants[s->participants_count].gaze_ssrc = gaze_ssrc;
     s->participants[s->participants_count].room = room;
     s->participants[s->participants_count].frame = NULL;
+    s->participants[s->participants_count].side_frame = NULL;
     s->participants[s->participants_count].texture = 0;
     //glGenTextures(1, &s->participants[s->participants_count].texture);
     //glBindTexture(GL_TEXTURE_2D, s->participants[s->participants_count].texture);
@@ -271,6 +278,18 @@ static int find_participant(struct state_gcoll *s, uint32_t ssrc) {
 
   for (int i = 0; i < s->participants_count; i++) {
     if (s->participants[i].ssrc == ssrc)
+      return i;
+  }
+
+  return -1;
+}
+
+static int find_participant_side(struct state_gcoll *s, uint32_t ssrc) {
+  assert(s != NULL &&
+      s->participants != NULL);
+
+  for (int i = 0; i < s->participants_count; i++) {
+    if (s->participants[i].side_ssrc == ssrc)
       return i;
   }
 
@@ -660,6 +679,7 @@ static bool rum_communicator_parse_stats(struct rum_communicator *r, char *buf) 
       } else { // we are parsing information about clients
         uint32_t ssrc = 0;
         uint32_t gaze_ssrc = 0;
+        uint32_t side_ssrc = 0;
         int room = 0;
         int i;
         temp_str2 = line_ptr;
@@ -672,9 +692,12 @@ static bool rum_communicator_parse_stats(struct rum_communicator *r, char *buf) 
               ssrc = (uint32_t) atol(token_ptr);
               break;
             case 2:
-              gaze_ssrc = (uint32_t) atol(token_ptr);
+              side_ssrc = (uint32_t) atol(token_ptr);
               break;
             case 3:
+              gaze_ssrc = (uint32_t) atol(token_ptr);
+              break;
+            case 4:
               room = atoi(token_ptr);
               break;
             default:
@@ -682,7 +705,7 @@ static bool rum_communicator_parse_stats(struct rum_communicator *r, char *buf) 
           }
         }
         if (ssrc != 0 && ssrc != r->gcoll->params->front_ssrc)
-          add_or_update_participant(r->gcoll, ssrc, gaze_ssrc, room);
+          add_or_update_participant(r->gcoll, ssrc, side_ssrc, gaze_ssrc, room);
       }
     }
   }
@@ -860,14 +883,18 @@ static void setup_texture_parameters(void) {
 }
 
 static void reset_frame_storage(struct state_gcoll *s) {
-  s->current_frames->count = s->participants_count + s->groups_count;
+  s->current_frames->count = 2 * s->participants_count + s->groups_count;
   for (int i = 0; i < s->participants_count; i++) {
     s->current_frames->ssrc[i] = s->participants[i].ssrc;
     s->current_frames->frames[i] = NULL;
   }
+  for (int i = s->participants_count; i < 2 * s->participants_count; i++) {
+    s->current_frames->ssrc[i] = s->participants[i].side_ssrc;
+    s->current_frames->frames[i] = NULL;
+  }
   for (int i = 0; i < s->groups_count; i++) {
-    s->current_frames->ssrc[s->participants_count + i] = s->groups[i].ssrc;
-    s->current_frames->frames[s->participants_count + i] = NULL;
+    s->current_frames->ssrc[2 * s->participants_count + i] = s->groups[i].ssrc;
+    s->current_frames->frames[2 * s->participants_count + i] = NULL;
   }
 }
 
@@ -927,13 +954,21 @@ static void glut_idle_callback(void) {
   pthread_mutex_lock(&s->participants_lock);
   pthread_mutex_lock(&s->groups_lock);
   for (int i = 0; i < s->current_frames->count; i++) {
-    if (s->current_frames->frames[i] == NULL)
+    if ((s->current_frames->frames[i] == NULL && s->participants[i].ssrc == s->gaze_ssrc) ||
+        (s->current_frames->frames[i + MAX_CLIENTS] == NULL && s->participants[i].ssrc != s->gaze_ssrc))
       continue;
 
     int id = find_participant(s, s->current_frames->ssrc[i]);
     if (id >= 0) {
       vf_free_data(s->participants[id].frame);
       s->participants[id].frame = s->current_frames->frames[i];
+      participant_update_ts(&s->participants[id]);
+      continue;
+    }
+    id = find_participant_side(s, s->current_frames->ssrc[i]);
+    if (id >= 0) {
+      vf_free_data(s->participants[id].side_frame);
+      s->participants[id].side_frame = s->current_frames->frames[i + MAX_CLIENTS];
       participant_update_ts(&s->participants[id]);
       continue;
     }
@@ -972,8 +1007,9 @@ static void glut_idle_callback(void) {
   float gap_width = (float) (1 - maximum_small_width * s->participants_count) / (s->participants_count + 1);
   float left = -1.0 +  2 * gap_width;
   for (int i = 0; i < s->participants_count; i++) {
-    if (s->participants[i].frame == NULL) continue;
+    if ((s->participants[i].frame == NULL && s->participants[i].ssrc == s->gaze_ssrc)) continue;
 
+    if (s->participants[i].ssrc == s->gaze_ssrc && s->participants[i].frame == NULL) {
     if (s->participants[i].texture == 0) {
       glGenTextures(1, &s->participants[i].texture);
       gl_check_error();
@@ -1015,7 +1051,7 @@ static void glut_idle_callback(void) {
       float bottom = -1.0;
       float top = -1.0 + 2 * maximum_small_height;
 
-  fprintf(stderr, "%f %f\n", bound_ratio, frame_ratio);
+  //fprintf(stderr, "%f %f\n", bound_ratio, frame_ratio);
       if (bound_ratio > frame_ratio) {
         float center = (left + right) / 2;
         float win_width = (right - left) * frame_ratio * (float) screen_height / screen_width;
@@ -1027,25 +1063,8 @@ static void glut_idle_callback(void) {
         bottom = center - win_height / 2;
         top = center + win_height / 2;
       }
-/*
-      if (tile_ratio > bound_ratio) {
-        small_height = maximum_small_height;
-        small_width = maximum_small_height * tile_ratio / screen_ratio;
-      } else {
-        small_width = maximum_small_width;
-        small_height = small_width / tile_ratio * screen_ratio;
-      }
-*/
-
-      //float small_height = small_win_ratio * s->participants[i].frame->tiles[0].height / s->participants[i].frame->tiles[0].width * screen_width / screen_height * 2;
       fprintf(stderr, "%f %f %f %f\n", left, right, bottom, top);
       glBegin(GL_QUADS);
-/*
-      glTexCoord2f(0.0f, 1.0f); glVertex2f(left, -1.0f);
-      glTexCoord2f(1.0f, 1.0f); glVertex2f(left + 2 * small_width, -1.0f);
-      glTexCoord2f(1.0f, 0.0f); glVertex2f(left + 2 * small_width, -1.0f + small_height);
-      glTexCoord2f(0.0f, 0.0f); glVertex2f(left, -1.0f + small_height);
-*/
       glTexCoord2f(0.0f, 1.0f); glVertex2f(left, bottom);
       glTexCoord2f(1.0f, 1.0f); glVertex2f(right, bottom);
       glTexCoord2f(1.0f, 0.0f); glVertex2f(right, top);
@@ -1077,9 +1096,98 @@ static void glut_idle_callback(void) {
       glTexCoord2f(0.0f, 0.0f); glVertex2f(left, top);
       glEnd();
     }
-    left += 2 * (maximum_small_width + gap_width);
+} else 
+    if (s->participants[i].ssrc != s->gaze_ssrc && s->participants[i].side_frame == NULL) {
+    if (s->participants[i].side_texture == 0) {
+      glGenTextures(1, &s->participants[i].side_texture);
+      gl_check_error();
+      glBindTexture(GL_TEXTURE_2D, s->participants[i].side_texture);
+      gl_check_error();
+      setup_texture_parameters();
+      gl_check_error();
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
+          s->participants[i].side_frame->tiles[0].width,
+          s->participants[i].side_frame->tiles[0].height,
+          0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+      gl_check_error();
+      fprintf(stderr, "generate texture: %d\n", i);
+    } else {
+      glBindTexture(GL_TEXTURE_2D, s->participants[i].side_texture);
+    }
 
     gl_check_error();
+
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+        s->participants[i].side_frame->tiles[0].width,
+        s->participants[i].side_frame->tiles[0].height,
+        GL_RGB, GL_UNSIGNED_BYTE,
+        s->participants[i].side_frame->tiles[0].data);
+
+    gl_check_error();
+
+    glLoadIdentity();
+    glTranslatef(0.0f, 0.0f, -3.35f);
+
+    gl_check_error();
+
+    float small_height = 0.0;
+    float small_width = 0.0;
+    float frame_ratio = (float) s->participants[i].side_frame->tiles[0].width /
+      s->participants[i].side_frame->tiles[0].height;
+    if (s->participants[i].ssrc != s->gaze_ssrc) {
+      float right = left + 2 * maximum_small_width;
+      float bottom = -1.0;
+      float top = -1.0 + 2 * maximum_small_height;
+
+  //fprintf(stderr, "%f %f\n", bound_ratio, frame_ratio);
+      if (bound_ratio > frame_ratio) {
+        float center = (left + right) / 2;
+        float win_width = (right - left) * frame_ratio * (float) screen_height / screen_width;
+        left = center - win_width / 2;
+        right = center + win_width / 2;
+      } else {
+        float center = (bottom + top) / 2;
+        float win_height = (top - bottom) / frame_ratio * (float) screen_width / screen_height;
+        bottom = center - win_height / 2;
+        top = center + win_height / 2;
+      }
+      fprintf(stderr, "%f %f %f %f\n", left, right, bottom, top);
+      glBegin(GL_QUADS);
+      glTexCoord2f(0.0f, 1.0f); glVertex2f(left, bottom);
+      glTexCoord2f(1.0f, 1.0f); glVertex2f(right, bottom);
+      glTexCoord2f(1.0f, 0.0f); glVertex2f(right, top);
+      glTexCoord2f(0.0f, 0.0f); glVertex2f(left, top);
+      glEnd();
+    } else {
+      float top = 1.0;
+      float left = 0.0;
+      float bottom = 0.0;
+      float right = 1.0;
+      if (screen_ratio > frame_ratio) {
+        float big_width = (right - left) * (float) s->participants[i].side_frame->tiles[0].width / 
+          s->participants[i].side_frame->tiles[0].height *
+          (float) screen_height / screen_width;
+        left = 0.5 - big_width / 2;
+        right = 0.5 + big_width / 2;
+      } else {
+        float big_height = (top - bottom) * (float) s->participants[i].side_frame->tiles[0].height / 
+          s->participants[i].side_frame->tiles[0].width *
+          (float) screen_width / screen_height;
+        bottom = 0.5 - big_height / 2;
+        top = 0.5 + big_height / 2;
+      }
+      fprintf(stderr, "%f %f %f %f\n", left, right, bottom, top);
+      glBegin(GL_QUADS);
+      glTexCoord2f(0.0f, 1.0f); glVertex2f(left, bottom);
+      glTexCoord2f(1.0f, 1.0f); glVertex2f(right, bottom);
+      glTexCoord2f(1.0f, 0.0f); glVertex2f(right, top);
+      glTexCoord2f(0.0f, 0.0f); glVertex2f(left, top);
+      glEnd();
+    }
+}
+
+    gl_check_error();
+    left += 2 * (maximum_small_width + gap_width);
 
   }
   pthread_mutex_unlock(&s->participants_lock);
