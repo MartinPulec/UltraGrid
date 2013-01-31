@@ -557,7 +557,7 @@ static int rum_communicator_get_reply(struct rum_communicator *r, char *buf, uns
   }
 
   do {
-    bytes_read = read(r->rap_socket, temp_buf, RAP_REPLY_LENGTH_LIMIT);
+    bytes_read = recv(r->rap_socket, temp_buf, RAP_REPLY_LENGTH_LIMIT, 0);
     if (bytes_read < 0) {
       perror("rum_communicator_get_reply read");
       free(temp_buf);
@@ -804,6 +804,7 @@ static void * rum_communicator_main(void *s) {
 
     if (rum_communicator_init(sg->rum, sg->params, sg) == FALSE) {
       fprintf(stderr, "RUM communicator initialization failed.\n");
+    fflush(stderr);
       sg->exit = true;
       return NULL;
     }
@@ -816,6 +817,7 @@ static void * rum_communicator_main(void *s) {
       }
       if (retval == FALSE) {
         fprintf(stderr, "New sending addresses could not be set, quitting.");
+    fflush(stderr);
         sg->exit = true;
       }
     }
@@ -828,6 +830,7 @@ static void * rum_communicator_main(void *s) {
     }
     if (sg->rum->heartbeats < 2) {
       fprintf(stderr, "Frequent RUM communicator failures, quitting.\n");
+    fflush(stderr);
       sg->exit = true;
     }
 
@@ -1136,7 +1139,7 @@ static void glut_idle_callback(void) {
       float bottom = -1.0;
       float top = -1.0 + 2 * maximum_small_height;
 
-  //fprintf(stderr, "f %f\n", bound_ratio, frame_ratio);
+  //fprintf(stderr, "%f %f\n", bound_ratio, frame_ratio);
       if (bound_ratio > frame_ratio) {
         float center = (left + right) / 2;
         float win_width = (right - left) * frame_ratio * (float) screen_height / screen_width;
