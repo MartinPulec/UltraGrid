@@ -1304,7 +1304,7 @@ SAVED_LIBS=$LIBS
 if test $system = Windows; then
 	AC_MSG_CHECKING([GLEW presence (library and headers)])
 	SAVED_LIBS=$LIBS
-	LIBS="$LIBS libglew32.a libglew32.dll.a"
+	LIBS="$LIBS -lglew32"
 	AC_LINK_IFELSE([ AC_LANG_PROGRAM([
 #define _STDCALL_SUPPORTED 1
 #include <GL/glew.h>
@@ -1381,7 +1381,7 @@ case "$host_os" in
 	*mingw*)
 	AC_MSG_CHECKING([OpenGL support for GColl])
 	SAVED_LIBS=$LIBS
-	LIBS="$LIBS -lglut libglew32.a libglew32.dll.a -lopengl32"
+	LIBS="$LIBS -lglut -lglew32 -lopengl32"
 	AC_LINK_IFELSE([ AC_LANG_PROGRAM([
 #define _STDCALL_SUPPORTED 1
 #include <GL/glew.h>
@@ -1395,7 +1395,7 @@ glBindTexture(GL_TEXTURE_2D, 0);
 	AC_MSG_RESULT([$HAVE_GCOLL])
 
 	if test "$HAVE_GCOLL" = yes; then
-		GCOLL_LIB="$GCOLL_LIB -lglut libglew32.a libglew32.dll.a -lopengl32"
+		GCOLL_LIB="$GCOLL_LIB -lglut -lglew32 -lopengl32"
 		GCOLL_OBJ="$GCOLL_OBJ src/video_display/gcoll.o"
 		AC_DEFINE([HAVE_GCOLL], [1], [Build with GColl display])
 		gcoll=yes	
@@ -1455,6 +1455,8 @@ then
         AC_SUBST(GCOLL_LIB_TARGET, "lib/ultragrid/display_gcoll.so.$video_display_abi_version")
         LIB_TARGETS="$LIB_TARGETS $GCOLL_LIB_TARGET"
         LIB_OBJS="$LIB_OBJS $GCOLL_OBJ"
+else
+        AC_MSG_ERROR([This source tree currently requires GColl mode!])
 fi
 
 LIB_MODULES="$LIB_MODULES $GCOLL_LIB"
