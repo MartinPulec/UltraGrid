@@ -54,6 +54,7 @@
 #include "video_decompress/libavcodec.h"
 
 #include <libavcodec/avcodec.h>
+#include <libavutil/mem.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
 
@@ -146,7 +147,8 @@ static bool configure_with(struct state_libavcodec_decompress *s,
 #endif
         }
 
-        s->codec_ctx->pix_fmt = PIX_FMT_YUV420P;
+        // set by decoder
+        s->codec_ctx->pix_fmt = PIX_FMT_NONE;
 
         if(avcodec_open2(s->codec_ctx, s->codec, NULL) < 0) {
                 fprintf(stderr, "[lavd] Unable to open decoder.\n");
@@ -219,11 +221,12 @@ int libavcodec_decompress_reconfigure(void *state, struct video_desc desc,
 static void yuv420p_to_yuv422(char *dst_buffer, AVFrame *in_frame,
                 int width, int height)
 {
+        char *dst = dst_buffer + 1;
         for(int y = 0; y < (int) height; ++y) {
                 char *src = (char *) in_frame->data[0] + in_frame->linesize[0] * y;
-                char *dst = (char *) dst_buffer + width * y * 2;
                 for(int x = 0; x < width; ++x) {
-                        dst[x * 2 + 1] = src[x];
+                        *dst = *src++;
+                        dst += 2;
                 }
         }
 
@@ -233,10 +236,14 @@ static void yuv420p_to_yuv422(char *dst_buffer, AVFrame *in_frame,
                 char *dst1 = dst_buffer + width * (y * 2) * 2;
                 char *dst2 = dst_buffer + (y * 2 + 1) * width * 2;
                 for(int x = 0; x < width / 2; ++x) {
-                        dst1[x * 4] = src_cb[x];
-                        dst1[x * 4 + 2] = src_cr[x];
-                        dst2[x * 4] = src_cb[x];
-                        dst2[x * 4 + 2] = src_cr[x];
+                        *dst1 = *src_cb;
+                        dst1 += 2;
+                        *dst1 = *src_cr;
+                        dst1 += 2;
+                        *dst2 = *src_cb++;
+                        dst2 += 2;
+                        *dst2 = *src_cr++;
+                        dst2 += 2;
                 }
         }
 }
@@ -244,21 +251,24 @@ static void yuv420p_to_yuv422(char *dst_buffer, AVFrame *in_frame,
 static void yuv422p_to_yuv422(char *dst_buffer, AVFrame *in_frame,
                 int width, int height)
 {
+        char *dst = (char *) dst_buffer + 1;
         for(int y = 0; y < (int) height; ++y) {
                 char *src = (char *) in_frame->data[0] + in_frame->linesize[0] * y;
-                char *dst = (char *) dst_buffer + width * y * 2;
                 for(int x = 0; x < width; ++x) {
-                        dst[x * 2 + 1] = src[x];
+                        *dst = *src++;
+                        dst += 2;
                 }
         }
 
+        dst = dst_buffer;
         for(int y = 0; y < (int) height; ++y) {
                 char *src_cb = (char *) in_frame->data[1] + in_frame->linesize[1] * y;
                 char *src_cr = (char *) in_frame->data[2] + in_frame->linesize[2] * y;
-                char *dst = dst_buffer + width * y * 2;
                 for(int x = 0; x < width / 2; ++x) {
-                        dst[x * 4] = src_cb[x];
-                        dst[x * 4 + 2] = src_cr[x];
+                        *dst = *src_cb++;
+                        dst += 2;
+                        *dst = *src_cr++;
+                        dst += 2;
                 }
         }
 }
@@ -422,9 +432,20 @@ int libavcodec_decompress(void *state, unsigned char *dst, unsigned char *src,
                 if(got_frame) {
                         /* pass frame only if this is I-frame or we have complete
                          * GOP (assuming we are not using B-frames */
-                        if(s->frame->pict_type == AV_PICTURE_TYPE_I ||
+                        if(
+#ifdef LAVD_ACCEPT_CORRUPTED
+                                        true
+#else
+                                        s->frame->pict_type == AV_PICTURE_TYPE_I ||
+#ifndef DISABLE_H264_INTRA_REFRESH
+                                        /* there should be also check if we got 
+                                         * all previous frames (up to the size
+                                         * of GOP) */
+                                        (s->in_codec == H264) ||
+#endif
                                         (s->frame->pict_type == AV_PICTURE_TYPE_P &&
                                          s->last_frame_seq == frame_seq - 1)
+#endif // LAVD_ACCEPT_CORRUPTED
                                         ) {
                                 res = change_pixfmt(s->frame, dst, s->codec_ctx->pix_fmt,
                                                 s->out_codec, s->width, s->height);
@@ -460,7 +481,11 @@ int libavcodec_decompress_get_property(void *state, int property, void *val, siz
                         if(*len >= sizeof(int)) {
                                 *(int *) val = FALSE;
                                 *len = sizeof(int);
+#ifdef LAVD_ACCEPT_CORRUPTED
                                 ret = TRUE;
+#else
+                                ret = FALSE;
+#endif
                         }
                         break;
                 default:
