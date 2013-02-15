@@ -204,7 +204,7 @@ int main(int argc, char **argv) {
         image_information.lines_per_image_ele = height;
 
         int in_fd = open(in_filename, O_RDONLY);
-        int out_fd = open(out_filename, O_WRONLY | O_CREAT | O_EXCL, 0666);
+        int out_fd = open(out_filename, O_WRONLY | O_CREAT, 0666);
 
         assert(in_fd != -1 && out_fd != -1);
 
