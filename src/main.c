@@ -792,7 +792,7 @@ int main(int argc, char *argv[])
                   ihdtv_sender_thread_id = 0;
         unsigned vidcap_flags = 0,
                  display_flags = 0;
-        struct state_receiver receiver_state;
+        struct receiver_param receiver_param;
 
 #if defined DEBUG && defined HAVE_LINUX
         mtrace();
@@ -841,12 +841,12 @@ int main(int argc, char *argv[])
         uv_state = uv;
 
         uv->audio = NULL;
-        receiver_state.display_device = NULL;
+        receiver_param.display_device = NULL;
         uv->requested_display = "none";
         uv->requested_capture = "none";
         uv->requested_compression = "none";
-        receiver_state.decoder_mode = NULL;
-        receiver_state.postprocess = NULL;
+        receiver_param.decoder_mode = NULL;
+        receiver_param.postprocess = NULL;
         uv->requested_mtu = 0;
         uv->use_ihdtv_protocol = 0;
         uv->tx = NULL;
@@ -901,10 +901,10 @@ int main(int argc, char *argv[])
                         uv->requested_mtu = atoi(optarg);
                         break;
                 case 'M':
-                        receiver_state.decoder_mode = optarg;
+                        receiver_param.decoder_mode = optarg;
                         break;
                 case 'p':
-                        receiver_state.postprocess = optarg;
+                        receiver_param.postprocess = optarg;
                         break;
                 case 'v':
                         printf("%s", PACKAGE_STRING);
@@ -1090,7 +1090,7 @@ int main(int argc, char *argv[])
         }
         printf("Video capture initialized-%s\n", uv->requested_capture);
 
-        if ((receiver_state.display_device =
+        if ((receiver_param.display_device =
              initialize_video_display(uv->requested_display, display_cfg, display_flags)) == NULL) {
                 printf("Unable to open display device: %s\n",
                        uv->requested_display);
@@ -1229,12 +1229,12 @@ int main(int argc, char *argv[])
                 }
 
                 /* following block only shows help (otherwise initialized in receiver thread */
-                if((receiver_state.postprocess && strstr(receiver_state.postprocess, "help") != NULL) || 
-                                (receiver_state.decoder_mode &&
-                                 strstr(receiver_state.decoder_mode, "help") != NULL)) {
+                if((receiver_param.postprocess && strstr(receiver_param.postprocess, "help") != NULL) || 
+                                (receiver_param.decoder_mode &&
+                                 strstr(receiver_param.decoder_mode, "help") != NULL)) {
                         struct state_decoder *dec = decoder_init(
-                                        receiver_state.decoder_mode,
-                                        receiver_state.postprocess, NULL);
+                                        receiver_param.decoder_mode,
+                                        receiver_param.postprocess, NULL);
                         decoder_destroy(dec);
                         exit_uv(EXIT_SUCCESS);
                         goto cleanup_wait_display;
@@ -1247,16 +1247,16 @@ int main(int argc, char *argv[])
                         goto cleanup_wait_display;
                 }
 
-                receiver_state.network_devices = uv->network_devices;
-                receiver_state.master_lock = &uv->master_lock;
-                receiver_state.connections_count = uv->connections_count;
-                receiver_state.participants = uv->participants;
+                receiver_param.network_devices = uv->network_devices;
+                receiver_param.master_lock = &uv->master_lock;
+                receiver_param.connections_count = uv->connections_count;
+                receiver_param.participants = uv->participants;
 
                 if (strcmp("none", uv->requested_display) != 0) {
                         pthread_mutex_lock(&uv->master_lock); 
                         if (pthread_create
                             (&receiver_thread_id, NULL, receiver_thread,
-                             (void *)&receiver_state) != 0) {
+                             (void *)&receiver_param) != 0) {
                                 perror("Unable to create display thread!\n");
                                 exit_uv(EXIT_FAILURE);
                                 goto cleanup_wait_display;
@@ -1278,15 +1278,15 @@ int main(int argc, char *argv[])
         pthread_mutex_lock(&uv->master_lock); 
 
         if(audio_get_display_flags(uv->audio)) {
-                audio_register_get_callback(uv->audio, (struct audio_frame * (*)(void *)) display_get_audio_frame, receiver_state.display_device);
-                audio_register_put_callback(uv->audio, (void (*)(void *, struct audio_frame *)) display_put_audio_frame, receiver_state.display_device);
+                audio_register_get_callback(uv->audio, (struct audio_frame * (*)(void *)) display_get_audio_frame, receiver_param.display_device);
+                audio_register_put_callback(uv->audio, (void (*)(void *, struct audio_frame *)) display_put_audio_frame, receiver_param.display_device);
                 audio_register_reconfigure_callback(uv->audio, (int (*)(void *, int, int, 
                                                 int)) display_reconfigure_audio,
-                                receiver_state.display_device);
+                                receiver_param.display_device);
         }
 
         if (strcmp("none", uv->requested_display) != 0)
-                display_run(receiver_state.display_device);
+                display_run(receiver_param.display_device);
 
 cleanup_wait_display:
         if (strcmp("none", uv->requested_display) != 0 && receiver_thread_id)
@@ -1319,8 +1319,8 @@ cleanup:
                 destroy_devices(uv->network_devices);
         if(uv->capture_device)
                 vidcap_done(uv->capture_device);
-        if(receiver_state.display_device)
-                display_done(receiver_state.display_device);
+        if(receiver_param.display_device)
+                display_done(receiver_param.display_device);
         if (uv->participants != NULL) {
                 struct pdb_e *cp = pdb_iter_init(uv->participants);
                 while (cp != NULL) {
