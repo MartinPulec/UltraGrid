@@ -85,7 +85,7 @@ class state_j2k_decompress {
                                 count(0) {
                         state = demo_dec_create(NULL, 0);
                         if(!state) {
-                                throw;
+                                throw runtime_error("Unable to create J2K decompress");
                         }
                         pthread_cond_init(&this->cv, NULL);
                         pthread_mutex_init(&this->lock, NULL);

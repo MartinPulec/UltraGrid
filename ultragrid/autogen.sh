@@ -2,7 +2,7 @@
 
 udt_init() {
         cd ../udt4
-        make clean
+        #make clean
         if [ `uname` = "Linux" ]; then
                 if [ `uname -p` = "x86_64" ]; then
                         make -e arch=AMD64
@@ -18,7 +18,7 @@ udt_init() {
 
 libgpujpeg_init() {
         cd ../libgpujpeg
-        make clean
+        #make clean
         make
         cd -
 }
@@ -39,7 +39,7 @@ autoconf && \
 $srcdir/configure $@
 STATUS=$?
 
-make clean
+#make clean
 
 cd $ORIGDIR
 

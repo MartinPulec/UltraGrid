@@ -300,8 +300,6 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
 {
     wxString failedPart;
 
-    codec_t transmit_codec, display_codec = RGB;
-
     currentVideo = &item;
 
     last_wanted = 0;
@@ -335,14 +333,14 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
 
         // COMPRESSION
         string compression = settings->GetValue(std::string("compression"), std::string("none"));
-        if(compression == string("JPEG")) {
-            transmit_codec = JPEG;
-        } else if(compression == string("J2K")) {
-            transmit_codec = J2K;
-            display_codec = R10k;
+        codec_t compress_codec = codec_from_name(compression.c_str());
+        codec_t video_codec = codec_from_name(video_format.mb_str());
+        if(is_codec_opaque(video_codec)) { // video files are already compressed
+            compress_codec = NO_COMPRESSION;
+        } else {
+            this->connection.set_parameter(wxT("compression"), wxString(compression.c_str(), wxConvUTF8) << wxT(" ") +
+                    wxString(settings->GetValue(std::string("jpeg_qual"), std::string("80")).c_str(), wxConvUTF8));
         }
-        this->connection.set_parameter(wxT("compression"), wxString(compression.c_str(), wxConvUTF8) << wxT(" ") +
-                wxString(settings->GetValue(std::string("jpeg_qual"), std::string("80")).c_str(), wxConvUTF8));
 
         failedPart = wxT("TCP/UDP setting");
         wxString use_tcp_str = wxString(settings->GetValue(std::string("use_tcp"), std::string("false")).c_str(), wxConvUTF8);
@@ -381,7 +379,8 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
         this->fps = fps;
         SchedulePlay();
 
-        receiver->reinitializeDecompress(transmit_codec, display_codec);
+        receiver->reinitializeDecompress(video_codec,
+                                         compress_codec);
 
         connection.play(start_frame);
         //connection.play();

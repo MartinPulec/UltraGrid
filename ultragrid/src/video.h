@@ -81,6 +81,7 @@ typedef enum {
         JPEG,
         J2K,
         RAW,
+        NO_COMPRESSION,
 } codec_t;
 
 enum interlacing_t {

@@ -107,9 +107,6 @@ using namespace std;
 
 #define USE_CUSTOM_TRANSMIT 1
 
-const char * volatile video_directory = 0;
-volatile int logo_hidden = 0;
-
 struct state_uv {
 #ifndef USE_CUSTOM_TRANSMIT
         struct rtp **network_devices;
@@ -144,20 +141,15 @@ struct state_uv {
         volatile double compress_quality;
 };
 
-long packet_rate = 13600;
-volatile int should_exit = FALSE;
 volatile int wait_to_finish = FALSE;
 volatile int threads_joined = FALSE;
 static int exit_status = EXIT_SUCCESS;
 
-uint32_t RTT = 0;               /* this is computed by handle_rr in rtp_callback */
 struct video_frame *frame_buffer = NULL;
 uint32_t hd_color_spc = 0;
 
 long frame_begin[2];
 
-int uv_argc;
-char **uv_argv;
 static struct state_uv *uv_state;
 
 void list_video_capture_devices(void);
@@ -187,8 +179,6 @@ void _exit_uv(int status) {
         wait_to_finish = FALSE;
         close(uv_state->comm_fd);
 }
-
-void (*exit_uv)(int status) = _exit_uv;
 
 static void usage(void)
 {
@@ -482,6 +472,7 @@ int main(int argc, char *argv[])
 {
         uv_argc = argc;
         uv_argv = argv;
+        exit_uv = _exit_uv;
 
         if (argc == 1) {
                 return main_sp();

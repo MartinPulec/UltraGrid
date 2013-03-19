@@ -67,6 +67,8 @@
 #include "video_capture/deltacast.h"
 #include "video_capture/quad.h"
 
+#include "video_capture/vf.h"
+
 #define VIDCAP_MAGIC	0x76ae98f0
 
 #ifdef BUILD_LIBRARIES
@@ -106,6 +108,17 @@ struct vidcap_device_api {
 };
 
 struct vidcap_device_api vidcap_device_table[] = {
+        {
+         0,
+         NULL,
+         MK_STATIC(vidcap_vf_probe),
+         MK_STATIC(vidcap_vf_init),
+         MK_STATIC(vidcap_vf_finish),
+         MK_STATIC(vidcap_vf_done),
+         MK_STATIC(vidcap_vf_grab),
+         MK_STATIC(vidcap_vf_command),
+         NULL
+        },
         {
          0,
          NULL,

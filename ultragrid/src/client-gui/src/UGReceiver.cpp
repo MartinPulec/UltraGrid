@@ -40,6 +40,8 @@ extern "C" {
 
 #define USE_CUSTOM_TRANSMIT
 
+using namespace std;
+
 enum cmd {
     CMD_ACCEPT,
     CMD_QUIT,
@@ -108,18 +110,13 @@ struct state_uv {
     aes_decrypt dec;
 };
 
-volatile int should_exit = FALSE;
-uint32_t RTT = 0;               /* this is computed by handle_rr in rtp_callback */
 struct video_frame *frame_buffer = NULL;
-long packet_rate = 13600;
 int uv_argc;
 char **uv_argv;
 
 void _exit_uv(int status) {
         should_exit = 1;
 }
-
-void (*exit_uv)(int status) = _exit_uv;
 
 struct display *client_initialize_video_display(const char *requested_display,
                                                 char *fmt, unsigned int flags)
@@ -589,6 +586,7 @@ quit:
 
 UGReceiver::UGReceiver(VideoBuffer *buffer_, Player *player_, bool use_tcp)
 {
+    exit_uv = _exit_uv;
     pthread_t receiver_thread_id;
 
     uv = new state_uv(buffer_);
@@ -884,7 +882,7 @@ void UGReceiver::Reconfigure(struct state_uv *uv, struct video_desc video_desc, 
     }
 }
 
-void UGReceiver::reinitializeDecompress(codec_t transmit_codec, codec_t display_codec)
+void UGReceiver::reinitializeDecompress(codec_t codec, codec_t compress)
 {
-    uv->decompress.reintializeDecompress(transmit_codec, display_codec);
+    uv->decompress.reintializeDecompress(codec, compress);
 }

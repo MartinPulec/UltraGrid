@@ -58,7 +58,7 @@ void                    *vidcap_dpx_init(char *fmt, unsigned int flags);
 void                     vidcap_dpx_finish(void *state);
 void                     vidcap_dpx_done(void *state);
 struct video_frame	*vidcap_dpx_grab(void *state, struct audio_frame **audio);
-void                     vidcap_dpx_command(struct vidcap *state, int command, void *data);
+void                     vidcap_dpx_command(void *state, int command, void *data);
 
 #ifdef __cplusplus
 }

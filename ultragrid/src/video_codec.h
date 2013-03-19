@@ -85,6 +85,7 @@ const char * get_codec_name(codec_t codec);
 int is_codec_opaque(codec_t codec);
 codec_t get_codec_from_fcc(uint32_t fourcc);
 int get_haligned(int width_pixels, codec_t codec);
+codec_t codec_from_name(const char *name);
 
 int vc_get_linesize(unsigned int width, codec_t codec);
 

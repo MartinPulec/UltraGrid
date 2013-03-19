@@ -825,7 +825,7 @@ static void clamp_indices(struct vidcap_dpx_state *s)
 }
 
 
-void vidcap_dpx_command(struct vidcap *state, int command, void *data)
+void vidcap_dpx_command(void *state, int command, void *data)
 {
 	struct vidcap_dpx_state 	*s = (struct vidcap_dpx_state *) state;
 

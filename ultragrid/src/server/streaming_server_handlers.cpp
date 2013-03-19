@@ -152,6 +152,8 @@ void session_handler::handle(struct msg *message, streaming_server* serv, respon
                                                 char * args[100];
 
                                                 char dpx_arg[MAX_PATH_LEN + 1];
+                                                // colorspace will be the same as in file
+                                                // thus we do not need to provide any value
                                                 if(strcmp(color_space.c_str(), "file") == 0) {
                                                         snprintf(dpx_arg, MAX_PATH_LEN, "%s:files=%s/*.%s", video_format.c_str(), path.c_str(), glob_ext.c_str());
                                                 } else {
@@ -431,6 +433,10 @@ launch_err:
                         else if(strcmp(video_format, "EXR") == 0) {
                                 this->video_format = "exr";
                                 this->glob_ext = "exr";
+                        } else if(strcasecmp(video_format, "j2k") == 0) {
+                                // we use generic driver for J2K
+                                this->video_format = "vf";
+                                this->glob_ext = "j2k";
                         }
                         char *color_space = strtok_r(NULL, " ", &save_ptr);
                         if(color_space) {

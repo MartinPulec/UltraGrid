@@ -74,8 +74,14 @@ void Decompress::pushDecompressedFrame(std::tr1::shared_ptr<Frame> frame)
     buffer->putframe(frame);
 }
 
-void Decompress::reintializeDecompress(codec_t in_codec, codec_t out_codec)
+void Decompress::reintializeDecompress(codec_t in_codec, codec_t compress)
 {
+    codec_t out_codec = RGB;
+
+    if(compress == J2K || in_codec == J2K) {
+        out_codec = R10k;
+    }
+
     if(in_codec == this->in_codec &&
        out_codec == this->out_codec) {
            // no need to reinitialize
@@ -106,7 +112,9 @@ void Decompress::reintializeDecompress(codec_t in_codec, codec_t out_codec)
     }
 
     decompress = decompress_init(decoder_index, out_codec);
-    assert(decompress);
+    if(!decompress) {
+        throw runtime_error("Unable to create decoder");
+    }
 
     thread = new DecompressThread(this);
 

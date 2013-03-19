@@ -54,4 +54,4 @@ void                    *vidcap_exr_init(char *fmt, unsigned int flags);
 void                     vidcap_exr_finish(void *state);
 void                     vidcap_exr_done(void *state);
 struct video_frame	*vidcap_exr_grab(void *state, struct audio_frame **audio);
-void                     vidcap_exr_command(struct vidcap *state, int command, void *data);
+void                     vidcap_exr_command(void *state, int command, void *data);

@@ -80,6 +80,7 @@ const struct codec_info_t codec_info[] = {
         {JPEG, "JPEG", to_fourcc('J','P','E','G'), 0, 0.0, FALSE, TRUE},
         {J2K, "J2K", to_fourcc('M','J','2','C'), 0, 0.0, FALSE, TRUE},
         {RAW, "raw", to_fourcc('r','a','w','s'), 0, 1.0, FALSE, TRUE}, /* raw SDI */
+        {NO_COMPRESSION, "none", 0, 0, 1.0, FALSE, TRUE}, /* dummy */
         {0, NULL, 0, 0, 0.0, FALSE, FALSE}
 };
 
@@ -114,6 +115,15 @@ double rgb_709_d65_to_xyz[] = { 0.412453, 0.357580, 0.180423,
 double xyz_to_rgb_709_d65[] = { 3.240479, -1.537150, -0.498535,
                              -0.969256, 1.875992, 0.041556,
                              0.055648, -0.204043, 1.057311 };
+
+codec_t codec_from_name(const char *name) {
+        for (int i = 0; codec_info[i].name != NULL; i++) {
+                if (strcmp(name, codec_info[i].name) == 0) {
+                        return codec_info[i].codec;
+                }
+        }
+        return (codec_t) -1; // not found
+}
 
 void show_codec_help(char *module)
 {

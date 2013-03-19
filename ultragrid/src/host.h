@@ -65,4 +65,7 @@ extern const char * volatile video_directory;
 
 extern volatile int logo_hidden;
 
+extern int uv_argc;
+extern char **uv_argv;
+
 #endif
