@@ -47,9 +47,9 @@ void VideoBuffer::putframe(std::tr1::shared_ptr<Frame> data)
     //Observable::notifyObservers();
 }
 
-shared_ptr<Frame> VideoBuffer::getframe()
+std::tr1::shared_ptr<Frame> VideoBuffer::getframe()
 {
-    return shared_ptr<Frame> (new Frame(videoDataLen, maxAudioDataLen));
+    return std::tr1::shared_ptr<Frame> (new Frame(videoDataLen, maxAudioDataLen));
 }
 
 void VideoBuffer::reconfigure(int width, int height, int codec, int videoDataLen, size_t maxAudioDataLen)

@@ -69,14 +69,14 @@ using namespace std;
 using namespace std::tr1;
 
 struct j2k_decompress_data {
-        j2k_decompress_data(shared_ptr<Frame> frame_, shared_ptr<char> decompressed_) :
+        j2k_decompress_data(std::tr1::shared_ptr<Frame> frame_, std::tr1::shared_ptr<char> decompressed_) :
                 frame(frame_),
                 decompressed(decompressed_)
         {
         }
 
-        shared_ptr<Frame> frame;
-        shared_ptr<char> decompressed;
+        std::tr1::shared_ptr<Frame> frame;
+        std::tr1::shared_ptr<char> decompressed;
 };
 
 class state_j2k_decompress {
@@ -140,11 +140,11 @@ void j2k_push(void *state, std::tr1::shared_ptr<Frame> frame)
         size_t new_length = vc_get_linesize(frame->video_desc.width, s->out_codec) *
                 frame->video_desc.height;
 #ifdef CUDA_RECYCLE_BUFFERS
-        shared_ptr<char> decompressed(std::tr1::shared_ptr<char> (
+        std::tr1::shared_ptr<char> decompressed(std::tr1::shared_ptr<char> (
                                 (char *) cuda_pool_alloc(new_length),
                                 CudaDeleter(new_length)));
 #else
-        shared_ptr<char> decompressed(std::tr1::shared_ptr<char> (
+        std::tr1::shared_ptr<char> decompressed(std::tr1::shared_ptr<char> (
                                 new char[new_length],
                                 CharPtrDeleter()));
 #endif // CUDA_RECYCLE_BUFFERS

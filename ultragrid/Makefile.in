@@ -300,6 +300,7 @@ SERVER_OBJ = src/server/sp_server.o \
 		src/video_compress.o \
 		src/video_compress/none.o \
 		@J2K_COMPRESS_OBJ@ \
+		src/video_file.o \
 		src/abstract_transmit.o \
 		src/aes_encrypt.o \
 		src/tcp_transmit.o \

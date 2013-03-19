@@ -7,6 +7,8 @@ AC_CONFIG_SRCDIR([src/main.cpp])
 
 PARENT=`echo $PWD | sed -e 's%/[[^/]]*$%%'`
 
+m4_include([m4/ax_cxx_compile_stdcxx_11.m4])
+
 AC_CANONICAL_HOST
 AC_PROG_CC
 AC_PROG_CC_C99
@@ -18,6 +20,8 @@ AC_C_CONST
 AC_TYPE_SIZE_T
 AC_C_BIGENDIAN
 AC_C_CHAR_UNSIGNED
+
+CXXFLAGS="$CXXFLAGS -std=gnu++11"
 
 AC_CHECK_HEADERS(stropts.h sys/filio.h sys/wait.h)
 
@@ -59,6 +63,8 @@ case "$host" in
 esac	
 
 AC_MSG_CHECKING([OS family])
+
+
 
 if expr "$host_os" : ".*darwin.*" > /dev/null; then
         system=MacOSX

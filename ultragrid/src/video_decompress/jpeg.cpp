@@ -78,8 +78,8 @@ struct state_decompress_jpeg {
         int pitch;
         codec_t out_codec;
 
-        queue<shared_ptr<Frame> > in;
-        queue<shared_ptr<Frame> > out;
+        queue<std::tr1::shared_ptr<Frame> > in;
+        queue<std::tr1::shared_ptr<Frame> > out;
 
         pthread_mutex_t lock;
         pthread_cond_t worker_in_cv;
@@ -123,7 +123,7 @@ static void *worker(void *args) {
         struct state_decompress_jpeg *s = (struct state_decompress_jpeg *) args;
 
         while(1) {
-                shared_ptr<Frame> frame;
+                std::tr1::shared_ptr<Frame> frame;
                 pthread_mutex_lock(&s->lock);
                 while(s->in.empty()) {
                         pthread_cond_wait(&s->worker_in_cv, &s->lock);
@@ -136,7 +136,7 @@ static void *worker(void *args) {
 
                 if(!frame) {
                         // pass poisoned pill to consumer and exit
-                        s->out.push(shared_ptr<Frame>());
+                        s->out.push(std::tr1::shared_ptr<Frame>());
                         pthread_cond_signal(&s->boss_out_cv);
                         pthread_mutex_unlock(&s->lock);
                         break;
@@ -156,11 +156,11 @@ static void *worker(void *args) {
                 size_t new_length = vc_get_linesize(frame->video_desc.width, s->out_codec) *
                         frame->video_desc.height;
 #ifdef CUDA_RECYCLE_BUFFERS
-                shared_ptr<char> out_data(std::tr1::shared_ptr<char> (
+                std::tr1::shared_ptr<char> out_data(std::tr1::shared_ptr<char> (
                                         (char *) cuda_pool_alloc(new_length),
                                         CudaDeleter(new_length)));
 #else
-                shared_ptr<char> out_data(std::tr1::shared_ptr<char> (
+                std::tr1::shared_ptr<char> out_data(std::tr1::shared_ptr<char> (
                                         new char[new_length],
                                         CharPtrDeleter()));
 #endif

@@ -63,7 +63,7 @@ struct state_decompress_null {
         pthread_mutex_t lock;
         pthread_cond_t in_cv;
         pthread_cond_t out_cv;
-        queue<shared_ptr<Frame> > dummy_queue;
+        queue<std::tr1::shared_ptr<Frame> > dummy_queue;
 };
 
 void * null_decompress_init(codec_t out_codec)
@@ -114,7 +114,7 @@ void null_push(void *state, std::tr1::shared_ptr<Frame> src)
 std::tr1::shared_ptr<Frame> null_pop(void *state)
 {
         struct state_decompress_null *s = (struct state_decompress_null *) state;
-        shared_ptr<Frame> res;
+        std::tr1::shared_ptr<Frame> res;
 
         assert(s->magic == NULL_MAGIC);
 

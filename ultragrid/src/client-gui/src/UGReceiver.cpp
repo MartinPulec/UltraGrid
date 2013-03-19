@@ -476,7 +476,7 @@ static void *receiver_thread(void *arg)
                     }
 
                     //shared_ptr<Frame> receivedFrame(new Frame(audio_len, video_len));
-                    shared_ptr<Frame> receivedFrame(new Frame(audio_len, video_desc.width * video_desc.height * 4));
+                    std::tr1::shared_ptr<Frame> receivedFrame(new Frame(audio_len, video_desc.width * video_desc.height * 4));
                     receivedFrame->audio_desc = audio_desc;
                     receivedFrame->video_desc = video_desc;
                     receivedFrame->audio_len = audio_len;

@@ -845,7 +845,7 @@ void GLView::Render(bool toHW)
     }
 
     char *render_data;
-    shared_ptr<char> res(new char[width * height * 4], CharPtrDeleter());
+    std::tr1::shared_ptr<char> res(new char[width * height * 4], CharPtrDeleter());
     if(this->data != (char *) cesnet_logo.pixel_data) {
         glDisable(GL_BLEND);
 #if 0
