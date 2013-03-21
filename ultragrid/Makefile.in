@@ -4,7 +4,7 @@ CC            = @CC@
 CXX	      = @CXX@
 LINKER	      = @LINKER@
 COMMON_FLAGS  = -fPIC -D_GNU_SOURCE -DHAVE_CONFIG_H -fopenmp -DPATH_PREFIX=@prefix@ -DLIB_DIR=@libdir@ @OPENEXR_INC@
-CFLAGS        = $(COMMON_FLAGS) @DEFS@ @CFLAGS@ @X_CFLAGS@ 
+CFLAGS        = $(COMMON_FLAGS) @DEFS@ @CFLAGS@ @X_CFLAGS@
 CPPFLAGS      = @CPPFLAGS@
 CXXFLAGS      = $(COMMON_FLAGS) @CXXFLAGS@ -fopenmp
 NVCCFLAGS     = @NVCCFLAGS@ -Xcompiler -fPIC
@@ -322,7 +322,7 @@ client: bin/client
 server: bin/server
 server-gui: bin/server-gui
 
-bin/client: $(OBJS) $(CLIENT_OBJ)
+bin/client: $(OBJS) $(CLIENT_OBJ) src/client-gui/client_guiApp.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(CLIENT_OBJ) $(OBJS) $(CLIENT_LIBS) $(LIBS) -DHAVE_CONFIG_H $(INC) src/client-gui/client_guiApp.o -o bin/client
 
 bin/server: $(SERVER_OBJ) $(OBJS) src/main.o 
@@ -546,7 +546,7 @@ ag_plugin/uvReceiverService.zip: $(AG_PLUGIN_RX_SCRIPTS) $(TARGET)
 
 # -------------------------------------------------------------------------------------------------
 clean:
-	-rm -f $(OBJS) src/main.o $(TARGET) src/version.h 
+	-rm -f $(OBJS) src/main.o src/client-gui/client_guiApp.o $(TARGET) src/version.h 
 	-rm -f $(TEST_OBJS) test/run_tests
 	-rm -f ag_plugin/uvReceiverService.zip ag_plugin/uvSenderService.zip
 	-rm -rf $(BUNDLE)/Contents/MacOS/$(TARGET)
