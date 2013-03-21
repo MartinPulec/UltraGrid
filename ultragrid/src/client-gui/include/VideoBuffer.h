@@ -12,6 +12,7 @@
 #include "../include/Observable.h"
 
 #include "Frame.h"
+#include "Decompress.h"
 
 class GLView;
 
@@ -55,20 +56,22 @@ class VideoBuffer: public Observable
         void DropFrames(int low, int high);
 
         void Reset();
+        void reinitializeDecompress(codec_t codec, codec_t compress);
 
     protected:
     private:
-        std::map<int, std::tr1::shared_ptr<Frame> > buffered_frames;
-        GLView *view;
-
-        pthread_mutex_t lock;
-
-        size_t videoDataLen;
-        size_t maxAudioDataLen;
-
-        int last_frame;
-
         void DropUnusedFrames();
+
+        std::map<int, std::tr1::shared_ptr<Frame> > m_buffered_frames;
+
+        pthread_mutex_t m_lock;
+
+        size_t m_videoDataLen;
+        size_t m_maxAudioDataLen;
+
+        int m_last_frame;
+
+        Decompress m_decompress;
 };
 
 #endif // VIDEOBUFFER_H

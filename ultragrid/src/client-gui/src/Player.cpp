@@ -77,7 +77,6 @@ void Player::Init(GLView *view_, client_guiFrame *parent_, Settings *settings_)
     parent = parent_;
     settings = settings_;
 
-    buffer.SetGLView(view);
     std::string use_tcp_str = settings->GetValue(std::string("use_tcp"), std::string("false"));
     bool use_tcp = Utils::boolFromString(use_tcp_str);
 
@@ -522,11 +521,6 @@ void Player::SchedulePlay()
     scheduledPlayone = false;
     audio_playback_reset(this->audio_playback_device);
     wxTimer::Start(1, wxTIMER_ONE_SHOT);
-}
-
-std::tr1::shared_ptr<Frame> Player::getframe()
-{
-    return buffer.getframe();
 }
 
 void Player::reconfigure(int width, int height, int codec, int data_len, struct audio_desc *audio_desc)

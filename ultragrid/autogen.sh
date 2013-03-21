@@ -23,14 +23,6 @@ libgpujpeg_init() {
         cd -
 }
 
-j2k_init() {
-        cd ../demo_dec
-        make
-        cd -
-        cd ../demo_enc
-        make
-        cd -
-}
 
 srcdir=`dirname $0`
 test -z "$srcdir" && srcdir=.
@@ -38,9 +30,8 @@ test -z "$srcdir" && srcdir=.
 ORIGDIR=`pwd`
 cd $srcdir
 
-udt_init
-libgpujpeg_init
-j2k_init
+#udt_init
+#libgpujpeg_init
 
 aclocal && \
 autoheader && \

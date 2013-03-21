@@ -132,7 +132,6 @@ class Player : public wxTimer
 
         int GetCurrentFrame();
 
-        std::tr1::shared_ptr<Frame> getframe();
         void reconfigure(int width, int height, int codec, int data_len, struct audio_desc *audio_desc);
         void putframe(std::tr1::shared_ptr<Frame> data, unsigned int seq_num);
 
