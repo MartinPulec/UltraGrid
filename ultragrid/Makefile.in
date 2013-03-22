@@ -322,7 +322,7 @@ client: bin/client
 server: bin/server
 server-gui: bin/server-gui
 
-bin/client: $(OBJS) $(CLIENT_OBJ)
+bin/client: $(OBJS) $(CLIENT_OBJ) src/client-gui/client_guiApp.o
 	$(CXX) $(CXXFLAGS) $(LDFLAGS) $(CLIENT_OBJ) $(OBJS) $(CLIENT_LIBS) $(LIBS) -DHAVE_CONFIG_H $(INC) src/client-gui/client_guiApp.o -o bin/client
 
 bin/server: $(SERVER_OBJ) $(OBJS) src/main.o 
@@ -552,7 +552,7 @@ clean:
 	-rm -rf $(BUNDLE)/Contents/MacOS/$(TARGET)
 	-rm -rf $(PERF) src/uv_perf.o
 	-rm -rf @LIB_OBJS@ @LIB_TARGETS@
-	-rm -rf bin/client $(CLIENT_OBJ)
+	-rm -rf bin/client $(CLIENT_OBJ) src/client-gui/client_guiApp.o
 	-rm -rf bin/server $(SERVER_OBJ)
 	-rm -rf bin/server-gui $(SERVER_GUI_OBJ)
 	-rm -rf client.app/Contents/libs/*
