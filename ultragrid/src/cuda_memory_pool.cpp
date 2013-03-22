@@ -5,7 +5,7 @@
 #endif
 
 #include <cuda_runtime.h>
-#include <stack>
+#include <iostream>
 #include <map>
 
 #include "cuda_memory_pool.h"
@@ -20,17 +20,21 @@ class cuda_memory_pool {
 
                 virtual ~cuda_memory_pool() {
                         pthread_mutex_destroy(&mutex);
+                        for(multimap<int, void *>::iterator it = available_memory.begin();
+                                        it != available_memory.end();
+                                        ++it) {
+                                cudaFreeHost(it->second);
+                        }
                 }
 
                 void *alloc(size_t size) {
                         void *buffer = NULL;
 
                         pthread_mutex_lock(&mutex);
-                        if(available_memory.find(size) != available_memory.end()) {
-                                if(!available_memory[size].empty()) {
-                                        buffer = available_memory[size].top();
-                                        available_memory[size].pop();
-                                }
+                        multimap<int, void *>::iterator it = available_memory.lower_bound(size);
+                        if(it != available_memory.end()) {
+                                buffer = it->second;
+                                available_memory.erase(it);
                         }
                         pthread_mutex_unlock(&mutex);
 
@@ -50,14 +54,11 @@ class cuda_memory_pool {
                 void free(void *ptr, size_t size)
                 {
                         pthread_mutex_lock(&mutex);
-                        if(available_memory.find(size) == available_memory.end()) {
-                                available_memory[size] = stack<void *>();
-                        }
-                        available_memory[size].push(ptr);
+                        available_memory.insert(std::pair<int,void *>(size,ptr));
                         pthread_mutex_unlock(&mutex);
                 }
         private:
-                map<int, stack<void *> > available_memory;
+                multimap<int, void *> available_memory;
                 pthread_mutex_t      mutex;
 };
 
