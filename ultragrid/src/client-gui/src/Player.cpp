@@ -378,8 +378,13 @@ void Player::Play(VideoEntry &item, double fps, int start_frame)
         this->fps = fps;
         SchedulePlay();
 
-        receiver->reinitializeDecompress(video_codec,
-                                         compress_codec);
+        codec_t decompress;
+        if(video_codec == J2K) {
+            decompress = J2K;
+        } else {
+            decompress = compress_codec;
+        }
+        buffer.reinitializeDecompress(decompress);
 
         connection.play(start_frame);
         //connection.play();

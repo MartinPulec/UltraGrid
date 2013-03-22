@@ -10,6 +10,7 @@
 #include <string.h>
 #include <wx/log.h>
 
+#include "video_codec.h"
 #include "video_decompress.h"
 
 #include "VideoBuffer.h"
@@ -71,14 +72,14 @@ void Decompress::push(std::tr1::shared_ptr<Frame> frame)
 
 void Decompress::pushDecompressedFrame(std::tr1::shared_ptr<Frame> frame)
 {
-    buffer->putframe(frame);
+    buffer->put_decompressed_frame(frame);
 }
 
-void Decompress::reintializeDecompress(codec_t in_codec, codec_t compress)
+void Decompress::reintializeDecompress(codec_t compress)
 {
     codec_t out_codec = RGB;
 
-    if(compress == J2K || in_codec == J2K) {
+    if(compress == J2K) {
         out_codec = R10k;
     }
 
@@ -99,7 +100,7 @@ void Decompress::reintializeDecompress(codec_t in_codec, codec_t compress)
 
     unsigned int decoder_index;
 
-    switch(in_codec) {
+    switch(compress) {
         case J2K:
             decoder_index = J2K_DECOMPRESS_MAGIC;
             break;

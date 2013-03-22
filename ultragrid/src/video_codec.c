@@ -80,7 +80,7 @@ const struct codec_info_t codec_info[] = {
         {JPEG, "JPEG", to_fourcc('J','P','E','G'), 0, 0.0, FALSE, TRUE},
         {J2K, "J2K", to_fourcc('M','J','2','C'), 0, 0.0, FALSE, TRUE},
         {RAW, "raw", to_fourcc('r','a','w','s'), 0, 1.0, FALSE, TRUE}, /* raw SDI */
-        {NO_COMPRESSION, "none", 0, 0, 1.0, FALSE, TRUE}, /* dummy */
+        {NO_COMPRESSION, "none", 0, 0, 1.0, FALSE, FALSE}, /* dummy */
         {0, NULL, 0, 0, 0.0, FALSE, FALSE}
 };
 

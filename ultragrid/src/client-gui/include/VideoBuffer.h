@@ -1,7 +1,9 @@
 #ifndef VIDEOBUFFER_H
 #define VIDEOBUFFER_H
 
+#include <condition_variable>
 #include <map>
+#include <mutex>
 #include <tr1/memory>
 
 #include <pthread.h>
@@ -13,8 +15,6 @@
 
 #include "Frame.h"
 #include "Decompress.h"
-
-class GLView;
 
 #if 0
 struct Frame {
@@ -33,6 +33,7 @@ struct Frame {
 #endif
 
 typedef std::tr1::shared_ptr<Frame> shared_frame;
+typedef std::map<int, std::tr1::shared_ptr<Frame> > frame_map;
 
 class VideoBuffer: public Observable
 {
@@ -40,12 +41,11 @@ class VideoBuffer: public Observable
         VideoBuffer();
         virtual ~VideoBuffer();
 
-        void SetGLView(GLView *view);
-
         /* ext API for receiver */
-        std::tr1::shared_ptr<Frame> getframe();
-        void reconfigure(int width, int height, int codec, int data_len, size_t maxAudioDataLen);
-        void putframe(std::tr1::shared_ptr<Frame> data);
+        void put_received_frame(std::tr1::shared_ptr<Frame> data);
+
+        /* API for decompress */
+        void put_decompressed_frame(std::tr1::shared_ptr<Frame> data);
 
         /* ext API for player */
         std::tr1::shared_ptr<Frame> GetFrame(int frame);
@@ -56,22 +56,30 @@ class VideoBuffer: public Observable
         void DropFrames(int low, int high);
 
         void Reset();
-        void reinitializeDecompress(codec_t codec, codec_t compress);
+        void reinitializeDecompress(codec_t compress);
 
     protected:
     private:
         void DropUnusedFrames();
+        void SetDefaultValues();
+        void DecompressFrames();
+        void DiscardOldDecompressedFrames();
 
-        std::map<int, std::tr1::shared_ptr<Frame> > m_buffered_frames;
+        std::map<int, std::tr1::shared_ptr<Frame> > m_received_frames;
+        std::map<int, std::tr1::shared_ptr<Frame> > m_decompressed_frames;
 
-        pthread_mutex_t m_lock;
+        // master lock
+        std::mutex m_lock;
+        // for access to m_decompressed_frames
+        std::mutex m_decompressed_frames_lock;
 
-        size_t m_videoDataLen;
-        size_t m_maxAudioDataLen;
+        std::condition_variable m_frame_decompressed;
 
-        int m_last_frame;
+        int m_last_frame_received;
 
         Decompress m_decompress;
+        std::map<int, bool> m_decompress_enqueued;
+        int        m_dec_req_first;
 };
 
 #endif // VIDEOBUFFER_H

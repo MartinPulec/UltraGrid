@@ -60,7 +60,7 @@ using namespace std::tr1;
 
 struct state_uv {
     state_uv(VideoBuffer *buffer) :
-        decompress(buffer)
+        m_buffer(buffer)
     {
         memset(&savedAudioDesc, 0, sizeof(savedAudioDesc));
         memset(&savedVideoDesc, 0, sizeof(savedVideoDesc));
@@ -105,7 +105,7 @@ struct state_uv {
 
     Player *player;
 
-    Decompress decompress;
+    VideoBuffer *m_buffer;
 
     aes_decrypt dec;
 };
@@ -473,7 +473,8 @@ static void *receiver_thread(void *arg)
                     }
 
                     //shared_ptr<Frame> receivedFrame(new Frame(audio_len, video_len));
-                    std::tr1::shared_ptr<Frame> receivedFrame(new Frame(audio_len, video_desc.width * video_desc.height * 4));
+                    //std::tr1::shared_ptr<Frame> receivedFrame(new Frame(audio_len, video_desc.width * video_desc.height * 4));
+                    std::tr1::shared_ptr<Frame> receivedFrame(new Frame(audio_len, video_len));
                     receivedFrame->audio_desc = audio_desc;
                     receivedFrame->video_desc = video_desc;
                     receivedFrame->audio_len = audio_len;
@@ -559,7 +560,7 @@ static void *receiver_thread(void *arg)
                     uv->player->putframe(buffer_data, video_desc.seq_num);
 #endif
 
-                    uv->decompress.push(receivedFrame);
+                    uv->m_buffer->put_received_frame(receivedFrame);
                     //display_put_frame(uv->display_device, (char *) pbuf_data.frame_buffer);
                     //pbuf_data.frame_buffer = display_get_frame(uv->display_device);
                 }
@@ -703,8 +704,6 @@ void UGReceiver::Disconnect()
         pthread_cond_wait(&uv->boss_cv, &uv->lock);
     }
     uv->boss_waiting = false;
-
-    uv->decompress.waitFree();
 
     pthread_mutex_unlock(&uv->lock);
 }
@@ -880,9 +879,4 @@ void UGReceiver::Reconfigure(struct state_uv *uv, struct video_desc video_desc, 
                                 vc_get_linesize(video_desc.width, out_codec) * video_desc.height,
                                 audio_desc);
     }
-}
-
-void UGReceiver::reinitializeDecompress(codec_t codec, codec_t compress)
-{
-    uv->decompress.reintializeDecompress(codec, compress);
 }

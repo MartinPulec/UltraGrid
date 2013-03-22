@@ -8,109 +8,155 @@
 using namespace std::tr1;
 using namespace std;
 
+
+#define DEMUX_TO_DECOMPRESS_INT 15
+
 VideoBuffer::VideoBuffer() :
-    m_maxAudioDataLen(0),
     m_decompress(this)
 {
     //ctor
-    int ret = pthread_mutex_init(&m_lock, NULL);
-    assert(ret == 0);
-    m_last_frame = -1;
+    SetDefaultValues();
+}
+
+void VideoBuffer::SetDefaultValues()
+{
+    m_last_frame_received = -1;
+
+    m_dec_req_first = 0;
 }
 
 VideoBuffer::~VideoBuffer()
 {
     //dtor
-    pthread_mutex_destroy(&m_lock);
+    m_decompress.waitFree();
 }
 
-void VideoBuffer::putframe(std::tr1::shared_ptr<Frame> data)
+void VideoBuffer::put_received_frame(std::tr1::shared_ptr<Frame> data)
 {
-    pthread_mutex_lock(&m_lock);
+    std::lock_guard<std::mutex> lock(m_lock);
 
-    int seq_num = data->video_desc.seq_num ;
+    int seq_num = data->video_desc.seq_num;
 //#ifdef DEBUG
-    std::cerr << "Buffer: Received frame " << seq_num << std::endl;
+    std::clog << "Buffer: Received frame " << seq_num << std::endl;
 //#endif
 
+    m_received_frames.insert(std::pair<int, std::tr1::shared_ptr<Frame> >(seq_num, data));
+    m_last_frame_received = seq_num;
 
-    m_buffered_frames.insert(std::pair<int, std::tr1::shared_ptr<Frame> >(seq_num, data));
-    m_last_frame = seq_num;
-
-    pthread_mutex_unlock(&m_lock);
-
+    if(seq_num >= m_dec_req_first && seq_num < m_dec_req_first + DEMUX_TO_DECOMPRESS_INT) {
+        m_decompress.push(data);
+        m_decompress_enqueued[seq_num] = true;
+    }
     //Observable::notifyObservers();
 }
 
-std::tr1::shared_ptr<Frame> VideoBuffer::getframe()
+void VideoBuffer::put_decompressed_frame(std::tr1::shared_ptr<Frame> data)
 {
-    return std::tr1::shared_ptr<Frame> (new Frame(m_videoDataLen, m_maxAudioDataLen));
+    std::lock_guard<std::mutex> lock(m_decompressed_frames_lock);
+    int seq_num = data->video_desc.seq_num;
+
+    m_decompressed_frames.insert(std::pair<int, std::tr1::shared_ptr<Frame> >(seq_num,
+                                                                              data));
+    m_frame_decompressed.notify_one();
+
+    std::clog << "Decompressed: " << seq_num << endl;
 }
 
-void VideoBuffer::reconfigure(int width, int height, int codec, int videoDataLen, size_t maxAudioDataLen)
-{
-    pthread_mutex_lock(&m_lock);
-    {
-        m_videoDataLen = videoDataLen;
-        m_maxAudioDataLen = maxAudioDataLen;
-
-        m_buffered_frames.clear();
-        m_last_frame = -1;
-    }
-    pthread_mutex_unlock(&m_lock);
-}
 
 void VideoBuffer::DropFrames(int low, int high)
 {
-    pthread_mutex_lock(&m_lock);
+    std::lock_guard<std::mutex> lock(m_lock);
+
+    map<int, shared_frame>::iterator low_it, high_it;
+
+    low_it = m_received_frames.lower_bound (low);
+    high_it = m_received_frames.upper_bound (high);
+
+    //received_frames.erase(received_frames.begin(), low_it);
+    //received_frames.erase(high_it, received_frames.end());
+    m_received_frames.erase(low_it, high_it);
+
+    //before_min = (before_min > low ? before_min : low);
+    //after_max = (after_max < high ? after_max : high);
+}
+
+void VideoBuffer::DecompressFrames()
+{
+    // should hold lock from caller
+    std::lock_guard<std::mutex> lock(m_lock, std::adopt_lock_t());
+
+    for (int i = m_dec_req_first; i < m_dec_req_first + DEMUX_TO_DECOMPRESS_INT; ++i)
     {
-        map<int, shared_frame>::iterator low_it, high_it;
+        std::map<int, bool>::iterator it_state = m_decompress_enqueued.find(i);
+        if(it_state == m_decompress_enqueued.end()) { // not ENQUEUED nor DECOMPRESSED
+            frame_map::iterator it_received_frame = m_received_frames.find(i);
+            if(it_received_frame != m_received_frames.end())
+            {
+                std::clog << "Want Decompressed: " << i<< endl;
+                m_decompress.push(it_received_frame->second);
+                m_decompress_enqueued[i] = true;
+            }
+        }
 
-        low_it = m_buffered_frames.lower_bound (low);
-        high_it = m_buffered_frames.upper_bound (high);
-
-        //buffered_frames.erase(buffered_frames.begin(), low_it);
-        //buffered_frames.erase(high_it, buffered_frames.end());
-        m_buffered_frames.erase(low_it, high_it);
-
-        //before_min = (before_min > low ? before_min : low);
-        //after_max = (after_max < high ? after_max : high);
     }
-    pthread_mutex_unlock(&m_lock);
+}
+
+void VideoBuffer::DiscardOldDecompressedFrames()
+{
+    // should hold master lock from caller
+    std::lock_guard<std::mutex> lock(m_lock, std::adopt_lock_t());
+    std::lock_guard<std::mutex> lock_decompressed(m_decompressed_frames_lock);
+
+    // [0, m_dec_req_first)
+    m_decompress_enqueued.erase(m_decompress_enqueued.begin(), m_decompress_enqueued.lower_bound(m_dec_req_first));
+    m_decompressed_frames.erase(m_decompressed_frames.begin(),
+                                m_decompressed_frames.lower_bound(m_dec_req_first));
+    // [m_dec_req_first, end)
+    m_decompress_enqueued.erase(m_decompress_enqueued.upper_bound(m_dec_req_first + DEMUX_TO_DECOMPRESS_INT),
+                             m_decompress_enqueued.end());
+    m_decompressed_frames.erase(m_decompressed_frames.upper_bound(m_dec_req_first + DEMUX_TO_DECOMPRESS_INT),
+                                m_decompressed_frames.end());
+
 }
 
 /* ext API for player */
 std::tr1::shared_ptr<Frame> VideoBuffer::GetFrame(int frame)
 {
+    std::unique_lock<std::mutex> lock(m_lock);
     std::tr1::shared_ptr<Frame> res;
 
-    pthread_mutex_lock(&m_lock);
-    {
-        std::map<int, std::tr1::shared_ptr<Frame> >::iterator it = m_buffered_frames.find(frame);
-        if(it == m_buffered_frames.end()) {
-            res = std::tr1::shared_ptr<Frame>();
-        } else {
-            res = it->second;
+    m_dec_req_first = frame;
+    DecompressFrames();
+    DiscardOldDecompressedFrames();
+    /* check if we have frames
+     * if not, try to enqueue more
+     */
+    std::unique_lock<std::mutex> lock_decompressed(m_decompressed_frames_lock);
+    std::map<int, bool>::iterator it_state = m_decompress_enqueued.find(frame);
+    if(it_state != m_decompress_enqueued.end()) { // not enqueued
+        while(m_decompressed_frames.find(frame) == m_decompressed_frames.end()) {
+            m_frame_decompressed.wait(lock_decompressed);
         }
+    } else {
+        return std::tr1::shared_ptr<Frame>();
     }
-    pthread_mutex_unlock(&m_lock);
 
-    return res;
+    std::map<int, std::tr1::shared_ptr<Frame> >::iterator it = m_decompressed_frames.find(frame);
+    assert(it != m_received_frames.end());
+
+    return it->second;
 }
 
 int VideoBuffer::GetLowerBound()
 {
+    std::lock_guard<std::mutex> lock(m_lock);
     int before_min;
 
-    pthread_mutex_lock(&m_lock);
-    {
-        if(m_buffered_frames.begin() != m_buffered_frames.end()) {
-            before_min = m_buffered_frames.begin()->first - 1;
-        } else {
-            before_min = -1;
-        }
+    if(m_received_frames.begin() != m_received_frames.end()) {
+        before_min = m_received_frames.begin()->first - 1;
+    } else {
+        before_min = -1;
     }
-    pthread_mutex_unlock(&m_lock);
 
     return before_min;
 }
@@ -118,50 +164,50 @@ int VideoBuffer::GetLowerBound()
 int VideoBuffer::GetUpperBound()
 {
     int after_max;
+    std::lock_guard<std::mutex> lock(m_lock);
 
-    pthread_mutex_lock(&m_lock);
-    {
-        if(m_buffered_frames.begin() != m_buffered_frames.end()) {
-            after_max = m_buffered_frames.rbegin()->first + 1;
-        } else {
-            after_max = 0;
-        }
+    if(m_received_frames.begin() != m_received_frames.end()) {
+        after_max = m_received_frames.rbegin()->first + 1;
+    } else {
+        after_max = 0;
     }
-    pthread_mutex_unlock(&m_lock);
 
     return after_max;
 }
 
 void VideoBuffer::Reset()
 {
-    pthread_mutex_lock(&m_lock);
-    {
-        m_buffered_frames.clear();
-        m_last_frame = -1;
-    }
-    pthread_mutex_unlock(&m_lock);
+    std::lock_guard<std::mutex> lock(m_lock);
+
+    m_decompress.waitFree();
+
+    std::lock_guard<std::mutex> decompress_lock(m_decompressed_frames_lock);
+
+    m_received_frames.clear();
+    m_decompressed_frames.clear();
+    m_decompress_enqueued.clear();
+    SetDefaultValues();
 }
 
 // Currently unused?
 bool VideoBuffer::HasFrame(int number)
 {
     bool ret;
+    std::lock_guard<std::mutex> lock(m_lock);
 
-    pthread_mutex_lock(&m_lock);
-    {
-        ret = m_buffered_frames.find(number) != m_buffered_frames.end();
-    }
-    pthread_mutex_unlock(&m_lock);
+    ret = m_received_frames.find(number) != m_received_frames.end();
 
     return ret;
 }
 
 int VideoBuffer::GetLastReceivedFrame()
 {
-    return m_last_frame;
+    return m_last_frame_received;
 }
 
-void VideoBuffer::reinitializeDecompress(codec_t codec, codec_t compress)
+void VideoBuffer::reinitializeDecompress(codec_t compress)
 {
-    m_decompress.reintializeDecompress(codec, compress);
+    std::lock_guard<std::mutex> lock(m_lock);
+
+    m_decompress.reintializeDecompress(compress);
 }
