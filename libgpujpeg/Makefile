@@ -38,8 +38,6 @@ DCT_FROM_NPP ?= 1
 USE_OPENGL ?= 0
 # Debug
 DEBUG ?= 0
-# CUDA install path
-CUDA_INSTALL_PATH ?= /usr/local/cuda
 
 # Target executable
 TARGET := libgpujpeg.a
@@ -65,31 +63,52 @@ CUFILES := \
     gpujpeg_huffman_gpu_encoder.cu \
     gpujpeg_huffman_gpu_decoder.cu
 
+# Common flags
+COMMONFLAGS += -I. -I.. -O2 -g
+
 # Compilers
 CC := gcc -fPIC
 LINK := g++ -fPIC
-NVCC := $(CUDA_INSTALL_PATH)/bin/nvcc -Xcompiler -fPIC
-
-# Debug
-ifeq ($(DEBUG),1)
-    COMMONFLAGS += -g -D_DEBUG -O0
-    NVCCFLAGS += -G
+ifdef CUDA_INSTALL_PATH
+	NVCC := $(CUDA_INSTALL_PATH)/bin/nvcc -Xcompiler -fPIC
+	COMMONFLAGS += -I$(CUDA_INSTALL_PATH)/include
 else
-    COMMONFLAGS += -O2
+	NVCC := nvcc
 endif
 
-# Common flags
-COMMONFLAGS += -I. -I.. -I$(CUDA_INSTALL_PATH)/include
+
+# Ultragrid changes
+ARCH := $(shell uname -s)
+ifeq ($(ARCH),Darwin)
+    COMMONFLAGS += -m32 -DHAVE_MACOSX
+endif
+
 # C flags
 CFLAGS += $(COMMONFLAGS) -std=c99
 # CUDA flags
 NVCCFLAGS += $(COMMONFLAGS) \
-	--ptxas-options="-v" -gencode arch=compute_20,code=sm_20 \
+	-gencode arch=compute_20,code=sm_20 \
+	-gencode arch=compute_13,code=sm_13 \
 	-gencode arch=compute_11,code=sm_11 \
 	-gencode arch=compute_10,code=sm_10 \
 
+NVCC_VERSION_MAJOR := $(shell $(NVCC) --version |grep release|sed  's/^.*release \([0-9][0-9]*\).*$$/\1/')
+NVCC_VERSION_MINOR := $(shell $(NVCC) --version |grep release|sed  's/^.*release [0-9][0-9]*\.\([0-9][0-9]*\).*$$/\1/')
+NVCC_VERSION_GE_4_2 := $(shell test $(NVCC_VERSION_MAJOR) -eq 4 -a $(NVCC_VERSION_MINOR) -ge 2 || test $(NVCC_VERSION_MAJOR) -ge 5 && echo yes)
+
+ifeq ($(NVCC_VERSION_GE_4_2),yes)
+NVCCFLAGS += \
+	-gencode arch=compute_30,code=sm_30 
+endif
+
+
 # Linker flags
 LDFLAGS += -shared
+
+# Debug
+ifeq ($(DEBUG),1)
+    COMMONFLAGS += -g -D_DEBUG
+endif    
 
 # Other Flags
 ifeq ($(HUFFMAN_CODER_TABLES_IN_CONSTANT),1)
@@ -107,10 +126,14 @@ endif
 LBITS := $(shell getconf LONG_BIT)
 ifeq ($(LBITS),64)
     # 64bit
-    LDFLAGS += -L$(CUDA_INSTALL_PATH)/lib64
+    CUDA_LIB = -L$(CUDA_INSTALL_PATH)/lib64
 else
     # 32bit
-    LDFLAGS += -L$(CUDA_INSTALL_PATH)/lib
+    CUDA_LIB = -L$(CUDA_INSTALL_PATH)/lib
+endif
+
+ifdef CUDA_INSTALL_PATH
+	LDFLAGS += $(CUDA_LIB)
 endif
 LDFLAGS += -lcudart -lnpp
 
@@ -124,6 +147,7 @@ clean:
 	rm -f *.cudafe1.c *.cudafe1.cpp *.cudafe1.gpu *.cudafe1.stub.c
 	rm -f *.cudafe2.c *.cudafe2.gpu *.cudafe2.stub.c
 	rm -f *.fatbin *.fatbin.c *.ptx *.hash *.cubin *.cu.cpp
+
 
 # Lists of object files
 COBJS=$(CFILES:.c=.c.o)
