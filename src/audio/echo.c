@@ -119,6 +119,8 @@ static struct delay_buffer *delay_buffer_alloc(int sample_rate, int bps, int chu
 
 static void delay_buffer_free(struct delay_buffer *buf)
 {
+        if(!buf)
+                return;
         free(buf->m_buffer);
         free(buf);
 }
