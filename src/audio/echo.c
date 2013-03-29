@@ -146,11 +146,12 @@ static int delay_buffer_get_data(struct delay_buffer *buf, char *new_data, int n
                         new_data += len;
                         new_data_len -= len;
                 }
-
-                memcpy(buf->m_buffer + buf->m_size, new_data, new_data_len);
         } else {
                 write_size = 0;
         }
+
+	memcpy(buf->m_buffer + buf->m_size, new_data, new_data_len);
+	buf->m_size += new_data_len;
 
         return write_size;
 }
@@ -196,7 +197,7 @@ static void reconfigure_echo (struct echo_cancellation *s, int sample_rate, int 
 
         // the following must be less than delay buffer plus time to play out
         s->far_end = ring_buffer_init(sample_rate * 2 *
-                        DELAY_BUF_MIN_OCCUPANCY_MS / 1000 / 2);
+                        DELAY_BUF_MIN_OCCUPANCY_MS / 1000 * 20);
 
         speex_echo_ctl(s->echo_state, SPEEX_ECHO_SET_SAMPLING_RATE, &sample_rate); // should the 3rd parameter be int?
 }
@@ -302,7 +303,6 @@ struct audio_frame * echo_cancel(struct echo_cancellation *s, struct audio_frame
         const int data_to_write_len = delay_buffer_get_data(s->out_delay_buffer, data, data_len,
                         &data_to_write);
 
-
         if(data_to_write_len) {
                 ///char *data_to_write = malloc(rounded_data_len);
                 char *far_end_tmp = (char *) malloc(s->chunk_size);
@@ -316,13 +316,13 @@ struct audio_frame * echo_cancel(struct echo_cancellation *s, struct audio_frame
                 spx_int16_t *out_ptr = (spx_int16_t *)(void *) s->frame.data;
 
                 int read_len_far;
-                read_len_far = ring_buffer_read(s->far_end, far_end_tmp, s->chunk_size);
-                while((read_len_far == s->chunk_size) && s->frame.data_len < data_to_write_len)  {
+                while(s->frame.data_len < data_to_write_len)  {
+                //while((read_len_far == s->chunk_size) && s->frame.data_len < data_to_write_len)  {
+			read_len_far = ring_buffer_read(s->far_end, far_end_tmp, s->chunk_size);
                         speex_echo_cancellation(s->echo_state, near_ptr,
                                         (spx_int16_t *)(void *) far_end_tmp,
                                         out_ptr);
 
-                        read_len_far = ring_buffer_read(s->far_end, far_end_tmp, s->chunk_size);
                         near_ptr += s->chunk_size / sizeof(*near_ptr);
                         out_ptr += s->chunk_size / sizeof(*out_ptr);
                         s->frame.data_len += s->chunk_size;
