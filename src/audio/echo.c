@@ -197,7 +197,7 @@ static void reconfigure_echo (struct echo_cancellation *s, int sample_rate, int 
 
         // the following must be less than delay buffer plus time to play out
         s->far_end = ring_buffer_init(sample_rate * 2 *
-                        DELAY_BUF_MIN_OCCUPANCY_MS / 1000 * 20);
+                        DELAY_BUF_MIN_OCCUPANCY_MS / 1000 / 2);
 
         speex_echo_ctl(s->echo_state, SPEEX_ECHO_SET_SAMPLING_RATE, &sample_rate); // should the 3rd parameter be int?
 }
