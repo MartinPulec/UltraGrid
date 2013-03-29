@@ -66,7 +66,7 @@
 
 #define SAMPLES_PER_FRAME (48 * 10) // 10 msec for 48000 Hz
 #define DELAY_BUF_MIN_OCCUPANCY_MS 100
-#define FILTER_LENGTH (48 * 500)
+#define FILTER_LENGTH (48 * 200)
 
 struct delay_buffer {
         /**
