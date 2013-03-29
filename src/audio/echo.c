@@ -148,8 +148,10 @@ static int delay_buffer_get_data(struct delay_buffer *buf, char *new_data, int n
                 }
 
                 memcpy(buf->m_buffer + buf->m_size, new_data, new_data_len);
+        } else {
+                write_size = 0;
         }
-        
+
         return write_size;
 }
 
