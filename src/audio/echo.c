@@ -64,19 +64,109 @@
 #include <pthread.h>
 #include "utils/ring_buffer.h"
 
-#define SAMPLES_PER_FRAME (48 * 10)
+#define SAMPLES_PER_FRAME (48 * 10) // 10 msec for 48000 Hz
+#define DELAY_BUF_MIN_OCCUPANCY_MS 100
 #define FILTER_LENGTH (48 * 500)
 
+struct delay_buffer {
+        /**
+         * @var   m_buffer
+         * @brief delay buffer containing delayed input signal
+         * The purpose of this is to allow the echo to be processed
+         * prior to input that contains the matching echo.
+         */
+        char *m_buffer;
+        /**
+         * @var   m_max_len
+         * @brief length of the allocated buffer (bytes)
+         */
+        int   m_max_len;
+        /**
+         * @var   m_min_occupancy
+         * @brief minimal occupancy of buffer to be passed (bytes)
+         */
+        int   m_min_occupancy;
+        /**
+         * @var   m_size
+         * @brief actual size of the delay buffer
+         */
+        int   m_size;
+        int   m_chunk_size;
+};
+
+static struct delay_buffer *delay_buffer_alloc(int sample_rate, int bps, int chunk_size,
+                int min_occupancy_ms);
+static void delay_buffer_free(struct delay_buffer *buf);
+static int delay_buffer_get_data(struct delay_buffer *buf, char *new_data, int new_data_len,
+                        char **data_to_write);
+
+static struct delay_buffer *delay_buffer_alloc(int sample_rate, int bps, int chunk_size,
+                int min_occupancy_ms)
+{
+        struct delay_buffer *buf = (struct delay_buffer *) calloc(1, sizeof(struct delay_buffer));
+
+        buf->m_min_occupancy = sample_rate / 1000 * min_occupancy_ms * bps;
+        // in case that remaining samples aren't divisible by chunk_size,
+        // save the indivisible rest also to the buffer
+        buf->m_max_len = buf->m_min_occupancy + chunk_size;
+        buf->m_buffer = (char *) malloc(buf->m_max_len);
+        buf->m_size = 0;
+        buf->m_chunk_size = chunk_size;
+
+        return buf;
+
+}
+
+static void delay_buffer_free(struct delay_buffer *buf)
+{
+        free(buf->m_buffer);
+        free(buf);
+}
+
+static int delay_buffer_get_data(struct delay_buffer *buf, char *new_data, int new_data_len,
+                        char **data_to_write)
+{
+        int overall_size = buf->m_size + new_data_len;
+        int write_size = overall_size - buf->m_min_occupancy;
+        write_size = write_size / buf->m_chunk_size * buf->m_chunk_size;
+
+        if(write_size > 0) {
+                *data_to_write = (char *) malloc(write_size);
+                int from_buffer_size = min(write_size, buf->m_size);
+                memcpy(*data_to_write, buf->m_buffer, from_buffer_size);
+                memmove(buf->m_buffer, buf->m_buffer + from_buffer_size, buf->m_size - from_buffer_size);
+                buf->m_size -= from_buffer_size;
+
+                if(from_buffer_size < write_size) {
+                        int len = write_size - from_buffer_size;
+
+                        memcpy(*data_to_write + from_buffer_size, new_data, len);
+                        new_data += len;
+                        new_data_len -= len;
+                }
+
+                memcpy(buf->m_buffer + buf->m_size, new_data, new_data_len);
+        }
+        
+        return write_size;
+}
+
 struct echo_cancellation {
-        SpeexEchoState *echo_state;
+        SpeexEchoState     *echo_state;
 
-        char *near_end_residual;
-        int near_end_residual_size;
-        ring_buffer_t *far_end;
+        ring_buffer_t      *far_end;
 
-        struct audio_frame frame;
+        struct audio_frame  frame;
 
-        pthread_mutex_t lock;
+        struct delay_buffer *out_delay_buffer;
+
+        /**
+         * @var   chunk_size
+         * @brief chunk size in bytes
+         */
+        int                 chunk_size;
+
+        pthread_mutex_t     lock;
 };
 
 static void reconfigure_echo (struct echo_cancellation *s, int sample_rate, int bps);
@@ -92,11 +182,17 @@ static void reconfigure_echo (struct echo_cancellation *s, int sample_rate, int 
         free(s->frame.data);
         s->frame.data = NULL;
 
-        free(s->near_end_residual);
+        s->chunk_size = SAMPLES_PER_FRAME * 2 /* BPS */;
+
         ring_buffer_destroy(s->far_end);
-        s->near_end_residual = NULL;
-        s->near_end_residual_size = 0;
-        s->far_end = ring_buffer_init(sample_rate * 2 / 2); // 0.5 sec
+
+        delay_buffer_free(s->out_delay_buffer);
+        s->out_delay_buffer = delay_buffer_alloc(sample_rate, s->frame.bps, s->chunk_size,
+                        DELAY_BUF_MIN_OCCUPANCY_MS);
+
+        // the following must be less than delay buffer plus time to play out
+        s->far_end = ring_buffer_init(sample_rate * 2 *
+                        DELAY_BUF_MIN_OCCUPANCY_MS / 1000 / 2);
 
         speex_echo_ctl(s->echo_state, SPEEX_ECHO_SET_SAMPLING_RATE, &sample_rate); // should the 3rd parameter be int?
 }
@@ -122,7 +218,7 @@ void echo_cancellation_destroy(struct echo_cancellation *s)
                 speex_echo_state_destroy(s->echo_state);  
         }
         ring_buffer_destroy(s->far_end);
-        free(s->near_end_residual);
+        delay_buffer_free(s->out_delay_buffer);
 
         pthread_mutex_destroy(&s->lock);
 
@@ -149,7 +245,7 @@ void echo_play(struct echo_cancellation *s, struct audio_frame *frame)
         }
 
         if(frame->bps != 2) {
-                char *tmp = malloc(frame->data_len / frame->bps * 2);
+                char *tmp = (char *) malloc(frame->data_len / frame->bps * 2);
                 change_bps(tmp, 2, frame->data, frame->bps, frame->data_len/* bytes */);
                 ring_buffer_write(s->far_end, tmp, frame->data_len / frame->bps * 2);
                 free(tmp);
@@ -188,7 +284,7 @@ struct audio_frame * echo_cancel(struct echo_cancellation *s, struct audio_frame
 
         if(frame->bps != 2) {
                 data_len = frame->data_len / frame->bps * 2;
-                data = tmp = malloc(data_len);
+                data = tmp = (char *) malloc(data_len);
                 change_bps(tmp, 2, frame->data, frame->bps, frame->data_len/* bytes */);
         } else {
                 tmp = NULL;
@@ -196,68 +292,52 @@ struct audio_frame * echo_cancel(struct echo_cancellation *s, struct audio_frame
                 data_len = frame->data_len;
         }
         
-        const int chunk_size = SAMPLES_PER_FRAME * 2 /* BPS */;
-        const int rounded_data_len = (s->near_end_residual_size + data_len) / chunk_size * chunk_size;
+        //const int rounded_data_len = (s->near_end_residual_size + data_len) / chunk_size * chunk_size;
 
-        if(rounded_data_len) {
-                char *data_to_write = malloc(rounded_data_len);
-                char *far_end_tmp = malloc(chunk_size);
+        char *data_to_write;
+        const int data_to_write_len = delay_buffer_get_data(s->out_delay_buffer, data, data_len,
+                        &data_to_write);
 
-                memcpy(data_to_write, s->near_end_residual, s->near_end_residual_size);
-                memcpy(data_to_write + s->near_end_residual_size, 
-                                data,
-                                rounded_data_len - s->near_end_residual_size);
 
-                free(s->near_end_residual);
-                s->near_end_residual_size = data_len + s->near_end_residual_size - rounded_data_len;
-                s->near_end_residual = malloc(s->near_end_residual_size);
-                memcpy(s->near_end_residual, data + data_len - s->near_end_residual_size, s->near_end_residual_size);
+        if(data_to_write_len) {
+                ///char *data_to_write = malloc(rounded_data_len);
+                char *far_end_tmp = (char *) malloc(s->chunk_size);
 
                 free(s->frame.data);
-                s->frame.data = malloc(rounded_data_len);
-                s->frame.max_size = rounded_data_len;
+                s->frame.data = (char *) malloc(data_to_write_len);
+                s->frame.max_size = data_to_write_len;
                 s->frame.data_len = 0;
 
                 const spx_int16_t *near_ptr = (spx_int16_t *)(void *) data_to_write;
                 spx_int16_t *out_ptr = (spx_int16_t *)(void *) s->frame.data;
 
                 int read_len_far;
-                read_len_far = ring_buffer_read(s->far_end, far_end_tmp, chunk_size);
-                while((read_len_far == chunk_size) && s->frame.data_len < rounded_data_len)  {
+                read_len_far = ring_buffer_read(s->far_end, far_end_tmp, s->chunk_size);
+                while((read_len_far == s->chunk_size) && s->frame.data_len < data_to_write_len)  {
                         speex_echo_cancellation(s->echo_state, near_ptr,
                                         (spx_int16_t *)(void *) far_end_tmp,
                                         out_ptr);
 
-                        read_len_far = ring_buffer_read(s->far_end, far_end_tmp, chunk_size);
-                        near_ptr += chunk_size / sizeof(*near_ptr);
-                        out_ptr += chunk_size / sizeof(*out_ptr);
-                        s->frame.data_len += chunk_size;
+                        read_len_far = ring_buffer_read(s->far_end, far_end_tmp, s->chunk_size);
+                        near_ptr += s->chunk_size / sizeof(*near_ptr);
+                        out_ptr += s->chunk_size / sizeof(*out_ptr);
+                        s->frame.data_len += s->chunk_size;
                 }
                
-                if(s->frame.data_len < rounded_data_len) {
-                        memcpy(out_ptr, near_ptr, rounded_data_len - s->frame.data_len);
+                // is this needed ??
+                if(s->frame.data_len < data_to_write_len) {
+                        memcpy(out_ptr, near_ptr, data_to_write_len - s->frame.data_len);
                 }
 
                 free(data_to_write);
                 free(far_end_tmp);
 
-                s->frame.data_len = rounded_data_len;
+                s->frame.data_len = data_to_write_len;
 
                 pthread_mutex_unlock(&s->lock);
 
                 res = &s->frame;
         } else {
-                if(!s->near_end_residual) {
-                        s->near_end_residual_size = frame->data_len;
-                        s->near_end_residual = malloc(frame->data_len);
-                        memcpy(s->near_end_residual, frame->data, frame->data_len);
-                } else {
-                        s->near_end_residual_size += frame->data_len;
-                        s->near_end_residual = realloc(s->near_end_residual, s->near_end_residual_size);
-                        memcpy(s->near_end_residual + (s->near_end_residual_size - frame->data_len),
-                                        frame->data, frame->data_len);
-                }
-
                 res = NULL;
         }
 
