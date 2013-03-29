@@ -103,7 +103,7 @@ static void reconfigure_echo (struct echo_cancellation *s, int sample_rate, int 
 
 struct echo_cancellation * echo_cancellation_init(void)
 {
-        struct echo_cancellation *s = (struct echo_cancellation *) malloc(sizeof(struct echo_cancellation));
+        struct echo_cancellation *s = (struct echo_cancellation *) calloc(1, sizeof(struct echo_cancellation));
 
         s->echo_state = speex_echo_state_init(SAMPLES_PER_FRAME, FILTER_LENGTH);
 
@@ -229,8 +229,8 @@ struct audio_frame * echo_cancel(struct echo_cancellation *s, struct audio_frame
                                         out_ptr);
 
                         read_len_far = ring_buffer_read(s->far_end, far_end_tmp, chunk_size);
-                        near_ptr += chunk_size;
-                        out_ptr += chunk_size;
+                        near_ptr += chunk_size / sizeof(*near_ptr);
+                        out_ptr += chunk_size / sizeof(*out_ptr);
                         s->frame.data_len += chunk_size;
                 }
                
