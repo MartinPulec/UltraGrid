@@ -53,6 +53,7 @@
 #include "rtp/rtp_callback.h"
 #include "rtp/pbuf.h"
 #include "rtp/decoders.h"
+#include "utils/list.h"
 #include "video.h"
 #include "video_codec.h"
 #include "video_decompress.h"
@@ -61,7 +62,11 @@
 
 void (*decoder_destroy_extrn)(struct state_decoder *decoder) = decoder_destroy;
 
+#define MAX_QUEUE_SIZE 10
+
 struct state_decoder;
+struct display_data;
+struct ldgm_data;
 
 static struct video_frame * reconfigure_decoder(struct state_decoder * const decoder, struct video_desc desc,
                                 struct video_frame *frame);
@@ -76,8 +81,13 @@ static int find_best_decompress(codec_t in_codec, codec_t out_codec,
 static bool try_initialize_decompress(struct state_decoder * decoder, uint32_t magic);
 static void wait_for_framebuffer_swap(struct state_decoder *decoder);
 static void *ldgm_thread(void *args);
+static void *display_thread(void *args);
 static void *decompress_thread(void *args);
 static void cleanup(struct state_decoder *decoder);
+static void ldgm_queue_enqueue(struct state_decoder *decoder,
+                struct ldgm_data *ldgm_data);
+static void display_queue_enqueue(struct state_decoder *decoder,
+                struct display_data *display_data);
 
 enum decoder_type_t {
         UNSET,
@@ -108,7 +118,8 @@ struct decompress_data;
 
 struct state_decoder {
         pthread_t decompress_thread_id,
-                  ldgm_thread_id;
+                  ldgm_thread_id,
+                  display_thread_id;
         struct video_desc received_vid_desc;
         struct video_desc display_desc;
 
@@ -156,7 +167,10 @@ struct state_decoder {
 
         pthread_cond_t    ldgm_worker_cv;
         pthread_cond_t    ldgm_boss_cv;
-        struct ldgm_data *ldgm_data;
+        struct simple_linked_list *ldgm_queue;
+        pthread_cond_t    display_worker_cv;
+        pthread_cond_t    display_boss_cv;
+        struct simple_linked_list *display_queue;
 
         unsigned int      video_mode;
         
@@ -188,6 +202,11 @@ struct decompress_data {
         bool poisoned;
 };
 
+struct display_data {
+        bool poisoned;
+        char *display_buffer[];
+};
+
 static void wait_for_framebuffer_swap(struct state_decoder *decoder) {
         pthread_mutex_lock(&decoder->lock);
         {
@@ -208,11 +227,10 @@ static void *ldgm_thread(void *args) {
                 struct ldgm_data *data = NULL;
                 pthread_mutex_lock(&decoder->lock);
                 {
-                        while (decoder->ldgm_data == NULL) {
+                        while (simple_linked_list_size(decoder->ldgm_queue) == 0) {
                                 pthread_cond_wait(&decoder->ldgm_worker_cv, &decoder->lock);
                         }
-                        data = decoder->ldgm_data;
-                        decoder->ldgm_data = NULL;
+                        data = simple_linked_list_pop(decoder->ldgm_queue);
 
                         pthread_cond_signal(&decoder->ldgm_boss_cv);
                 }
@@ -424,12 +442,19 @@ static void *decompress_thread(void *args) {
 
                 if(data->poisoned) {
                         free(data);
+                        struct display_data *ddata = calloc(1, sizeof(struct display_data));
+                        ddata->poisoned = true;
+                        display_queue_enqueue(decoder, ddata);
                         break;
                 }
 
+                struct display_data *ddata = NULL;
+                int tile_width = decoder->received_vid_desc.width; // get_video_mode_tiles_x(decoder->video_mode);
+                int tile_height = decoder->received_vid_desc.height; // get_video_mode_tiles_y(decoder->video_mode);
+
                 if(decoder->decoder_type == EXTERNAL_DECODER) {
-                        int tile_width = decoder->received_vid_desc.width; // get_video_mode_tiles_x(decoder->video_mode);
-                        int tile_height = decoder->received_vid_desc.height; // get_video_mode_tiles_y(decoder->video_mode);
+                        ddata = calloc(1, sizeof(struct decompress_data) +
+                                        decoder->frame->tile_count * sizeof(char *));
                         int x, y;
                         struct video_frame *output;
                         if(decoder->postprocess) {
@@ -437,18 +462,24 @@ static void *decompress_thread(void *args) {
                         } else {
                                 output = decoder->frame;
                         }
+                        if(decoder->merged_fb) {
+                                ddata->display_buffer[0] = malloc(tile_width * tile_height *
+                                        get_video_mode_tiles_x(decoder->video_mode) *
+                                        get_video_mode_tiles_y(decoder->video_mode) *
+                                        4);
+                        }
+
                         for (x = 0; x < get_video_mode_tiles_x(decoder->video_mode); ++x) {
                                 for (y = 0; y < get_video_mode_tiles_y(decoder->video_mode); ++y) {
                                         int pos = x + get_video_mode_tiles_x(decoder->video_mode) * y;
                                         char *out;
                                         if(decoder->merged_fb) {
-                                                tile = vf_get_tile(output, 0);
                                                 // TODO: OK when rendering directly to display FB, otherwise, do not reflect pitch (we use PP)
-                                                out = tile->data + y * decoder->pitch * tile_height +
+                                                out = ddata->display_buffer[0] + y * decoder->pitch * tile_height +
                                                         vc_get_linesize(tile_width, decoder->out_codec) * x;
                                         } else {
-                                                tile = vf_get_tile(output, x);
-                                                out = tile->data;
+                                                out = ddata->display_buffer[x] =
+                                                        malloc(tile_width * tile_height * 4);
                                         }
                                         decompress_frame(decoder->decompress_state[pos],
                                                         (unsigned char *) out,
@@ -493,16 +524,26 @@ static void *decompress_thread(void *args) {
                 if(decoder->change_il) {
                         unsigned int i;
                         for(i = 0; i < decoder->frame->tile_count; ++i) {
-                                struct tile *tile = vf_get_tile(decoder->frame, i);
-                                decoder->change_il(tile->data, tile->data, vc_get_linesize(tile->width, decoder->out_codec), tile->height);
+                                char *data;
+                                if(decoder->decoder_type == EXTERNAL_DECODER) {
+                                        data = vf_get_tile(decoder->frame, i)->data;
+                                } else {
+                                        data = ddata->display_buffer[i];
+                                }
+                                decoder->change_il(data, data, vc_get_linesize(tile_width, decoder->out_codec),
+                                                tile_height);
                         }
                 }
 
-                display_put_frame(decoder->display,
-                                decoder->frame);
-                decoder->frame =
-                        display_get_frame(decoder->display);
-
+                if(decoder->decoder_type == EXTERNAL_DECODER) {
+                        display_queue_enqueue(decoder,
+                                        ddata);
+                } else {
+                        display_put_frame(decoder->display,
+                                        decoder->frame);
+                        decoder->frame =
+                                display_get_frame(decoder->display);
+                }
 skip_frame:
 
                 for(unsigned int i = 0; i < decoder->max_substreams; ++i) {
@@ -530,6 +571,44 @@ skip_frame:
         return NULL;
 }
 
+static void *display_thread(void *args)
+{
+        struct state_decoder *decoder = args;
+        while(1) {
+                struct display_data *data = NULL;
+                pthread_mutex_lock(&decoder->lock);
+                {
+                        while (simple_linked_list_size(decoder->display_queue) == 0) {
+                                pthread_cond_wait(&decoder->display_worker_cv, &decoder->lock);
+                        }
+                        data = simple_linked_list_pop(decoder->display_queue);
+
+                        pthread_cond_signal(&decoder->display_boss_cv);
+                }
+                pthread_mutex_unlock(&decoder->lock);
+
+                if(data->poisoned) {
+                        free(data);
+                        break; // exit from loop
+                }
+
+                for(unsigned int i = 0; i < decoder->frame->tile_count; ++i) {
+                        memcpy(decoder->frame->tiles[i].data, data->display_buffer[i],
+                                        decoder->frame->tiles[i].data_len);
+                        free(data->display_buffer[i]);
+                }
+
+                free(data);
+
+                display_put_frame(decoder->display,
+                                decoder->frame);
+                decoder->frame =
+                        display_get_frame(decoder->display);
+
+        }
+        return NULL;
+}
+
 static void decoder_set_video_mode(struct state_decoder *decoder, unsigned int video_mode)
 {
         decoder->video_mode = video_mode;
@@ -537,8 +616,7 @@ static void decoder_set_video_mode(struct state_decoder *decoder, unsigned int v
                         * get_video_mode_tiles_y(decoder->video_mode);
 }
 
-struct state_decoder *decoder_init(const char *requested_mode, const char *postprocess,
-                struct display *display)
+struct state_decoder *decoder_init(const char *requested_mode, const char *postprocess, struct display *display)
 {
         struct state_decoder *s;
         
@@ -557,7 +635,10 @@ struct state_decoder *decoder_init(const char *requested_mode, const char *postp
 
         pthread_cond_init(&s->ldgm_boss_cv, NULL);
         pthread_cond_init(&s->ldgm_worker_cv, NULL);
-        s->ldgm_data = NULL;
+        s->ldgm_queue = simple_linked_list_init();
+        pthread_cond_init(&s->display_boss_cv, NULL);
+        pthread_cond_init(&s->display_worker_cv, NULL);
+        s->display_queue = simple_linked_list_init();
         s->decompress_thread_has_processed_input = true;
         
         int video_mode = VIDEO_NORMAL;
@@ -587,9 +668,7 @@ struct state_decoder *decoder_init(const char *requested_mode, const char *postp
         decoder_set_video_mode(s, video_mode);
 
         if(postprocess) {
-                char *tmp_pp_config = strdup(postprocess);
-                s->postprocess = vo_postprocess_init(tmp_pp_config);
-                free(tmp_pp_config);
+                s->postprocess = vo_postprocess_init(postprocess);
                 if(strcmp(postprocess, "help") == 0) {
                         exit_uv(0);
                         return NULL;
@@ -699,6 +778,13 @@ bool decoder_register_video_display(struct state_decoder *decoder, struct displa
                 return false;
         }
 
+        if(pthread_create(&decoder->display_thread_id, NULL, display_thread,
+                                decoder) != 0) {
+                perror("Unable to create thread");
+                return false;
+        }
+
+
         return true;
 }
 
@@ -708,22 +794,13 @@ bool decoder_register_video_display(struct state_decoder *decoder, struct displa
 void decoder_remove_display(struct state_decoder *decoder)
 {
         if(decoder->display) {
-                pthread_mutex_lock(&decoder->lock);
-                {
-                        while (decoder->ldgm_data) {
-                                pthread_cond_wait(&decoder->ldgm_boss_cv, &decoder->lock);
-                        }
-
-                        decoder->ldgm_data = malloc(sizeof(struct ldgm_data));
-                        decoder->ldgm_data->poisoned = true;
-
-                        /*  ...and signal the worker */
-                        pthread_cond_signal(&decoder->ldgm_worker_cv);
-                }
-                pthread_mutex_unlock(&decoder->lock);
+                struct ldgm_data *poisoned = malloc(sizeof(struct ldgm_data));
+                poisoned->poisoned = true;
+                ldgm_queue_enqueue(decoder, poisoned);
 
                 pthread_join(decoder->ldgm_thread_id, NULL);
                 pthread_join(decoder->decompress_thread_id, NULL);
+                pthread_join(decoder->display_thread_id, NULL);
 
                 decoder->display = NULL;
         }
@@ -759,6 +836,9 @@ void decoder_destroy(struct state_decoder *decoder)
         pthread_cond_destroy(&decoder->ldgm_boss_cv);
         pthread_cond_destroy(&decoder->ldgm_worker_cv);
 
+        pthread_cond_destroy(&decoder->display_boss_cv);
+        pthread_cond_destroy(&decoder->display_worker_cv);
+
         cleanup(decoder);
 
         if(decoder->pp_frame) {
@@ -768,6 +848,9 @@ void decoder_destroy(struct state_decoder *decoder)
 
         free(decoder->native_codecs);
         free(decoder->disp_supported_il);
+
+        simple_linked_list_destroy(decoder->ldgm_queue);
+        simple_linked_list_destroy(decoder->display_queue);
 
         fprintf(stderr, "Decoder statistics: %lu displayed frames / %lu frames dropped (%lu corrupted)\n",
                         decoder->displayed, decoder->dropped, decoder->corrupted);
@@ -989,7 +1072,10 @@ static struct video_frame * reconfigure_decoder(struct state_decoder * const dec
         //struct video_frame *frame;
         int render_mode;
 
-        wait_for_framebuffer_swap(decoder);
+        // wait for finish
+        struct display *display = decoder->display;
+        decoder_remove_display(decoder);
+        decoder_register_video_display(decoder, display);
 
         assert(decoder != NULL);
         assert(decoder->native_codecs != NULL);
@@ -1271,6 +1357,42 @@ static int check_for_mode_change(struct state_decoder *decoder, uint32_t *hdr, s
         return ret;
 }
 
+static void ldgm_queue_enqueue(struct state_decoder *decoder,
+                struct ldgm_data *ldgm_data)
+{
+        pthread_mutex_lock(&decoder->lock);
+        {
+                while (simple_linked_list_size(decoder->ldgm_queue) >
+                                MAX_QUEUE_SIZE) {
+                        pthread_cond_wait(&decoder->ldgm_boss_cv, &decoder->lock);
+                }
+
+                simple_linked_list_append(decoder->ldgm_queue, ldgm_data);
+
+                /*  ...and signal the worker */
+                pthread_cond_signal(&decoder->ldgm_worker_cv);
+        }
+        pthread_mutex_unlock(&decoder->lock);
+}
+
+static void display_queue_enqueue(struct state_decoder *decoder,
+                struct display_data *display_data)
+{
+        pthread_mutex_lock(&decoder->lock);
+        {
+                while (simple_linked_list_size(decoder->display_queue) >
+                                MAX_QUEUE_SIZE) {
+                        pthread_cond_wait(&decoder->display_boss_cv, &decoder->lock);
+                }
+
+                simple_linked_list_append(decoder->display_queue, display_data);
+
+                /*  ...and signal the worker */
+                pthread_cond_signal(&decoder->display_worker_cv);
+        }
+        pthread_mutex_unlock(&decoder->lock);
+}
+
 int decode_frame(struct coded_data *cdata, void *decode_data)
 {
         struct vcodec_state *pbuf_data = (struct vcodec_state *) decode_data;
@@ -1522,22 +1644,7 @@ int decode_frame(struct coded_data *cdata, void *decode_data)
         memcpy(ldgm_data->recv_buffers, recv_buffers, sizeof(recv_buffers));
         memcpy(ldgm_data->pckt_list, pckt_list, sizeof(pckt_list));
 
-        pthread_mutex_lock(&decoder->lock);
-        {
-                if(decoder->ldgm_data) {
-                        fprintf(stderr, "Your computer is too SLOW to play this !!!\n");
-                }
-
-                while (decoder->ldgm_data) {
-                        pthread_cond_wait(&decoder->ldgm_boss_cv, &decoder->lock);
-                }
-
-                decoder->ldgm_data = ldgm_data;
-
-                /*  ...and signal the worker */
-                pthread_cond_signal(&decoder->ldgm_worker_cv);
-        }
-        pthread_mutex_unlock(&decoder->lock);
+        ldgm_queue_enqueue(decoder, ldgm_data);
 
 cleanup:
         ;
