@@ -112,6 +112,7 @@ OBJS	      = @OBJS@ \
 		src/vo_postprocess/interlace.o \
 		src/vo_postprocess/double-framerate.o \
 		src/vo_postprocess/split.o \
+		ldgm-coding/interleaver.o \
 		ldgm-coding/ldgm-session-cpu.o \
 		ldgm-coding/ldgm-session.o \
 		ldgm-coding/tanner.o \

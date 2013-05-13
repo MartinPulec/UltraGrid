@@ -68,6 +68,7 @@
 
 #include "ldgm.h"
 
+#include "ldgm-coding/interleaver.h"
 #include "ldgm-coding/ldgm-session.h"
 #include "ldgm-coding/ldgm-session-cpu.h"
 #include "ldgm-coding/matrix-gen/matrix-generator.h"
@@ -86,7 +87,6 @@ typedef struct {
         double loss;
         // result
         int k, m, c;
-
 } configuration_t;
 
 
@@ -159,7 +159,8 @@ struct ldgm_state_encoder {
         ldgm_state_encoder(unsigned int k_, unsigned int m_, unsigned int c_) :
                 k(k_),
                 m(m_),
-                c(c_)
+                c(c_),
+                out_buffer(0)
         {
                 seed = SEED;
                 coding_session.set_params(k, m, c);
@@ -203,7 +204,47 @@ struct ldgm_state_encoder {
         char * encode(char *hdr, int hdr_len, char *frame, int size, int *out_size) {
                 char *output = coding_session.encode_hdr_frame(hdr, hdr_len,
                                 frame, size, out_size);
-                return output;
+
+#define PARAM_Q         224
+#define PARAM_L         17
+#define PARAM_KOEF      0
+
+                // INTERLEAVE
+                {
+                        int frame_size = hdr_len + size;
+                        int param_k = k;
+                        int param_m = m;
+                        int buf_size;
+                        int ps;
+                        short header_size = 4;
+
+
+                        if ( (frame_size + header_size) % param_k == 0 )
+                                buf_size = frame_size + header_size;
+                        else
+                                buf_size = (((frame_size + header_size)/param_k) + 1)*param_k;
+
+                        ps = buf_size/param_k;
+                        buf_size += param_m*ps;
+
+                        char *array_in[param_k + param_m];
+                        char *array_out[param_k + param_m];
+                        for(int i = 0; i < param_m + param_k; ++i) {
+                                array_in[i] = output + header_size + ps * i;
+                        }
+                        shuffle(array_in, array_out, PARAM_Q, PARAM_L, PARAM_KOEF, param_k+param_m);
+
+                        free(out_buffer);
+
+                        out_buffer = (char *) malloc(buf_size);
+
+                        memcpy(out_buffer, output, header_size);
+                        for(int i=0; i < k + m; i++){
+                                memcpy(out_buffer + i * ps, array_in[i], ps);
+                        }
+                }
+
+                return out_buffer;
         }
 
         void freeBuffer(char *buffer) {
@@ -235,6 +276,7 @@ struct ldgm_state_encoder {
         unsigned int k, m, c;
         unsigned int seed;
         char *left_matrix;
+        char *out_buffer;
 };
 
 struct ldgm_state_decoder {
@@ -244,6 +286,10 @@ struct ldgm_state_decoder {
                 char path[256];
 
                 int res;
+
+                this->k = k;
+                this->m = m;
+                this->c = c;
 
 #ifdef WIN32
 		TCHAR tmpPath[MAX_PATH];
@@ -280,6 +326,32 @@ struct ldgm_state_decoder {
         void decode(const char *frame, int size, char **out, int *out_size, struct linked_list *ll) {
                 char *decoded;
 
+                char *tmp = (char *) malloc(size);
+
+                // DEINTERLEAVE
+                {
+                        int frame_size = size;
+                        int param_k = k;
+                        int param_m = m;
+                        int buf_size  = size;
+                        int ps = buf_size/ (k+m);
+                        short header_size = 4;
+
+                        Symbol outSym[1024];
+                        int ret = deshuffle(0, size, PARAM_Q, PARAM_L, PARAM_KOEF, k+m, ps, outSym);
+                        fprintf(stderr, "%d %d %d %d\n",ret , m+k, size, (k+m) * ps);
+
+                        memcpy(tmp, frame, header_size);
+
+                        for(int i=0; i < ret; i++){
+                                fprintf(stderr, "%d %d %d\n", outSym[i].position, ps, outSym[i].lengOfSymbol);
+                                memcpy(tmp + (outSym[i].position),
+                                                frame + i * ps,
+                                                outSym[i].lengOfSymbol);
+                        }
+                }
+                memcpy((char*)frame, tmp, size);
+                free(tmp);
                 decoded = coding_session.decode_frame((char *) frame, size, out_size, ll_to_map(ll));
 
                 *out = decoded;
@@ -299,6 +371,7 @@ struct ldgm_state_decoder {
         private:
         LDGM_session_cpu coding_session;
         char *buffer;
+        int k, m, c;
 };
 
 
