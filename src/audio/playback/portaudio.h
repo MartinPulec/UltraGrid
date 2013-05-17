@@ -45,13 +45,12 @@
  *
  */
 
-struct audio_frame;
+struct audio_playout_buffer;
 
 void portaudio_playback_help(const char *driver_name);
 
 void           *portaudio_playback_init(char *cfg);
 void            portaudio_close_playback(void *s);
-void            portaudio_put_frame(void *state, struct audio_frame *buffer);
 int portaudio_reconfigure(void *state, int quant_samples, int channels,
-                int sample_rate);
+                int sample_rate, struct audio_playout_buffer *playout_buffer);
 

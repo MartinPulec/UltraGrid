@@ -67,6 +67,7 @@
 #include "audio/capture/sdi.h"
 #include "audio/playback/sdi.h"
 #include "audio/jack.h" 
+#include "audio/playout_buffer.h"
 #include "audio/utils.h"
 #include "compat/platform_semaphore.h"
 #include "debug.h"
@@ -120,7 +121,9 @@ struct state_audio {
         struct module audio_sender_module;
 
         struct audio_codec_state *audio_coder;
-        
+
+        struct audio_playout_buffer *playout_buffer;
+
         struct audio_network_parameters audio_network_parameters;
         struct rtp *audio_network_device;
         struct pdb *audio_participants;
@@ -286,6 +289,8 @@ struct state_audio * audio_cfg_init(struct module *parent, const char *addrs, in
                 s->echo_state = NULL;
         }
 
+        audio_playout_buffer_init(&s->playout_buffer);
+
         if(encryption) {
                 s->requested_encryption = strdup(encryption);
         }
@@ -414,6 +419,7 @@ error:
         if(s->audio_participants) {
                 pdb_destroy(&s->audio_participants);
         }
+        audio_playout_buffer_destroy(s->playout_buffer);
         audio_codec_done(s->audio_coder);
         free(s);
         exit_uv(1);
@@ -437,6 +443,7 @@ void audio_finish()
 void audio_done(struct state_audio *s)
 {
         if(s) {
+                audio_playout_buffer_poison(s->playout_buffer);
                 audio_playback_done(s->audio_playback_device);
                 audio_capture_done(s->audio_capture_device);
                 module_done(CAST_MODULE(s->tx_session));
@@ -461,6 +468,8 @@ void audio_done(struct state_audio *s)
 
                 free(s->audio_network_parameters.addr);
                 free(s->audio_network_parameters.mcast_if);
+
+                audio_playout_buffer_destroy(s->playout_buffer);
 
                 free(s);
         }
@@ -522,7 +531,6 @@ static void *audio_receiver_thread(void *arg)
                                 if (audio_pbuf_decode(cp->playout_buffer, curr_time, decode_audio_frame, &pbuf_data)) {
                                         decoded = true;
                                 }
-
                                 pbuf_remove(cp->playout_buffer, curr_time);
                                 cp = pdb_iter_next(&it);
 
@@ -535,10 +543,10 @@ static void *audio_receiver_thread(void *arg)
 
 
 
-                }else { /* NET_JACK */
+
+                } else { /* NET_JACK */
 #ifdef HAVE_JACK_TRANS
                         decoded = jack_receive(s->jack_connection, &pbuf_data);
-                        audio_playback_put_frame(s->audio_playback_device, &pbuf_data.buffer);
 #endif
                 }
 
@@ -554,16 +562,22 @@ static void *audio_receiver_thread(void *arg)
                         curr_desc = audio_desc_from_audio_frame(&pbuf_data.buffer);
 
                         if(!audio_desc_eq(device_desc, curr_desc)) {
-                                if(audio_reconfigure(s, curr_desc.bps * 8,
+                                audio_playout_buffer_poison(s->playout_buffer);
+                                struct audio_playout_buffer *new_buffer;
+                                audio_playout_buffer_init(&new_buffer);
+                                if(audio_playback_reconfigure(s->audio_playback_device,
+                                                        curr_desc.bps * 8,
                                                         curr_desc.ch_count,
-                                                        curr_desc.sample_rate) != TRUE) {
+                                                        curr_desc.sample_rate, new_buffer) != TRUE) {
                                         fprintf(stderr, "Audio reconfiguration failed!");
                                         failed = true;
+                                        audio_playout_buffer_destroy(new_buffer);
                                 }
                                 else {
                                         fprintf(stderr, "Audio reconfiguration succeeded.");
                                         device_desc = curr_desc;
-                                        rtp_flush_recv_buf(s->audio_network_device);
+                                        audio_playout_buffer_destroy(s->playout_buffer);
+                                        s->playout_buffer = new_buffer;
                                 }
                                 fprintf(stderr, " (%d channels, %d bps, %d Hz)\n",
                                                 curr_desc.ch_count,
@@ -571,8 +585,9 @@ static void *audio_receiver_thread(void *arg)
 
                         }
 
-                        if(!failed)
-                                audio_playback_put_frame(s->audio_playback_device, &pbuf_data.buffer);
+                        audio_playout_buffer_write(s->playout_buffer, &pbuf_data.buffer);
+                        //if(!failed)
+                        //        audio_playback_put_frame(s->audio_playback_device, &pbuf_data.buffer);
                 }
         }
 
@@ -793,13 +808,6 @@ void audio_register_reconfigure_callback(struct state_audio *s, int (*callback)(
 unsigned int audio_get_display_flags(struct state_audio *s)
 {
         return audio_playback_get_display_flags(s->audio_playback_device);
-}
-
-int audio_reconfigure(struct state_audio *s, int quant_samples, int channels,
-                int sample_rate)
-{
-        return audio_playback_reconfigure(s->audio_playback_device, quant_samples,
-                        channels, sample_rate);
 }
 
 struct audio_desc audio_desc_from_frame(struct audio_frame *frame)

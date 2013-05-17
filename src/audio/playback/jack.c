@@ -46,13 +46,16 @@
  *
  */
 
-#include "audio/audio.h"
-#include "audio/playback/jack.h" 
-#include "audio/utils.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #include "config_unix.h"
+#include "config_win32.h"
 #endif
+
+#include "audio/audio.h"
+#include "audio/playback/jack.h"
+#include "audio/playout_buffer.h"
+#include "audio/utils.h"
 #include "debug.h"
 #include "host.h"
 #include "utils/ring_buffer.h"
@@ -249,8 +252,13 @@ error:
 }
 
 int audio_play_jack_reconfigure(void *state, int quant_samples, int channels,
-                                int sample_rate)
+                                int sample_rate, struct audio_playout_buffer *apb)
 {
+        UNUSED(apb);
+        /// @todo repair
+        fprintf(stderr, "[JACK playback] Fatal: not upgraded to new API!\n");
+        return FALSE;
+
         struct state_jack_playback *s = (struct state_jack_playback *) state;
         const char **ports;
         int i;
@@ -322,6 +330,7 @@ int audio_play_jack_reconfigure(void *state, int quant_samples, int channels,
         return TRUE;
 }
 
+#if 0
 void audio_play_jack_put_frame(void *state, struct audio_frame *frame)
 {
         struct state_jack_playback *s = (struct state_jack_playback *) state;
@@ -351,6 +360,7 @@ void audio_play_jack_put_frame(void *state, struct audio_frame *frame)
 #endif
         }
 }
+#endif
 
 void audio_play_jack_done(void *state)
 {

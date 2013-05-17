@@ -67,6 +67,7 @@
 #include "audio/playback/none.h" 
 #include "audio/playback/jack.h" 
 #include "audio/playback/sdi.h" 
+#include "audio/playout_buffer.h"
 
 #include "lib_common.h"
 
@@ -84,14 +85,12 @@ typedef void (*audio_device_help_t)(const char *driver_name);
  */
 typedef void * (*audio_init_t)(char *cfg);
 
-typedef void (*audio_put_frame_t)(void *state, struct audio_frame *frame);
-typedef void (*audio_finish_t)(void *state);
 typedef void (*audio_done_t)(void *state);
 /*
  * Returns TRUE if succeeded, FALSE otherwise
  */
 typedef int (*audio_reconfigure_t)(void *state, int quant_samples, int channels,
-                int sample_rate);
+                int sample_rate, struct audio_playout_buffer *playout_buffer);
 typedef void (*audio_playback_done_t)(void *s);
 
 struct audio_playback_t {
@@ -102,8 +101,6 @@ struct audio_playback_t {
         const char              *audio_help_str;
         audio_init_t             audio_init;
         const char              *audio_init_str;
-        audio_put_frame_t        audio_put_frame;
-        const char              *audio_put_frame_str;
         audio_playback_done_t    audio_playback_done;
         const char              *audio_playback_done_str;
         audio_reconfigure_t      audio_reconfigure;
@@ -117,7 +114,6 @@ static struct audio_playback_t audio_playback_table[] = {
                NULL,
                MK_STATIC(sdi_playback_help),
                MK_STATIC(sdi_playback_init),
-               MK_STATIC(sdi_put_frame),
                MK_STATIC(sdi_playback_done),
                MK_STATIC(sdi_reconfigure),
                NULL
@@ -126,7 +122,6 @@ static struct audio_playback_t audio_playback_table[] = {
                NULL,
                MK_STATIC(sdi_playback_help),
                MK_STATIC(sdi_playback_init),
-               MK_STATIC(sdi_put_frame),
                MK_STATIC(sdi_playback_done),
                MK_STATIC(sdi_reconfigure),
                NULL
@@ -135,7 +130,6 @@ static struct audio_playback_t audio_playback_table[] = {
                NULL,
                MK_STATIC(sdi_playback_help),
                MK_STATIC(sdi_playback_init),
-               MK_STATIC(sdi_put_frame),
                MK_STATIC(sdi_playback_done),
                MK_STATIC(sdi_reconfigure),
                NULL
@@ -145,7 +139,6 @@ static struct audio_playback_t audio_playback_table[] = {
                 "alsa",
                 MK_NAME(audio_play_alsa_help),
                 MK_NAME(audio_play_alsa_init),
-                MK_NAME(audio_play_alsa_put_frame),
                 MK_NAME(audio_play_alsa_done),
                 MK_NAME(audio_play_alsa_reconfigure),
                 NULL
@@ -156,7 +149,6 @@ static struct audio_playback_t audio_playback_table[] = {
                 NULL,
                 MK_STATIC(audio_play_ca_help),
                 MK_STATIC(audio_play_ca_init),
-                MK_STATIC(audio_play_ca_put_frame),
                 MK_STATIC(audio_play_ca_done),
                 MK_STATIC(audio_play_ca_reconfigure),
                 NULL
@@ -167,7 +159,6 @@ static struct audio_playback_t audio_playback_table[] = {
                 "jack",
                 MK_NAME(audio_play_jack_help),
                 MK_NAME(audio_play_jack_init),
-                MK_NAME(audio_play_jack_put_frame),
                 MK_NAME(audio_play_jack_done),
                 MK_NAME(audio_play_jack_reconfigure),
                 NULL
@@ -178,7 +169,6 @@ static struct audio_playback_t audio_playback_table[] = {
                 "portaudio",
                 MK_NAME(portaudio_playback_help),
                 MK_NAME(portaudio_playback_init),
-                MK_NAME(portaudio_put_frame),
                 MK_NAME(portaudio_close_playback),
                 MK_NAME(portaudio_reconfigure),
                 NULL
@@ -189,7 +179,6 @@ static struct audio_playback_t audio_playback_table[] = {
                 "decklink",
                 MK_NAME(decklink_playback_help),
                 MK_NAME(decklink_playback_init),
-                MK_NAME(decklink_put_frame),
                 MK_NAME(decklink_close_playback),
                 MK_NAME(decklink_reconfigure),
                 NULL
@@ -199,7 +188,6 @@ static struct audio_playback_t audio_playback_table[] = {
                 NULL,
                 MK_STATIC(audio_play_none_help),
                 MK_STATIC(audio_play_none_init),
-                MK_STATIC(audio_play_none_put_frame),
                 MK_STATIC(audio_play_none_done),
                 MK_STATIC(audio_play_none_reconfigure),
                 NULL
@@ -228,15 +216,13 @@ static int audio_playback_fill_symbols(struct audio_playback_t *device)
                 dlsym(handle, device->audio_help_str);
         device->audio_init = (audio_init_t)
                 dlsym(handle, device->audio_init_str);
-        device->audio_put_frame = (audio_put_frame_t)
-                dlsym(handle, device->audio_put_frame_str);
         device->audio_playback_done = (audio_done_t)
                 dlsym(handle, device->audio_playback_done_str);
         device->audio_reconfigure = (audio_reconfigure_t)
                 dlsym(handle, device->audio_reconfigure_str);
 
         if(!device->audio_help || !device->audio_init ||
-                        !device->audio_put_frame || !device->audio_playback_done || !device->audio_reconfigure) {
+                        !device->audio_playback_done || !device->audio_reconfigure) {
                 fprintf(stderr, "Library %s opening error: %s \n", device->library_name, dlerror());
                 return FALSE;
         }
@@ -326,11 +312,6 @@ struct state_audio_playback *audio_playback_init_null_device(void)
         return device;
 }
 
-void audio_playback_finish(struct state_audio_playback *s)
-{
-        UNUSED(s);
-}
-
 void audio_playback_done(struct state_audio_playback *s)
 {
         if(s) {
@@ -355,19 +336,12 @@ unsigned int audio_playback_get_display_flags(struct state_audio_playback *s)
         }
 }
 
-void audio_playback_put_frame(struct state_audio_playback *s, struct audio_frame *frame)
-{
-        return available_audio_playback[s->index]->audio_put_frame(
-                                                        s->state,
-                                                        frame);
-}
-
 int audio_playback_reconfigure(struct state_audio_playback *s, int quant_samples, int channels,
-                int sample_rate)
+                int sample_rate, struct audio_playout_buffer *playout_buffer)
 {
         return available_audio_playback[s->index]->audio_reconfigure(
                                                         s->state,
-                                                        quant_samples, channels, sample_rate);
+                                                        quant_samples, channels, sample_rate, playout_buffer);
 }
 
 void  *audio_playback_get_state_pointer(struct state_audio_playback *s)

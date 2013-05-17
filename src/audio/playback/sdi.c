@@ -46,12 +46,14 @@
  *
  */
 
-#include "audio/audio.h" 
-#include "audio/playback/sdi.h" 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #include "config_unix.h"
 #endif
+
+#include "audio/audio.h"
+#include "audio/playback/sdi.h"
+#include "audio/playout_buffer.h"
 #include "debug.h"
 
 #include <stdlib.h>
@@ -111,6 +113,7 @@ void sdi_register_reconfigure_callback(void *state, int (*callback)(void *, int,
         s->reconfigure_udata = udata;
 }
 
+#if 0
 void sdi_put_frame(void *state, struct audio_frame *frame)
 {
         struct state_sdi_playback *s;
@@ -119,10 +122,16 @@ void sdi_put_frame(void *state, struct audio_frame *frame)
         if(s->put_callback)
                 s->put_callback(s->put_udata, frame);
 }
+#endif
 
 int sdi_reconfigure(void *state, int quant_samples, int channels,
-                int sample_rate)
+                int sample_rate, struct audio_playout_buffer *apb)
 {
+        UNUSED(apb);
+        /// @todo repair
+        fprintf(stderr, "[embedded audio] Fatal: not upgraded to new API!\n");
+        return FALSE;
+
         struct state_sdi_playback *s;
         s = (struct state_sdi_playback *) state;
 

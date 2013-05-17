@@ -51,7 +51,8 @@
 #include "config_unix.h"
 #include "config_win32.h"
 #endif
-#include "audio/playback/none.h" 
+#include "audio/playback/none.h"
+#include "audio/playout_buffer.h"
 #include "debug.h"
 #include <stdlib.h>
 #include <string.h>
@@ -81,14 +82,6 @@ void * audio_play_none_init(char *cfg)
         return s;
 }
 
-void audio_play_none_put_frame(void *state, struct audio_frame *frame)
-{
-        UNUSED(frame);
-        struct state_audio_playback_none *s = 
-                (struct state_audio_playback_none *) state;
-        assert(s->magic == AUDIO_PLAYBACK_NONE_MAGIC);
-}
-
 void audio_play_none_done(void *state)
 {
         struct state_audio_playback_none *s = 
@@ -98,8 +91,9 @@ void audio_play_none_done(void *state)
 }
 
 int audio_play_none_reconfigure(void *state, int quant_samples, int channels,
-                                                int sample_rate)
+                int sample_rate, struct audio_playout_buffer *apb)
 {
+        UNUSED(apb);
         UNUSED(quant_samples);
         UNUSED(channels);
         UNUSED(sample_rate);
@@ -109,3 +103,4 @@ int audio_play_none_reconfigure(void *state, int quant_samples, int channels,
 
         return TRUE;
 }
+

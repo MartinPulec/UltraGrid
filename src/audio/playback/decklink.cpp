@@ -62,6 +62,7 @@ extern "C" {
 #include "video_codec.h"
 #include "tv.h"
 #include "audio/playback/decklink.h"
+#include "audio/playout_buffer.h"
 #include "debug.h"
 #include "video_capture.h"
 #include "audio/audio.h"
@@ -413,6 +414,7 @@ void *decklink_playback_init(char *index_str)
         return (void *)s;
 }
 
+#if 0
 void decklink_put_frame(void *state, struct audio_frame *frame)
 {
         struct state_decklink *s = (struct state_decklink *)state;
@@ -446,9 +448,15 @@ void decklink_put_frame(void *state, struct audio_frame *frame)
                 fprintf(stderr, "[decklink] audio buffer underflow!\n");
 
 }
+#endif
 
 int decklink_reconfigure(void *state, int quant_samples, int channels,
-                                int sample_rate) {
+                                int sample_rate, struct audio_playout_buffer *apb) {
+        UNUSED(apb);
+        /// @todo repair
+        fprintf(stderr, "[Decklink playback] Fatal: not upgraded to new API!\n");
+        return FALSE;
+
         struct state_decklink *s = (struct state_decklink *)state;
         BMDAudioSampleType sample_type;
 

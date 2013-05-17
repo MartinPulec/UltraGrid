@@ -61,6 +61,7 @@
 
 #include "audio/audio.h"
 #include "audio/playback/portaudio.h"
+#include "audio/playout_buffer.h"
 #include "debug.h"
 #include "utils/ring_buffer.h"
 
@@ -68,13 +69,13 @@
 #define BUFFER_LEN_SEC 2
 
 struct state_portaudio_playback {
-        struct audio_desc desc;
+        struct audio_desc audio_desc;
         int samples;
         int device;
         PaStream *stream;
         int max_output_channels;
 
-        struct ring_buffer *data;
+        struct audio_playout_buffer *data;
         char *tmp_buffer;
 };
 
@@ -229,7 +230,7 @@ void * portaudio_playback_init(char *cfg)
         }
 	s->max_output_channels = device_info->maxOutputChannels;
         
-        portaudio_reconfigure(s, 16, 2, 48000);
+        portaudio_reconfigure(s, 16, 2, 48000, NULL);
          
 	return s;
 }
@@ -244,12 +245,11 @@ static void cleanup(struct state_portaudio_playback * s)
 {
         portaudio_close(s->stream);
 
-        ring_buffer_destroy(s->data);
         free(s->tmp_buffer);
 }
 
 int portaudio_reconfigure(void *state, int quant_samples, int channels,
-                int sample_rate)
+                int sample_rate, struct audio_playout_buffer *playout_buffer)
 {
         struct state_portaudio_playback * s = 
                 (struct state_portaudio_playback *) state;
@@ -262,12 +262,10 @@ int portaudio_reconfigure(void *state, int quant_samples, int channels,
 
         int size = BUFFER_LEN_SEC * channels * (quant_samples/8) *
                         sample_rate;
-        s->data = ring_buffer_init(size);
         s->tmp_buffer = malloc(size);
         
-        s->desc.bps = quant_samples / 8;
-        s->desc.ch_count = channels;
-        s->desc.sample_rate = sample_rate;
+        s->audio_desc.bps = quant_samples / 8;
+        s->audio_desc.sample_rate = sample_rate;
         
 	printf("(Re)initializing portaudio playback.\n");
 
@@ -303,6 +301,7 @@ int portaudio_reconfigure(void *state, int quant_samples, int channels,
                 outputParameters.channelCount = channels; // output channels
         else
                 outputParameters.channelCount = s->max_output_channels; // output channels
+        s->audio_desc.ch_count = outputParameters.channelCount; // output channels
         assert(quant_samples % 8 == 0 && quant_samples <= 32 && quant_samples != 0);
         switch(quant_samples) {
                 case 8:
@@ -321,7 +320,7 @@ int portaudio_reconfigure(void *state, int quant_samples, int channels,
                         
         outputParameters.suggestedLatency = Pa_GetDeviceInfo( outputParameters.device )->defaultLowOutputLatency;
         outputParameters.hostApiSpecificStreamInfo = NULL;
-
+        s->data = playout_buffer;
         error = Pa_OpenStream( &s->stream, NULL, &outputParameters, sample_rate, paFramesPerBufferUnspecified, // frames per buffer // TODO decide on the amount
                         paNoFlag,
                         callback,
@@ -355,36 +354,11 @@ static int callback( const void *inputBuffer, void *outputBuffer,
         UNUSED(timeInfo);
         UNUSED(statusFlags);
 
-        ring_buffer_read(s->data, outputBuffer, framesPerBuffer *
-                        s->desc.ch_count * s->desc.bps);
+        if(s->data) {
+                audio_playout_buffer_read(s->data, outputBuffer, framesPerBuffer, s->audio_desc.ch_count,
+                                s->audio_desc.bps, false);
+        }
 
         return paContinue;
-}
-
-void portaudio_put_frame(void *state, struct audio_frame *buffer)
-{
-        struct state_portaudio_playback * s = 
-                (struct state_portaudio_playback *) state;
-                
-        const int samples_count = buffer->data_len / (buffer->bps * buffer->ch_count);
-
-        /* if we got more channel we can play - skip the additional channels */
-        if(s->desc.ch_count > s->max_output_channels) {
-                int i;
-                for (i = 0; i < samples_count; ++i) {
-                        int j;
-                        for(j = 0; j < s->max_output_channels; ++j)
-                                memcpy(buffer->data + s->desc.bps * ( i * s->max_output_channels + j),
-                                        buffer->data + s->desc.bps * ( i * buffer->ch_count + j),
-                                        buffer->bps);
-                }
-        }
-
-        int out_channels = s->desc.ch_count;
-        if (out_channels > s->max_output_channels) {
-                out_channels = s->max_output_channels;
-        }
-        
-        ring_buffer_write(s->data, buffer->data, samples_count * buffer->bps * out_channels);
 }
 
