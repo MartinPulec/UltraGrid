@@ -67,6 +67,7 @@
 #include "audio/playback/none.h" 
 #include "audio/playback/jack.h" 
 #include "audio/playback/sdi.h" 
+#include "audio/playout_buffer.h"
 
 #include "lib_common.h"
 
@@ -91,7 +92,7 @@ typedef void (*audio_done_t)(void *state);
  * Returns TRUE if succeeded, FALSE otherwise
  */
 typedef int (*audio_reconfigure_t)(void *state, int quant_samples, int channels,
-                int sample_rate);
+                int sample_rate, struct audio_playout_buffer *playout_buffer);
 typedef void (*audio_playback_done_t)(void *s);
 
 struct audio_playback_t {
@@ -363,11 +364,11 @@ void audio_playback_put_frame(struct state_audio_playback *s, struct audio_frame
 }
 
 int audio_playback_reconfigure(struct state_audio_playback *s, int quant_samples, int channels,
-                int sample_rate)
+                int sample_rate, struct audio_playout_buffer *playout_buffer)
 {
         return available_audio_playback[s->index]->audio_reconfigure(
                                                         s->state,
-                                                        quant_samples, channels, sample_rate);
+                                                        quant_samples, channels, sample_rate, playout_buffer);
 }
 
 void  *audio_playback_get_state_pointer(struct state_audio_playback *s)

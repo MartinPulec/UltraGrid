@@ -49,6 +49,7 @@
 #include "config.h"
 
 struct audio_frame;
+struct audio_playout_buffer;
 
 void audio_play_alsa_help(const char *driver_name);
 void * audio_play_alsa_init(char *cfg);
@@ -56,5 +57,5 @@ struct audio_frame *audio_play_alsa_get_frame(void *state);
 void audio_play_alsa_put_frame(void *state, struct audio_frame *frame);
 void audio_play_alsa_done(void *state);
 int audio_play_alsa_reconfigure(void *state, int quant_samples, int channels,
-                                int sample_rate);
+                                int sample_rate, struct audio_playout_buffer *);
 

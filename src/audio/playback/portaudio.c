@@ -61,6 +61,7 @@
 
 #include "audio/audio.h"
 #include "audio/playback/portaudio.h"
+#include "audio/playout_buffer.h"
 #include "debug.h"
 #include "utils/ring_buffer.h"
 
@@ -68,13 +69,13 @@
 #define BUFFER_LEN_SEC 2
 
 struct state_portaudio_playback {
-        audio_frame frame;
+        struct audio_desc audio_desc;
         int samples;
         int device;
         PaStream *stream;
         int max_output_channels;
 
-        struct ring_buffer *data;
+        struct audio_playout_buffer *data;
         char *tmp_buffer;
 };
 
@@ -229,7 +230,7 @@ void * portaudio_playback_init(char *cfg)
         }
 	s->max_output_channels = device_info->maxOutputChannels;
         
-        portaudio_reconfigure(s, 16, 2, 48000);
+        portaudio_reconfigure(s, 16, 2, 48000, NULL);
          
 	return s;
 }
@@ -242,15 +243,13 @@ void portaudio_close_playback(void *state)
 
 static void cleanup(struct state_portaudio_playback * s)
 {
-        free(s->frame.data);
         portaudio_close(s->stream);
 
-        ring_buffer_destroy(s->data);
         free(s->tmp_buffer);
 }
 
 int portaudio_reconfigure(void *state, int quant_samples, int channels,
-                int sample_rate)
+                int sample_rate, struct audio_playout_buffer *playout_buffer)
 {
         struct state_portaudio_playback * s = 
                 (struct state_portaudio_playback *) state;
@@ -263,17 +262,10 @@ int portaudio_reconfigure(void *state, int quant_samples, int channels,
 
         int size = BUFFER_LEN_SEC * channels * (quant_samples/8) *
                         sample_rate;
-        s->data = ring_buffer_init(size);
         s->tmp_buffer = malloc(size);
         
-        s->frame.bps = quant_samples / 8;
-        s->frame.ch_count = channels;
-        s->frame.sample_rate = sample_rate;
-        
-        s->frame.max_size = s->frame.bps * s->frame.ch_count * s->frame.sample_rate; // can hold up to 1 sec
-        
-        s->frame.data = (char*)malloc(s->frame.max_size);
-        assert(s->frame.data != NULL);
+        s->audio_desc.bps = quant_samples / 8;
+        s->audio_desc.sample_rate = sample_rate;
         
 	printf("(Re)initializing portaudio playback.\n");
 
@@ -309,6 +301,7 @@ int portaudio_reconfigure(void *state, int quant_samples, int channels,
                 outputParameters.channelCount = channels; // output channels
         else
                 outputParameters.channelCount = s->max_output_channels; // output channels
+        s->audio_desc.ch_count = outputParameters.channelCount; // output channels
         assert(quant_samples % 8 == 0 && quant_samples <= 32 && quant_samples != 0);
         switch(quant_samples) {
                 case 8:
@@ -327,7 +320,7 @@ int portaudio_reconfigure(void *state, int quant_samples, int channels,
                         
         outputParameters.suggestedLatency = Pa_GetDeviceInfo( outputParameters.device )->defaultLowOutputLatency;
         outputParameters.hostApiSpecificStreamInfo = NULL;
-
+        s->data = playout_buffer;
         error = Pa_OpenStream( &s->stream, NULL, &outputParameters, sample_rate, paFramesPerBufferUnspecified, // frames per buffer // TODO decide on the amount
                         paNoFlag,
                         callback,
@@ -348,7 +341,9 @@ int portaudio_reconfigure(void *state, int quant_samples, int channels,
 // get first empty frame, bud don't consider it as being used
 struct audio_frame* portaudio_get_frame(void *state)
 {
+#if 0
 	return &((struct state_portaudio_playback *) state)->frame;
+#endif
 }
 
 /* This routine will be called by the PortAudio engine when audio is needed.
@@ -367,14 +362,17 @@ static int callback( const void *inputBuffer, void *outputBuffer,
         UNUSED(timeInfo);
         UNUSED(statusFlags);
 
-        ring_buffer_read(s->data, outputBuffer, framesPerBuffer * s->frame.ch_count *
-                        s->frame.bps);
+        if(s->data) {
+                audio_playout_buffer_read(s->data, outputBuffer, framesPerBuffer, s->audio_desc.ch_count,
+                                s->audio_desc.bps);
+        }
 
         return paContinue;
 }
 
 void portaudio_put_frame(void *state, struct audio_frame *buffer)
 {
+#if 0
         struct state_portaudio_playback * s = 
                 (struct state_portaudio_playback *) state;
                 
@@ -398,5 +396,6 @@ void portaudio_put_frame(void *state, struct audio_frame *buffer)
         }
         
         ring_buffer_write(s->data, buffer->data, samples_count * buffer->bps * out_channels);
+#endif
 }
 

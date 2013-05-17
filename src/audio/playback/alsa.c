@@ -68,6 +68,7 @@
 #include "audio/audio.h"
 #include "audio/utils.h"
 #include "audio/playback/alsa.h" 
+#include "audio/playout_buffer.h"
 #include "debug.h"
 
 #define BUFFER_MIN 41
@@ -75,13 +76,70 @@
 
 struct state_alsa_playback {
         snd_pcm_t *handle;
-        struct audio_frame frame;
+        struct audio_desc audio_desc;
 
-        unsigned int min_device_channels;
+        pthread_t thread_id;
+        bool thread_started;
+
+        struct audio_playout_buffer *playout_buffer;
 };
 
+static void *worker(void *arg);
+
+struct audio_playout_buffer *apb;
+
+static void *worker(void *arg)
+{
+        struct state_alsa_playback *s = arg;
+
+        while(1) {
+                int frames = 128;
+                int data_len = frames * s->audio_desc.bps * s->audio_desc.ch_count;
+                char buffer[data_len];
+                int rc;
+
+                int ret = audio_playout_buffer_read(s->playout_buffer, buffer, frames,
+                                s->audio_desc.ch_count, s->audio_desc.bps);
+                if(ret == -1)
+                        return NULL;
+
+                if(s->audio_desc.bps == 1) { // convert to unsigned
+                        signed2unsigned(buffer, buffer, data_len);
+                }
+
+                rc = snd_pcm_writei(s->handle, buffer, frames);
+
+                if (rc == -EPIPE) {
+                        /* EPIPE means underrun */
+                        fprintf(stderr, "underrun occurred\n");
+                        snd_pcm_prepare(s->handle);
+#if 0
+                        /* fill the stream with some sasmples */
+                        for (double sec = 0.0; sec < BUFFER_MAX / 1000.0; sec += (double) frames / frame->sample_rate) {
+                                int frames_to_write = frames;
+                                if(sec + (double) frames/frame->sample_rate > BUFFER_MAX / 1000.0) {
+                                        frames_to_write = (BUFFER_MAX / 1000.0 - sec) * frame->sample_rate;
+                                }
+                                int rc = snd_pcm_writei(s->handle, data, frames_to_write);
+                                if(rc < 0) {
+                                        fprintf(stderr, "error from writei: %s\n",
+                                                        snd_strerror(rc));
+                                        break;
+                                }
+                        }
+#endif
+                } else if (rc < 0) {
+                        fprintf(stderr, "error from writei: %s\n",
+                                        snd_strerror(rc));
+                }  else if (rc != (int)frames) {
+                        fprintf(stderr, "short write, written %d frames (overrun)\n", rc);
+                }
+
+        }
+}
+
 int audio_play_alsa_reconfigure(void *state, int quant_samples, int channels,
-                                int sample_rate)
+                                int sample_rate, struct audio_playout_buffer *playout_buffer)
 {
         struct state_alsa_playback *s = (struct state_alsa_playback *) state;
         snd_pcm_hw_params_t *params;
@@ -91,10 +149,13 @@ int audio_play_alsa_reconfigure(void *state, int quant_samples, int channels,
         int rc;
         snd_pcm_uframes_t frames;
 
-        s->frame.bps = quant_samples / 8;
-        s->min_device_channels = s->frame.ch_count = channels;
-        s->frame.sample_rate = sample_rate;
+        s->audio_desc.bps = quant_samples / 8;
+        s->audio_desc.ch_count = channels;
+        s->audio_desc.sample_rate = sample_rate;
 
+        if(s->thread_started) {
+                pthread_join(s->thread_id, NULL);
+        }
 
         /* Allocate a hardware parameters object. */
         snd_pcm_hw_params_alloca(&params);
@@ -148,7 +209,9 @@ int audio_play_alsa_reconfigure(void *state, int quant_samples, int channels,
         rc = snd_pcm_hw_params_set_channels(s->handle, params, channels);
         if (rc < 0) {
                 if(channels == 1) {
-                        snd_pcm_hw_params_set_channels_first(s->handle, params, &s->min_device_channels);
+                        unsigned int min_device_channels;
+                        snd_pcm_hw_params_set_channels_first(s->handle, params, &min_device_channels);
+                        s->audio_desc.ch_count = min_device_channels;
                 } else {
                         fprintf(stderr, "cannot set requested channel count: %s\n",
                                         snd_strerror(rc));
@@ -217,11 +280,9 @@ int audio_play_alsa_reconfigure(void *state, int quant_samples, int channels,
                 return FALSE;
         }
 
-        free(s->frame.data);
-
-        s->frame.max_size = s->frame.bps * s->frame.ch_count * s->frame.sample_rate; // can hold up to 1 sec
-        s->frame.data = (char*)malloc(s->frame.max_size);
-        assert(s->frame.data != NULL);
+        s->playout_buffer = playout_buffer;
+        pthread_create(&s->thread_id, NULL, &worker, s);
+        s->thread_started = true;
 
         return TRUE;
 }
@@ -295,7 +356,7 @@ void * audio_play_alsa_init(char *cfg)
                     goto error;
         }
 
-        rc = snd_pcm_nonblock(s->handle, 1);
+        rc = snd_pcm_nonblock(s->handle, 0);
         if(rc < 0) {
                 fprintf(stderr, "ALSA Warning: Unable to set nonblock mode.\n");
         }
@@ -307,15 +368,9 @@ error:
         return NULL;
 }
 
-struct audio_frame *audio_play_alsa_get_frame(void *state)
-{
-        struct state_alsa_playback *s = (struct state_alsa_playback *) state;
-
-        return &s->frame;
-}
-
 void audio_play_alsa_put_frame(void *state, struct audio_frame *frame)
 {
+#if 0
         struct state_alsa_playback *s = (struct state_alsa_playback *) state;
         int rc;
         char *data = frame->data;
@@ -364,15 +419,19 @@ void audio_play_alsa_put_frame(void *state, struct audio_frame *frame)
         }
 
         free(tmp_data);
+#endif
 }
 
 void audio_play_alsa_done(void *state)
 {
         struct state_alsa_playback *s = (struct state_alsa_playback *) state;
 
+        if(s->thread_started) {
+                pthread_join(s->thread_id, NULL);
+        }
+
         snd_pcm_drain(s->handle);
         snd_pcm_close(s->handle);
-        free(s->frame.data);
         free(s);
 }
 
