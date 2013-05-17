@@ -52,7 +52,7 @@
 
 #include "audio/audio.h"
 #include "audio/playback/coreaudio.h" 
-#include "utils/ring_buffer.h"
+#include "audio/playout_buffer.h"
 #include "debug.h"
 #include <stdlib.h>
 #include <string.h>
@@ -67,8 +67,8 @@ struct state_ca_playback {
         AudioComponentInstance
 #endif
                         auHALComponentInstance;
-        struct audio_frame frame;
-        struct ring_buffer *buffer;
+        struct audio_desc audio_desc;
+        struct audio_playout_buffer *buffer;
         int audio_packet_size;
 };
 
@@ -92,7 +92,8 @@ static OSStatus theRenderProc(void *inRefCon,
         int write_bytes = inNumFrames * s->audio_packet_size;
         int ret;
        
-        ret = ring_buffer_read(s->buffer, ioData->mBuffers[0].mData, write_bytes);
+        ret = audio_playout_buffer_read(s->buffer, ioData->mBuffers[0].mData, write_bytes / s->audio_desc.ch_count
+			/ s->audio_desc.bps, s->audio_desc.ch_count, s->audio_desc.bps);
         ioData->mBuffers[0].mDataByteSize = ret;
 
         if(!ret) {
@@ -104,7 +105,7 @@ static OSStatus theRenderProc(void *inRefCon,
 }
 
 int audio_play_ca_reconfigure(void *state, int quant_samples, int channels,
-                                                int sample_rate)
+		int sample_rate, struct audio_playout_buffer *playout_buffer)
 {
         struct state_ca_playback *s = (struct state_ca_playback *)state;
         AudioStreamBasicDescription desc;
@@ -115,18 +116,11 @@ int audio_play_ca_reconfigure(void *state, int quant_samples, int channels,
         printf("[CoreAudio] Audio reinitialized to %d-bit, %d channels, %d Hz\n", 
                         quant_samples, channels, sample_rate);
 
-        s->frame.bps = quant_samples / 8;
-        s->frame.ch_count = channels;
-        s->frame.sample_rate = sample_rate;
+        s->audio_desc.bps = quant_samples / 8;
+        s->audio_desc.ch_count = channels;
+        s->audio_desc.sample_rate = sample_rate;
 
-        ring_buffer_destroy(s->buffer);
-        s->buffer = NULL;
-        free(s->frame.data);
-        s->frame.data = NULL;
-
-        s->frame.max_size = quant_samples / 8 * channels * sample_rate;
-        s->frame.data = (char *) malloc(s->frame.max_size);
-        s->buffer = ring_buffer_init(s->frame.max_size);
+	s->buffer = playout_buffer;
 
         ret = AudioOutputUnitStop(s->auHALComponentInstance);
         if(ret) {
@@ -267,10 +261,6 @@ void * audio_play_ca_init(char *cfg)
         if (ret != noErr) goto error;
 #endif
         
-        s->frame.data = NULL;
-        s->buffer = NULL;
-        s->frame.max_size = 0;
-
         ret = AudioUnitUninitialize(s->auHALComponentInstance);
         if(ret) goto error;
 
@@ -307,9 +297,11 @@ error:
 
 struct audio_frame *audio_play_ca_get_frame(void *state)
 {
+#if 0
         struct state_ca_playback *s = (struct state_ca_playback *)state;
 
         return &s->frame;
+#endif
 }
 
 void audio_play_ca_put_frame(void *state, struct audio_frame *frame)
@@ -321,13 +313,14 @@ void audio_play_ca_put_frame(void *state, struct audio_frame *frame)
 
 void audio_play_ca_done(void *state)
 {
+#if 0
         struct state_ca_playback *s = (struct state_ca_playback *)state;
 
         AudioOutputUnitStop(s->auHALComponentInstance);
         AudioUnitUninitialize(s->auHALComponentInstance);
         free(s->frame.data);
-        ring_buffer_destroy(s->buffer);
         free(s);
+#endif
 }
 
 #endif /* HAVE_COREAUDIO */
