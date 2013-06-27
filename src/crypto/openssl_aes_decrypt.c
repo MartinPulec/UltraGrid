@@ -62,7 +62,11 @@
 #include "crypto/openssl_aes_decrypt.h"
 
 #include <string.h>
+#ifndef HAVE_NETTLE
 #include <openssl/aes.h>
+#else
+#include <nettle/aes.h>
+#endif
 
 struct openssl_aes_decrypt {
         AES_KEY key;
@@ -125,7 +129,11 @@ void openssl_aes_decrypt_block(struct openssl_aes_decrypt *s,
                 case MODE_ECB:
                         assert(len == AES_BLOCK_SIZE);
                         AES_ecb_encrypt(ciphertext, plaintext,
-                                        &s->key, AES_DECRYPT);
+                                        &s->key
+#ifndef HAVE_NETTLE
+                                        , AES_DECRYPT
+#endif
+                                        );
                         break;
                 case MODE_CTR:
                         AES_ctr128_encrypt(ciphertext, plaintext, len, &s->key, s->ivec,

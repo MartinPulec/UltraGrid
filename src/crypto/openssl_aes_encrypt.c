@@ -62,8 +62,13 @@
 #include "crypto/openssl_aes_encrypt.h"
 
 #include <string.h>
+#ifndef HAVE_NETTLE
 #include <openssl/aes.h>
 #include <openssl/rand.h>
+#else
+#include <nettle/aes.h>
+#endif
+#include "crypto/random.h"
 
 struct openssl_aes_encrypt {
         AES_KEY key;
@@ -84,9 +89,17 @@ int openssl_aes_encrypt_init(struct openssl_aes_encrypt **state, const char *pas
         MD5_CTX context;
         unsigned char hash[16];
 
+#ifndef HAVE_NETTLE
         if (!RAND_bytes(s->ivec, 8)) {
                 return -1;
         }
+#else
+        lbl_srandom((int)(getpid() * 42) ^ (int)time((time_t *) 0));
+        uint32_t rand_number = lbl_random();
+        memcpy(&s->ivec, &rand_number, sizeof(uint32_t));
+        rand_number = lbl_random();
+        memcpy(&s->ivec, &rand_number, sizeof(uint32_t));
+#endif
 
         MD5Init(&context);
         MD5Update(&context, (unsigned char *) passphrase,
@@ -123,7 +136,11 @@ void openssl_aes_encrypt_block(struct openssl_aes_encrypt *s, unsigned char *pla
                         break;
                 case MODE_ECB:
                         AES_ecb_encrypt(plaintext, ciphertext,
-                                        &s->key, AES_ENCRYPT);
+                                        &s->key
+#ifndef HAVE_NETTLE
+                                        , AES_ENCRYPT
+#endif
+                                        );
                         break;
                 default:
                         abort();

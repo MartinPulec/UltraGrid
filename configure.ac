@@ -2530,17 +2530,33 @@ AC_SUBST(IMPORT_CONTROL_KEYBOARD_LIBS)
 # OpenSSL-libcrypto
 # -------------------------------------------------------------------------------------------------
 crypto=no
+nettle=no
 crypto_req=auto
 AC_ARG_ENABLE(openssl,
-      AS_HELP_STRING([--disable-openssl], [disable OpenSSL support(default is auto)]),
+      AS_HELP_STRING([--disable-crypto], [disable OpenSSL/Nettle support(default is auto)]),
     [crypto_req=$enableval],
     [crypto_req=auto]
     )
 
 PKG_CHECK_MODULES([CRYPTO], [libcrypto], [crypto=yes], [crypto=no])
+PKG_CHECK_MODULES([NETTLE], [nettle], [nettle=yes], [nettle=no])
+
+if test $crypto = no -a $crypto_req != no
+then
+        # if we do not have OpenSSL but Nettle, use it as substitution
+        if test $nettle = yes; then
+                AC_DEFINE([HAVE_NETTLE], [1], [Build with Nettle support])
+                crypto=yes
+                CRYPTO_CFLAGS=$NETTLE_CFLAGS
+                CRYPTO_CXXFLAGS=$NETTLE_CXXFLAGS
+                CRYPTO_CPPFLAGS=$NETTLE_CPPFLAGS
+                CRYPTO_LIBS=$NETTLE_LIBS
+        fi
+fi
+
 
 if test $crypto_req != no -a $crypto = yes; then
-        AC_DEFINE([HAVE_CRYPTO], [1], [Build with OpenSSL support])
+        AC_DEFINE([HAVE_CRYPTO], [1], [Build with Crypto support])
         CFLAGS="$CFLAGS $CRYPTO_CFLAGS"
         CXXFLAGS="$CXXFLAGS $CRYPTO_CFLAGS"
         CPPFLAGS="$CPPFLAGS $CRYPTO_CFLAGS"

@@ -51,6 +51,11 @@
 
 #ifndef OPENSSL_AES_ENCRYPT_H_
 #define OPENSSL_AES_ENCRYPT_H_
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#include "config_win32.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -61,6 +66,10 @@ enum openssl_aes_mode {
         MODE_ECB,
         MODE_CTR
 };
+
+#ifdef HAVE_NETTLE
+#define AES_KEY struct aes_ctx *
+#endif
 
 int openssl_aes_encrypt_init(struct openssl_aes_encrypt **state,
                 const char *passphrase, enum openssl_aes_mode mode);
