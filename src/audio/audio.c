@@ -103,8 +103,6 @@ enum audio_transport_device {
         NET_JACK
 };
 
-struct audio_playout_buffer *apb;
-
 struct state_audio {
         struct module mod;
         struct state_audio_capture *audio_capture_device;
@@ -269,7 +267,6 @@ struct state_audio * audio_cfg_init(struct module *parent, const char *addrs, in
         }
 
         audio_playout_buffer_init(&s->playout_buffer);
-        apb = s->playout_buffer;
 
         if(encryption) {
                 s->requested_encryption = strdup(encryption);
