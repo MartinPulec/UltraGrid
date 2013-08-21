@@ -193,11 +193,10 @@ static void show_help()
 {
         printf("SW Mix capture\n");
         printf("Usage\n");
-        printf("\t-t swmix:<width>:<height>:<fps>[:<codec>[:interpolation=<i_type>[,<algo>]]] -t <dev1_config>"
-                        "-t <dev2_config>\n");
+        printf("\t-t swmix:<width>:<height>:<fps>[:<codec>[:interpolation=<i_type>[,<algo>]]] "
+                        "-t <dev1_config> -t <dev2_config>\n");
         printf("\tor\n");
-        printf("\t-t swmix:file#<dev1_name>[@<dev1_config>]#"
-                        "<dev2_name>[@<dev2_config>][#....] (currently defunct)\n");
+        printf("\t-t swmix:file -t <dev1_name> -t <dev2_name> ...\n");
         printf("\t\twhere <devn_config> is a complete configuration string of device\n"
                         "\t\t\tinvolved in an SW mix device, if not set, must be filled in\n"
                         "\t\t\tthe config file (last item)\n");

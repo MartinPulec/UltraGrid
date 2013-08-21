@@ -122,6 +122,7 @@ struct vidcap_params {
         unsigned int flags;  ///< one of @ref vidcap_flags
 
         const char *requested_capture_filter;
+        const char  *name;   ///< input name (capture alias in config file)
 };
 
 int			 vidcap_init_devices(void);
