@@ -52,6 +52,7 @@
 #include "debug.h"
 #include "gl_context.h"
 #include "host.h"
+#include "utils/config_file.h"
 #include "video.h"
 #include "video_capture.h"
 
@@ -171,7 +172,7 @@ static void show_help(void);
 static void *master_worker(void *arg);
 static void *slave_worker(void *arg);
 static char *get_config_name(void);
-static bool get_slave_param_from_file(FILE* config, char *slave_name, int *x, int *y,
+static bool get_slave_param_from_file(FILE* config, const char *slave_name, int *x, int *y,
                                         int *width, int *height);
 static bool get_device_config_from_file(FILE* config_file, char *slave_name,
                 char *device_name_config) __attribute__((unused));
@@ -191,17 +192,17 @@ static char *get_config_name()
 
 static void show_help()
 {
+        char ug_default_config_file_buf[1024];
         printf("SW Mix capture\n");
         printf("Usage\n");
         printf("\t-t swmix:<width>:<height>:<fps>[:<codec>[:interpolation=<i_type>[,<algo>]]] "
                         "-t <dev1_config> -t <dev2_config>\n");
         printf("\tor\n");
         printf("\t-t swmix:file -t <dev1_name> -t <dev2_name> ...\n");
-        printf("\t\twhere <devn_config> is a complete configuration string of device\n"
-                        "\t\t\tinvolved in an SW mix device, if not set, must be filled in\n"
-                        "\t\t\tthe config file (last item)\n");
-        printf("\t\t<devn_name> is an input name (to be matched against config file %s)\n",
-                        get_config_name());
+        printf("\t\twhere <devn_config> is a configuration string of device as usual\n");
+        printf("\t\t<devn_name> is an input name alias (alias taken from config file %s)\n",
+                default_config_file(ug_default_config_file_buf,
+                        sizeof(ug_default_config_file_buf)));
         printf("\t\t<width> widht of resulting video\n");
         printf("\t\t<height> height of resulting video\n");
         printf("\t\t<fps> FPS of resulting video, may be eg. 25 or 50i\n");
@@ -215,8 +216,7 @@ struct state_slave {
         pthread_t           thread_id;
         bool                should_exit;
         pthread_mutex_t     lock;
-        char               *name;
-        const struct vidcap_params *device_params;
+        struct vidcap_params *device_params;
 
         struct video_frame *captured_frame;
         struct video_frame *done_frame;
@@ -322,10 +322,10 @@ static struct slave_data *init_slave_data(vidcap_swmix_state *s, FILE *config) {
                         slaves_data[i].y = (i / (int) m) * slaves_data[i].height;
                 } else {
                         int x, y, width, height;
-                        if(!get_slave_param_from_file(config, s->slaves[i].name,
+                        if(!get_slave_param_from_file(config, s->slaves[i].device_params->name,
                                         &x, &y, &width, &height)) {
                                 fprintf(stderr, "Cannot find config for device "
-                                                "\"%s\"\n", s->slaves[i].name);
+                                                "\"%s\"\n", s->slaves[i].device_params->name);
                                 free(slaves_data);
                                 return NULL;
                         }
@@ -748,7 +748,8 @@ static void *slave_worker(void *arg)
                 initialize_video_capture(NULL, s->device_params->driver, s->device_params, &device);
         if(ret != 0) {
                 fprintf(stderr, "[swmix] Unable to initialize device %s (%s:%s).\n",
-                                s->name, s->device_params->driver, s->device_params->fmt);
+                                s->device_params->name, s->device_params->driver,
+                                s->device_params->fmt);
                 return NULL;
         }
 
@@ -787,7 +788,7 @@ static void *slave_worker(void *arg)
         return NULL;
 }
 
-static bool get_slave_param_from_file(FILE* config_file, char *slave_name, int *x, int *y,
+static bool get_slave_param_from_file(FILE* config_file, const char *slave_name, int *x, int *y,
                                         int *width, int *height)
 {
         char *ret;
@@ -849,7 +850,6 @@ static int parse_config_string(const char *fmt, unsigned int *width,
         *interl = PROGRESSIVE;
 
         tmp = parse_string = strdup(fmt);
-        if(strchr(parse_string, '#')) *strchr(parse_string, '#') = '\0';
         while((item = strtok_r(tmp, ":", &save_ptr))) {
                 bool found = false;
                 switch (token_nr) {
@@ -974,7 +974,7 @@ static bool parse(struct vidcap_swmix_state *s, struct video_desc *desc, char *f
 
         tmp = &params[1];
         for (int i = 0; i < s->devices_cnt; ++i) {
-                s->slaves[i].device_params = tmp + i;
+                s->slaves[i].device_params = vidcap_params_copy(tmp + i); // we need our copy
         }
 
         return true;
@@ -1156,8 +1156,8 @@ vidcap_swmix_done(void *state)
                 pthread_mutex_destroy(&s->slaves[i].lock);
                 vf_free(s->slaves[i].captured_frame);
                 vf_free(s->slaves[i].done_frame);
-                free(s->slaves[i].name);
                 free(s->slaves[i].audio_frame.data);
+                vidcap_param_free_struct(s->slaves[i].device_params);
         }
         free(s->slaves);
 
