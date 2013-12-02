@@ -62,7 +62,7 @@ struct state_decompress_j2k {
         codec_t out_codec;
 
         pthread_mutex_t lock;
-        queue<char *> *queue;
+        queue<char *> *decompressed_frames;
         pthread_t thread_id;
 };
 
@@ -99,7 +99,7 @@ static void *decompress_j2k_worker(void *args)
                 memcpy(buffer, dec_data, data_len);
 
                 pthread_mutex_lock(&s->lock);
-                s->queue->push(buffer);
+                s->decompressed_frames->push(buffer);
                 pthread_mutex_unlock(&s->lock);
         }
 }
@@ -136,7 +136,7 @@ void * j2k_decompress_init(void)
                 goto error;
         }
 
-        s->queue = new queue<char *>();
+        s->decompressed_frames = new queue<char *>();
 
         assert(pthread_create(&s->thread_id, NULL, decompress_j2k_worker,
                                 (void *) s) == 0);
@@ -144,7 +144,7 @@ void * j2k_decompress_init(void)
         return s;
 
 error:
-        delete s->queue;
+        delete s->decompressed_frames;
         if (s->settings) {
                 CMPTO_J2K_Dec_Settings_Destroy(s->settings);
         }
@@ -209,12 +209,12 @@ int j2k_decompress(void *state, unsigned char *dst, unsigned char *buffer,
         }
         
         pthread_mutex_lock(&s->lock);
-        if (s->queue->size() == 0) {
+        if (s->decompressed_frames->size() == 0) {
                 pthread_mutex_unlock(&s->lock);
                 return FALSE;
         }
-        char *decoded = s->queue->front();
-        s->queue->pop();
+        char *decoded = s->decompressed_frames->front();
+        s->decompressed_frames->pop();
         pthread_mutex_unlock(&s->lock);
 
         memcpy(dst, decoded, s->desc.height *
@@ -254,7 +254,7 @@ void j2k_decompress_done(void *state)
 
         pthread_mutex_destroy(&s->lock);
 
-        delete s->queue;
+        delete s->decompressed_frames;
 
         free(s);
 }
