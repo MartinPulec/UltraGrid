@@ -50,8 +50,15 @@
 #include "video.h"
 
 #include <queue>
+#include <utility>
 
 using namespace std;
+
+struct encoded_image {
+        char *data;
+        int len;
+        struct video_desc *desc;
+};
 
 struct state_video_compress_j2k {
         struct module module_data;
@@ -61,7 +68,7 @@ struct state_video_compress_j2k {
 
         pthread_cond_t frame_ready;
         pthread_mutex_t lock;
-        queue<CMPTO_J2K_Enc_Image *> *encoded_images;
+        queue<struct encoded_image *> *encoded_images;
 
         pthread_t thread_id;
 
@@ -82,7 +89,6 @@ static void *j2k_compress_worker(void *args)
                 j2k_error = CMPTO_J2K_Enc_Context_Get_Encoded_Image(
                                 s->context,
                                 &img /* Set to NULL if encoder stopped */);
-                abort();
                 if (j2k_error != CMPTO_J2K_OK) {
                         // some better solution?
                         continue;
@@ -91,9 +97,32 @@ static void *j2k_compress_worker(void *args)
                 if (img == NULL) {
                         break;
                 }
+                struct video_desc *desc;
+                j2k_error = CMPTO_J2K_Enc_Image_Get_Custom_Data(
+                                img, (void **) &desc);
+                if (j2k_error != CMPTO_J2K_OK) {
+                        continue;
+                }
+                size_t size;
+                void * ptr;
+                j2k_error = CMPTO_J2K_Enc_Image_Get_Codestream(
+                                img,
+                                &size,
+                                &ptr);
+                if (j2k_error != CMPTO_J2K_OK) {
+                        continue;
+                }
+                struct encoded_image *encoded = (struct encoded_image *)
+                        malloc(sizeof(struct encoded_image));
+                encoded->data = (char *) malloc(size);
+                memcpy(encoded->data, ptr, size);
+                encoded->len = size;
+                encoded->desc = desc;
+                CMPTO_J2K_Enc_Context_Return_Unused_Image(
+                                s->context, img);
 
                 pthread_mutex_lock(&s->lock);
-                s->encoded_images->push(img);
+                s->encoded_images->push(encoded);
                 pthread_cond_signal(&s->frame_ready);
                 pthread_mutex_unlock(&s->lock);
         }
@@ -139,7 +168,7 @@ struct module * j2k_compress_init(struct module *parent, const struct video_comp
         s->module_data.deleter = j2k_compress_done;
         module_register(&s->module_data, parent);
 
-        s->encoded_images = new queue<CMPTO_J2K_Enc_Image *>();
+        s->encoded_images = new queue<struct encoded_image *>();
 
         for (int i = 0; i < 2; ++i) {
                 s->out[i] = vf_alloc(1);
@@ -166,7 +195,6 @@ struct video_frame  *j2k_compress_tile(struct module *mod, struct video_frame *t
         enum CMPTO_J2K_Error j2k_error;
 
         assert(tx->tile_count == 1); // TODO
-        fprintf(stderr, "1\n");
 
         j2k_error = CMPTO_J2K_Enc_Context_Get_Free_Image(
                         s->context,
@@ -177,12 +205,10 @@ struct video_frame  *j2k_compress_tile(struct module *mod, struct video_frame *t
         if (j2k_error != CMPTO_J2K_OK) {
                 return NULL;
         }
-        fprintf(stderr, "1.2\n");
 
         void *ptr;
         j2k_error = CMPTO_J2K_Enc_Image_Get_Source_Data_Ptr(img,
                         &ptr);
-        fprintf(stderr, "1.3\n");
         if (j2k_error != CMPTO_J2K_OK) {
                 return NULL;
         }
@@ -198,7 +224,6 @@ struct video_frame  *j2k_compress_tile(struct module *mod, struct video_frame *t
                 return NULL;
         }
 
-        fprintf(stderr, "2\n");
         j2k_error = CMPTO_J2K_Enc_Context_Encode_Image(s->context,
                         img, s->enc_settings);
         if (j2k_error != CMPTO_J2K_OK) {
@@ -206,46 +231,25 @@ struct video_frame  *j2k_compress_tile(struct module *mod, struct video_frame *t
         }
 
         pthread_mutex_lock(&s->lock);
-        struct CMPTO_J2K_Enc_Image *encoded_img = NULL;
+        struct encoded_image *encoded_img = NULL;
         if (s->encoded_images->size() > 0) {
                 encoded_img = s->encoded_images->front();
                 s->encoded_images->pop();
         }
         pthread_mutex_unlock(&s->lock);
-        fprintf(stderr, "3\n");
 
         if (encoded_img != NULL) {
-        fprintf(stderr, "4\n");
-                struct video_desc *desc;
-                j2k_error = CMPTO_J2K_Enc_Image_Get_Custom_Data(
-                                encoded_img, (void **) &desc);
-                if (j2k_error != CMPTO_J2K_OK) {
-                        return NULL;
-                }
-                vf_write_desc(s->out[buffer_idx], *desc);
-                free(desc);
+
+                vf_write_desc(s->out[buffer_idx], *(encoded_img->desc));
+                free(encoded_img->desc);
                 free(s->out[buffer_idx]->tiles[0].data);
-                s->out[buffer_idx]->tiles[0].data = NULL;
-                size_t size;
-                void * ptr;
-                j2k_error = CMPTO_J2K_Enc_Image_Get_Codestream(
-                                encoded_img,
-                                &size,
-                                &ptr);
-                if (j2k_error != CMPTO_J2K_OK) {
-                        return NULL;
-                }
-                s->out[buffer_idx]->tiles[0].data = (char *)
-                        malloc(size);
-                s->out[buffer_idx]->tiles[0].data_len = size;
-                memcpy(s->out[buffer_idx]->tiles[0].data,
-                                ptr, size);
-                CMPTO_J2K_Enc_Context_Return_Unused_Image(
-                                s->context, encoded_img);
-        fprintf(stderr, "5\n");
+                s->out[buffer_idx]->tiles[0].data = encoded_img->data;
+                s->out[buffer_idx]->tiles[0].data_len =
+                        encoded_img->len;
+                free(encoded_img);
                 return s->out[buffer_idx];
         } else {
-                //return NULL;
+                return NULL;
                 s->out[buffer_idx]->tiles[0].data = (char *)malloc(1000);
                 s->out[buffer_idx]->tiles[0].data_len = 1000;
                 return s->out[buffer_idx];

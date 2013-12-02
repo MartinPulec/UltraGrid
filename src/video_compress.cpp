@@ -527,6 +527,10 @@ void compress_frame(compress_state_proxy *proxy, struct video_frame *frame)
                 frame->dispose(frame);
         }
 
+        if (sync_api_frame == NULL) {
+                return;
+        }
+
         msg_frame *frame_msg;
         if (s->handle->compress_pop_func) {
                 abort(); // not yet implemented
