@@ -53,6 +53,7 @@
 #include "video_compress/dxt_glsl.h"
 #include "video_compress/fastdxt.h"
 #include "video_compress/libavcodec.h"
+#include "video_compress/j2k.h"
 #include "video_compress/jpeg.h"
 #include "video_compress/none.h"
 #include "video_compress/uyvy.h"
@@ -172,6 +173,15 @@ struct compress_t compress_modules[] = {
                 NULL
         },
 #endif
+        {
+                "J2K",
+                "j2k",
+                MK_NAME(j2k_compress_init),
+                MK_NAME(NULL),
+                MK_NAME(j2k_compress_tile),
+                MK_NAME(NULL),
+                NULL
+        },
 #if defined HAVE_JPEG || defined  BUILD_LIBRARIES
         {
                 "JPEG",
@@ -555,24 +565,6 @@ static void *compress_tile_callback(void *arg) {
         s->ret = s->callback(s->state, s->frame, s->tile_idx, s->buffer_index);
 
         return s;
-}
-
-/**
- * Writes given video desc to video frame metadata without changing anything else.
- * @param buf  video frame to be written to
- * @param desc video description
- */
-static void vf_write_desc(struct video_frame *buf, struct video_desc desc)
-{
-        assert(desc.tile_count == buf->tile_count);
-
-        buf->color_spec = desc.color_spec;
-        buf->fps = desc.fps;
-        buf->interlacing = desc.interlacing;
-        for(unsigned int i = 0; i < buf->tile_count; ++i) {
-                buf->tiles[0].width = desc.width;
-                buf->tiles[0].height = desc.height;
-        }
 }
 
 /**

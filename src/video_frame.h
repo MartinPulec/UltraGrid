@@ -165,6 +165,8 @@ void il_merged_to_upper(char *dst, char *src, int linesize, int height);
  */
 double compute_fps(int fps, int fpsd, int fd, int fi);
 
+void vf_write_desc(struct video_frame *buf, struct video_desc desc);
+
 /** @name Video Flags
  * @deprecated use rather video_frame or video_desc members
  * @{ */
