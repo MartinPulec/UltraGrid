@@ -1,5 +1,5 @@
 /**
- * @file   video_compress/j2k.h
+ * @file   video_compress/j2k.cpp
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
@@ -118,6 +118,7 @@ static void *j2k_compress_worker(void *args)
                 memcpy(encoded->data, ptr, size);
                 encoded->len = size;
                 encoded->desc = desc;
+                encoded->desc->color_spec = J2K;
                 CMPTO_J2K_Enc_Context_Return_Unused_Image(
                                 s->context, img);
 

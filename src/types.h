@@ -76,6 +76,7 @@ typedef enum {
         MJPG,     ///< JPEG image, without restart intervals.
         VP8,      ///< VP8 frame
         BGR,      ///< 8-bit BGR
+        J2K,      ///< JPEG 2000
 } codec_t;
 
 /**

@@ -11,7 +11,7 @@ CXXFLAGS      = @CXXFLAGS@ $(COMMON_FLAGS) -D_GNU_SOURCE
 NVCCFLAGS     = @NVCCFLAGS@
 LDFLAGS      =  @LDFLAGS@
 LIBS         += @LIBS@ @JACK_TRANS_LIB@ @MATHLIBS@ @COREAUDIO_LIB@ \
-		-lm -pthread
+		-lm -pthread -lcmptoj2k
 INC           = -I. -Isrc -Itest @DVS_INC@ @DELTACAST_INC@ @FASTDXT_INC@ @QUICKTIME_INC@ @RTSP_INC@ @DECKLINK_INC@ @PORTAUDIO_INC@ \
                 @GL_INC@ @SAGE_INC@ @LINSYS_INC@ @JACK_TRANS_INC@ @JPEG_INC@ @COREAUDIO_INC@ @SPEEX_INC@ \
 		@BLUEFISH444_INC@ @NCURSES_CFLAGS@
@@ -127,6 +127,7 @@ OBJS	      = @OBJS@ \
 		src/video_compress/j2k.o \
 		src/video_compress/none.o \
 		src/video_decompress.o \
+		src/video_decompress/j2k.o \
 		src/video_decompress/null.o \
 		src/video_display.o \
 		src/video_display/aggregate.o \

@@ -527,6 +527,8 @@ void compress_frame(compress_state_proxy *proxy, struct video_frame *frame)
                 frame->dispose(frame);
         }
 
+        // NULL has special meaning - it is poisoned pill so we must
+        // prevent passing it further
         if (sync_api_frame == NULL) {
                 return;
         }
