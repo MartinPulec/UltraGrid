@@ -101,6 +101,13 @@ static void *decompress_j2k_worker(void *args)
                 pthread_mutex_lock(&s->lock);
                 s->decompressed_frames->push(buffer);
                 pthread_mutex_unlock(&s->lock);
+                j2k_error = CMPTO_J2K_Dec_Context_Return_Unused_Image(
+                                s->decoder,
+                                img);
+                if (j2k_error != CMPTO_J2K_OK) {
+                        fprintf(stderr, "[J2K decompress] unable to "
+                                        "to return processed image!\n");
+                }
         }
 }
 
