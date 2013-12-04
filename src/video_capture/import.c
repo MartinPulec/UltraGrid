@@ -74,7 +74,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define BUFFER_LEN_MAX 200
+#define BUFFER_LEN_MAX 40
 #define MAX_CLIENTS 16
 
 #define CONTROL_PORT 15004
@@ -1017,7 +1017,7 @@ static void * reading_thread(void *args)
                 if(index < 0) {
                         index = 0;
                 }
-                if(index > s->count) {
+                if(index >= s->count) {
                         fprintf(stderr, "Warning: Index exceeds available frame count!\n");
                         index = s->count;
                 }

@@ -337,7 +337,6 @@ static void tx_done(struct module *mod)
 void
 tx_send(struct tx *tx, struct video_frame *frame, struct rtp *rtp_session)
 {
-fprintf(stderr, "%d\n", tx->tiles[0].data_len);
         unsigned int i;
         uint32_t ts = 0;
 

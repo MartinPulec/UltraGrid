@@ -141,6 +141,7 @@ struct module * j2k_compress_init(struct module *parent, const struct video_comp
                         cuda_devices_count,
                         &s->context);
         if (j2k_error != CMPTO_J2K_OK) {
+fprintf(stderr, "%s", CMPTO_J2K_Get_Error_Message(j2k_error));
                 goto error;
         }
 
@@ -150,6 +151,15 @@ struct module * j2k_compress_init(struct module *parent, const struct video_comp
         if (j2k_error != CMPTO_J2K_OK) {
                 goto error;
         }
+CMPTO_J2K_Enc_Settings_Quantization(
+    s->enc_settings,
+    0.7 /* 0.0 = poor quality, 1.0 = full quality */
+);
+
+CMPTO_J2K_Enc_Settings_Rate_Limit(s->enc_settings, 1300000);
+CMPTO_J2K_Enc_Settings_Enable(s->enc_settings, CMPTO_J2K_Rate_Control);
+CMPTO_J2K_Enc_Settings_Enable(s->enc_settings, CMPTO_J2K_MCT);
+
 
         j2k_error = CMPTO_J2K_Enc_Settings_DWT_Count(
                                 s->enc_settings,
@@ -157,7 +167,6 @@ struct module * j2k_compress_init(struct module *parent, const struct video_comp
         if (j2k_error != CMPTO_J2K_OK) {
                 goto error;
         }
-
         assert(pthread_cond_init(&s->frame_ready, NULL) == 0);
         assert(pthread_mutex_init(&s->lock, NULL) == 0);
 
