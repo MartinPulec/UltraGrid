@@ -74,7 +74,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define BUFFER_LEN_MAX 40
+#define BUFFER_LEN_MAX 200
 #define MAX_CLIENTS 16
 
 #define CONTROL_PORT 15004

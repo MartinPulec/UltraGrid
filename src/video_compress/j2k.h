@@ -46,8 +46,8 @@ struct video_compress_params;
 
 struct module      *j2k_compress_init(struct module *parent,
                 const struct video_compress_params *params);
-struct video_frame *j2k_compress_tile(struct module *mod, struct video_frame *tx,
-                int tile_idx, int buffer);
+struct video_frame *j2k_compress(struct module *mod, struct video_frame *tx,
+                int buffer);
 
 
 #ifdef __cplusplus

@@ -71,8 +71,6 @@ struct state_video_compress_j2k {
         queue<struct encoded_image *> *encoded_images;
 
         pthread_t thread_id;
-
-        struct video_frame *out[2];
 };
 
 static void j2k_compress_done(struct module *mod);
@@ -171,10 +169,6 @@ struct module * j2k_compress_init(struct module *parent, const struct video_comp
 
         s->encoded_images = new queue<struct encoded_image *>();
 
-        for (int i = 0; i < 2; ++i) {
-                s->out[i] = vf_alloc(1);
-        }
-
         assert(pthread_create(&s->thread_id, NULL, j2k_compress_worker,
                         (void *) s) == 0);
 
@@ -187,36 +181,48 @@ error:
         return NULL;
 }
 
-struct video_frame  *j2k_compress_tile(struct module *mod, struct video_frame *tx,
-                int tile_idx, int buffer_idx)
+static void j2k_compressed_frame_dispose(struct video_frame *frame)
+{
+	free(frame->tiles[0].data);
+	vf_free(frame);
+}
+
+
+struct video_frame  *j2k_compress(struct module *mod, struct video_frame *tx,
+                int buffer_idx)
 {
         struct state_video_compress_j2k *s =
                 (struct state_video_compress_j2k *) mod->priv_data;
         struct CMPTO_J2K_Enc_Image *img;
         enum CMPTO_J2K_Error j2k_error;
+        void *ptr;
+        struct video_desc desc;
+        void *udata;
+
+	if (tx == NULL)
+		goto get_frame_from_queue;
 
         assert(tx->tile_count == 1); // TODO
 
         j2k_error = CMPTO_J2K_Enc_Context_Get_Free_Image(
                         s->context,
-                                tx->tiles[tile_idx].width,
-                                tx->tiles[tile_idx].height,
+                                tx->tiles[0].width,
+                                tx->tiles[0].height,
                                 CMPTO_J2K_444_u8_p012,
                                 &img);
         if (j2k_error != CMPTO_J2K_OK) {
                 return NULL;
         }
 
-        void *ptr;
         j2k_error = CMPTO_J2K_Enc_Image_Get_Source_Data_Ptr(img,
                         &ptr);
         if (j2k_error != CMPTO_J2K_OK) {
                 return NULL;
         }
-        memcpy(ptr, tx->tiles[tile_idx].data,
-                        tx->tiles[tile_idx].data_len);
-        struct video_desc desc = video_desc_from_frame(tx);
-        void *udata = malloc(sizeof(desc));
+        memcpy(ptr, tx->tiles[0].data,
+                        tx->tiles[0].data_len);
+        desc = video_desc_from_frame(tx);
+        udata = malloc(sizeof(desc));
         memcpy(udata, &desc, sizeof(desc));
 
         j2k_error = CMPTO_J2K_Enc_Image_Set_Custom_Data(
@@ -231,6 +237,7 @@ struct video_frame  *j2k_compress_tile(struct module *mod, struct video_frame *t
                 return NULL;
         }
 
+get_frame_from_queue:
         pthread_mutex_lock(&s->lock);
         struct encoded_image *encoded_img = NULL;
         if (s->encoded_images->size() > 0) {
@@ -240,20 +247,17 @@ struct video_frame  *j2k_compress_tile(struct module *mod, struct video_frame *t
         pthread_mutex_unlock(&s->lock);
 
         if (encoded_img != NULL) {
+		struct video_frame *out = vf_alloc_desc(*(encoded_img->desc));
 
-                vf_write_desc(s->out[buffer_idx], *(encoded_img->desc));
                 free(encoded_img->desc);
-                free(s->out[buffer_idx]->tiles[0].data);
-                s->out[buffer_idx]->tiles[0].data = encoded_img->data;
-                s->out[buffer_idx]->tiles[0].data_len =
+                out->tiles[0].data = encoded_img->data;
+                out->tiles[0].data_len =
                         encoded_img->len;
+		out->dispose = j2k_compressed_frame_dispose;
                 free(encoded_img);
-                return s->out[buffer_idx];
+                return out;
         } else {
                 return NULL;
-                s->out[buffer_idx]->tiles[0].data = (char *)malloc(1000);
-                s->out[buffer_idx]->tiles[0].data_len = 1000;
-                return s->out[buffer_idx];
         }
 }
 

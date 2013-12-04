@@ -177,8 +177,8 @@ struct compress_t compress_modules[] = {
                 "J2K",
                 "j2k",
                 MK_NAME(j2k_compress_init),
+                MK_NAME(j2k_compress),
                 MK_NAME(NULL),
-                MK_NAME(j2k_compress_tile),
                 MK_NAME(NULL),
                 NULL
         },
@@ -423,7 +423,7 @@ static int compress_init_real(struct module *parent, const char *config_string,
         memset(&params, 0, sizeof(params));
 
         s = (struct compress_state_real *) calloc(1, sizeof(struct compress_state_real));
-        s->queue = new message_queue(1);
+        s->queue = new message_queue(5);
 
         s->state_count = 1;
         int i;
@@ -533,13 +533,18 @@ void compress_frame(compress_state_proxy *proxy, struct video_frame *frame)
                 return;
         }
 
-        msg_frame *frame_msg;
-        if (s->handle->compress_pop_func) {
-                abort(); // not yet implemented
-        } else {
-                frame_msg = new msg_frame(sync_api_frame);
-        }
-        s->queue->push(frame_msg);
+	while (sync_api_frame) {
+		msg_frame *frame_msg;
+		if (s->handle->compress_pop_func) {
+			abort(); // not yet implemented
+		} else {
+			frame_msg = new msg_frame(sync_api_frame);
+		}
+		s->queue->push(frame_msg);
+		// if API supports it, get next frame
+		//sync_api_frame = NULL;
+		sync_api_frame = s->handle->compress_frame_func(s->state[0], NULL, s->buffer_index);
+	}
 }
 
 /**
