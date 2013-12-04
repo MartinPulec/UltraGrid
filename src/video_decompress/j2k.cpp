@@ -57,8 +57,6 @@ struct state_decompress_j2k {
         CMPTO_J2K_Dec_Settings *settings;
 
         struct video_desc desc;
-        int rshift, gshift, bshift;
-        int pitch;
         codec_t out_codec;
 
         pthread_mutex_t lock;
@@ -135,14 +133,6 @@ void * j2k_decompress_init(void)
                 goto error;
         }
 
-        j2k_error = CMPTO_J2K_Dec_Settings_Data_Format(
-                                s->settings,
-                                CMPTO_J2K_444_u8_p012);
-
-        if (j2k_error != CMPTO_J2K_OK) {
-                goto error;
-        }
-
         s->decompressed_frames = new queue<char *>();
 
         assert(pthread_create(&s->thread_id, NULL, decompress_j2k_worker,
@@ -170,14 +160,22 @@ int j2k_decompress_reconfigure(void *state, struct video_desc desc,
 {
         struct state_decompress_j2k *s = (struct state_decompress_j2k *) state;
         
-        assert(out_codec == RGB || out_codec == UYVY);
+        assert(out_codec == RGB);
+        assert((rshift == 0 && gshift == 8 && bshift == 16) ||
+                        (rshift == 16 && gshift == 8 && bshift == 0));
         assert(pitch == vc_get_linesize(desc.width, out_codec));
 
+        int j2k_error = CMPTO_J2K_Dec_Settings_Data_Format(
+                                s->settings,
+                                (rshift == 0) ?
+                                CMPTO_J2K_444_u8_p012 :
+                                CMPTO_J2K_444_u8_p210);
+
+        if (j2k_error != CMPTO_J2K_OK) {
+                return FALSE;
+        }
+
         s->desc = desc;
-        s->rshift = rshift;
-        s->gshift = gshift;
-        s->bshift = bshift;
-        s->pitch = pitch;
         s->out_codec = out_codec;
 
         return TRUE;
