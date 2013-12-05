@@ -423,7 +423,7 @@ static int compress_init_real(struct module *parent, const char *config_string,
         memset(&params, 0, sizeof(params));
 
         s = (struct compress_state_real *) calloc(1, sizeof(struct compress_state_real));
-        s->queue = new message_queue(1);
+        s->queue = new message_queue(5);
 
         s->state_count = 1;
         int i;
