@@ -48,6 +48,10 @@
 
 #define DISPLAY_GL_ID  0xba370a2a
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct audio_frame;
 struct video_desc;
 struct video_frame;
@@ -67,4 +71,8 @@ int                      display_gl_handle_events(void *arg);
 void                    display_gl_put_audio_frame(void *state, struct audio_frame *frame);
 int                     display_gl_reconfigure_audio(void *state, int quant_samples, int channels,
                 int sample_rate);
+
+#ifdef __cplusplus
+}
+#endif
 
