@@ -156,7 +156,7 @@ CMPTO_J2K_Enc_Settings_Quantization(
     0.7 /* 0.0 = poor quality, 1.0 = full quality */
 );
 
-CMPTO_J2K_Enc_Settings_Rate_Limit(s->enc_settings, 1300000);
+CMPTO_J2K_Enc_Settings_Rate_Limit(s->enc_settings, 1100000);
 CMPTO_J2K_Enc_Settings_Enable(s->enc_settings, CMPTO_J2K_Rate_Control);
 CMPTO_J2K_Enc_Settings_Enable(s->enc_settings, CMPTO_J2K_MCT);
 
@@ -217,7 +217,8 @@ struct video_frame  *j2k_compress(struct module *mod, struct video_frame *tx,
                         s->context,
                                 tx->tiles[0].width,
                                 tx->tiles[0].height,
-                                CMPTO_J2K_444_u8_p012,
+                                tx->color_spec == RGB ? CMPTO_J2K_444_u8_p012
+                                : CMPTO_J2K_444_u8_p210, // BGR
                                 &img);
         if (j2k_error != CMPTO_J2K_OK) {
                 return NULL;

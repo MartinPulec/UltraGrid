@@ -338,6 +338,8 @@ struct module * jpeg_compress_init(struct module *parent, const struct video_com
 
 struct video_frame * jpeg_compress(struct module *mod, struct video_frame * tx, int buffer_idx)
 {
+
+if (tx == NULL) return NULL;
         struct state_video_compress_jpeg *s = (struct state_video_compress_jpeg *) mod->priv_data;
         int i;
         unsigned char *line1, *line2;
