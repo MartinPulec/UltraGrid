@@ -33,7 +33,6 @@ else if (b < 0)
       printf ('You have a negative delay, the echo canceller has no chance to cancel anything!\n');
    else
       printf ('Delay looks OK.\n');
-      end
    end
 end
 N2 = round(N/2);
@@ -57,7 +56,6 @@ else
       printf ('There may be (not sure) excessive clock drift. Is the capture and playback done on the same soundcard?\n');
    else
       printf ('Your clock is drifting! No way the AEC will be able to do anything with that. Most likely, you''re doing capture and playback from two different cards.\n');
-      end
    end
 end
 acorr(1) = .001+1.00001*acorr(1);
