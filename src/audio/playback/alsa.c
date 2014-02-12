@@ -86,11 +86,15 @@ struct state_alsa_playback {
 
 static void *worker(void *arg);
 
-struct audio_playout_buffer *apb;
-
 static void *worker(void *arg)
 {
         struct state_alsa_playback *s = arg;
+        snd_pcm_uframes_t buffer_size,
+                          period_size;
+        snd_pcm_get_params(s->handle,
+                        &buffer_size,
+                        &period_size);
+
 
         while(1) {
                 int frames = 128;
@@ -104,22 +108,21 @@ static void *worker(void *arg)
                         return NULL;
 
                 if (ret == 0) {
-                        snd_pcm_sframes_t max_frms = s->audio_desc.sample_rate * BUFFER_MAX / 1000;
                         snd_pcm_sframes_t avail_frms = snd_pcm_avail(s->handle);
-                        int frms_ms = s->audio_desc.sample_rate / 1000;
-                        const int wait_ms = 3;
-                        int wait_frames = wait_ms * frms_ms;
+                        long int frms_ms = s->audio_desc.sample_rate / 1000;
+                        const long int wait_ms = 3;
+                        unsigned long int wait_frames = wait_ms * frms_ms;
 
-                        if ((max_frms - avail_frms) < wait_frames) {
+                        if (avail_frms < 0 || // error
+                                        (buffer_size - avail_frms) < wait_frames) {
                                 fprintf(stderr, "ALSA: Warning: Playout buffer "
-                                                "underrun, %d.\n", avail_frms);
+                                                "underrun, %ld.\n", avail_frms);
                                 memset(buffer, 0, sizeof(buffer));
-                                rc = snd_pcm_writei(s->handle, buffer, frames);
-                                rc = snd_pcm_writei(s->handle, buffer, frames);
                         } else {
-                                snd_pcm_wait(s->handle,  wait_ms);
+                                //snd_pcm_wait(s->handle,  wait_ms);
+                                usleep(1000);
+                                continue;
                         }
-                        continue;
                 }
 
                 if(s->audio_desc.bps == 1) { // convert to unsigned
