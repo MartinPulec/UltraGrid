@@ -116,7 +116,9 @@ static void *worker(void *arg)
                         if (avail_frms < 0 || // error
                                         (buffer_size - avail_frms) < wait_frames) {
                                 fprintf(stderr, "ALSA: Warning: Playout buffer "
-                                                "underrun, %ld.\n", avail_frms);
+                                                "underrun, %ld frames remaining "
+                                                "to play while no data in playout buffer.\n",
+                                                buffer_size - avail_frms);
                                 memset(buffer, 0, sizeof(buffer));
                         } else {
                                 //snd_pcm_wait(s->handle,  wait_ms);
