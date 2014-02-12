@@ -96,7 +96,7 @@ static void *worker(void *arg)
                         &period_size);
 
 
-        while(1) {
+        while (1) {
                 int frames = 128;
                 int data_len = frames * s->audio_desc.bps * s->audio_desc.ch_count;
                 char buffer[data_len];
@@ -104,7 +104,7 @@ static void *worker(void *arg)
 
                 int ret = audio_playout_buffer_read(s->playout_buffer, buffer, frames,
                                 s->audio_desc.ch_count, s->audio_desc.bps, false);
-                if(ret == -1)
+                if (ret == -1)
                         return NULL;
 
                 if (ret == 0) {
@@ -117,7 +117,7 @@ static void *worker(void *arg)
                                         (buffer_size - avail_frms) < wait_frames) {
                                 fprintf(stderr, "ALSA: Warning: Playout buffer "
                                                 "underrun, %ld frames remaining "
-                                                "to play while no data in playout buffer.\n",
+                                                "to play and no data in playout buffer.\n",
                                                 buffer_size - avail_frms);
                                 memset(buffer, 0, sizeof(buffer));
                         } else {
