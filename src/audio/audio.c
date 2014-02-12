@@ -569,12 +569,12 @@ static void *audio_receiver_thread(void *arg)
                                                         curr_desc.bps * 8,
                                                         curr_desc.ch_count,
                                                         curr_desc.sample_rate, new_buffer) != TRUE) {
-                                        fprintf(stderr, "Audio reconfiguration failed!");
+                                        fprintf(stderr, "Audio reconfiguration failed!\n");
                                         failed = true;
                                         audio_playout_buffer_destroy(new_buffer);
                                 }
                                 else {
-                                        fprintf(stderr, "Audio reconfiguration succeeded.");
+                                        fprintf(stderr, "Audio reconfiguration succeeded.\n");
                                         device_desc = curr_desc;
                                         audio_playout_buffer_destroy(s->playout_buffer);
                                         s->playout_buffer = new_buffer;

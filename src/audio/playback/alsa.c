@@ -71,7 +71,7 @@
 #include "audio/playout_buffer.h"
 #include "debug.h"
 
-#define BUFFER_MIN 41
+#define BUFFER_MIN 10
 #define BUFFER_MAX 100
 
 struct state_alsa_playback {
@@ -103,14 +103,27 @@ static void *worker(void *arg)
                 if(ret == -1)
                         return NULL;
 
-                if(s->audio_desc.bps == 1) { // convert to unsigned
-                        signed2unsigned(buffer, buffer, data_len);
+                if (ret == 0) {
+                        snd_pcm_sframes_t max_frms = s->audio_desc.sample_rate * BUFFER_MAX / 1000;
+                        snd_pcm_sframes_t avail_frms = snd_pcm_avail(s->handle);
+                        int frms_ms = s->audio_desc.sample_rate / 1000;
+                        const int wait_ms = 3;
+                        int wait_frames = wait_ms * frms_ms;
+
+                        if ((max_frms - avail_frms) < wait_frames) {
+                                fprintf(stderr, "ALSA: Warning: Playout buffer "
+                                                "underrun, %d.\n", avail_frms);
+                                memset(buffer, 0, sizeof(buffer));
+                                rc = snd_pcm_writei(s->handle, buffer, frames);
+                                rc = snd_pcm_writei(s->handle, buffer, frames);
+                        } else {
+                                snd_pcm_wait(s->handle,  wait_ms);
+                        }
+                        continue;
                 }
 
-                if (ret == 0) {
-                        fprintf(stderr, "ALSA: Warning: Playout buffer "
-                                        "underrun.\n");
-                        memset(buffer, 0, sizeof(buffer));
+                if(s->audio_desc.bps == 1) { // convert to unsigned
+                        signed2unsigned(buffer, buffer, data_len);
                 }
 
                 rc = snd_pcm_writei(s->handle, buffer, frames);
