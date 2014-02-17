@@ -144,6 +144,8 @@ static void *worker(void *arg)
                         if (stopped) {
                                 stopped = false;
                                 snd_pcm_prepare(s->handle);
+                                audio_playout_buffer_flush(s->playout_buffer);
+
                         }
                 }
 

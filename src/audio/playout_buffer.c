@@ -54,6 +54,8 @@ struct audio_playout_buffer {
         struct audio_desc saved_desc;
         bool poisoned;
 
+        int net_frame_size;
+
         char *tmp;
 };
 
@@ -76,6 +78,13 @@ void audio_playout_buffer_destroy(struct audio_playout_buffer *s)
         ring_buffer_destroy(s->buffer);
         free(s->tmp);
         free(s);
+}
+
+void audio_playout_buffer_flush(struct audio_playout_buffer *s)
+{
+        pthread_mutex_lock(&s->lock);
+        ring_buffer_flush(s->buffer);
+        pthread_mutex_unlock(&s->lock);
 }
 
 void audio_playout_buffer_write(struct audio_playout_buffer *s, struct audio_frame *frame)

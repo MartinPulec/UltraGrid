@@ -45,10 +45,12 @@ extern "C" {
 struct audio_playout_buffer;
 
 int audio_playout_buffer_init(struct audio_playout_buffer **);
+void audio_playout_buffer_flush(struct audio_playout_buffer *);
 void audio_playout_buffer_destroy(struct audio_playout_buffer *);
 void audio_playout_buffer_write(struct audio_playout_buffer *, struct audio_frame *);
 int audio_playout_buffer_read(struct audio_playout_buffer *, char *buffer,
                 int samples, int ch_count, int bps, bool blocking);
+int audio_playout_buffer_net_frame_size(struct audio_playout_buffer *);
 void audio_playout_buffer_poison(struct audio_playout_buffer *);
 
 #ifdef __cplusplus
