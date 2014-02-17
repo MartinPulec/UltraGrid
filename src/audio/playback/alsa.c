@@ -137,6 +137,7 @@ static void *worker(void *arg)
                         if (no_data_sec > 1.0) {
                                 snd_pcm_drain(s->handle);
                                 stopped = true;
+                                continue;
                         }
                 } else {
                         no_data_sec = 0.0;
@@ -146,7 +147,7 @@ static void *worker(void *arg)
                         }
                 }
 
-#ifdef DEBUG
+#if 1
                 fprintf(stderr, "%ld %ld\n", buffer_size - avail_frms, buffer_size);
 #else
                 UNUSED(avail_frms);
