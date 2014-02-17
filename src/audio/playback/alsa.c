@@ -95,6 +95,9 @@ static void *worker(void *arg)
                         &buffer_size,
                         &period_size);
 
+        bool stopped = false;
+
+        double no_data_sec = 0.0;
 
         while (1) {
                 int frames = 128;
@@ -107,7 +110,12 @@ static void *worker(void *arg)
                 if (ret == -1)
                         return NULL;
 
+                snd_pcm_sframes_t avail_frms = snd_pcm_avail(s->handle);
                 if (ret == 0) {
+                        if (stopped) {
+                                usleep(1000);
+                                continue;
+                        }
                         snd_pcm_sframes_t avail_frms = snd_pcm_avail(s->handle);
                         long int frms_ms = s->audio_desc.sample_rate / 1000;
                         const long int wait_ms = 3;
@@ -120,12 +128,29 @@ static void *worker(void *arg)
                                                 "to play and no data in playout buffer.\n",
                                                 buffer_size - avail_frms);
                                 memset(buffer, 0, sizeof(buffer));
+                                no_data_sec += (double) frames / s->audio_desc.sample_rate;
                         } else {
                                 //snd_pcm_wait(s->handle,  wait_ms);
                                 usleep(1000);
                                 continue;
                         }
+                        if (no_data_sec > 1.0) {
+                                snd_pcm_drain(s->handle);
+                                stopped = true;
+                        }
+                } else {
+                        no_data_sec = 0.0;
+                        if (stopped) {
+                                stopped = false;
+                                snd_pcm_prepare(s->handle);
+                        }
                 }
+
+#ifdef DEBUG
+                fprintf(stderr, "%ld %ld\n", buffer_size - avail_frms, buffer_size);
+#else
+                UNUSED(avail_frms);
+#endif
 
                 if(s->audio_desc.bps == 1) { // convert to unsigned
                         signed2unsigned(buffer, buffer, data_len);
