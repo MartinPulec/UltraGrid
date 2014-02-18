@@ -55,6 +55,8 @@ struct audio_playout_buffer {
         bool poisoned;
 
         int net_frame_size;
+        int samples_per_frame;          ///< average frame size
+        int samples_per_frame_avg_diff; ///< average difference to average frame size
 
         char *tmp;
 };
@@ -80,15 +82,9 @@ void audio_playout_buffer_destroy(struct audio_playout_buffer *s)
         free(s);
 }
 
-void audio_playout_buffer_flush(struct audio_playout_buffer *s)
-{
-        pthread_mutex_lock(&s->lock);
-        ring_buffer_flush(s->buffer);
-        pthread_mutex_unlock(&s->lock);
-}
-
 void audio_playout_buffer_write(struct audio_playout_buffer *s, struct audio_frame *frame)
 {
+        int d;
         pthread_mutex_lock(&s->lock);
         if (!audio_desc_eq(s->saved_desc, audio_desc_from_audio_frame(frame))) {
                 ring_buffer_destroy(s->buffer);
@@ -97,6 +93,15 @@ void audio_playout_buffer_write(struct audio_playout_buffer *s, struct audio_fra
         }
 
         ring_buffer_write(s->buffer, frame->data, frame->data_len);
+
+        int samples = frame->data_len / frame->bps / frame->ch_count;
+        d = s->samples_per_frame - samples;
+        if (d < 0) {
+                d = -d;
+        }
+        s->samples_per_frame = (samples + 4 * s->samples_per_frame) / 5;
+        s->samples_per_frame_avg_diff = (d + 4 * s->samples_per_frame_avg_diff) / 5;
+
         pthread_cond_signal(&s->cv);
 
         pthread_mutex_unlock(&s->lock);
