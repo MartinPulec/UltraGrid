@@ -51,6 +51,8 @@ int audio_playout_buffer_read(struct audio_playout_buffer *, char *buffer,
                 int samples, int ch_count, int bps, bool blocking);
 int audio_playout_buffer_net_frame_size(struct audio_playout_buffer *);
 void audio_playout_buffer_poison(struct audio_playout_buffer *);
+void audio_playout_buffer_get_avg_frame_len(struct audio_playout_buffer *,
+                int *avg_len, int *avg_diff);
 
 #ifdef __cplusplus
 }

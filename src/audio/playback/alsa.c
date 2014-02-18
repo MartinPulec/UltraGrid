@@ -103,30 +103,29 @@ static void *worker(void *arg)
                 int frames = 128;
                 int data_len = frames * s->audio_desc.bps * s->audio_desc.ch_count;
                 char buffer[data_len];
-                int rc;
+
+                snd_pcm_sframes_t avail_frames = snd_pcm_avail(s->handle);
 
                 int ret = audio_playout_buffer_read(s->playout_buffer, buffer, frames,
                                 s->audio_desc.ch_count, s->audio_desc.bps, false);
                 if (ret == -1)
                         return NULL;
 
-                snd_pcm_sframes_t avail_frms = snd_pcm_avail(s->handle);
+                long int frames_per_ms = s->audio_desc.sample_rate / 1000;
                 if (ret == 0) {
                         if (stopped) {
                                 usleep(1000);
                                 continue;
                         }
-                        snd_pcm_sframes_t avail_frms = snd_pcm_avail(s->handle);
-                        long int frms_ms = s->audio_desc.sample_rate / 1000;
                         const long int wait_ms = 3;
-                        unsigned long int wait_frames = wait_ms * frms_ms;
+                        unsigned long int wait_frames = wait_ms * frames_per_ms;
 
-                        if (avail_frms < 0 || // error
-                                        (buffer_size - avail_frms) < wait_frames) {
+                        if (avail_frames < 0 || // error
+                                        (buffer_size - avail_frames) < wait_frames) {
                                 fprintf(stderr, "ALSA: Warning: Playout buffer "
                                                 "underrun, %ld frames remaining "
                                                 "to play and no data in playout buffer.\n",
-                                                buffer_size - avail_frms);
+                                                buffer_size - avail_frames);
                                 memset(buffer, 0, sizeof(buffer));
                                 no_data_sec += (double) frames / s->audio_desc.sample_rate;
                         } else {
@@ -147,17 +146,26 @@ static void *worker(void *arg)
                         }
                 }
 
+                int avg_len, avg_diff;
+                audio_playout_buffer_get_avg_frame_len(s->playout_buffer,
+                                &avg_len, &avg_diff);
+                const long int max_frames = ((avg_len + avg_diff) * 2);
+                if (buffer_size - avail_frames > max_frames) {
+                        frames = frames - 1;
+                }
+
+
 #if 1
-                fprintf(stderr, "%ld %ld\n", buffer_size - avail_frms, buffer_size);
+                fprintf(stderr, "%ld %ld\n", buffer_size - avail_frames, buffer_size);
 #else
-                UNUSED(avail_frms);
+                UNUSED(avail_frames);
 #endif
 
                 if(s->audio_desc.bps == 1) { // convert to unsigned
                         signed2unsigned(buffer, buffer, data_len);
                 }
 
-                rc = snd_pcm_writei(s->handle, buffer, frames);
+                int rc = snd_pcm_writei(s->handle, buffer, frames);
 
                 if (rc == -EPIPE) {
                         /* EPIPE means underrun */

@@ -107,6 +107,16 @@ void audio_playout_buffer_write(struct audio_playout_buffer *s, struct audio_fra
         pthread_mutex_unlock(&s->lock);
 }
 
+void audio_playout_buffer_get_avg_frame_len(struct audio_playout_buffer *s,
+                int *avg_len, int *avg_diff)
+{
+        pthread_mutex_lock(&s->lock);
+        *avg_len = s->samples_per_frame;
+        *avg_diff = s->samples_per_frame_avg_diff;
+        pthread_mutex_unlock(&s->lock);
+}
+
+
 int audio_playout_buffer_read(struct audio_playout_buffer *s, char *buffer,
                 int samples, int ch_count, int bps, bool blocking)
 {
