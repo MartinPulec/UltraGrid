@@ -554,6 +554,8 @@ tx_send_base(struct tx *tx, struct video_frame *frame, struct rtp *rtp_session,
 
         int ldgm_symbol_offset = 0;
 
+        pos = ldgm_symbol_size * frame->ldgm_params.k;
+
         do {
                 if(tx->fec_scheme == FEC_MULT) {
                         pos = mult_pos[mult_index];
@@ -581,7 +583,6 @@ tx_send_base(struct tx *tx, struct video_frame *frame, struct rtp *rtp_session,
                 }
                 if (pos + data_len >= (unsigned int) tile->data_len) {
                         if (send_m) {
-                                m = 1;
                         }
                         data_len = tile->data_len - pos;
                 }
@@ -625,6 +626,80 @@ tx_send_base(struct tx *tx, struct video_frame *frame, struct rtp *rtp_session,
                 }
 
         } while (pos < (unsigned int) tile->data_len);
+
+        pos = 0;
+
+        do {
+                if(tx->fec_scheme == FEC_MULT) {
+                        pos = mult_pos[mult_index];
+                }
+
+                int offset = pos + fragment_offset;
+
+                rtp_hdr[1] = htonl(offset);
+
+                data = tile->data + pos;
+                data_len = tx->mtu - hdrs_len;
+                if (frame->is_ldgm) {
+                        if (ldgm_symbol_size <= tx->mtu - hdrs_len) {
+                                data_len = data_len / ldgm_symbol_size * ldgm_symbol_size;
+                        } else {
+                                if (ldgm_symbol_size - ldgm_symbol_offset <= tx->mtu - hdrs_len) {
+                                        data_len = ldgm_symbol_size - ldgm_symbol_offset;
+                                        ldgm_symbol_offset = 0;
+                                } else {
+                                        ldgm_symbol_offset += data_len;
+                                }
+                        }
+                } else {
+                        data_len = (data_len / 48) * 48;
+                }
+                if (pos + data_len >= (unsigned int) ldgm_symbol_size * frame->ldgm_params.k) {
+                        if (send_m) {
+                                m = 1;
+                        }
+                        data_len = ldgm_symbol_size * frame->ldgm_params.k - pos;
+                }
+                pos += data_len;
+                GET_STARTTIME;
+                if(data_len) { /* check needed for FEC_MULT */
+                        char encrypted_data[data_len + MAX_CRYPTO_EXCEED];
+
+                        if (tx->encryption) {
+                                data_len = openssl_encrypt(tx->encryption,
+                                                data, data_len,
+                                                (char *) rtp_hdr,
+                                                frame->is_ldgm ? sizeof(ldgm_video_payload_hdr_t) :
+                                                sizeof(video_payload_hdr_t),
+                                                encrypted_data);
+                                data = encrypted_data;
+                        }
+
+                        rtp_send_data_hdr(rtp_session, ts, pt, m, 0, 0,
+                                  (char *) rtp_hdr, rtp_hdr_len,
+                                  data, data_len, 0, 0, 0);
+                }
+
+                if(tx->fec_scheme == FEC_MULT) {
+                        mult_pos[mult_index] = pos;
+                        mult_first_sent ++;
+                        if(mult_index != 0 || mult_first_sent >= (tx->mult_count - 1))
+                                        mult_index = (mult_index + 1) % tx->mult_count;
+                }
+
+                do {
+                        GET_STOPTIME;
+                        GET_DELTA;
+                        if (delta < 0)
+                                delta += 1000000000L;
+                } while (tx->packet_rate - delta > 0);
+
+                /* when trippling, we need all streams goes to end */
+                if(tx->fec_scheme == FEC_MULT) {
+                        pos = mult_pos[tx->mult_count - 1];
+                }
+
+        } while (pos < (unsigned int) ldgm_symbol_size * frame->ldgm_params.k);
 }
 
 /* 
