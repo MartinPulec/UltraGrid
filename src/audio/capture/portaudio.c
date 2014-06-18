@@ -60,6 +60,7 @@
 #include <portaudio.h> /* from PortAudio API */
 
 #include "audio/audio.h"
+#include "audio/audio_capture.h"
 #include "portaudio.h"
 #include "debug.h"
 #include "host.h"
@@ -193,9 +194,9 @@ void portaudio_close(PaStream * stream)	// closes and frees all audio resources
 /*
  * capture funcitons
  */
-void * portaudio_capture_init(char *cfg)
+void * portaudio_capture_init(const struct audio_capture_params *params)
 {
-        if(cfg && strcmp(cfg, "help") == 0) {
+        if(params->cfg && strcmp(params->cfg, "help") == 0) {
                 printf("Available PortAudio capture devices:\n");
                 portaudio_capture_help(NULL);
                 return &audio_init_state_ok;
@@ -211,8 +212,8 @@ void * portaudio_capture_init(char *cfg)
 	 * so far we only work with portaudio
 	 * might get more complicated later..(jack?)
 	 */
-        if(cfg)
-                input_device = atoi(cfg);
+        if (params->cfg)
+                input_device = atoi(params->cfg);
         else
                 input_device = -1;
 
@@ -257,6 +258,8 @@ void * portaudio_capture_init(char *cfg)
                 Pa_Terminate();
                 return NULL;
         }
+
+        unsigned int audio_capture_channels = params->audio_params->common_params->audio.capture_channels;
 
         if((int) audio_capture_channels <= device_info->maxInputChannels) {
                 inputParameters.channelCount = audio_capture_channels;

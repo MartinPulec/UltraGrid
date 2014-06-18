@@ -105,6 +105,8 @@ struct vidcap_params {
         struct vidcap_params *next; /**< Pointer to next vidcap params. Used by aggregate capture drivers.
                                      *   Last device in list has @ref driver set to NULL. */
         struct module *parent;
+
+        const struct common_params *common_params;
 };
 
 /// @brief This struct represents video capture state.
@@ -558,9 +560,13 @@ struct video_frame *vidcap_grab(struct vidcap *state, struct audio_frame **audio
 /**
  * @brier Allocates blank @ref vidcap_params structure.
  */
-struct vidcap_params *vidcap_params_allocate(void)
+struct vidcap_params *vidcap_params_allocate(const struct common_params *common_params)
 {
-        return calloc(1, sizeof(struct vidcap_params));
+        struct vidcap_params *ret = (struct vidcap_params *)
+                calloc(1, sizeof(struct vidcap_params));
+        ret->common_params = common_params;
+
+        return ret;
 }
 
 /**
@@ -570,10 +576,19 @@ struct vidcap_params *vidcap_params_allocate(void)
  * @param curr structure to be appended after
  * @returns pointer to newly created structure
  */
-struct vidcap_params *vidcap_params_allocate_next(struct vidcap_params *curr)
+struct vidcap_params *vidcap_params_allocate_next(struct vidcap_params *curr,
+                const struct common_params *common_params)
 {
-        curr->next = vidcap_params_allocate();
+        curr->next = vidcap_params_allocate(common_params);
         return curr->next;
+}
+
+/**
+ * @brier Returns next item in virtual @ref vidcap_params list.
+ */
+const struct common_params *vidcap_params_get_common_params(const struct vidcap_params *curr)
+{
+        return curr->common_params;
 }
 
 /**
@@ -713,7 +728,9 @@ struct vidcap_params *vidcap_params_copy(const struct vidcap_params *params)
                 return NULL;
 
         struct vidcap_params *ret = calloc(1, sizeof(struct vidcap_params));
+        memcpy(ret, params, sizeof(struct vidcap_params));
 
+        // do a deep copy
         if (params->driver)
                 ret->driver = strdup(params->driver);
         if (params->fmt)
@@ -723,8 +740,6 @@ struct vidcap_params *vidcap_params_copy(const struct vidcap_params *params)
                         strdup(params->requested_capture_filter);
         if (params->name)
                 ret->name = strdup(params->name);
-        if (params->flags)
-                ret->flags = params->flags;
 
         ret->next = NULL; // there is high probability that the pointer will be invalid
 

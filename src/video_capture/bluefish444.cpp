@@ -205,7 +205,7 @@ void RouteChannel(CBLUEVELVET_H pSDK, uint32_t Source, uint32_t Destination,
                 uint32_t LinkType);
 bool UpdateVideoMode(struct vidcap_bluefish444_state *s, uint32_t VideoMode);
 #ifdef HAVE_BLUE_AUDIO
-static bool setup_audio(struct vidcap_bluefish444_state *s, unsigned int flags);
+static bool setup_audio(struct vidcap_bluefish444_state *s, unsigned int flags, int audio_capture_channels);
 #endif
 
 static void BailOut(CBLUEVELVET_H pSDK)
@@ -368,7 +368,7 @@ vidcap_bluefish444_probe(void)
 }
 
 #ifdef HAVE_BLUE_AUDIO
-static bool setup_audio(struct vidcap_bluefish444_state *s, unsigned int flags)
+static bool setup_audio(struct vidcap_bluefish444_state *s, unsigned int flags, int audio_capture_channels)
 {
         memset(&s->objHancDecode, 0, sizeof(s->objHancDecode));
 
@@ -912,7 +912,8 @@ vidcap_bluefish444_init(const struct vidcap_params *params)
                         cerr << "[Blue cap] Unable to grab audio in sub-field mode." << endl;
                         goto error;
                 }
-                bool ret = setup_audio(s, vidcap_params_get_flags(params));
+                bool ret = setup_audio(s, vidcap_params_get_flags(params),
+                                vidcap_params_get_common_params(params)->audio.capture_channels);
                 if(ret == false) {
                         cerr << "[Blue cap] Unable to setup audio." << endl;
                         goto error;

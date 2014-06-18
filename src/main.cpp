@@ -106,11 +106,9 @@
 #define EXIT_FAIL_DECODER   8
 
 #define PORT_BASE               5004
-#define PORT_AUDIO              5006
 
 /* please see comments before transmit.c:audio_tx_send() */
 /* also note that this actually differs from video */
-#define DEFAULT_AUDIO_FEC       "mult:3"
 #define DEFAULT_BITRATE         (6618ll * 1000 * 1000)
 
 #define OPT_AUDIO_CHANNEL_MAP (('a' << 8) | 'm')
@@ -422,25 +420,18 @@ int main(int argc, char *argv[])
 #if defined HAVE_SCHED_SETSCHEDULER && defined USE_RT
         struct sched_param sp;
 #endif
+        struct common_params common_params;
         // NULL terminated array of capture devices
-        struct vidcap_params *vidcap_params_head = vidcap_params_allocate();
+        struct vidcap_params *vidcap_params_head = vidcap_params_allocate(&common_params);
         struct vidcap_params *vidcap_params_tail = vidcap_params_head;
+        struct audio_params audio_params;
 
         char *display_cfg = NULL;
-        const char *audio_recv = "none";
-        const char *audio_send = "none";
-        char *jack_cfg = NULL;
         const char *requested_video_fec = "none";
-        const char *requested_audio_fec = DEFAULT_AUDIO_FEC;
-        char *audio_channel_map = NULL;
-        const char *audio_scale = "mixauto";
         rtsp_serv_t* rtsp_server = NULL;
         int rtsp_port = 0;
-        bool isStd = FALSE;
         int recv_port_number = PORT_BASE;
         int send_port_number = PORT_BASE;
-
-        bool echo_cancellation = false;
 
         bool should_export = false;
         char *export_opts = NULL;
@@ -449,17 +440,12 @@ int main(int argc, char *argv[])
         int control_port = CONTROL_DEFAULT_PORT;
         struct control_state *control = NULL;
 
-        const char *audio_host = NULL;
-        int audio_rx_port = -1, audio_tx_port = -1;
         enum video_mode decoder_mode = VIDEO_NORMAL;
         const char *requested_compression = "none";
 
-        bool ipv6 = false;
         struct module root_mod;
         struct state_uv *uv;
         int ch;
-
-        const char *audio_codec = "PCM";
 
         pthread_t receiver_thread_id,
                   capture_thread_id;
@@ -469,14 +455,12 @@ int main(int argc, char *argv[])
         int compressed_audio_sample_rate = 48000;
         int ret;
         struct vidcap_params *audio_cap_dev;
-        long packet_rate;
         const char *requested_mcast_if = NULL;
 
         unsigned requested_mtu = 0;
         const char *postprocess = NULL;
         const char *requested_display = "none";
         const char *requested_receiver = "localhost";
-        const char *requested_encryption = NULL;
         struct video_export *video_exporter = NULL;
 
 #if defined DEBUG && defined HAVE_LINUX
@@ -484,6 +468,10 @@ int main(int argc, char *argv[])
 #endif
 
         vidcap_params_set_device(vidcap_params_head, "none");
+
+        common_params_init_default(&common_params);
+        audio_params_init_default(&audio_params, &common_params);
+        audio_params.rx_port = audio_params.tx_port = -1;
 
         if (argc == 1) {
                 usage();
@@ -568,7 +556,7 @@ int main(int argc, char *argv[])
                                 return 0;
                         }
                         vidcap_params_set_device(vidcap_params_tail, optarg);
-                        vidcap_params_tail = vidcap_params_allocate_next(vidcap_params_tail);
+                        vidcap_params_tail = vidcap_params_allocate_next(vidcap_params_tail, &common_params);
                         break;
                 case 'm':
                         requested_mtu = atoi(optarg);
@@ -627,19 +615,19 @@ int main(int argc, char *argv[])
                         }
                         break;
                 case 'r':
-                        audio_recv = optarg;                       
+                        audio_params.recv_cfg = optarg;
                         break;
                 case 's':
-                        audio_send = optarg;
+                        audio_params.send_cfg = optarg;
                         break;
                 case 'j':
-                        jack_cfg = optarg;
+                        audio_params.jack_cfg = optarg;
                         break;
                 case 'f':
                         if(strlen(optarg) > 2 && optarg[1] == ':' &&
                                         (toupper(optarg[0]) == 'A' || toupper(optarg[0]) == 'V')) {
                                 if(toupper(optarg[0]) == 'A') {
-                                        requested_audio_fec = optarg + 2;
+                                        audio_params.fec_cfg = optarg + 2;
                                 } else {
                                         requested_video_fec = optarg + 2;
                                 }
@@ -661,9 +649,9 @@ int main(int argc, char *argv[])
                                 recv_port_number = atoi(strtok_r(optarg, ":", &save_ptr));
                                 send_port_number = atoi(strtok_r(NULL, ":", &save_ptr));
                                 if((tok = strtok_r(NULL, ":", &save_ptr))) {
-                                        audio_rx_port = atoi(tok);
+                                        audio_params.rx_port = atoi(tok);
                                         if((tok = strtok_r(NULL, ":", &save_ptr))) {
-                                                audio_tx_port = atoi(tok);
+                                                audio_params.tx_port = atoi(tok);
                                         } else {
                                                 usage();
                                                 return EXIT_FAIL_USAGE;
@@ -687,19 +675,19 @@ int main(int argc, char *argv[])
                         }
                         break;
                 case '6':
-                        ipv6 = true;
+                        common_params.use_ipv6 = true;
                         break;
                 case OPT_AUDIO_CHANNEL_MAP:
-                        audio_channel_map = optarg;
+                        audio_params.audio_channel_map = optarg;
                         break;
                 case OPT_AUDIO_SCALE:
-                        audio_scale = optarg;
+                        audio_params.audio_scale = optarg;
                         break;
                 case OPT_AUDIO_CAPTURE_CHANNELS:
-                        audio_capture_channels = atoi(optarg);
+                        common_params.audio.capture_channels = atoi(optarg);
                         break;
                 case OPT_ECHO_CANCELLATION:
-                        echo_cancellation = true;
+                        audio_params.echo_cancellation = true;
                         break;
                 case OPT_CUDA_DEVICE:
 #ifdef HAVE_JPEG
@@ -737,19 +725,19 @@ int main(int argc, char *argv[])
                         requested_mcast_if = optarg;
                         break;
                 case 'A':
-                        audio_host = optarg;
+                        audio_params.addrs = optarg;
                         break;
                 case OPT_EXPORT:
                         should_export = true;
                         export_opts = optarg;
                         break;
                 case OPT_IMPORT:
-                        audio_send = "embedded";
+                        audio_params.send_cfg = "embedded";
                         {
                                 char dev_string[1024];
                                 snprintf(dev_string, sizeof(dev_string), "import:%s", optarg);
                                 vidcap_params_set_device(vidcap_params_tail, dev_string);
-                                vidcap_params_tail = vidcap_params_allocate_next(vidcap_params_tail);
+                                vidcap_params_tail = vidcap_params_allocate_next(vidcap_params_tail, &common_params);
                         }
                         break;
                 case OPT_AUDIO_CODEC:
@@ -757,19 +745,19 @@ int main(int argc, char *argv[])
                                 list_audio_codecs();
                                 return EXIT_SUCCESS;
                         }
-                        audio_codec = optarg;
+                        audio_params.audio_codec_cfg = optarg;
                         if(get_audio_codec(optarg) == AC_NONE) {
                                 fprintf(stderr, "Unknown audio codec entered: \"%s\"\n",
                                                 optarg);
                                 return EXIT_FAIL_USAGE;
                         }
-                        compressed_audio_sample_rate = get_audio_codec_sample_rate(audio_codec);
+                        compressed_audio_sample_rate = get_audio_codec_sample_rate(audio_params.audio_codec_cfg);
                         break;
                 case OPT_CAPTURE_FILTER:
                         vidcap_params_set_capture_filter(vidcap_params_tail, optarg);
                         break;
                 case OPT_ENCRYPTION:
-                        requested_encryption = optarg;
+                        common_params.encryption = optarg;
                         break;
                 case OPT_CONTROL_PORT:
                         control_port = atoi(optarg);
@@ -809,19 +797,19 @@ int main(int argc, char *argv[])
         printf("\n");
         printf("Display device   : %s\n", requested_display);
         printf("Capture device   : %s\n", vidcap_params_get_driver(vidcap_params_head));
-        printf("Audio capture    : %s\n", audio_send);
-        printf("Audio playback   : %s\n", audio_recv);
+        printf("Audio capture    : %s\n", audio_params.send_cfg);
+        printf("Audio playback   : %s\n", audio_params.recv_cfg);
         printf("MTU              : %d B\n", requested_mtu);
         printf("Video compression: %s\n", requested_compression);
-        printf("Audio codec      : %s\n", get_name_to_audio_codec(get_audio_codec(audio_codec)));
+        printf("Audio codec      : %s\n", get_name_to_audio_codec(get_audio_codec(audio_params.audio_codec_cfg)));
         printf("Network protocol : %s\n", video_rxtx::get_name(video_protocol));
-        printf("Audio FEC        : %s\n", requested_audio_fec);
+        printf("Audio FEC        : %s\n", audio_params.fec_cfg);
         printf("Video FEC        : %s\n", requested_video_fec);
         printf("\n");
 
-        if(audio_rx_port == -1) {
-                audio_tx_port = send_port_number + 2;
-                audio_rx_port = recv_port_number + 2;
+        if(audio_params.rx_port == -1) {
+                audio_params.rx_port = send_port_number + 2;
+                audio_params.tx_port = recv_port_number + 2;
         }
 
         if(should_export) {
@@ -837,9 +825,9 @@ int main(int argc, char *argv[])
         }
 
         if(bitrate != -1) {
-                packet_rate = 1000ll * 1000 * 1000 * requested_mtu * 8 / bitrate;
+                common_params.packet_rate = 1000ll * 1000 * 1000 * requested_mtu * 8 / bitrate;
         } else {
-                packet_rate = 0;
+                common_params.packet_rate = 0;
         }
 
         if (argc > 0) {
@@ -868,21 +856,18 @@ int main(int argc, char *argv[])
                 }
         }
 
-        if(!audio_host) {
-                audio_host = requested_receiver;
+        if(!audio_params.addrs) {
+                audio_params.addrs = requested_receiver;
         }
 #ifdef HAVE_RTSP_SERVER
-        if((audio_send != NULL || audio_recv != NULL) && video_protocol == H264_STD){
+        if ((audio_params.send_cfg != NULL || audio_params.recv_cfg != NULL) && video_protocol == H264_STD){
             //TODO: to implement a high level rxtx struct to manage different standards (i.e.:H264_STD, VP8_STD,...)
-            isStd = TRUE;
+            common_params.isStd = TRUE;
         }
 #endif
-        uv->audio = audio_cfg_init (&root_mod, audio_host, audio_rx_port,
-                        audio_tx_port, audio_send, audio_recv,
-                        jack_cfg, requested_audio_fec, requested_encryption,
-                        audio_channel_map,
-                        audio_scale, echo_cancellation, ipv6, requested_mcast_if,
-                        audio_codec, isStd, packet_rate);
+        audio_params.parent = &root_mod;
+
+        uv->audio = audio_cfg_init (&audio_params);
         if(!uv->audio)
                 goto cleanup;
 
@@ -909,12 +894,12 @@ int main(int argc, char *argv[])
          * device. */
         audio_cap_dev = vidcap_params_get_nth(
                         vidcap_params_head,
-                        audio_capture_get_vidcap_index(audio_send));
+                        audio_capture_get_vidcap_index(audio_params.send_cfg));
         if (audio_cap_dev != NULL) {
                 unsigned int orig_flags =
                         vidcap_params_get_flags(audio_cap_dev);
                 vidcap_params_set_flags(audio_cap_dev, orig_flags
-                                | audio_capture_get_vidcap_flags(audio_send));
+                                | audio_capture_get_vidcap_flags(audio_params.send_cfg));
         } else {
                 fprintf(stderr, "Entered index for non-existing vidcap (audio).");
                 exit_uv(EXIT_FAIL_CAPTURE);
@@ -974,23 +959,23 @@ int main(int argc, char *argv[])
                                         argc, argv);
                 }else if (video_protocol == H264_STD) {
                 		rtps_types_t avType;
-                		if(strcmp("none", vidcap_params_get_driver(vidcap_params_head)) != 0 && (strcmp("none",audio_send) != 0)) avType = av; //AVStream
-                		else if((strcmp("none",audio_send) != 0)) avType = audio; //AStream
+                                if(strcmp("none", vidcap_params_get_driver(vidcap_params_head)) != 0 && (strcmp("none",audio_params.send_cfg) != 0)) avType = av; //AVStream
+                                else if((strcmp("none",audio_params.send_cfg) != 0)) avType = audio; //AStream
                         else if(strcmp("none", vidcap_params_get_driver(vidcap_params_head))) avType = video; //VStream
            	            else printf("[RTSP SERVER CHECK] no stream type... check capture devices input...\n");
 
                         uv->state_video_rxtx = new h264_rtp_video_rxtx(&root_mod, video_exporter,
-                                        requested_compression, requested_encryption,
+                                        requested_compression, common_params.encryption,
                                         requested_receiver, recv_port_number, send_port_number,
-                                        ipv6, requested_mcast_if, requested_video_fec, requested_mtu,
-                                        packet_rate, avType, get_audio_codec(audio_codec), compressed_audio_sample_rate, audio_capture_channels, 2 /*bps*/, rtsp_port);
+                                        common_params.use_ipv6, requested_mcast_if, requested_video_fec, requested_mtu,
+                                        common_params.packet_rate, avType, get_audio_codec(audio_params.send_cfg), compressed_audio_sample_rate, common_params.audio.capture_channels, 2 /*bps*/, rtsp_port);
                 } else if (video_protocol == ULTRAGRID_RTP) {
                         uv->state_video_rxtx = new ultragrid_rtp_video_rxtx(&root_mod, video_exporter,
-                                        requested_compression, requested_encryption,
+                                        requested_compression, common_params.encryption,
                                         requested_receiver, recv_port_number,
-                                        send_port_number, ipv6,
+                                        send_port_number, common_params.use_ipv6,
                                         requested_mcast_if, requested_video_fec, requested_mtu,
-                                        packet_rate, decoder_mode, postprocess, uv->display_device);
+                                        common_params.packet_rate, decoder_mode, postprocess, uv->display_device);
                 } else { // SAGE
                         uv->state_video_rxtx = new sage_video_rxtx(&root_mod, video_exporter,
                                         requested_compression, requested_receiver, sage_opts);

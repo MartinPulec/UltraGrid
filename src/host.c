@@ -22,7 +22,6 @@
 
 long long bitrate = 0;
 unsigned int cuda_device = 0;
-unsigned int audio_capture_channels = 1;
 
 unsigned int cuda_devices[MAX_CUDA_DEVICES] = { 0 };
 unsigned int cuda_devices_count = 1;
@@ -118,5 +117,12 @@ int initialize_video_display(const char *requested_display,
         display_free_devices();
 
         return display_init(id, fmt, flags, out);
+}
+
+void common_params_init_default(struct common_params *common_params)
+{
+        memset(common_params, 0, sizeof(struct common_params));
+
+        common_params->audio.capture_channels = 1;
 }
 

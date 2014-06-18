@@ -48,10 +48,11 @@
 
 #include "config.h"
 
+struct audio_capture_params;
 struct audio_frame;
 
 void audio_cap_testcard_help(const char *driver_name);
-void * audio_cap_testcard_init(char *cfg);
+void * audio_cap_testcard_init(const struct audio_capture_params *);
 struct audio_frame *audio_cap_testcard_read(void *state);
 void audio_cap_testcard_finish(void *state);
 void audio_cap_testcard_done(void *state);

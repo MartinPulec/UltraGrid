@@ -52,6 +52,7 @@
 #ifdef HAVE_ALSA
 
 #include "audio/audio.h"
+#include "audio/audio_capture.h"
 #include "audio/playback/alsa.h"
 #include "audio/utils.h"
 
@@ -84,9 +85,9 @@ void audio_cap_alsa_help(const char *driver_name)
         audio_play_alsa_help(driver_name);
 }
 
-void * audio_cap_alsa_init(char *cfg)
+void * audio_cap_alsa_init(const struct audio_capture_params *init_params)
 {
-        if(cfg && strcmp(cfg, "help") == 0) {
+        if (init_params->cfg && strcmp(init_params->cfg, "help") == 0) {
                 printf("Available ALSA capture devices\n");
                 audio_cap_alsa_help(NULL);
                 return &audio_init_state_ok;
@@ -96,7 +97,7 @@ void * audio_cap_alsa_init(char *cfg)
         snd_pcm_hw_params_t *params;
         unsigned int val;
         int dir;
-        char *name = "default";
+        const char *name = "default";
         int format;
 
         s = calloc(1, sizeof(struct state_alsa_capture));
@@ -104,11 +105,11 @@ void * audio_cap_alsa_init(char *cfg)
         gettimeofday(&s->start_time, NULL);
         s->frame.bps = 2;
         s->frame.sample_rate = 48000;
-        s->min_device_channels = s->frame.ch_count = audio_capture_channels;
+        s->min_device_channels = s->frame.ch_count = init_params->audio_params->common_params->audio.capture_channels;
         s->tmp_data = NULL;
 
-        if(cfg && strlen(cfg) > 0) {
-                name = cfg;
+        if(init_params->cfg && strlen(init_params->cfg) > 0) {
+                name = init_params->cfg;
         }
 
         /* Open PCM device for recording (capture). */

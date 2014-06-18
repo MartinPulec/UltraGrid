@@ -48,10 +48,11 @@
 
 #include "config.h"
 
+struct audio_capture_params;
 struct audio_frame;
 
 void audio_cap_alsa_help(const char *driver_name);
-void * audio_cap_alsa_init(char *cfg);
+void * audio_cap_alsa_init(const struct audio_capture_params *cfg);
 struct audio_frame *audio_cap_alsa_read(void *state);
 void audio_cap_alsa_done(void *state);
 

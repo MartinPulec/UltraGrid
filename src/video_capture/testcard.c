@@ -75,7 +75,7 @@
 #define AUDIO_BPS 2
 #define BUFFER_SEC 1
 #define AUDIO_BUFFER_SIZE (AUDIO_SAMPLE_RATE * AUDIO_BPS * \
-                audio_capture_channels * BUFFER_SEC)
+                s->audio.ch_count * BUFFER_SEC)
 
 struct testcard_rect {
         int x, y, w, h;
@@ -140,10 +140,8 @@ static void grab_audio(int chan, void *stream, int len, void *udata)
 }
 #endif
 
-static int configure_audio(struct testcard_state *s)
+static int configure_audio(struct testcard_state *s, const struct common_params *common_params)
 {
-        UNUSED(s);
-        
 #if defined HAVE_LIBSDL_MIXER && ! defined HAVE_MACOSX
         char *filename;
         int fd;
@@ -153,7 +151,7 @@ static int configure_audio(struct testcard_state *s)
         SDL_Init(SDL_INIT_AUDIO);
         
         if( Mix_OpenAudio( AUDIO_SAMPLE_RATE, AUDIO_S16LSB,
-                        audio_capture_channels, 4096 ) == -1 ) {
+                        s->audio.ch_count, 4096 ) == -1 ) {
                 fprintf(stderr,"[testcard] error initalizing sound\n");
                 return -1;
         }
@@ -175,7 +173,7 @@ static int configure_audio(struct testcard_state *s)
         s->audio_start = 0;
         s->audio_end = 0;
         s->audio.bps = AUDIO_BPS;
-        s->audio.ch_count = audio_capture_channels;
+        s->audio.ch_count = common_params->audio.capture_channels;
         s->audio.sample_rate = AUDIO_SAMPLE_RATE;
         
         // register grab as a postmix processor
@@ -194,6 +192,8 @@ static int configure_audio(struct testcard_state *s)
         
         return 0;
 #else
+        UNUSED(s);
+        UNUSED(common_params);
         return -2;
 #endif
 }
@@ -507,7 +507,7 @@ void *vidcap_testcard_init(const struct vidcap_params *params)
         
         if(vidcap_params_get_flags(params) & VIDCAP_FLAG_AUDIO_EMBEDDED) {
                 s->grab_audio = TRUE;
-                if(configure_audio(s) != 0) {
+                if(configure_audio(s, vidcap_params_get_common_params(params)) != 0) {
                         s->grab_audio = FALSE;
                         fprintf(stderr, "[testcard] Disabling audio output. "
                                         "SDL-mixer missing, running on Mac or other problem.\n");

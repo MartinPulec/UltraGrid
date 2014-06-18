@@ -52,6 +52,7 @@
 #ifdef HAVE_COREAUDIO
 
 #include "audio/audio.h"
+#include "audio/audio_capture.h"
 #include "audio/utils.h"
 #include "audio/capture/coreaudio.h" 
 #include "utils/ring_buffer.h"
@@ -226,9 +227,9 @@ error:
         fprintf(stderr, "[CoreAudio] error obtaining device list.\n");
 }
 
-void * audio_cap_ca_init(char *cfg)
+void * audio_cap_ca_init(const struct audio_capture_params *params)
 {
-        if(cfg && strcmp(cfg, "help") == 0) {
+        if (params->cfg && strcmp(params->cfg, "help") == 0) {
                 printf("Available Core Audio capture devices:\n");
                 audio_cap_ca_help(NULL);
                 return &audio_init_state_ok;
@@ -248,8 +249,8 @@ void * audio_cap_ca_init(char *cfg)
         s = (struct state_ca_capture *) calloc(1, sizeof(struct state_ca_capture));
 
         size=sizeof(device);
-        if(cfg != NULL) {
-                device = atoi(cfg);
+        if (params->cfg != NULL) {
+                device = atoi(params->cfg);
         } else {
                 ret = AudioHardwareGetProperty(kAudioHardwarePropertyDefaultInputDevice, &size, &device);
                 if(ret) {
@@ -263,7 +264,7 @@ void * audio_cap_ca_init(char *cfg)
         s->boss_waiting = FALSE;
         s->data_ready = FALSE;
         s->frame.bps = 2;
-        s->frame.ch_count = audio_capture_channels;
+        s->frame.ch_count = params->audio_params->common_params->audio.capture_channels;
 
         double rate;
         size = sizeof(double);

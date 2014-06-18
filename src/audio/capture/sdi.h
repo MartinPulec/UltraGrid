@@ -48,11 +48,12 @@
 
 //void audio_sdi_send(struct state_audio *s, struct audio_frame *frame);
 //int audio_does_send_sdi(struct state_audio *s);
+struct audio_capture_params;
 struct audio_frame;
 
 /* audio capture API */
 void sdi_capture_help(const char *driver_name);
-void * sdi_capture_init(char *cfg);
+void * sdi_capture_init(const struct audio_capture_params *);
 void sdi_capture_finish(void *state);
 void sdi_capture_done(void *state);
 struct audio_frame * sdi_read(void *state);

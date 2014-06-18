@@ -52,10 +52,11 @@
 #include "config_win32.h"
 #endif // HAVE_CONFIG_H
 
+struct audio_capture_params;
 struct audio_frame;
 
 void audio_cap_none_help(const char *driver_name);
-void * audio_cap_none_init(char *cfg);
+void * audio_cap_none_init(const struct audio_capture_params *);
 struct audio_frame *audio_cap_none_read(void *state);
 void audio_cap_none_finish(void *state);
 void audio_cap_none_done(void *state);

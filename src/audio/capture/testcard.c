@@ -35,17 +35,18 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#include "config_unix.h"
+#include "config_win32.h"
+#endif
+
 #define MODULE_NAME "[Audio testcard] "
 
 #include "audio/capture/testcard.h"
 
 #include "audio/audio.h"
-
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#include "config_unix.h"
-#endif
-
+#include "audio/audio_capture.h"
 #include "audio/utils.h"
 #include "audio/wav_reader.h"
 #include "debug.h"
@@ -128,7 +129,7 @@ static char *get_ebu_signal(int sample_rate, int bps, int channels, int frequenc
                 return ret;
 }
 
-void * audio_cap_testcard_init(char *cfg)
+void * audio_cap_testcard_init(const struct audio_capture_params *params)
 {
         struct state_audio_capture_testcard *s;
         char *wav_file = NULL;
@@ -136,7 +137,7 @@ void * audio_cap_testcard_init(char *cfg)
 
         double volume = DEFAULT_VOLUME;
 
-        if(cfg && strcmp(cfg, "help") == 0) {
+        if (params->cfg && strcmp(params->cfg, "help") == 0) {
                 printf("Available testcard capture:\n");
                 audio_cap_testcard_help(NULL);
                 printf("\toptions\n\t\ttestcard[:volume=<vol>][:file=<wav>]\n");
@@ -145,7 +146,9 @@ void * audio_cap_testcard_init(char *cfg)
                 return &audio_init_state_ok;
         }
 
-        if(cfg) {
+        if (params->cfg) {
+                char *tmp = strdup(params->cfg);
+                char *cfg = tmp;
                 while((item = strtok_r(cfg, ":", &save_ptr))) {
                         if(strncasecmp(item, "vol=", strlen("vol=")) == 0) {
                                 volume = atof(item + strlen("vol="));
@@ -155,11 +158,14 @@ void * audio_cap_testcard_init(char *cfg)
 
                         cfg = NULL;
                 }
+                free(tmp);
         }
 
         s = (struct state_audio_capture_testcard *) malloc(sizeof(struct state_audio_capture_testcard));
         assert(s != 0);
         s->magic = AUDIO_CAPTURE_TESTCARD_MAGIC;
+
+        unsigned int audio_capture_channels = params->audio_params->common_params->audio.capture_channels;
 
         if(!wav_file) {
                 printf(MODULE_NAME "Generating %d Hz (%.2f RMS dBFS) EBU tone ", FREQUENCY,
@@ -238,7 +244,7 @@ struct audio_frame *audio_cap_testcard_read(void *state)
 
         tv_add_usec(&s->next_audio_time, 1000 * 1000 * CHUNK / AUDIO_SAMPLE_RATE);
 
-        s->audio.data = s->audio_samples + AUDIO_BPS * s->samples_played * audio_capture_channels;
+        s->audio.data = s->audio_samples + AUDIO_BPS * s->samples_played * s->audio.ch_count;
 
         s->samples_played += CHUNK;
 

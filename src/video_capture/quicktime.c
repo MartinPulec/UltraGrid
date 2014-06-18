@@ -578,7 +578,7 @@ static unsigned long get_color_spec(uint32_t pixfmt) {
 }
 
 /* Initialize the QuickTime grabber */
-static int qt_open_grabber(struct qt_grabber_state *s, char *fmt)
+static int qt_open_grabber(struct qt_grabber_state *s, char *fmt, int audio_capture_channels)
 {
         GrafPtr savedPort;
         WindowPtr gMonitor;
@@ -1055,7 +1055,7 @@ void *vidcap_quicktime_init(const struct vidcap_params *params)
                 }
 
                 char *fmt = strdup(vidcap_params_get_fmt(params));
-                int ret = qt_open_grabber(s, fmt);
+                int ret = qt_open_grabber(s, fmt, vidcap_params_get_common_params(params)->audio.capture_channels);
                 free(fmt);
 
                 if (ret != 1) {

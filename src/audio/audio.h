@@ -115,13 +115,27 @@ typedef struct
 } audio_channel;
 
 struct module;
+struct common_params;
 
-struct state_audio * audio_cfg_init(struct module *parent, const char *addrs, int recv_port, int send_port,
-                const char *send_cfg, const char *recv_cfg,
-                char *jack_cfg, const char *fec_cfg, const char *encryption,
-                char *audio_channel_map, const char *audio_scale,
-                bool echo_cancellation, bool use_ipv6, const char *mcast_iface, const char *audio_codec_cfg,
-                bool isStd, long packet_rate);
+struct audio_params {
+        const struct common_params *common_params;
+        struct module              *parent;
+        const char                 *addrs;
+        int                         rx_port;
+        int                         tx_port;
+        const char                 *send_cfg;
+        const char                 *recv_cfg;
+        const char                 *jack_cfg;
+        const char                 *fec_cfg;
+        const char                 *audio_channel_map;
+        const char                 *audio_scale;
+        bool                        echo_cancellation;
+        const char                 *audio_codec_cfg;
+};
+
+void audio_params_init_default(struct audio_params *, const struct common_params *);
+
+struct state_audio * audio_cfg_init(const struct audio_params *);
 void audio_finish(void);
 void audio_done(struct state_audio *s);
 void audio_join(struct state_audio *s);

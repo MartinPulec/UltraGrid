@@ -96,6 +96,7 @@ struct vidcap_deltacast_state {
         unsigned int      autodetect_format:1;
 
         unsigned int      initialize_flags;
+        unsigned int      audio_capture_channels;
         bool              initialized;
 };
 
@@ -296,19 +297,19 @@ static bool wait_for_channel(struct vidcap_deltacast_state *s)
         }
 
         if(s->initialize_flags & DISPLAY_FLAG_AUDIO_EMBEDDED) {
-                if(audio_capture_channels != 1 &&
-                                audio_capture_channels != 2) {
+                if (s->audio_capture_channels != 1 &&
+                                s->audio_capture_channels != 2) {
                         fprintf(stderr, "[DELTACAST capture] Unable to handle channel count other than 1 or 2.\n");
                         throw delta_init_exception();
                 }
                 s->audio_frame.bps = 3;
                 s->audio_frame.sample_rate = 48000;
-                s->audio_frame.ch_count = audio_capture_channels;
+                s->audio_frame.ch_count = s->audio_capture_channels;
                 memset(&s->AudioInfo, 0, sizeof(VHD_AUDIOINFO));
                 s->pAudioChn = &s->AudioInfo.pAudioGroups[0].pAudioChannels[0];
-                if(audio_capture_channels == 1) {
+                if (s->audio_capture_channels == 1) {
                         s->pAudioChn->Mode = s->AudioInfo.pAudioGroups[0].pAudioChannels[1].Mode=VHD_AM_MONO;
-                } else if(audio_capture_channels == 2) {
+                } else if (s->audio_capture_channels == 2) {
                         s->pAudioChn->Mode = s->AudioInfo.pAudioGroups[0].pAudioChannels[1].Mode=VHD_AM_STEREO;
                 } else abort();
                 s->pAudioChn->BufferFormat = s->AudioInfo.pAudioGroups[0].pAudioChannels[1].BufferFormat=VHD_AF_24;
@@ -451,6 +452,7 @@ vidcap_deltacast_init(const struct vidcap_params *params)
         VHD_SetBoardProperty(s->BoardHandle,VHD_CORE_BP_BYPASS_RELAY_3,FALSE);
 
         s->initialize_flags = vidcap_params_get_flags(params);
+        s->audio_capture_channels = vidcap_params_get_common_params(params)->audio.capture_channels;
         printf("\nWaiting for channel locked...\n");
         try {
                 if(wait_for_channel(s)) {

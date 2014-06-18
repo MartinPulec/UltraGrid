@@ -46,11 +46,14 @@
  *
  */
 
-#include "audio/capture/none.h" 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #include "config_unix.h"
+#include "config_win32.h"
 #endif
+
+#include "audio/audio_capture.h"
+#include "audio/capture/none.h"
 #include "debug.h"
 #include <assert.h>
 #include <stdlib.h>
@@ -67,14 +70,14 @@ void audio_cap_none_help(const char *driver_name)
         UNUSED(driver_name);
 }
 
-void * audio_cap_none_init(char *cfg)
+void * audio_cap_none_init(const struct audio_capture_params *params)
 {
         struct state_audio_capture_none *s;
 
         s = (struct state_audio_capture_none *) malloc(sizeof(struct state_audio_capture_none));
         s->magic = AUDIO_CAPTURE_NONE_MAGIC;
         assert(s != 0);
-        UNUSED(cfg);
+        UNUSED(params);
         return s;
 }
 

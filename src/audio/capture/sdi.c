@@ -53,6 +53,7 @@
 #endif // HAVE_CONFIG_H
 
 #include "audio/audio.h" 
+#include "audio/audio_capture.h"
 #include "audio/capture/sdi.h" 
 
 #include "compat/platform_semaphore.h"
@@ -72,9 +73,9 @@ struct state_sdi_capture {
         pthread_cond_t  audio_frame_ready_cv;
 };
 
-void * sdi_capture_init(char *cfg)
+void * sdi_capture_init(const struct audio_capture_params *params)
 {
-        if(cfg && strcmp(cfg, "help") == 0) {
+        if(params->cfg && strcmp(params->cfg, "help") == 0) {
                 printf("Available vidcap audio devices:\n");
                 sdi_capture_help("embedded");
                 sdi_capture_help("AESEBU");

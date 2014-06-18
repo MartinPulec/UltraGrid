@@ -64,27 +64,27 @@ extern "C" {
 struct video_frame;
 struct vidcap_params;
 
+struct common_params {
+        const char *encryption;
+        bool use_ipv6;
+        const char *mcast_iface;
+        bool isStd;
+        long packet_rate;
+
+        /// common audio settings
+        struct {
+                unsigned int capture_channels;
+        } audio;
+};
+
 extern int uv_argc;
 extern char **uv_argv;
 
 extern long long bitrate;
-extern long packet_rate; // gives interval between individual packets (in ns)
 
 extern volatile bool should_exit_receiver;
 
-/* TODO: remove these variables (should be safe) */
-extern unsigned int hd_size_x;
-extern unsigned int hd_size_y;
-extern unsigned int hd_color_spc;
-extern unsigned int hd_color_bpp;
-
-extern unsigned int bitdepth;
-
-extern unsigned int progressive;
-
 void exit_uv(int status);
-
-extern unsigned int audio_capture_channels;
 
 #define MAX_CUDA_DEVICES 4
 extern unsigned int cuda_devices[];
@@ -111,6 +111,8 @@ int initialize_video_display(const char *requested_display,
 int initialize_video_capture(struct module *parent,
                 struct vidcap_params *params,
                 struct vidcap **);
+
+void common_params_init_default(struct common_params *common_params);
 
 // if not NULL, data should be exported
 extern char *export_dir;

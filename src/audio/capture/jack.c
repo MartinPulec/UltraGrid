@@ -53,6 +53,7 @@
 #include "host.h"
 
 #include "audio/audio.h"
+#include "audio/audio_capture.h"
 #include "audio/utils.h"
 #include "audio/capture/jack.h" 
 #include "utils/ring_buffer.h"
@@ -150,7 +151,7 @@ void audio_cap_jack_help(const char *driver_name)
 }
 
 
-void * audio_cap_jack_init(char *cfg)
+void * audio_cap_jack_init(const struct audio_capture_params *params)
 {
         struct state_jack_capture *s;
         jack_status_t status;
@@ -159,7 +160,7 @@ void * audio_cap_jack_init(char *cfg)
 
 
 
-        if(!cfg || strcmp(cfg, "help") == 0) {
+        if(!params->cfg || strcmp(params->cfg, "help") == 0) {
                 audio_cap_jack_help("jack");
                 return &audio_init_state_ok;
         }
@@ -177,18 +178,19 @@ void * audio_cap_jack_init(char *cfg)
                 goto error;
         }
 
-        ports = jack_get_ports(s->client, cfg, NULL, JackPortIsOutput);
+        ports = jack_get_ports(s->client, params->cfg, NULL, JackPortIsOutput);
         if(ports == NULL) {
-                fprintf(stderr, "[JACK capture] Unable to output ports matching %s.\n", cfg);
+                fprintf(stderr, "[JACK capture] Unable to output ports matching %s.\n", params->cfg);
                 goto release_client;
         }
 
         i = 0;
         while(ports[i]) i++;
 
+        unsigned int audio_capture_channels = params->audio_params->common_params->audio.capture_channels;
         if(i < (int) audio_capture_channels) {
                 fprintf(stderr, "[JACK capture] Requested channel count %d not found (matching pattern %s).\n",
-                                audio_capture_channels, cfg);
+                                audio_capture_channels, params->cfg);
                 goto release_client;
 
         }

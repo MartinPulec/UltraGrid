@@ -45,11 +45,12 @@
  *
  */
 
+struct audio_capture_params;
 struct audio_frame;
 
 void portaudio_capture_help(const char *driver_name);
 
-void * portaudio_capture_init(char *cfg);
+void * portaudio_capture_init(const struct audio_capture_params *);
 struct audio_frame * portaudio_read(void *state);
 void portaudio_capture_finish(void *state);
 void portaudio_capture_done(void *state);

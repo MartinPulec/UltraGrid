@@ -67,7 +67,7 @@
 #define AUDIO_BPS 2
 #define BUFFER_SEC 1
 #define AUDIO_BUFFER_SIZE (AUDIO_SAMPLE_RATE * AUDIO_BPS * \
-                audio_capture_channels * BUFFER_SEC)
+                s->audio.ch_count * BUFFER_SEC)
 
 void * vidcap_testcard2_thread(void *args);
 void rgb2yuv422(unsigned char *in, unsigned int width, unsigned int height);
@@ -114,11 +114,6 @@ static int configure_audio(struct testcard_state2 *s)
                 data[i] = data[i+1] = (float) sin( ((double)i/(double)200) * M_PI * 2. ) * SHRT_MAX;
         }
 
-        
-        s->audio.bps = AUDIO_BPS;
-        s->audio.ch_count = audio_capture_channels;
-        s->audio.sample_rate = AUDIO_SAMPLE_RATE;
-        
         printf("[testcard2] playing audio\n");
         
         return 0;
@@ -264,6 +259,10 @@ void *vidcap_testcard2_init(const struct vidcap_params *params)
         
         if(vidcap_params_get_flags(params) & VIDCAP_FLAG_AUDIO_EMBEDDED) {
                 s->grab_audio = TRUE;
+                s->audio.bps = AUDIO_BPS;
+                s->audio.ch_count = vidcap_params_get_common_params(params)->audio.capture_channels;
+                s->audio.sample_rate = AUDIO_SAMPLE_RATE;
+
                 if(configure_audio(s) != 0) {
                         s->grab_audio = FALSE;
                         fprintf(stderr, "[testcard2] Disabling audio output. "
@@ -506,7 +505,7 @@ static void grab_audio(struct testcard_state2 *s)
         
         s->audio_remained = (seconds + s->audio_remained) * AUDIO_SAMPLE_RATE - s->audio.data_len;
         s->audio_remained /= AUDIO_SAMPLE_RATE;
-        s->audio.data_len *= audio_capture_channels * AUDIO_BPS;
+        s->audio.data_len *= s->audio.ch_count * AUDIO_BPS;
         
         s->last_audio_time = curr_time;
 }

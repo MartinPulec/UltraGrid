@@ -46,10 +46,11 @@
  *
  */
 
+struct audio_capture_params;
 struct audio_frame;
 
 void audio_cap_jack_help(const char *driver_name);
-void * audio_cap_jack_init(char *cfg);
+void * audio_cap_jack_init(const struct audio_capture_params *);
 struct audio_frame *audio_cap_jack_read(void *state);
 void audio_cap_jack_finish(void *state);
 void audio_cap_jack_done(void *state);

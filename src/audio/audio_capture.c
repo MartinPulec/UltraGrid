@@ -87,7 +87,7 @@ typedef void (*audio_device_help_t)(const char *driver_name);
 /**
  * @return state
  */
-typedef void * (*audio_init_t)(char *cfg);
+typedef void * (*audio_init_t)(const struct audio_capture_params *);
 typedef struct audio_frame* (*audio_read_t)(void *state);
 typedef void (*audio_done_t)(void *state);
 
@@ -259,7 +259,7 @@ void audio_capture_init_devices()
         }
 }
 
-int audio_capture_init(char *driver, char *cfg, struct state_audio_capture **state)
+int audio_capture_init(const struct audio_capture_params *params, struct state_audio_capture **state)
 {
         struct state_audio_capture *s;
         int i;
@@ -268,19 +268,19 @@ int audio_capture_init(char *driver, char *cfg, struct state_audio_capture **sta
         assert(s != NULL);
 
         for (i = 0; i < available_audio_capture_count; ++i) {
-                if(strcasecmp(driver, available_audio_capture[i]->name) == 0) {
+                if(strcasecmp(params->driver, available_audio_capture[i]->name) == 0) {
                         s->index = i;
                         break;
                 }
         }
 
         if(i == available_audio_capture_count) {
-                fprintf(stderr, "Unknown audio capture driver: %s\n", driver);
+                fprintf(stderr, "Unknown audio capture driver: %s\n", params->driver);
                 goto error;
         }
                 
         s->state =
-                available_audio_capture[s->index]->audio_init(cfg);
+                available_audio_capture[s->index]->audio_init(params);
                 
         if(!s->state) {
                 fprintf(stderr, "Error initializing audio capture.\n");
@@ -300,10 +300,13 @@ error:
         return -1;
 }
 
-struct state_audio_capture *audio_capture_init_null_device()
+struct state_audio_capture *audio_capture_init_null_device(const struct audio_params *audio_params)
 {
         struct state_audio_capture *device;
-        int ret = audio_capture_init("none", NULL, &device);
+        struct audio_capture_params params;
+        audio_capture_params_init(&params, audio_params);
+        params.driver = "none";
+        int ret = audio_capture_init(&params, &device);
         assert(ret == 0);
         return device;
 }
@@ -393,5 +396,13 @@ const char *audio_capture_get_driver_name(struct state_audio_capture * s)
 void *audio_capture_get_state_pointer(struct state_audio_capture *s)
 {
         return s->state;
+}
+
+void audio_capture_params_init(struct audio_capture_params *params, const struct audio_params *audio_params)
+{
+        assert(audio_params != NULL);
+        memset(params, 0, sizeof(struct audio_capture_params));
+
+        params->audio_params = audio_params;
 }
 

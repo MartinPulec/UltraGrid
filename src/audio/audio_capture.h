@@ -48,8 +48,15 @@
 extern "C" {
 #endif
 
-struct state_audio_capture;
 struct audio_frame;
+struct audio_params;
+struct state_audio_capture;
+
+struct audio_capture_params {
+        const char *driver;
+        const char *cfg;
+        const struct audio_params *audio_params;
+};
 
 
 void                        audio_capture_init_devices(void);
@@ -58,9 +65,9 @@ void                        audio_capture_print_help(void);
 /**
  * @see display_init
  */
-int                         audio_capture_init(char *driver, char *cfg,
+int                         audio_capture_init(const struct audio_capture_params *,
                 struct state_audio_capture **);
-struct state_audio_capture *audio_capture_init_null_device(void);
+struct state_audio_capture *audio_capture_init_null_device(const struct audio_params *);
 struct audio_frame         *audio_capture_read(struct state_audio_capture * state);
 void                        audio_capture_finish(struct state_audio_capture * state);
 void                        audio_capture_done(struct state_audio_capture * state);
@@ -73,6 +80,8 @@ const char                 *audio_capture_get_driver_name(struct state_audio_cap
  * SDI (embedded sound).
  */
 void                       *audio_capture_get_state_pointer(struct state_audio_capture *s);
+
+void audio_capture_params_init(struct audio_capture_params *, const struct audio_params *);
 
 #ifdef __cplusplus
 }
