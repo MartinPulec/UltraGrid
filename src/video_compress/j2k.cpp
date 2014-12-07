@@ -285,3 +285,13 @@ static void j2k_compress_done(struct module *mod)
         free(s);
 }
 
+struct compress_info_t j2k_info = {
+        "j2k",
+        j2k_compress_init,
+        j2k_compress,
+        NULL,
+        []{return true;}, // uncompressed video is always supported
+        {
+        },
+};
+

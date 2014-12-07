@@ -145,12 +145,8 @@ struct compress_t compress_modules[] = {
         },
 #endif
         {
-                "J2K",
                 "j2k",
-                MK_NAME(j2k_compress_init),
-                MK_NAME(j2k_compress),
-                MK_NAME(NULL),
-                MK_NAME(NULL),
+                MK_STATIC_REF(j2k_info),
                 NULL
         },
 #if defined HAVE_JPEG || defined  BUILD_LIBRARIES
@@ -493,16 +489,10 @@ void compress_frame(compress_state_proxy *proxy, shared_ptr<video_frame> frame)
         }
 
 	while (sync_api_frame) {
-		msg_frame *frame_msg;
-		if (s->handle->compress_pop_func) {
-			abort(); // not yet implemented
-		} else {
-			frame_msg = new msg_frame(sync_api_frame);
-		}
-		s->queue->push(frame_msg);
+		proxy->queue.push(sync_api_frame);
 		// if API supports it, get next frame
 		//sync_api_frame = NULL;
-		sync_api_frame = s->handle->compress_frame_func(s->state[0], NULL, s->buffer_index);
+		sync_api_frame = s->handle->compress_info->compress_frame_func(s->state[0], NULL);
 	}
 }
 
