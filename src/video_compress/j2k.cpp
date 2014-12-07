@@ -197,8 +197,7 @@ static void j2k_compressed_frame_dispose(struct video_frame *frame)
 }
 
 
-struct video_frame  *j2k_compress(struct module *mod, struct video_frame *tx,
-                int buffer_idx)
+shared_ptr<video_frame> j2k_compress(struct module *mod, shared_ptr<video_frame> tx)
 {
         struct state_video_compress_j2k *s =
                 (struct state_video_compress_j2k *) mod->priv_data;
@@ -231,7 +230,7 @@ struct video_frame  *j2k_compress(struct module *mod, struct video_frame *tx,
         }
         memcpy(ptr, tx->tiles[0].data,
                         tx->tiles[0].data_len);
-        desc = video_desc_from_frame(tx);
+        desc = video_desc_from_frame(tx.get());
         udata = malloc(sizeof(desc));
         memcpy(udata, &desc, sizeof(desc));
 
@@ -265,9 +264,9 @@ get_frame_from_queue:
                         encoded_img->len;
 		out->dispose = j2k_compressed_frame_dispose;
                 free(encoded_img);
-                return out;
+                return shared_ptr<video_frame>(out, out->dispose);
         } else {
-                return NULL;
+                return {};
         }
 }
 
