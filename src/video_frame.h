@@ -64,6 +64,10 @@ extern "C" {
 #define PARAM_TILE_COUNT                (1<<6u)
 /**@}*/
 
+#define VIDEO_FRAME_DISPOSE(frame) if (frame && frame->dispose) \
+                frame->dispose(frame)
+void video_frame_dispose(struct video_frame *);
+
 /**
  * @brief Allocates blank video frame
  * @param count number of allocated tiles

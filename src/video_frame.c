@@ -388,6 +388,7 @@ bool save_video_frame_as_pnm(struct video_frame *frame, const char *name)
         free(tmp_data);
 
         return true;
+}
 
 /**
  * @brief Writes specified @ref video_desc to @ref video_frame
