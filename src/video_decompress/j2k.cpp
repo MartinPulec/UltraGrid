@@ -107,6 +107,8 @@ static void *decompress_j2k_worker(void *args)
                                         "to return processed image!\n");
                 }
         }
+
+	return NULL;
 }
 
 void * j2k_decompress_init(void)
@@ -160,16 +162,14 @@ int j2k_decompress_reconfigure(void *state, struct video_desc desc,
 {
         struct state_decompress_j2k *s = (struct state_decompress_j2k *) state;
         
-        assert(out_codec == RGB);
+        assert(out_codec == UYVY || out_codec == RGB);
         assert((rshift == 0 && gshift == 8 && bshift == 16) ||
                         (rshift == 16 && gshift == 8 && bshift == 0));
         assert(pitch == vc_get_linesize(desc.width, out_codec));
 
         int j2k_error = CMPTO_J2K_Dec_Settings_Data_Format(
-                                s->settings,
-                                (rshift == 0) ?
-                                CMPTO_J2K_444_u8_p012 :
-                                CMPTO_J2K_444_u8_p210);
+                                s->settings, out_codec == UYVY ? CMPTO_J2K_422_u8_p1020 :
+                                (rshift == 0 ?  CMPTO_J2K_444_u8_p012 : CMPTO_J2K_444_u8_p210 /*BGR*/));
 
         if (j2k_error != CMPTO_J2K_OK) {
                 return FALSE;

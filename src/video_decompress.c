@@ -157,6 +157,7 @@ struct decode_from_to decoders_for_codec[] = {
         { JPEG, DXT5, JPEG_TO_DXT_MAGIC, 900 },
         { VP8, UYVY, LIBAVCODEC_MAGIC, 500 },
         { J2K, RGB, J2K_MAGIC, 500 },
+        { J2K, UYVY, J2K_MAGIC, 500 },
 };
 /** @brief Length of @ref decoders_for_codec members (items) */
 const int decoders_for_codec_count = (sizeof(decoders_for_codec) / sizeof(struct decode_from_to));

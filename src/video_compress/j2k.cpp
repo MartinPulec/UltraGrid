@@ -92,6 +92,17 @@ static void *j2k_compress_worker(void *args)
                         continue;
                 }
 
+#if 0
+		const char *msg;
+		j2k_error = CMPTO_J2K_Enc_Image_Get_Status(
+				img,
+				&msg
+				);
+                if (j2k_error != CMPTO_J2K_OK) {
+			fprintf(stderr, "%s\n", msg);
+		}
+#endif
+
                 if (img == NULL) {
                         break;
                 }
@@ -133,15 +144,33 @@ struct module * j2k_compress_init(struct module *parent, const struct video_comp
 {
         struct state_video_compress_j2k *s;
         enum CMPTO_J2K_Error j2k_error;
+        int rate = 1100000;
+        double quality = 0.7;
+        bool mct = false;
         
         s = (struct state_video_compress_j2k *) calloc(1, sizeof(struct state_video_compress_j2k));
+
+        char *cfg = strdup(params->cfg);
+        char *save_ptr, *item, *tmp;
+        tmp = cfg;
+        while ((item = strtok_r(tmp, ":", &save_ptr))) {
+                tmp = NULL;
+                if (strncasecmp("rate=", item, strlen("rate=")) == 0) {
+                        rate = atoi(item + strlen("rate="));
+                } else if (strncasecmp("quality=", item, strlen("quality=")) == 0) {
+                        quality = atof(item + strlen("quality="));
+                } else if (strcasecmp("mct", item) == 0) {
+                        mct = true;
+                }
+        }
+        free(cfg);
 
         j2k_error = CMPTO_J2K_Enc_Context_Init_CUDA( 
                         (const int *) cuda_devices,
                         cuda_devices_count,
                         &s->context);
         if (j2k_error != CMPTO_J2K_OK) {
-fprintf(stderr, "%s", CMPTO_J2K_Get_Error_Message(j2k_error));
+                fprintf(stderr, "%s", CMPTO_J2K_Get_Error_Message(j2k_error));
                 goto error;
         }
 
@@ -151,15 +180,16 @@ fprintf(stderr, "%s", CMPTO_J2K_Get_Error_Message(j2k_error));
         if (j2k_error != CMPTO_J2K_OK) {
                 goto error;
         }
-CMPTO_J2K_Enc_Settings_Quantization(
-    s->enc_settings,
-    0.7 /* 0.0 = poor quality, 1.0 = full quality */
-);
+        CMPTO_J2K_Enc_Settings_Quantization(
+                        s->enc_settings,
+                        quality /* 0.0 = poor quality, 1.0 = full quality */
+                        );
 
-CMPTO_J2K_Enc_Settings_Rate_Limit(s->enc_settings, 1100000);
-CMPTO_J2K_Enc_Settings_Enable(s->enc_settings, CMPTO_J2K_Rate_Control);
-CMPTO_J2K_Enc_Settings_Enable(s->enc_settings, CMPTO_J2K_MCT);
-
+        CMPTO_J2K_Enc_Settings_Rate_Limit(s->enc_settings, rate);
+        CMPTO_J2K_Enc_Settings_Enable(s->enc_settings, CMPTO_J2K_Rate_Control);
+        if (mct) {
+                CMPTO_J2K_Enc_Settings_Enable(s->enc_settings, CMPTO_J2K_MCT); // only for RGB
+        }
 
         j2k_error = CMPTO_J2K_Enc_Settings_DWT_Count(
                                 s->enc_settings,
@@ -217,7 +247,7 @@ shared_ptr<video_frame> j2k_compress(struct module *mod, shared_ptr<video_frame>
                                 tx->tiles[0].width,
                                 tx->tiles[0].height,
                                 tx->color_spec == RGB ? CMPTO_J2K_444_u8_p012
-                                : CMPTO_J2K_444_u8_p210, // BGR
+                                : (tx->color_spec == UYVY ? CMPTO_J2K_422_u8_p1020 : CMPTO_J2K_444_u8_p210), // BGR
                                 &img);
         if (j2k_error != CMPTO_J2K_OK) {
                 return NULL;
@@ -264,6 +294,7 @@ get_frame_from_queue:
                         encoded_img->len;
 		out->dispose = j2k_compressed_frame_dispose;
                 free(encoded_img);
+                assert (out->tiles[0].data_len != 0);
                 return shared_ptr<video_frame>(out, out->dispose);
         } else {
                 return {};
