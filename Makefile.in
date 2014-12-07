@@ -133,8 +133,10 @@ OBJS	      = @OBJS@ \
 		src/video_capture/switcher.o \
 		src/video_capture/ug_input.o \
 		src/video_compress.o \
+		src/video_compress/j2k.o \
 		src/video_compress/none.o \
 		src/video_decompress.o \
+		src/video_decompress/j2k.o \
 		src/video_decompress/null.o \
 		src/video_display.o \
 		src/video_display/aggregate.o \

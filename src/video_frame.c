@@ -388,5 +388,26 @@ bool save_video_frame_as_pnm(struct video_frame *frame, const char *name)
         free(tmp_data);
 
         return true;
+
+/**
+ * @brief Writes specified @ref video_desc to @ref video_frame
+ *
+ * @note @video_frame has to have same tile count as specified
+ * in @video_desc
+ *
+ * @param buf  video frame to be written to
+ * @param desc video description
+ */
+void vf_write_desc(struct video_frame *buf, struct video_desc desc)
+{
+        assert(desc.tile_count == buf->tile_count);
+
+        buf->color_spec = desc.color_spec;
+        buf->fps = desc.fps;
+        buf->interlacing = desc.interlacing;
+        for(unsigned int i = 0; i < buf->tile_count; ++i) {
+                buf->tiles[0].width = desc.width;
+                buf->tiles[0].height = desc.height;
+        }
 }
 

@@ -59,6 +59,7 @@
 #include "video_codec.h"
 #include "video_decompress.h"
 #include "video_decompress/dxt_glsl.h"
+#include "video_decompress/j2k.h"
 #include "video_decompress/jpeg.h"
 #include "video_decompress/libavcodec.h"
 #include "video_decompress/null.h"
@@ -155,6 +156,7 @@ struct decode_from_to decoders_for_codec[] = {
         { JPEG, DXT1, JPEG_TO_DXT_MAGIC, 900 },
         { JPEG, DXT5, JPEG_TO_DXT_MAGIC, 900 },
         { VP8, UYVY, LIBAVCODEC_MAGIC, 500 },
+        { J2K, RGB, J2K_MAGIC, 500 },
 };
 /** @brief Length of @ref decoders_for_codec members (items) */
 const int decoders_for_codec_count = (sizeof(decoders_for_codec) / sizeof(struct decode_from_to));
@@ -169,6 +171,14 @@ decoder_table_t decoders[] = {
                 MK_NAME(dxt_glsl_decompress), MK_NAME(dxt_glsl_decompress_get_property),
                 MK_NAME(dxt_glsl_decompress_done), NULL},
 #endif
+        { J2K_MAGIC, "J2K",
+                MK_NAME(j2k_decompress_init),
+                MK_NAME(j2k_decompress_reconfigure),
+                MK_NAME(j2k_decompress),
+                MK_NAME(j2k_decompress_get_property),
+                MK_NAME(j2k_decompress_done),
+                NULL
+        },
 #if defined HAVE_JPEG || defined BUILD_LIBRARIES
         { JPEG_MAGIC, "jpeg", MK_NAME(jpeg_decompress_init), MK_NAME(jpeg_decompress_reconfigure),
                 MK_NAME(jpeg_decompress), MK_NAME(jpeg_decompress_get_property),

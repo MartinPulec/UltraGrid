@@ -64,10 +64,6 @@ extern "C" {
 #define PARAM_TILE_COUNT                (1<<6u)
 /**@}*/
 
-#define VIDEO_FRAME_DISPOSE(frame) if (frame && frame->dispose) \
-        frame->dispose(frame)
-void video_frame_dispose(struct video_frame *);
-
 /**
  * @brief Allocates blank video frame
  * @param count number of allocated tiles
@@ -171,6 +167,7 @@ void il_merged_to_upper(char *dst, char *src, int linesize, int height, void **s
 double compute_fps(int fps, int fpsd, int fd, int fi);
 
 bool save_video_frame_as_pnm(struct video_frame *frame, const char *name);
+void vf_write_desc(struct video_frame *buf, struct video_desc desc);
 
 /** @name Video Flags
  * @deprecated use rather video_frame or video_desc members
