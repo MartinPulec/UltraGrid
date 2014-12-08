@@ -492,8 +492,12 @@ void compress_frame(compress_state_proxy *proxy, shared_ptr<video_frame> frame)
 		proxy->queue.push(sync_api_frame);
 		// if API supports it, get next frame
 		//sync_api_frame = NULL;
-		sync_api_frame = s->handle->compress_info->compress_frame_func(s->state[0], NULL);
-	}
+                if (s->handle->compress_info->compress_frame_func) {
+                        sync_api_frame = s->handle->compress_info->compress_frame_func(s->state[0], NULL);
+                } else {
+                        sync_api_frame = {};
+                }
+        }
 }
 
 /**
