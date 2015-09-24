@@ -34,10 +34,6 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/**
- * @todo
- * Rewrite the code to have more clear state machine!
- */
 
 #include "config.h"
 #include "config_unix.h"
@@ -62,7 +58,7 @@ static constexpr int TRANSITION_COUNT = 10;
 static constexpr int BUFFER_LEN = 5;
 static constexpr chrono::milliseconds SOURCE_TIMEOUT(500);
 static constexpr unsigned int IN_QUEUE_MAX_BUFFER_LEN = 5;
-static constexpr int SKIP_FIRST_N_FRAMES_IN_STREAM = 5;
+//static constexpr int SKIP_FIRST_N_FRAMES_FROM_STREAM = 5;
 
 struct state_proxy_common {
         ~state_proxy_common() {
@@ -81,6 +77,7 @@ struct state_proxy_common {
         uint32_t old_ssrc;
 
         int transition;
+        int skipped;
 
         queue<struct video_frame *> incoming_queue;
         condition_variable in_queue_decremented_cv;
@@ -143,9 +140,8 @@ static void *display_proxy_init(struct module *parent, const char *fmt, unsigned
         assert (initialize_video_display(parent, requested_display, cfg, flags, &s->common->real_display) == 0);
         free(fmt_copy);
 
-        int ret = pthread_create(&s->common->thread_id, NULL, (void *(*)(void *)) display_run,
+        pthread_create(&s->common->thread_id, NULL, (void *(*)(void *)) display_run,
                         s->common->real_display);
-        assert (ret == 0);
 
         s->common->parent = parent;
 
@@ -164,8 +160,11 @@ static void check_reconf(struct state_proxy_common *s, struct video_desc desc)
 static void display_proxy_run(void *state)
 {
         shared_ptr<struct state_proxy_common> s = ((struct state_proxy *)state)->common;
-        bool prefill = false;
-        int skipped = 0;
+        enum {
+                NONE,
+                PREFILL,
+                TRANSITION
+        } transition_state = NONE;
 
         while (1) {
                 struct video_frame *frame;
@@ -201,21 +200,17 @@ static void display_proxy_run(void *state)
                 }
 
                 if (frame->ssrc != s->current_ssrc && frame->ssrc != s->old_ssrc) {
-                        if (skipped >= SKIP_FIRST_N_FRAMES_IN_STREAM) {
-                                s->old_ssrc = s->current_ssrc; // if != 0, we will be in transition state
-                                s->current_ssrc = frame->ssrc;
-                                prefill = true;
-                                skipped = 0;
-                        } else {
-                                skipped++;
-                                continue;
-                        }
+                        s->old_ssrc = s->current_ssrc; // if != 0, we will be in transition state
+                        s->current_ssrc = frame->ssrc;
+                                fprintf(stderr, "PREFILL\n");
+                                transition_state = PREFILL;
                 }
 
                 s->frames[frame->ssrc].push_back(frame);
 
-                if (s->frames[s->current_ssrc].size() >= BUFFER_LEN) {
-                        prefill = false;
+                if (s->frames[s->current_ssrc].size() >= BUFFER_LEN && transition_state == PREFILL) {
+                                fprintf(stderr, "TRANSITION\n");
+                        transition_state = TRANSITION;
                 }
 
                 // we may receive two streams concurrently, therefore we use the timing according to
@@ -224,83 +219,76 @@ static void display_proxy_run(void *state)
                         continue;
                 }
 
-                if (s->old_ssrc != 0) {
-                        if (prefill) {
-                                auto & ssrc_list = s->frames[s->old_ssrc];
-                                if (ssrc_list.empty()) {
-                                        fprintf(stderr, "SMOLIK1!\n");
-                                } else {
-                                        frame = ssrc_list.front();
-                                        ssrc_list.pop_front();
-
-                                        check_reconf(s.get(), video_desc_from_frame(frame));
-
-                                        struct video_frame *real_display_frame = display_get_frame(s->real_display);
-                                        memcpy(real_display_frame->tiles[0].data, frame->tiles[0].data, frame->tiles[0].data_len);
-                                        vf_free(frame);
-                                        real_display_frame->ssrc = s->current_ssrc;
-                                        display_put_frame(s->real_display, real_display_frame, PUTF_BLOCKING);
-                                }
+                if (transition_state == PREFILL) {
+                        auto & ssrc_list = s->frames[s->old_ssrc];
+                        if (ssrc_list.empty()) {
+                                fprintf(stderr, "SMOLIK1!\n");
                         } else {
-                                auto & old_list = s->frames[s->old_ssrc];
-                                auto & new_list = s->frames[s->current_ssrc];
+                                frame = ssrc_list.front();
+                                ssrc_list.pop_front();
 
-                                s->transition += 1;
+                                check_reconf(s.get(), video_desc_from_frame(frame));
 
-                                if (old_list.empty() || new_list.empty()) {
-                                        fprintf(stderr, "SMOLIK2!\n");
-                                        // ok here, we do not have nothing to mix, therefore cancel smooth transition
-                                        s->transition = TRANSITION_COUNT;
-                                } else {
-                                        struct video_frame *old_frame, *new_frame;
-
-                                        old_frame = old_list.front();
-                                        old_list.pop_front();
-                                        new_frame = new_list.front();
-                                        new_list.pop_front();
-
-                                        struct video_desc old_desc = video_desc_from_frame(old_frame),
-                                                          new_desc = video_desc_from_frame(new_frame);
-
-                                        check_reconf(s.get(), new_desc);
-
-                                        struct video_frame *real_display_frame = display_get_frame(s->real_display);
-
-                                        if (video_desc_eq(old_desc, new_desc)) {
-                                                for (unsigned int i = 0; i < new_frame->tiles[0].data_len; ++i) {
-                                                        int old_val = ((unsigned char *) old_frame->tiles[0].data)[i];
-                                                        int new_val = ((unsigned char *) new_frame->tiles[0].data)[i];
-                                                        ((unsigned char *) real_display_frame->tiles[0].data)[i] =
-                                                                ((new_val * s->transition) + (old_val * (TRANSITION_COUNT - s->transition))) / TRANSITION_COUNT;
-                                                }
-                                        } else {
-                                                // new desc is different than old desc!
-                                                fprintf(stderr, "SMOLIK4!\n");
-                                                memcpy(real_display_frame->tiles[0].data, new_frame->tiles[0].data, new_frame->tiles[0].data_len);
-                                        }
-                                        vf_free(old_frame);
-                                        vf_free(new_frame);
-                                        real_display_frame->ssrc = s->current_ssrc;
-                                        display_put_frame(s->real_display, real_display_frame, PUTF_BLOCKING);
-                                }
+                                struct video_frame *real_display_frame = display_get_frame(s->real_display);
+                                memcpy(real_display_frame->tiles[0].data, frame->tiles[0].data, frame->tiles[0].data_len);
+                                vf_free(frame);
+                                display_put_frame(s->real_display, real_display_frame, PUTF_BLOCKING);
                         }
-                } else {
-                        if (!prefill) {
-                                if (s->frames[s->current_ssrc].empty()) {
-                                        // this should not happen, heh ?
-                                        fprintf(stderr, "SMOLIK3!\n");
+                } else if (transition_state == TRANSITION) {
+                        auto & old_list = s->frames[s->old_ssrc];
+                        auto & new_list = s->frames[s->current_ssrc];
+
+                        s->transition += 1;
+
+                        if (old_list.empty() || new_list.empty()) {
+                                fprintf(stderr, "SMOLIK2!\n");
+                                // ok here, we do not have nothing to mix, therefore cancel smooth transition
+                                s->transition = TRANSITION_COUNT;
+                        } else {
+                                struct video_frame *old_frame, *new_frame;
+
+                                old_frame = old_list.front();
+                                old_list.pop_front();
+                                new_frame = new_list.front();
+                                new_list.pop_front();
+
+                                struct video_desc old_desc = video_desc_from_frame(old_frame),
+                                                  new_desc = video_desc_from_frame(new_frame);
+
+                                check_reconf(s.get(), new_desc);
+
+                                struct video_frame *real_display_frame = display_get_frame(s->real_display);
+
+                                if (video_desc_eq(old_desc, new_desc)) {
+                                        for (unsigned int i = 0; i < new_frame->tiles[0].data_len; ++i) {
+                                                int old_val = ((unsigned char *) old_frame->tiles[0].data)[i];
+                                                int new_val = ((unsigned char *) new_frame->tiles[0].data)[i];
+                                                ((unsigned char *) real_display_frame->tiles[0].data)[i] =
+                                                        ((new_val * s->transition) + (old_val * (TRANSITION_COUNT - s->transition))) / TRANSITION_COUNT;
+                                        }
                                 } else {
-                                        frame = s->frames[s->current_ssrc].front();
-                                        s->frames[s->current_ssrc].pop_front();
-
-                                        check_reconf(s.get(), video_desc_from_frame(frame));
-
-                                        struct video_frame *real_display_frame = display_get_frame(s->real_display);
-                                        memcpy(real_display_frame->tiles[0].data, frame->tiles[0].data, frame->tiles[0].data_len);
-                                        vf_free(frame);
-                                        real_display_frame->ssrc = s->current_ssrc;
-                                        display_put_frame(s->real_display, real_display_frame, PUTF_BLOCKING);
+                                        // new desc is different than old desc!
+                                        fprintf(stderr, "SMOLIK4!\n");
+                                        memcpy(real_display_frame->tiles[0].data, new_frame->tiles[0].data, new_frame->tiles[0].data_len);
                                 }
+                                vf_free(old_frame);
+                                vf_free(new_frame);
+                                display_put_frame(s->real_display, real_display_frame, PUTF_BLOCKING);
+                        }
+                } else if (transition_state == NONE) {
+                        if (s->frames[s->current_ssrc].empty()) {
+                                // this should not happen, heh ?
+                                fprintf(stderr, "SMOLIK3!\n");
+                        } else {
+                                frame = s->frames[s->current_ssrc].front();
+                                s->frames[s->current_ssrc].pop_front();
+
+                                check_reconf(s.get(), video_desc_from_frame(frame));
+
+                                struct video_frame *real_display_frame = display_get_frame(s->real_display);
+                                memcpy(real_display_frame->tiles[0].data, frame->tiles[0].data, frame->tiles[0].data_len);
+                                vf_free(frame);
+                                display_put_frame(s->real_display, real_display_frame, PUTF_BLOCKING);
                         }
                 }
 
@@ -314,6 +302,8 @@ static void display_proxy_run(void *state)
                         s->disabled_ssrc[s->old_ssrc] = chrono::system_clock::now();
                         s->old_ssrc = 0u;
                         s->transition = 0;
+                        transition_state = NONE;
+                        fprintf(stderr, "\n\n\n\\n\n\n\n");
                 }
         }
 
