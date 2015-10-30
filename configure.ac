@@ -1376,6 +1376,41 @@ AC_SUBST(RTSP_SERVER_LIBS)
 AC_SUBST(RTSP_SERVER_OBJ)
 
 # -------------------------------------------------------------------------------------------------
+# MVTP stuff
+# -------------------------------------------------------------------------------------------------
+mvtp=no
+
+AC_ARG_ENABLE(mvtp,
+[  --disable-mvtp          disable MVTP support (default is auto)]
+[                          Requires: libmvtp],
+    [mvtp_req=$enableval],
+    [mvtp_req=auto]
+    )
+
+PKG_CHECK_MODULES([MVTP], [libmvtp], FOUND_MVTP_DEPS=yes, FOUND_MVTP_DEPS=no)
+
+if test $mvtp_req != no -a "$FOUND_MVTP_DEPS" = yes
+then
+        CFLAGS="$CFLAGS $MVTP_CFLAGS"
+        CXXFLAGS="$CXXFLAGS $MVTP_CFLAGS"
+        MVTP_OBJ="src/video_rxtx/mvtp.o"
+        MVTP_LIBS="$MVTP_LIBS -lboost_system"
+        AC_SUBST(MVTP_LIB_TARGET, "lib/ultragrid/module_video_rxtx_mvtp.so")
+        LIB_TARGETS="$LIB_TARGETS $MVTP_LIB_TARGET"
+        LIB_OBJS="$LIB_OBJS $MVTP_OBJ"
+        mvtp=yes
+fi
+
+if test $mvtp_req = yes -a $mvtp = no; then
+        AC_MSG_ERROR([Install libmvtp for UltraGrid MVTP support.]);
+fi
+
+LIB_MODULES="$LIB_MODULES $MVTP_LIBS"
+
+AC_SUBST(MVTP_LIBS)
+AC_SUBST(MVTP_OBJ)
+
+# -------------------------------------------------------------------------------------------------
 # Resize stuff
 # -------------------------------------------------------------------------------------------------
 RESIZE_LIBS=
@@ -2944,6 +2979,7 @@ RESULT=\
   resize capture filter ....... $resize
   blank capture filter ........ $blank
   RTSP Server ................. $rtsp_server
+  MVTP ........................ $mvtp
   scale postprocessor ......... $scale
   testcard extras ............. $testcard_extras_req
   GPU accelerated LDGM ........ $ldgm_gpu

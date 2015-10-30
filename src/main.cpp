@@ -1075,11 +1075,13 @@ int main(int argc, char *argv[])
                 if (video_rxtx_mode & MODE_RECEIVER)
                         params["display_device"].ptr = uv->display_device;
 
+                // RTP + MVTP
+                params["tx_port"].i = video_tx_port;
+
                 //RTP
                 params["mtu"].i = requested_mtu;
                 params["receiver"].ptr = (void *) requested_receiver;
                 params["rx_port"].i = video_rx_port;
-                params["tx_port"].i = video_tx_port;
                 params["use_ipv6"].b = ipv6;
                 params["mcast_if"].ptr = (void *) requested_mcast_if;
                 params["mtu"].i = requested_mtu;

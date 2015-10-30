@@ -198,7 +198,7 @@ static const char *interlacing_suffixes[] = {
                 [UPPER_FIELD_FIRST] = "tff",
                 [LOWER_FIELD_FIRST] = "bff",
                 [INTERLACED_MERGED] = "i",
-                [SEGMENTED_FRAME] = "psf",
+                [SEGMENTED_FRAME] = "PsF",
 };
 
 const char *get_interlacing_suffix(enum interlacing_t interlacing)

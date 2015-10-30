@@ -644,7 +644,8 @@ static bool address_is_ipv6(const char *addr)
  * @param tx_port transmit port.
  * @param ttl     time-to-live value for transmitted packets.
  * @param use_ipv6     whether to use IPv6 for hostname
- * @param multithreaded receiving in a separate thread than processing
+ * @param multithreaded receiving in a separate thread while processing in the other for better
+ *                      performance
  *
  * @returns a pointer to a socket_udp structure on success, NULL otherwise.
  **/

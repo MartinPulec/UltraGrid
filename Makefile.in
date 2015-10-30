@@ -666,6 +666,9 @@ rtsp_server: @RTSP_SERVER_LIB_TARGET@
 @RTSP_SERVER_LIB_TARGET@: @RTSP_SERVER_OBJ@
 	$(LINKER) $(LDFLAGS) -shared -Wl,-soname,module_video_rxtx_h264.so $^ @RTSP_SERVER_LIBS@ -o $@
 
+@MVTP_LIB_TARGET@: @MVTP_OBJ@
+	$(LINKER) $(LDFLAGS) -shared -Wl,-soname,module_video_rxtx_mvtp.so $^ @MVTP_LIBS@ -o $@
+
 @VCAPTURE_FILTER_RESIZE_LIB_TARGET@: @RESIZE_OBJ@
 	$(LINKER) $(LDFLAGS) -shared -Wl,-soname,module_vcapfilter_resize.so $^ @RESIZE_LIBS@ -o $@
 
