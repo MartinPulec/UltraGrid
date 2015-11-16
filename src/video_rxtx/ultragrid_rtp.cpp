@@ -395,7 +395,7 @@ void *ultragrid_rtp_video_rxtx::receiver_loop()
                                 }
 
                                 if (supp_for_mult_sources.val == false) {
-                                        remove_display_from_decoders(); // must be called before creating new decoder state
+                                        //remove_display_from_decoders(); // must be called before creating new decoder state
                                 }
 
                                 cp->decoder_state = new_video_decoder();
