@@ -43,9 +43,10 @@
 #include <memory>
 #include <string>
 
+#include "debug.h"
 #include "module.h"
 
-#define VIDEO_RXTX_ABI_VERSION 2
+#define VIDEO_RXTX_ABI_VERSION 3
 
 struct display;
 struct module;
@@ -54,6 +55,7 @@ struct video_export;
 struct video_frame;
 
 class video_rxtx;
+class audio_frame2;
 
 union param_u {
         void * ptr;
@@ -95,6 +97,9 @@ private:
         virtual void send_frame(std::shared_ptr<video_frame>) = 0;
         virtual void *(*get_receiver_thread())(void *arg) = 0;
         static void *sender_thread(void *args);
+        virtual void send_audio(audio_frame2 const &) {
+                log_msg(LOG_LEVEL_ERROR, "Sending audio not supported with current protocol!");
+        }
         void *sender_loop();
         virtual struct response *process_message(struct msg_sender *) {
                 return NULL;

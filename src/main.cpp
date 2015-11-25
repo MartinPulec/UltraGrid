@@ -1068,7 +1068,12 @@ int main(int argc, char *argv[])
                 params["audio_sample_rate"].i = get_audio_codec_sample_rate(audio_codec) ? get_audio_codec_sample_rate(audio_codec) : 48000;
                 params["audio_channels"].i = audio_capture_channels;
                 params["audio_bps"].i = 2;
+
+                // audio
                 params["a_rx_port"].i = audio_rx_port;
+                params["a_tx_port"].i = audio_tx_port;
+                params["a_receiver"].ptr = (void *) audio_host;
+                params["a_fec"].ptr = (void *) requested_audio_fec;
 
                 if (strcmp(video_protocol, "rtsp") == 0) {
                         rtps_types_t avType;
