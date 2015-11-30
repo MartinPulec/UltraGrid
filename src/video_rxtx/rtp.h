@@ -70,9 +70,12 @@ public:
 protected:
         int m_connections_count;
         struct rtp **m_network_devices; // ULTRAGRID_RTP
+        struct rtp *m_audio_network_device;
+
         std::mutex m_network_devices_lock;
         struct tx *m_tx;
         struct pdb *m_participants;
+        struct pdb *m_audio_participants;
         std::string      m_requested_receiver;
         int              m_recv_port_number;
         int              m_send_port_number;
