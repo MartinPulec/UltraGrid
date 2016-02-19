@@ -324,8 +324,13 @@ int jpeg_to_dxt_decompress(void *state, unsigned char *dst, unsigned char *buffe
                 struct msg_frame *completed =
                         dynamic_cast<msg_frame *>(s->thread_data[s->free].m_out.pop());
                 assert(completed != NULL);
-                cuda_wrapper_memcpy(dst, completed->f->tiles[0].data, completed->f->tiles[0].data_len,
-                                CUDA_WRAPPER_MEMCPY_DEVICE_TO_HOST);
+                gpujpeg_set_device(cuda_devices[s->thread_data[s->free].cuda_dev_index]);
+                if (cuda_wrapper_memcpy(dst, completed->f->tiles[0].data, completed->f->tiles[0].data_len,
+                                CUDA_WRAPPER_MEMCPY_DEVICE_TO_HOST) != CUDA_WRAPPER_SUCCESS) {
+                        log_msg(LOG_LEVEL_ERROR, "CUDA memcpy error!\n");
+                        delete completed;
+                        return FALSE;
+                }
 
                 delete completed;
         }
