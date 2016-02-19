@@ -46,12 +46,16 @@
 
 #include "libgpujpeg/gpujpeg_decoder.h"
 
+#include "cuda_wrapper.h"
 #include "debug.h"
 #include "lib_common.h"
 #include "host.h"
 #include "utils/synchronized_queue.h"
+#include "utils/video_frame_pool.h"
 #include "video.h"
 #include "video_decompress.h"
+
+using std::shared_ptr;
 
 namespace {
 
@@ -70,6 +74,8 @@ struct thread_data {
         char                    *out_buff;
 
         int                      cuda_dev_index;
+
+        video_frame_pool<cuda_buffer_data_allocator> pool;
 };
 
 struct msg_reconfigure : public msg {
@@ -84,14 +90,9 @@ struct msg_reconfigure_status : public msg {
 };
 
 struct msg_frame : public msg {
-        msg_frame(int len) {
-                data = new char[len];
-                data_len = len;
+        msg_frame(shared_ptr<video_frame> f_) : f(f_) {
         }
-        ~msg_frame() {
-                delete data;
-        }
-        char *data;
+        shared_ptr<video_frame> f;
         int data_len;
 };
 
@@ -104,6 +105,8 @@ struct state_decompress_jpeg_to_dxt {
         // which card is free to process next image
         unsigned int             free;
         unsigned int             occupied_count; // number of GPUs occupied
+
+        video_frame_pool<default_data_allocator> pool;
 };
 
 static int reconfigure_thread(struct thread_data *s, struct video_desc desc, codec_t out_codec);
@@ -131,14 +134,22 @@ static void *worker_thread(void *arg)
                         msg_frame *frame_msg = dynamic_cast<msg_frame *>(message);
                         struct gpujpeg_decoder_output decoder_output;
 
-                        msg_frame *output_frame = new msg_frame(vc_get_linesize(s->desc.width, s->out_codec) * s->desc.height);
+                        msg_frame *output_frame = new msg_frame(s->pool.get_frame());
 
-                        gpujpeg_decoder_output_set_custom(&decoder_output, (uint8_t *) output_frame->data);
+                        gpujpeg_decoder_output_set_cuda_buffer(&decoder_output);
 
-
-                        if (gpujpeg_decoder_decode(s->jpeg_decoder, (uint8_t *) frame_msg->data, frame_msg->data_len,
+                        if (gpujpeg_decoder_decode(s->jpeg_decoder, (uint8_t *) frame_msg->f->tiles[0].data, frame_msg->f->tiles[0].data_len,
                                         &decoder_output) != 0) {
                                 log_msg(LOG_LEVEL_ERROR, "JPEG decoding error!\n");
+                                delete output_frame;
+                                continue;
+                        }
+
+                        if (cuda_wrapper_memcpy((uint8_t *) output_frame->f->tiles[0].data,
+                                                decoder_output.data,
+                                                output_frame->f->tiles[0].data_len,
+                                                CUDA_WRAPPER_MEMCPY_DEVICE_TO_DEVICE) != CUDA_WRAPPER_SUCCESS) {
+                                log_msg(LOG_LEVEL_ERROR, "CUDA memcpy error!\n");
                                 delete output_frame;
                                 continue;
                         }
@@ -218,6 +229,10 @@ int jpeg_to_dxt_decompress_reconfigure(void *state, struct video_desc desc,
 
         s->desc = desc;
 
+        struct video_desc pool_desc(desc);
+        pool_desc.color_spec = out_codec;
+        s->pool.reconfigure(pool_desc, vc_get_linesize(desc.width, out_codec) * desc.height);
+
         flush(s);
 
         for(unsigned int i = 0; i < cuda_devices_count; ++i) {
@@ -251,6 +266,10 @@ static int reconfigure_thread(struct thread_data *s, struct video_desc desc, cod
         } else {
                 gpujpeg_init_device(cuda_devices[s->cuda_dev_index], 0);
         }
+
+        struct video_desc pool_desc(desc);
+        pool_desc.color_spec = out_codec;
+        s->pool.reconfigure(pool_desc, vc_get_linesize(desc.width, out_codec) * desc.height);
 
         if(s->out_buff != NULL) {
                 free(s->out_buff);
@@ -290,8 +309,8 @@ int jpeg_to_dxt_decompress(void *state, unsigned char *dst, unsigned char *buffe
         struct state_decompress_jpeg_to_dxt *s = (struct state_decompress_jpeg_to_dxt *) state;
         UNUSED(frame_seq);
 
-        msg_frame *message = new msg_frame(src_len);
-        memcpy(message->data, buffer, src_len);
+        msg_frame *message = new msg_frame(s->pool.get_frame());
+        memcpy(message->f->tiles[0].data, buffer, src_len);
 
         if(s->occupied_count < cuda_devices_count - 1) {
                 s->thread_data[s->free].m_in.push(message);
@@ -305,7 +324,8 @@ int jpeg_to_dxt_decompress(void *state, unsigned char *dst, unsigned char *buffe
                 struct msg_frame *completed =
                         dynamic_cast<msg_frame *>(s->thread_data[s->free].m_out.pop());
                 assert(completed != NULL);
-                memcpy(dst, completed->data, completed->data_len);
+                cuda_wrapper_memcpy(dst, completed->f->tiles[0].data, completed->f->tiles[0].data_len,
+                                CUDA_WRAPPER_MEMCPY_DEVICE_TO_HOST);
 
                 delete completed;
         }

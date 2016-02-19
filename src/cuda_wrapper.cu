@@ -61,6 +61,7 @@ static inline enum cudaMemcpyKind map_cuda_memcpy_kind(int our_kind) {
         struct kind_mapping mapping[] = {
                 { cudaMemcpyHostToDevice, CUDA_WRAPPER_MEMCPY_HOST_TO_DEVICE },
                 { cudaMemcpyDeviceToHost, CUDA_WRAPPER_MEMCPY_DEVICE_TO_HOST },
+                { cudaMemcpyDeviceToDevice, CUDA_WRAPPER_MEMCPY_DEVICE_TO_DEVICE },
         };
 
         int i;

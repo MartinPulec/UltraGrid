@@ -61,6 +61,7 @@ extern "C" {
 /// @{
 #define CUDA_WRAPPER_MEMCPY_HOST_TO_DEVICE 0
 #define CUDA_WRAPPER_MEMCPY_DEVICE_TO_HOST 1
+#define CUDA_WRAPPER_MEMCPY_DEVICE_TO_DEVICE 2
 /// @}
 
 typedef void *cuda_wrapper_stream_t;
@@ -80,6 +81,23 @@ CUDA_DLL_API const char * cuda_wrapper_get_error_string(int error);
 #ifdef __cplusplus
 }
 #endif // __cplusplus
+
+#ifdef __cplusplus
+// for video_frame_pool
+struct cuda_buffer_data_allocator {
+        void *allocate(size_t size) {
+                void *ptr;
+                if (CUDA_WRAPPER_SUCCESS != cuda_wrapper_malloc_host(&ptr,
+                                        size)) {
+                        return NULL;
+                }
+                return ptr;
+        }
+        void deallocate(void *ptr) {
+                cuda_wrapper_free(ptr);
+        }
+};
+#endif
 
 #endif // CUDA_WRAPPER_H_
 

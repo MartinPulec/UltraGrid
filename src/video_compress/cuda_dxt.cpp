@@ -56,20 +56,6 @@ using namespace std;
 
 namespace {
 
-struct cuda_buffer_data_allocator {
-        void *allocate(size_t size) {
-                void *ptr;
-                if (CUDA_WRAPPER_SUCCESS != cuda_wrapper_malloc_host(&ptr,
-                                        size)) {
-                        return NULL;
-                }
-                return ptr;
-        }
-        void deallocate(void *ptr) {
-                cuda_wrapper_free(ptr);
-        }
-};
-
 struct state_video_compress_cuda_dxt {
         struct module       module_data;
         struct video_desc   saved_desc;
