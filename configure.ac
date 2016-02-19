@@ -2091,7 +2091,7 @@ then
         JPEG_INC="$JPEG_INC $LIBGPUJPEG_CFLAGS"
         JPEG_LIB="$JPEG_LIB $LIBGPUJPEG_LIBS"
         JPEG_COMPRESS_OBJ="src/video_compress/jpeg.o"
-        JPEG_DECOMPRESS_OBJ="src/video_decompress/jpeg.o "
+        JPEG_DECOMPRESS_OBJ="src/video_decompress/jpeg.o src/video_decompress/jpeg_multi_gpu.o"
         AC_DEFINE([HAVE_JPEG], [1], [Build with JPEG support])
         AC_SUBST(JPEG_COMPRESS_LIB_TARGET, "lib/ultragrid/module_vcompress_jpeg.so")
         AC_SUBST(JPEG_DECOMPRESS_LIB_TARGET, "lib/ultragrid/module_vdecompress_jpeg.so")
