@@ -270,6 +270,14 @@ static int reconfigure_thread(struct thread_data *s, struct video_desc desc, cod
                 return false;
         }
 
+        if (out_codec == RGB) {
+                gpujpeg_decoder_set_output_format(s->jpeg_decoder, GPUJPEG_RGB,
+                                GPUJPEG_4_4_4);
+        } else {
+                gpujpeg_decoder_set_output_format(s->jpeg_decoder, GPUJPEG_YCBCR_BT709,
+                                GPUJPEG_4_2_2);
+        }
+
         s->desc = desc;
         s->out_codec = out_codec;
 
@@ -339,7 +347,7 @@ void jpeg_to_dxt_decompress_done(void *state)
 
 static const struct decode_from_to jpeg_to_dxt_decoders[] = {
         { JPEG, UYVY, 200 },
-        { JPEG, RGB, 200 },
+        //{ JPEG, RGB, 200 },
         { VIDEO_CODEC_NONE, VIDEO_CODEC_NONE, 0 },
 };
 
