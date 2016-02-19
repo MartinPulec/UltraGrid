@@ -131,7 +131,7 @@ static void *worker_thread(void *arg)
                         msg_frame *frame_msg = dynamic_cast<msg_frame *>(message);
                         struct gpujpeg_decoder_output decoder_output;
 
-                        msg_frame *output_frame = new msg_frame(vc_get_linesize(s->desc.width, s->desc.color_spec) * s->desc.height);
+                        msg_frame *output_frame = new msg_frame(vc_get_linesize(s->desc.width, s->out_codec) * s->desc.height);
 
                         gpujpeg_decoder_output_set_custom(&decoder_output, (uint8_t *) output_frame->data);
 
@@ -297,7 +297,7 @@ int jpeg_to_dxt_decompress(void *state, unsigned char *dst, unsigned char *buffe
                 struct msg_frame *completed =
                         dynamic_cast<msg_frame *>(s->thread_data[s->free].m_out.pop());
                 assert(completed != NULL);
-                memcpy(dst, completed->data, vc_get_linesize(s->desc.width, s->desc.color_spec) * s->desc.height);
+                memcpy(dst, completed->data, completed->data_len);
 
                 delete completed;
         }
