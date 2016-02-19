@@ -351,7 +351,7 @@ static const struct video_decompress_info jpeg_to_dxt_info = {
         jpeg_to_dxt_decoders,
 };
 
-REGISTER_MODULE(jpeg_to_dxt, &jpeg_to_dxt_info, LIBRARY_CLASS_VIDEO_DECOMPRESS, VIDEO_DECOMPRESS_ABI_VERSION);
+REGISTER_MODULE(jpeg_multi_gpu, &jpeg_to_dxt_info, LIBRARY_CLASS_VIDEO_DECOMPRESS, VIDEO_DECOMPRESS_ABI_VERSION);
 
 } // namespace
 
