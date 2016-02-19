@@ -106,7 +106,7 @@ struct state_decompress_jpeg_to_dxt {
         unsigned int             occupied_count; // number of GPUs occupied
 };
 
-static int reconfigure_thread(struct thread_data *s, struct video_desc desc);
+static int reconfigure_thread(struct thread_data *s, struct video_desc desc, codec_t out_codec);
 
 static void *worker_thread(void *arg)
 {
@@ -121,9 +121,7 @@ static void *worker_thread(void *arg)
                         break;
                 } else if (dynamic_cast<msg_reconfigure *>(message)) {
                         msg_reconfigure *reconf = dynamic_cast<msg_reconfigure *>(message);
-                        bool ret = reconfigure_thread(s, reconf->desc);
-                        s->desc = reconf->desc;
-                        s->out_codec = reconf->out_codec;
+                        bool ret = reconfigure_thread(s, reconf->desc, reconf->out_codec);
 
                         msg_reconfigure_status *status = new msg_reconfigure_status(ret);
                         s->m_out.push(status);
@@ -245,7 +243,7 @@ int jpeg_to_dxt_decompress_reconfigure(void *state, struct video_desc desc,
 /**
  * @return maximal buffer size needed to image with such a properties
  */
-static int reconfigure_thread(struct thread_data *s, struct video_desc desc)
+static int reconfigure_thread(struct thread_data *s, struct video_desc desc, codec_t out_codec)
 {
         if(s->jpeg_decoder != NULL) {
                 gpujpeg_decoder_destroy(s->jpeg_decoder);
@@ -259,7 +257,7 @@ static int reconfigure_thread(struct thread_data *s, struct video_desc desc)
                 s->out_buff = NULL;
         }
 
-        s->out_buff = (char *) malloc(vc_get_linesize(desc.width, desc.color_spec) * desc.height);
+        s->out_buff = (char *) malloc(vc_get_linesize(desc.width, out_codec) * desc.height);
         if (s->out_buff == NULL) {
                 log_msg(LOG_LEVEL_ERROR, "Could not allocate output buffer.\n");
                 return false;
@@ -271,6 +269,9 @@ static int reconfigure_thread(struct thread_data *s, struct video_desc desc)
                 log_msg(LOG_LEVEL_ERROR, "Creating JPEG decoder failed.\n");
                 return false;
         }
+
+        s->desc = desc;
+        s->out_codec = out_codec;
 
         return true;
 }
