@@ -347,7 +347,7 @@ void jpeg_to_dxt_decompress_done(void *state)
 
 static const struct decode_from_to jpeg_to_dxt_decoders[] = {
         { JPEG, UYVY, 200 },
-        //{ JPEG, RGB, 200 },
+        { JPEG, RGB, 200 },
         { VIDEO_CODEC_NONE, VIDEO_CODEC_NONE, 0 },
 };
 
