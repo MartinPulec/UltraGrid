@@ -216,7 +216,7 @@ int jpeg_to_dxt_decompress_reconfigure(void *state, struct video_desc desc,
         assert(rshift == 0 && gshift == 8 && bshift == 16);
         assert(out_codec == UYVY || out_codec == RGB);
         /// TODO TODO TODO TODO !
-        assert(pitch == (int) vc_get_linesize(desc.width, desc.color_spec)); // default
+        assert(pitch == (int) vc_get_linesize(desc.width, out_codec)); // default
 
         s->desc = desc;
 
