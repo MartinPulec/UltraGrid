@@ -493,6 +493,11 @@ struct decompress_worker_data {
 static void *decompress_tile_callback(void *arg) {
         decompress_worker_data *s = (decompress_worker_data *) arg;
 
+        if (!s->compressed) {
+                data->ret = FALSE;
+                return s;
+        }
+
         s->ret = decompress_frame(s->decompress_state,
                         (unsigned char *) s->decompressed,
                         (unsigned char *) s->compressed,
@@ -537,9 +542,6 @@ static void *decompress_thread(void *args) {
                                         } else {
                                                 out = vf_get_tile(output, x)->data;
                                         }
-                                        if(!msg->nofec_frame->tiles[pos].data)
-abort();
-                                                //continue;
 
                                         struct decompress_worker_data *data = &data_tile[pos];
 
