@@ -494,7 +494,7 @@ static void *decompress_tile_callback(void *arg) {
         decompress_worker_data *s = (decompress_worker_data *) arg;
 
         if (!s->compressed) {
-                data->ret = FALSE;
+                s->ret = FALSE;
                 return s;
         }
 
