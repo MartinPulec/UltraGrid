@@ -531,8 +531,8 @@ static void *decompress_thread(void *args) {
 
                         int tile_width = decoder->received_vid_desc.width; // get_video_mode_tiles_x(decoder->video_mode);
                         int tile_height = decoder->received_vid_desc.height; // get_video_mode_tiles_y(decoder->video_mode);
-                        for (int x = 0; x < get_video_mode_tiles_x(decoder->video_mode); ++x) {
-                                for (int y = 0; y < get_video_mode_tiles_y(decoder->video_mode); ++y) {
+                        for (int y = 0; y < get_video_mode_tiles_y(decoder->video_mode); ++y) {
+                                for (int x = 0; x < get_video_mode_tiles_x(decoder->video_mode); ++x) {
                                         int pos = x + get_video_mode_tiles_x(decoder->video_mode) * y;
                                         char *out;
                                         if(decoder->merged_fb) {
@@ -552,15 +552,15 @@ static void *decompress_thread(void *args) {
                                         data->buffer_num = msg->buffer_num[pos];
 
 
-                                        task_handle[y] = task_run_async(decompress_tile_callback,
+                                        task_handle[x] = task_run_async(decompress_tile_callback,
                                                         data);
                                 }
 
                                 bool failed = false;
 
-                                for (int y = 0; y < get_video_mode_tiles_y(decoder->video_mode); ++y) {
+                                for (int x = 0; x < get_video_mode_tiles_x(decoder->video_mode); ++x) {
                                         struct decompress_worker_data *data = (struct decompress_worker_data *)
-                                                wait_task(task_handle[y]);
+                                                wait_task(task_handle[x]);
 
                                         if(!data->ret) {
                                                 failed = true;
