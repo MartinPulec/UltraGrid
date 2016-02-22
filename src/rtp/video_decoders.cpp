@@ -90,6 +90,7 @@
 #include "rtp/video_decoders.h"
 #include "utils/synchronized_queue.h"
 #include "utils/timed_message.h"
+#include "utils/worker.h"
 #include "video.h"
 #include "video_decompress.h"
 #include "video_display.h"
@@ -479,6 +480,27 @@ cleanup:
         return NULL;
 }
 
+struct compress_worker_data {
+        struct state_decompress *decompress_state;
+        struct module *state;      ///< compress driver status
+        shared_ptr<video_frame> frame; ///< uncompressed tile to be compressed
+
+        compress_tile_t callback;  ///< tile compress callback
+        shared_ptr<video_frame> ret; ///< OUT - returned compressed tile, NULL if failed
+};
+
+static void *decompress_tile_callback(void *arg) {
+        decompress_worker_data *s = (decompress_worker_data *) arg;
+
+        s->ret = decompress_frame(decoder->decompress_state[pos],
+                        (unsigned char *) out,
+                        (unsigned char *) msg->nofec_frame->tiles[pos].data,
+                        msg->nofec_frame->tiles[pos].data_len,
+                        msg->buffer_num[pos]);
+
+        return s;
+}
+
 static void *decompress_thread(void *args) {
         struct state_video_decoder *decoder =
                 (struct state_video_decoder *) args;
@@ -500,9 +522,8 @@ static void *decompress_thread(void *args) {
                 if(decoder->decoder_type == EXTERNAL_DECODER) {
                         int tile_width = decoder->received_vid_desc.width; // get_video_mode_tiles_x(decoder->video_mode);
                         int tile_height = decoder->received_vid_desc.height; // get_video_mode_tiles_y(decoder->video_mode);
-                        int x, y;
-                        for (x = 0; x < get_video_mode_tiles_x(decoder->video_mode); ++x) {
-                                for (y = 0; y < get_video_mode_tiles_y(decoder->video_mode); ++y) {
+                        for (int x = 0; x < get_video_mode_tiles_x(decoder->video_mode); ++x) {
+                                for (int y = 0; y < get_video_mode_tiles_y(decoder->video_mode); ++y) {
                                         int pos = x + get_video_mode_tiles_x(decoder->video_mode) * y;
                                         char *out;
                                         if(decoder->merged_fb) {

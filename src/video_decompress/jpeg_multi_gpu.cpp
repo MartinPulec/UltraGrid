@@ -371,9 +371,12 @@ void jpeg_to_dxt_decompress_done(void *state)
 }
 
 static const struct decode_from_to jpeg_to_dxt_decoders[] = {
+#undef USE_JPEG_MULTI_GPU
+#if defined USE_JPEG_MULTI_GPU
         { JPEG, UYVY, 200 },
         { JPEG, RGB, 200 },
         { VIDEO_CODEC_NONE, VIDEO_CODEC_NONE, 0 },
+#endif
 };
 
 static const struct video_decompress_info jpeg_to_dxt_info = {
