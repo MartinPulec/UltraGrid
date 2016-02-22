@@ -112,6 +112,8 @@ static int jpeg_decompress_reconfigure(void *state, struct video_desc desc,
         
         assert(out_codec == RGB || out_codec == UYVY);
 
+        gpujpeg_set_device(s->cuda_device);
+
         if(s->out_codec == out_codec &&
                         s->pitch == pitch &&
                         s->rshift == rshift &&
