@@ -552,27 +552,23 @@ static void *decompress_thread(void *args) {
                                         data->buffer_num = msg->buffer_num[pos];
 
 
-                                        task_handle[pos] = task_run_async(decompress_tile_callback,
+                                        task_handle[y] = task_run_async(decompress_tile_callback,
                                                         data);
                                 }
-                        }
 
-                        bool failed = false;
+                                bool failed = false;
 
-                        for (int x = 0; x < get_video_mode_tiles_x(decoder->video_mode); ++x) {
                                 for (int y = 0; y < get_video_mode_tiles_y(decoder->video_mode); ++y) {
-                                        int pos = x + get_video_mode_tiles_x(decoder->video_mode) * y;
-
                                         struct decompress_worker_data *data = (struct decompress_worker_data *)
-                                                wait_task(task_handle[pos]);
+                                                wait_task(task_handle[y]);
 
                                         if(!data->ret) {
                                                 failed = true;
                                         }
                                 }
-                        }
-                        if (failed) {
-                                goto skip_frame;
+                                if (failed) {
+                                        goto skip_frame;
+                                }
                         }
                 } else {
                         /// @todo
