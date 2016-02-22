@@ -480,23 +480,24 @@ cleanup:
         return NULL;
 }
 
-struct compress_worker_data {
+struct decompress_worker_data {
         struct state_decompress *decompress_state;
-        struct module *state;      ///< compress driver status
-        shared_ptr<video_frame> frame; ///< uncompressed tile to be compressed
+        char *compressed;
+        int compressed_data_len;
+        char *decompressed;
+        int buffer_num;
 
-        compress_tile_t callback;  ///< tile compress callback
-        shared_ptr<video_frame> ret; ///< OUT - returned compressed tile, NULL if failed
+        int ret;
 };
 
 static void *decompress_tile_callback(void *arg) {
         decompress_worker_data *s = (decompress_worker_data *) arg;
 
-        s->ret = decompress_frame(decoder->decompress_state[pos],
-                        (unsigned char *) out,
-                        (unsigned char *) msg->nofec_frame->tiles[pos].data,
-                        msg->nofec_frame->tiles[pos].data_len,
-                        msg->buffer_num[pos]);
+        s->ret = decompress_frame(s->decompress_state,
+                        (unsigned char *) s->decompressed,
+                        (unsigned char *) s->compressed,
+                        s->compressed_data_len,
+                        s->buffer_num);
 
         return s;
 }
@@ -520,6 +521,9 @@ static void *decompress_thread(void *args) {
                 }
 
                 if(decoder->decoder_type == EXTERNAL_DECODER) {
+                        vector <task_result_handle_t> task_handle(get_video_mode_tiles_x(decoder->video_mode) * get_video_mode_tiles_y(decoder->video_mode));
+                        vector <decompress_worker_data> data_tile(get_video_mode_tiles_x(decoder->video_mode) * get_video_mode_tiles_y(decoder->video_mode));
+
                         int tile_width = decoder->received_vid_desc.width; // get_video_mode_tiles_x(decoder->video_mode);
                         int tile_height = decoder->received_vid_desc.height; // get_video_mode_tiles_y(decoder->video_mode);
                         for (int x = 0; x < get_video_mode_tiles_x(decoder->video_mode); ++x) {
@@ -535,15 +539,37 @@ static void *decompress_thread(void *args) {
                                         }
                                         if(!msg->nofec_frame->tiles[pos].data)
                                                 continue;
-                                        int ret = decompress_frame(decoder->decompress_state[pos],
-                                                        (unsigned char *) out,
-                                                        (unsigned char *) msg->nofec_frame->tiles[pos].data,
-                                                        msg->nofec_frame->tiles[pos].data_len,
-                                                        msg->buffer_num[pos]);
-                                        if (ret == FALSE) {
-                                                goto skip_frame;
+
+                                        struct decompress_worker_data *data = &data_tile[pos];
+
+                                        data->decompress_state = decoder->decompress_state[pos];
+                                        data->compressed = msg->nofec_frame->tiles[pos].data;
+                                        data->compressed_data_len = msg->nofec_frame->tiles[pos].data_len;
+                                        data->decompressed = out;
+                                        data->buffer_num = msg->buffer_num[pos];
+
+
+                                        task_handle[pos] = task_run_async(decompress_tile_callback,
+                                                        data);
+                                }
+                        }
+
+                        bool failed = false;
+
+                        for (int x = 0; x < get_video_mode_tiles_x(decoder->video_mode); ++x) {
+                                for (int y = 0; y < get_video_mode_tiles_y(decoder->video_mode); ++y) {
+                                        int pos = x + get_video_mode_tiles_x(decoder->video_mode) * y;
+
+                                        struct decompress_worker_data *data = (struct decompress_worker_data *)
+                                                wait_task(task_handle[pos]);
+
+                                        if(!data->ret) {
+                                                failed = true;
                                         }
                                 }
+                        }
+                        if (failed) {
+                                goto skip_frame;
                         }
                 } else {
                         /// @todo
