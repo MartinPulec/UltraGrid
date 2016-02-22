@@ -538,7 +538,8 @@ static void *decompress_thread(void *args) {
                                                 out = vf_get_tile(output, x)->data;
                                         }
                                         if(!msg->nofec_frame->tiles[pos].data)
-                                                continue;
+abort();
+                                                //continue;
 
                                         struct decompress_worker_data *data = &data_tile[pos];
 
