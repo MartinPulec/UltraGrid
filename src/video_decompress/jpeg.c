@@ -52,6 +52,7 @@
 #include "lib_common.h"
 
 struct state_decompress_jpeg {
+        int cuda_device;
         struct gpujpeg_decoder *decoder;
 
         struct video_desc desc;
@@ -81,7 +82,7 @@ static int configure_with(struct state_decompress_jpeg *s, struct video_desc des
         return TRUE;
 }
 
-static void * jpeg_decompress_init(void)
+static void * jpeg_decompress_init(int index)
 {
         struct state_decompress_jpeg *s;
 
@@ -89,12 +90,13 @@ static void * jpeg_decompress_init(void)
 
         s->decoder = NULL;
         s->pitch = 0;
+        s->cuda_device = cuda_devices[index % cuda_devices_count];
 
         int ret;
-        printf("Initializing CUDA device %d...\n", cuda_devices[0]);
-        ret = gpujpeg_init_device(cuda_devices[0], TRUE);
+        printf("Initializing CUDA device %d...\n", s->cuda_device);
+        ret = gpujpeg_init_device(s->cuda_device, TRUE);
         if(ret != 0) {
-                fprintf(stderr, "[JPEG] initializing CUDA device %d failed.\n", cuda_devices[0]);
+                fprintf(stderr, "[JPEG] initializing CUDA device %d failed.\n", s->cuda_device);
                 free(s);
                 return NULL;
         }
@@ -145,7 +147,7 @@ static int jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffe
                 linesize = s->desc.width * 2;
         }
         
-        gpujpeg_set_device(cuda_devices[0]);
+        gpujpeg_set_device(s->cuda_device);
 
         if((s->out_codec != RGB || (s->rshift == 0 && s->gshift == 8 && s->bshift == 16)) &&
                         s->pitch == linesize) {

@@ -169,7 +169,7 @@ static void *worker_thread(void *arg)
         return NULL;
 }
 
-void * jpeg_to_dxt_decompress_init(void)
+void * jpeg_to_dxt_decompress_init(int /* index */)
 {
         struct state_decompress_jpeg_to_dxt *s;
 

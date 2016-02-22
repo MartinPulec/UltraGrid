@@ -107,14 +107,14 @@ static int find_best_decompress(codec_t in_codec, codec_t out_codec,
  * @retval NULL if initialization failed
  * @retval not-NULL state of new decompressor
  */
-static struct state_decompress *decompress_init(const video_decompress_info *vdi)
+static struct state_decompress *decompress_init(const video_decompress_info *vdi, int index)
 {
         struct state_decompress *s;
 
         s = (struct state_decompress *) calloc(1, sizeof(struct state_decompress));
         s->magic = DECOMPRESS_MAGIC;
         s->functions = vdi;
-        s->state = s->functions->init();
+        s->state = s->functions->init(index);
         if (s->state == NULL) {
                 free(s);
                 return NULL;
@@ -134,7 +134,7 @@ static bool try_initialize_decompress(const video_decompress_info *vdi,
                 struct state_decompress **decompress_state, int substreams)
 {
         for(int i = 0; i < substreams; ++i) {
-                decompress_state[i] = decompress_init(vdi);
+                decompress_state[i] = decompress_init(vdi, i);
 
                 if (!decompress_state[i]) {
                         for(int j = 0; j < substreams; ++j) {

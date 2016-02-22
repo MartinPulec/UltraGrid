@@ -199,8 +199,9 @@ static bool configure_with(struct state_libavcodec_decompress *s,
         return true;
 }
 
-static void * libavcodec_decompress_init(void)
+static void * libavcodec_decompress_init(int index)
 {
+        UNUSED(index);
         struct state_libavcodec_decompress *s;
         
         s = (struct state_libavcodec_decompress *)

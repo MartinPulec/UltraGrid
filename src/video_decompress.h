@@ -50,7 +50,7 @@
  *
  */
 
-#define VIDEO_DECOMPRESS_ABI_VERSION 4
+#define VIDEO_DECOMPRESS_ABI_VERSION 5
 
 /**
  * @defgroup video_decompress Video Decompress
@@ -75,8 +75,10 @@ struct state_decompress;
 
 /**
  * initializes decompression and returns internal state
+ *
+ * @param index index of decoder if multiple decoders are to run in parallel
  */
-typedef  void *(*decompress_init_t)();
+typedef  void *(*decompress_init_t)(int index);
 /**
  * Recompresses decompression for specified video description
  * @param[in] desc      video description
@@ -148,6 +150,9 @@ struct video_decompress_info {
         const struct decode_from_to *available_decoders;
 };
 
+/**
+ * TODO: vodokumentovat
+ */
 bool decompress_init_multi(codec_t from, codec_t to, struct state_decompress **out, int count);
 int decompress_reconfigure(struct state_decompress *, struct video_desc, int rshift, int gshift, int bshift, int pitch, codec_t out_codec);
 int decompress_frame(struct state_decompress *, unsigned char *dst,

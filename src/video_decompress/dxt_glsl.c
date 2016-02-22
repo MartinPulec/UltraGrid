@@ -112,8 +112,9 @@ static void configure_with(struct state_decompress_rtdxt *decompressor, struct v
         decompressor->configured = TRUE;
 }
 
-static void * dxt_glsl_decompress_init(void)
+static void * dxt_glsl_decompress_init(int index)
 {
+        UNUSED(index);
         struct state_decompress_rtdxt *s;
         
         s = (struct state_decompress_rtdxt *) malloc(sizeof(struct state_decompress_rtdxt));
