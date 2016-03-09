@@ -82,6 +82,8 @@
 #include "video_display/splashscreen.h"
 #include "tv.h"
 
+#include "libgpujpeg/gpujpeg_common.h"
+
 #define MAGIC_GL         0x1331018e
 #define DEFAULT_WIN_NAME "Ultragrid - OpenGL Display"
 
@@ -91,6 +93,8 @@
 #define SYSTEM_VSYNC 0xFF
 
 using namespace std;
+
+struct gpujpeg_opengl_texture* gl_texture;
 
 static const char * yuv422_to_rgb_fp = STRINGIFY(
 uniform sampler2D image;
@@ -235,6 +239,7 @@ static struct state_gl *gl;
 /* Prototyping */
 static int display_gl_putf(void *state, struct video_frame *frame, int nonblock);
 static int display_gl_reconfigure(void *state, struct video_desc desc);
+static bool display_gl_init_opengl(struct state_gl *s);
 
 static void gl_draw(double ratio, double bottom_offset);
 static void gl_show_help(void);
@@ -408,6 +413,12 @@ static void * display_gl_init(struct module *parent, const char *fmt, unsigned i
 
                 s->frame_queue.push(vf_alloc_desc(desc));
         }
+
+        if (!display_gl_init_opengl(s)) {
+                return NULL;
+        }
+
+        gpujpeg_init_device(cuda_devices[0], GPUJPEG_OPENGL_INTEROPERABILITY);
 
         gl_load_splashscreen(s);
 
@@ -605,6 +616,8 @@ static void gl_reconfigure_screen(struct state_gl *s, struct video_desc desc)
                                 desc.width, desc.height, 0,
                                 GL_RGB, GL_UNSIGNED_BYTE,
                                 NULL);
+                gl_texture = gpujpeg_opengl_texture_register(s->texture_display,
+                                GPUJPEG_OPENGL_TEXTURE_WRITE);
         } else if (desc.color_spec == DXT5) {
                 glUseProgram(s->PHandle_dxt5);
 
@@ -938,16 +951,8 @@ static bool display_gl_init_opengl(struct state_gl *s)
         return true;
 }
 
-static void display_gl_run(void *arg)
+static void display_gl_run(void * /* arg */)
 {
-        struct state_gl *s = 
-                (struct state_gl *) arg;
-
-        if (!display_gl_init_opengl(s)) {
-                exit_uv(1);
-                return;
-        }
-
 #if defined FREEGLUT
 	glutMainLoop();
 #else

@@ -51,6 +51,8 @@
 #include <stdlib.h>
 #include "lib_common.h"
 
+extern struct gpujpeg_opengl_texture* gl_texture;
+
 struct state_decompress_jpeg {
         struct gpujpeg_decoder *decoder;
 
@@ -92,7 +94,7 @@ static void * jpeg_decompress_init(void)
 
         int ret;
         printf("Initializing CUDA device %d...\n", cuda_devices[0]);
-        ret = gpujpeg_init_device(cuda_devices[0], TRUE);
+        ret = gpujpeg_init_device(cuda_devices[0], GPUJPEG_VERBOSE | GPUJPEG_OPENGL_INTEROPERABILITY);
         if(ret != 0) {
                 fprintf(stderr, "[JPEG] initializing CUDA device %d failed.\n", cuda_devices[0]);
                 free(s);
@@ -149,7 +151,11 @@ static int jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffe
 
         if((s->out_codec != RGB || (s->rshift == 0 && s->gshift == 8 && s->bshift == 16)) &&
                         s->pitch == linesize) {
-                gpujpeg_decoder_output_set_custom(&decoder_output, dst);
+                if (!gl_texture) {
+                        return FALSE;
+                }
+                gpujpeg_decoder_output_set_texture(&decoder_output, gl_texture);
+                //gpujpeg_decoder_output_set_custom(&decoder_output, dst);
                 //int data_decompressed_size = decoder_output.data_size;
                     
                 ret = gpujpeg_decoder_decode(s->decoder, (uint8_t*) buffer, src_len, &decoder_output);
@@ -218,7 +224,7 @@ static void jpeg_decompress_done(void *state)
 
 static const struct decode_from_to jpeg_decoders[] = {
         { JPEG, RGB, 500 },
-        { JPEG, UYVY, 500 },
+        //{ JPEG, UYVY, 500 },
         { VIDEO_CODEC_NONE, VIDEO_CODEC_NONE, 0 },
 };
 
