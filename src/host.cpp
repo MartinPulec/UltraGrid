@@ -76,6 +76,10 @@ bool common_preinit(int argc, char *argv[])
         uv_argc = argc;
         uv_argv = argv;
 
+        // force line buffering for stdout and no buffering for stderr even if connected to pipe
+        setvbuf(stdout, NULL, _IOLBF, 0);
+        setvbuf(stderr, NULL, _IONBF, 0);
+
 #ifdef HAVE_X
         XInitThreads();
 #endif
