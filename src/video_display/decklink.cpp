@@ -1,9 +1,10 @@
 /**
  * @file   video_display/decklink.cpp
  * @author Martin Pulec     <pulec@cesnet.cz>
+ * @author Robert Karström  <robert@hqtec.se>
  */
 /*
- * Copyright (c) 2011-2015 CESNET, z. s. p. o.
+ * Copyright (c) 2011-2016 CESNET, z. s. p. o.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -68,6 +69,8 @@ static void display_decklink_done(void *state);
 
 using namespace std;
 
+static bool                Late_Dropped;
+
 namespace {
 class PlaybackDelegate : public IDeckLinkVideoOutputCallback // , public IDeckLinkAudioOutputCallback
 {
@@ -86,7 +89,9 @@ public:
                 } else if (result == bmdOutputFrameFlushed){
                         log_msg(LOG_LEVEL_WARNING, MOD_NAME "Flushed frame\n");
                 }
-
+        if (result == bmdOutputFrameDisplayedLate || result == bmdOutputFrameDropped){
+            Late_Dropped = true;
+        }
 		completedFrame->Release();
 		return S_OK;
 	}
@@ -231,6 +236,8 @@ struct state_decklink {
         uint32_t            link;
 
         buffer_pool_t       buffer_pool;
+        bool                noschedulevideo;
+        bool                schedulevideo_start;
  };
 
 static void show_help(void);
@@ -429,29 +436,47 @@ static int display_decklink_putf(void *state, struct video_frame *frame, int non
 
 #ifdef WIN32
         long unsigned int i;
+        long unsigned int t;
 #else
         uint32_t i;
+        uint32_t t;
+
 #endif
         s->state[0].deckLinkOutput->GetBufferedVideoFrameCount(&i);
-        log_msg(LOG_LEVEL_DEBUG, MOD_NAME "putf - %u frames buffered.\n", (unsigned int) i);
-        //if (i > 2) 
-        if (0) 
-                fprintf(stderr, "Frame dropped!\n");
-        else {
+        s->state[0].deckLinkOutput->GetBufferedAudioSampleFrameCount(&t);
+
+        // If the last completed frame was late or dropped, bump the scheduled time further into the future
+        if(Late_Dropped){
+                log_msg(LOG_LEVEL_VERBOSE, MOD_NAME  "Late_Dropped!\n");
+                Late_Dropped = false;
+                s->frames += 1;
+        }
+
+        if (i > 3){ // This is added because efter 6 hours run the frames bufred whas 11
+                log_msg(LOG_LEVEL_WARNING, MOD_NAME  "Frame dropped!\n");
+                log_msg(LOG_LEVEL_WARNING, MOD_NAME  "BufferedVideoFrameCount => %d\n", (int) i);
+        } else {
                 for (int j = 0; j < s->devices_cnt; ++j) {
                         IDeckLinkMutableVideoFrame *deckLinkFrame =
                                 (*((vector<IDeckLinkMutableVideoFrame *> *) frame->dispose_udata))[j];
                         if(s->emit_timecode) {
                                 deckLinkFrame->SetTimecode(bmdTimecodeRP188Any, s->timecode);
                         }
+                        if(!s->schedulevideo_start){
+                                s->state[j].deckLinkOutput->StartScheduledPlayback(0, s->frameRateScale, 1.0);
+                                s->schedulevideo_start = true;
+                                log_msg(LOG_LEVEL_VERBOSE, MOD_NAME  "StartScheduledPlayback\n");
+                        }
+                        if(s->noschedulevideo) {
+                                s->state[j].deckLinkOutput->DisplayVideoFrameSync(deckLinkFrame);
+                                deckLinkFrame->Release();
 
-#ifdef DECKLINK_LOW_LATENCY
-                        s->state[j].deckLinkOutput->DisplayVideoFrameSync(deckLinkFrame);
-                        deckLinkFrame->Release();
-#else
-                        s->state[j].deckLinkOutput->ScheduleVideoFrame(deckLinkFrame,
-                                        s->frames * s->frameRateDuration, s->frameRateDuration, s->frameRateScale);
-#endif /* DECKLINK_LOW_LATENCY */
+                        } else {
+                                HRESULT hr = s->state[j].deckLinkOutput->ScheduleVideoFrame(deckLinkFrame, s->frames*s->frameRateDuration, s->frameRateDuration, s->frameRateScale);
+                                if(hr != S_OK) {
+                                        log_msg(LOG_LEVEL_ERROR, MOD_NAME  "Could not schedule video frame. error %08x.\n", (uint32_t) hr);
+                                }
+                        }
                 }
                 s->frames++;
                 if(s->emit_timecode) {
@@ -466,11 +491,15 @@ static int display_decklink_putf(void *state, struct video_frame *frame, int non
         if (seconds > 5) {
                 double fps = (s->frames - s->frames_last) / seconds;
                 log_msg(LOG_LEVEL_INFO, MOD_NAME "%lu frames in %g seconds = %g FPS\n",
-                        s->frames - s->frames_last, seconds, fps);
+                                s->frames - s->frames_last, seconds, fps);
+                if(!s->noschedulevideo) {
+                        log_msg(LOG_LEVEL_INFO, MOD_NAME  "BufferedVideoFrameCount => %d\n", (int) i);
+                }
+                log_msg(LOG_LEVEL_INFO, MOD_NAME  "BufferedAudioSampleFrameCount => %d\n", (int) t);
+
                 s->tv = tv;
                 s->frames_last = s->frames;
         }
-
         return 0;
 }
 
@@ -540,15 +569,22 @@ display_decklink_reconfigure(void *state, struct video_desc desc)
         
         s->vid_desc = desc;
 
+        s->schedulevideo_start = false;
+        s->frames = 0;
+        s->frames_last = 0;
+
 	switch (desc.color_spec) {
                 case UYVY:
                         s->pixelFormat = bmdFormat8BitYUV;
+                        log_msg(LOG_LEVEL_INFO, MOD_NAME "Selected pixel format UYVY!\n");
                         break;
                 case v210:
                         s->pixelFormat = bmdFormat10BitYUV;
+                        log_msg(LOG_LEVEL_INFO, MOD_NAME "Selected pixel format v210!\n");
                         break;
                 case RGBA:
                         s->pixelFormat = bmdFormat8BitBGRA;
+                        log_msg(LOG_LEVEL_INFO, MOD_NAME "Selected pixel format RGBA!\n");
                         break;
                 default:
                         log_msg(LOG_LEVEL_ERROR, MOD_NAME "Unsupported pixel format!\n");
@@ -573,9 +609,6 @@ display_decklink_reconfigure(void *state, struct video_desc desc)
                 }
                 
                 s->state[0].deckLinkOutput->EnableVideoOutput(displayMode,  bmdVideoOutputDualStream3D);
-#ifndef DECKLINK_LOW_LATENCY
-                s->state[0].deckLinkOutput->StartScheduledPlayback(0, s->frameRateScale, (double) s->frameRateDuration);
-#endif /* ! defined DECKLINK_LOW_LATENCY */
         } else {
                 if((int) desc.tile_count > s->devices_cnt) {
                         log_msg(LOG_LEVEL_ERROR, MOD_NAME "Expected at most %d streams. Got %d.\n", s->devices_cnt,
@@ -607,12 +640,6 @@ display_decklink_reconfigure(void *state, struct video_desc desc)
 	                }
 
 	                s->state[i].deckLinkOutput->EnableVideoOutput(displayMode, outputFlags);
-	        }
-	
-	        for(int i = 0; i < s->devices_cnt; ++i) {
-#ifndef DECKLINK_LOW_LATENCY
-	                s->state[i].deckLinkOutput->StartScheduledPlayback(0, s->frameRateScale, (double) s->frameRateDuration);
-#endif /* ! defined DECKLINK_LOW_LATENCY */
 	        }
 	}
 
@@ -715,6 +742,8 @@ static void *display_decklink_init(struct module *parent, const char *fmt, unsig
         s->link = 0;
         cardIdx[0] = 0;
         s->devices_cnt = 1;
+        s->noschedulevideo = false;
+        s->schedulevideo_start = false;
 
         if(fmt == NULL || strlen(fmt) == 0) {
                 fprintf(stderr, "Card number unset, using first found (see -d decklink:help)!\n");
@@ -1178,7 +1207,6 @@ static int display_decklink_reconfigure_audio(void *state, int quant_samples, in
                         sample_type,
                         channels,
                         bmdAudioOutputStreamContinuous);
-        s->state[0].deckLinkOutput->StartScheduledPlayback(0, s->frameRateScale, s->frameRateDuration);
         
         return TRUE;
 }
