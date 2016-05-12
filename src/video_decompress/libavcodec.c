@@ -60,6 +60,8 @@ using std::min;
 #define min(a, b)      (((a) < (b))? (a): (b))
 #endif
 
+#define MOD_NAME "[lavd] "
+
 struct state_libavcodec_decompress {
         pthread_mutex_t *global_lavcd_lock;
         AVCodecContext  *codec_ctx;
@@ -449,7 +451,6 @@ static void error_callback(void *ptr, int level, const char *fmt, va_list vl) {
         av_log_default_callback(ptr, level, fmt, vl);
 }
 
-
 static int libavcodec_decompress(void *state, unsigned char *dst, unsigned char *src,
                 unsigned int src_len, int frame_seq)
 {
@@ -463,7 +464,22 @@ static int libavcodec_decompress(void *state, unsigned char *dst, unsigned char 
         while (s->pkt.size > 0) {
                 struct timeval t0, t1;
                 gettimeofday(&t0, NULL);
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(57, 37, 100)
                 len = avcodec_decode_video2(s->codec_ctx, s->frame, &got_frame, &s->pkt);
+#else
+                got_frame = 0;
+                int ret = avcodec_send_packet(s->codec_ctx, &s->pkt);
+                if (ret == 0) {
+                        ret = avcodec_receive_frame(s->codec_ctx, s->frame);
+                        if (ret == 0) {
+                                got_frame = 1;
+                        }
+                }
+                if (ret != 0) {
+                        print_decoder_error(MOD_NAME, ret);
+                }
+                len = s->pkt.size;
+#endif
                 gettimeofday(&t1, NULL);
 
                 /*
