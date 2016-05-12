@@ -537,6 +537,10 @@ static int libavcodec_decompress(void *state, unsigned char *dst, unsigned char 
                         }
                 }
 
+                if (len <= 0) {
+                        break;
+                }
+
                 if(s->pkt.data) {
                         s->pkt.size -= len;
                         s->pkt.data += len;
