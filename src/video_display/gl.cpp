@@ -82,7 +82,10 @@
 #include "video_display/splashscreen.h"
 #include "tv.h"
 
+#ifdef HAVE_JPEG
 #include "libgpujpeg/gpujpeg_common.h"
+struct gpujpeg_opengl_texture* gl_texture;
+#endif
 
 #define MAGIC_GL         0x1331018e
 #define DEFAULT_WIN_NAME "Ultragrid - OpenGL Display"
@@ -93,8 +96,6 @@
 #define SYSTEM_VSYNC 0xFF
 
 using namespace std;
-
-struct gpujpeg_opengl_texture* gl_texture;
 
 static const char * yuv422_to_rgb_fp = STRINGIFY(
 uniform sampler2D image;
@@ -418,7 +419,11 @@ static void * display_gl_init(struct module *parent, const char *fmt, unsigned i
                 return NULL;
         }
 
-        gpujpeg_init_device(cuda_devices[0], GPUJPEG_OPENGL_INTEROPERABILITY);
+#ifdef HAVE_JPEG
+        if (get_commandline_param("jpeg-gl-shared-experimental")) {
+                gpujpeg_init_device(cuda_devices[0], GPUJPEG_OPENGL_INTEROPERABILITY);
+        }
+#endif
 
         gl_load_splashscreen(s);
 
@@ -616,8 +621,12 @@ static void gl_reconfigure_screen(struct state_gl *s, struct video_desc desc)
                                 desc.width, desc.height, 0,
                                 GL_RGB, GL_UNSIGNED_BYTE,
                                 NULL);
-                gl_texture = gpujpeg_opengl_texture_register(s->texture_display,
-                                GPUJPEG_OPENGL_TEXTURE_WRITE);
+#ifdef HAVE_JPEG
+                if (get_commandline_param("jpeg-gl-shared-experimental")) {
+                        gl_texture = gpujpeg_opengl_texture_register(s->texture_display,
+                                        GPUJPEG_OPENGL_TEXTURE_WRITE);
+                }
+#endif
         } else if (desc.color_spec == DXT5) {
                 glUseProgram(s->PHandle_dxt5);
 
@@ -1104,13 +1113,19 @@ static int display_gl_get_property(void *state, int property, void *val, size_t 
 
         switch (property) {
                 case DISPLAY_PROPERTY_CODECS:
-                        if(sizeof(codecs) <= *len) {
-                                memcpy(val, codecs, sizeof(codecs));
+                        if (get_commandline_param("gl-rgb-only")) {
+                                codec_t rgb = RGB;
+                                memcpy(val, &rgb, sizeof rgb);
+                                *len = sizeof rgb;
                         } else {
-                                return FALSE;
-                        }
+                                if(sizeof(codecs) <= *len) {
+                                        memcpy(val, codecs, sizeof(codecs));
+                                } else {
+                                        return FALSE;
+                                }
 
-                        *len = sizeof(codecs);
+                                *len = sizeof(codecs);
+                        }
                         break;
                 case DISPLAY_PROPERTY_RGB_SHIFT:
                         if(sizeof(rgb_shift) > *len) {
