@@ -67,6 +67,8 @@
 #include "syphon_server.h"
 
 #include <algorithm>
+#include <cuda_runtime.h>
+#include <cuda_gl_interop.h>
 #include <condition_variable>
 #include <mutex>
 #include <queue>
@@ -79,6 +81,7 @@
 #include "module.h"
 #include "video.h"
 #include "video_display.h"
+#include "video_display/gl.h"
 #include "video_display/splashscreen.h"
 #include "tv.h"
 
@@ -91,6 +94,10 @@
 #define SYSTEM_VSYNC 0xFF
 
 using namespace std;
+
+#include "libgpujpeg/gpujpeg_common.h"
+
+video_frame_pool<cuda_buffer_data_allocator> shared_pool;
 
 static const char * yuv422_to_rgb_fp = STRINGIFY(
 uniform sampler2D image;
@@ -162,6 +169,8 @@ struct state_gl {
         GLuint fbo_id;
 	GLuint		texture_display;
 	GLuint		texture_uyvy;
+	GLuint		texture_pbo;
+	struct cudaGraphicsResource *texture_pbo_resource;
 
         /* For debugging... */
         uint32_t	magic;
@@ -235,6 +244,7 @@ static struct state_gl *gl;
 /* Prototyping */
 static int display_gl_putf(void *state, struct video_frame *frame, int nonblock);
 static int display_gl_reconfigure(void *state, struct video_desc desc);
+static bool display_gl_init_opengl(struct state_gl *s);
 
 static void gl_draw(double ratio, double bottom_offset);
 static void gl_show_help(void);
@@ -408,6 +418,16 @@ static void * display_gl_init(struct module *parent, const char *fmt, unsigned i
 
                 s->frame_queue.push(vf_alloc_desc(desc));
         }
+
+        if (!display_gl_init_opengl(s)) {
+                return NULL;
+        }
+
+#ifdef HAVE_JPEG
+	if (get_commandline_param("jpeg-gl-shared-experimental")) {
+		gpujpeg_init_device(cuda_devices[0], GPUJPEG_OPENGL_INTEROPERABILITY);
+	}
+#endif
 
         gl_load_splashscreen(s);
 
@@ -605,6 +625,16 @@ static void gl_reconfigure_screen(struct state_gl *s, struct video_desc desc)
                                 desc.width, desc.height, 0,
                                 GL_RGB, GL_UNSIGNED_BYTE,
                                 NULL);
+		if (get_commandline_param("jpeg-gl-shared-experimental")) {
+                        glGenBuffers(1, (GLuint*)&s->texture_pbo);
+			glBindBuffer(GL_PIXEL_PACK_BUFFER, s->texture_pbo);
+			glBufferData(s->texture_pbo, desc.width * desc.height * 3 * sizeof(uint8_t), NULL, GL_DYNAMIC_DRAW);
+			glBindBuffer(s->texture_pbo, 0);
+
+			// Create CUDA PBO Resource
+			assert(cudaGraphicsGLRegisterBuffer(&s->texture_pbo_resource, s->texture_pbo,
+					cudaGraphicsMapFlagsNone) == cudaSuccess);
+		}
         } else if (desc.color_spec == DXT5) {
                 glUseProgram(s->PHandle_dxt5);
 
@@ -766,7 +796,31 @@ static void glut_idle_callback(void)
                 gl_reconfigure_screen(s, video_desc_from_frame(frame));
         }
 
-        gl_render(s, frame->tiles[0].data);
+	if (get_commandline_param("jpeg-gl-shared-experimental")) {
+                glBindTexture(GL_TEXTURE_2D,s->texture_display);
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, s->texture_pbo);
+                glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+                glBindTexture(GL_TEXTURE_2D, 0);
+
+		assert(cudaGraphicsMapResources(1, &s->texture_pbo_resource, 0) == cudaSuccess);
+
+		// Get device data pointer to pixel buffer object data
+		uint8_t *d_data;
+		size_t d_data_size;
+		assert(cudaGraphicsResourceGetMappedPointer((void **)&d_data, &d_data_size, s->texture_pbo_resource) == cudaSuccess);
+
+
+                shared_ptr<video_frame> *f = *((std::shared_ptr<video_frame>**) frame->tiles[0].data);
+                assert((*f)->tiles[0].data_len == d_data_size);
+                assert(cudaMemcpy(d_data, (*f)->tiles[0].data, (*f)->tiles[0].data_len, cudaMemcpyDeviceToDevice) == cudaSuccess);
+                delete f;
+
+                // unmap
+		assert(cudaGraphicsUnmapResources(1, &s->texture_pbo_resource, 0) == cudaSuccess);
+        } else {
+		gl_render(s, frame->tiles[0].data);
+	}
         gl_draw(s->aspect, (gl->dxt_height - gl->current_display_desc.height) / (float) gl->dxt_height * 2);
 #ifdef HAVE_SYPHON
         if (s->syphon) {
@@ -938,16 +992,9 @@ static bool display_gl_init_opengl(struct state_gl *s)
         return true;
 }
 
-static void display_gl_run(void *arg)
+static void display_gl_run(void * /* arg */)
 {
-        struct state_gl *s = 
-                (struct state_gl *) arg;
-
-        if (!display_gl_init_opengl(s)) {
-                exit_uv(1);
-                return;
-        }
-
+	cudaSetDevice(cuda_devices[0]);
 #if defined FREEGLUT
 	glutMainLoop();
 #else
@@ -1099,13 +1146,19 @@ static int display_gl_get_property(void *state, int property, void *val, size_t 
 
         switch (property) {
                 case DISPLAY_PROPERTY_CODECS:
-                        if(sizeof(codecs) <= *len) {
-                                memcpy(val, codecs, sizeof(codecs));
+                        if (get_commandline_param("gl-rgb-only")) {
+                                codec_t rgb = RGB;
+                                memcpy(val, &rgb, sizeof rgb);
+                                *len = sizeof rgb;
                         } else {
-                                return FALSE;
-                        }
+                                if(sizeof(codecs) <= *len) {
+                                        memcpy(val, codecs, sizeof(codecs));
+                                } else {
+                                        return FALSE;
+                                }
 
-                        *len = sizeof(codecs);
+                                *len = sizeof(codecs);
+                        }
                         break;
                 case DISPLAY_PROPERTY_RGB_SHIFT:
                         if(sizeof(rgb_shift) > *len) {
