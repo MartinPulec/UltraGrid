@@ -97,7 +97,8 @@ static void * jpeg_decompress_init(void)
         int ret;
         printf("Initializing CUDA device %d...\n", cuda_devices[0]);
         if (get_commandline_param("jpeg-gl-shared-experimental")) {
-                ret = gpujpeg_init_device(cuda_devices[0], GPUJPEG_VERBOSE | GPUJPEG_OPENGL_INTEROPERABILITY);
+                ret = 0;
+                //ret = gpujpeg_init_device(cuda_devices[0], GPUJPEG_VERBOSE | GPUJPEG_OPENGL_INTEROPERABILITY);
         } else {
                 ret = gpujpeg_init_device(cuda_devices[0], TRUE);
         }
@@ -161,7 +162,7 @@ static int jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffe
                 if (get_commandline_param("jpeg-gl-shared-experimental")) {
 #ifdef HAVE_GL
                         if (!gl_texture) {
-                                return FALSE;
+                                return TRUE;
                         }
                         gpujpeg_decoder_output_set_texture(&decoder_output, gl_texture);
 #endif
