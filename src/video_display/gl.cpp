@@ -1236,13 +1236,13 @@ static void display_gl_done(void *state)
         while (s->free_frame_queue.size() > 0) {
                 struct video_frame *buffer = s->free_frame_queue.front();
                 s->free_frame_queue.pop();
-                delete_cuda_frame(buffer);
                 vf_free(buffer);
         }
 
         while (s->frame_queue.size() > 0) {
                 struct video_frame *buffer = s->frame_queue.front();
                 s->frame_queue.pop();
+                delete_cuda_frame(buffer);
                 vf_free(buffer);
         }
 

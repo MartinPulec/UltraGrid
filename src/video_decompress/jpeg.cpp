@@ -167,18 +167,23 @@ static int jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffe
 
         if((s->out_codec != RGB || (s->rshift == 0 && s->gshift == 8 && s->bshift == 16)) &&
                         s->pitch == linesize) {
-                if (get_commandline_param("jpeg-gl-shared-experimental")) {
-                        shared_ptr<video_frame> out = shared_pool.get_frame();
+                shared_ptr<video_frame> out;
 
+                if (get_commandline_param("jpeg-gl-shared-experimental")) {
+                        out = shared_pool.get_frame();
                         gpujpeg_decoder_output_set_custom_cuda(&decoder_output, (uint8_t *) out->tiles[0].data);
-                        memcpy(dst, &frame_magic, sizeof frame_magic);
-                        shared_ptr<video_frame> **ptr_storage = ((shared_ptr<video_frame> **) (dst + sizeof frame_magic));
-                        *ptr_storage = new shared_ptr<video_frame>(out);
                 } else {
                         gpujpeg_decoder_output_set_custom(&decoder_output, dst);
                         //int data_decompressed_size = decoder_output.data_size;
                 }
                 ret = gpujpeg_decoder_decode(s->decoder, (uint8_t*) buffer, src_len, &decoder_output);
+                if (get_commandline_param("jpeg-gl-shared-experimental") && ret == 0) {
+                        // store pointer to framebuffer data (not used - data are on GPU)
+                        memcpy(dst, &frame_magic, sizeof frame_magic);
+                        shared_ptr<video_frame> **ptr_storage = ((shared_ptr<video_frame> **) (dst + sizeof frame_magic));
+                        *ptr_storage = new shared_ptr<video_frame>(out);
+                }
+
                 if (ret != 0) return FALSE;
         } else {
                 unsigned int i;
