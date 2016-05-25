@@ -627,13 +627,18 @@ static void gl_reconfigure_screen(struct state_gl *s, struct video_desc desc)
                                 NULL);
 		if (get_commandline_param("jpeg-gl-shared-experimental")) {
                         glGenBuffers(1, (GLuint*)&s->texture_pbo);
-			glBindBuffer(GL_PIXEL_PACK_BUFFER, s->texture_pbo);
-			glBufferData(s->texture_pbo, desc.width * desc.height * 3 * sizeof(uint8_t), NULL, GL_DYNAMIC_DRAW);
-			glBindBuffer(s->texture_pbo, 0);
+        gl_check_error();
+			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, s->texture_pbo);
+        gl_check_error();
+			glBufferData(GL_PIXEL_UNPACK_BUFFER, desc.width * desc.height * 3 * sizeof(uint8_t), NULL, GL_DYNAMIC_DRAW);
+        gl_check_error();
+			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+        gl_check_error();
 
 			// Create CUDA PBO Resource
 			assert(cudaGraphicsGLRegisterBuffer(&s->texture_pbo_resource, s->texture_pbo,
 					cudaGraphicsMapFlagsNone) == cudaSuccess);
+        gl_check_error();
 		}
         } else if (desc.color_spec == DXT5) {
                 glUseProgram(s->PHandle_dxt5);
@@ -796,20 +801,13 @@ static void glut_idle_callback(void)
                 gl_reconfigure_screen(s, video_desc_from_frame(frame));
         }
 
-	if (get_commandline_param("jpeg-gl-shared-experimental")) {
-                glBindTexture(GL_TEXTURE_2D,s->texture_display);
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, s->texture_pbo);
-                glGetTexImage(GL_TEXTURE_2D, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
-                glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
-                glBindTexture(GL_TEXTURE_2D, 0);
-
+	if (get_commandline_param("jpeg-gl-shared-experimental") && frame->color_spec == RGB) {
 		assert(cudaGraphicsMapResources(1, &s->texture_pbo_resource, 0) == cudaSuccess);
 
 		// Get device data pointer to pixel buffer object data
 		uint8_t *d_data;
 		size_t d_data_size;
 		assert(cudaGraphicsResourceGetMappedPointer((void **)&d_data, &d_data_size, s->texture_pbo_resource) == cudaSuccess);
-
 
                 uint32_t magic;
                 memcpy(&magic, frame->tiles[0].data, sizeof magic);
@@ -821,6 +819,18 @@ static void glut_idle_callback(void)
 
                 // unmap
 		assert(cudaGraphicsUnmapResources(1, &s->texture_pbo_resource, 0) == cudaSuccess);
+
+		glBindTexture(GL_TEXTURE_2D, s->texture_display);
+		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, s->texture_pbo);
+
+		//glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, frame->tiles[0].width, frame->tiles[0].height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, s->current_display_desc.width, s->current_display_desc.height, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+		//glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+		//glBindTexture(GL_TEXTURE_2D, 0);
+		//glFinish();
+
+		//glBindTexture(GL_TEXTURE_2D, s->texture_display);
         } else {
 		gl_render(s, frame->tiles[0].data);
 	}
@@ -1040,7 +1050,7 @@ static void gl_resize(int width, int height)
 
         glLoadIdentity( );
 
-        if (gl->current_frame) {
+        if (gl->current_frame && !get_commandline_param("jpeg-gl-shared-experimental")) {
                 // redraw last frame
                 for (int i = 0; i < 2; ++i) {
                         gl_render(gl, gl->current_frame->tiles[0].data);
