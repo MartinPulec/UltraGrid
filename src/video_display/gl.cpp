@@ -1198,6 +1198,17 @@ static int display_gl_get_property(void *state, int property, void *val, size_t 
         return TRUE;
 }
 
+static void delete_cuda_frame(struct video_frame *buffer)
+{
+        if (get_commandline_param("jpeg-gl-shared-experimental") && buffer->color_spec == RGB) {
+                uint32_t magic;
+                memcpy(&magic, buffer->tiles[0].data, sizeof magic);
+                assert(magic == frame_magic);
+                shared_ptr<video_frame> *f = *((std::shared_ptr<video_frame>**) (buffer->tiles[0].data + sizeof frame_magic));
+                delete f;
+        }
+}
+
 static void display_gl_done(void *state)
 {
         struct state_gl *s = (struct state_gl *) state;
@@ -1221,9 +1232,11 @@ static void display_gl_done(void *state)
         if (s->fbo_id)
                 glDeleteFramebuffersEXT(1, &s->fbo_id);
 
+
         while (s->free_frame_queue.size() > 0) {
                 struct video_frame *buffer = s->free_frame_queue.front();
                 s->free_frame_queue.pop();
+                delete_cuda_frame(buffer);
                 vf_free(buffer);
         }
 
@@ -1287,6 +1300,7 @@ static int display_gl_putf(void *state, struct video_frame *frame, int nonblock)
         }
 
         if (nonblock == PUTF_DISCARD) {
+                delete_cuda_frame(frame);
                 s->free_frame_queue.push(frame);
                 return 0;
         }
