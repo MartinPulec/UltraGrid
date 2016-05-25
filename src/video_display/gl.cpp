@@ -832,8 +832,8 @@ static void glut_idle_callback(void)
 
 		//glBindTexture(GL_TEXTURE_2D, s->texture_display);
         } else {
-		gl_render(s, frame->tiles[0].data);
-	}
+                gl_render(s, frame->tiles[0].data);
+        }
         gl_draw(s->aspect, (gl->dxt_height - gl->current_display_desc.height) / (float) gl->dxt_height * 2);
 #ifdef HAVE_SYPHON
         if (s->syphon) {
