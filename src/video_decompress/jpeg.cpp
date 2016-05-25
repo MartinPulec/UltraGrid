@@ -174,7 +174,8 @@ static int jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffe
                         shared_ptr<video_frame> out = shared_pool.get_frame();
 
                         gpujpeg_decoder_output_set_custom_cuda(&decoder_output, (uint8_t *) out->tiles[0].data);
-                        shared_ptr<video_frame> **ptr_storage = ((shared_ptr<video_frame> **) dst);
+                        memcpy(dst, &frame_magic, sizeof frame_magic);
+                        shared_ptr<video_frame> **ptr_storage = ((shared_ptr<video_frame> **) (dst + sizeof frame_magic));
                         *ptr_storage = new shared_ptr<video_frame>(out);
                 }
                 ret = gpujpeg_decoder_decode(s->decoder, (uint8_t*) buffer, src_len, &decoder_output);

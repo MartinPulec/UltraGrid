@@ -811,7 +811,10 @@ static void glut_idle_callback(void)
 		assert(cudaGraphicsResourceGetMappedPointer((void **)&d_data, &d_data_size, s->texture_pbo_resource) == cudaSuccess);
 
 
-                shared_ptr<video_frame> *f = *((std::shared_ptr<video_frame>**) frame->tiles[0].data);
+                uint32_t magic;
+                memcpy(&magic, frame->tiles[0].data, sizeof magic);
+                assert(magic == frame_magic);
+                shared_ptr<video_frame> *f = *((std::shared_ptr<video_frame>**) (frame->tiles[0].data + sizeof frame_magic));
                 assert((*f)->tiles[0].data_len == d_data_size);
                 assert(cudaMemcpy(d_data, (*f)->tiles[0].data, (*f)->tiles[0].data_len, cudaMemcpyDeviceToDevice) == cudaSuccess);
                 delete f;
