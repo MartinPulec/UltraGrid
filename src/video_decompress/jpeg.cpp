@@ -74,7 +74,7 @@ static int configure_with(struct state_decompress_jpeg *s, struct video_desc des
         if (get_commandline_param("jpeg-gl-shared-experimental")) {
                 struct video_desc pool_desc = desc;
                 pool_desc.color_spec = RGB;
-        
+
                 shared_pool.reconfigure(pool_desc, vc_get_linesize(pool_desc.width,
                                         pool_desc.color_spec) * pool_desc.height);
         }
@@ -105,11 +105,7 @@ static void * jpeg_decompress_init(void)
 
         int ret;
         printf("Initializing CUDA device %d...\n", cuda_devices[0]);
-        if (get_commandline_param("jpeg-gl-shared-experimental")) {
-                ret = 0;
-        } else {
-                ret = gpujpeg_init_device(cuda_devices[0], GPUJPEG_VERBOSE);
-        }
+        ret = gpujpeg_init_device(cuda_devices[0], GPUJPEG_VERBOSE);
 
         if(ret != 0) {
                 fprintf(stderr, "[JPEG] initializing CUDA device %d failed.\n", cuda_devices[0]);
@@ -125,7 +121,7 @@ static int jpeg_decompress_reconfigure(void *state, struct video_desc desc,
                 int rshift, int gshift, int bshift, int pitch, codec_t out_codec)
 {
         struct state_decompress_jpeg *s = (struct state_decompress_jpeg *) state;
-        
+
         assert(out_codec == RGB || out_codec == UYVY);
 
         if(s->out_codec == out_codec &&
@@ -162,7 +158,7 @@ static int jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffe
         } else {
                 linesize = s->desc.width * 2;
         }
-        
+
         gpujpeg_set_device(cuda_devices[0]);
 
         if((s->out_codec != RGB || (s->rshift == 0 && s->gshift == 8 && s->bshift == 16)) &&
@@ -188,15 +184,15 @@ static int jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffe
         } else {
                 unsigned int i;
                 unsigned char *line_src, *line_dst;
-                
+
                 gpujpeg_decoder_output_set_default(&decoder_output);
                 decoder_output.type = GPUJPEG_DECODER_OUTPUT_INTERNAL_BUFFER;
                 //int data_decompressed_size = decoder_output.data_size;
-                    
+
                 ret = gpujpeg_decoder_decode(s->decoder, (uint8_t*) buffer, src_len, &decoder_output);
 
                 if (ret != 0) return FALSE;
-                
+
                 line_dst = dst;
                 line_src = decoder_output.data;
                 for(i = 0u; i < s->desc.height; i++) {
@@ -206,10 +202,10 @@ static int jpeg_decompress(void *state, unsigned char *dst, unsigned char *buffe
                         } else {
                                 memcpy(line_dst, line_src, linesize);
                         }
-                                
+
                         line_dst += s->pitch;
                         line_src += linesize;
-                        
+
                 }
         }
 
