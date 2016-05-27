@@ -627,18 +627,13 @@ static void gl_reconfigure_screen(struct state_gl *s, struct video_desc desc)
                                 NULL);
 		if (get_commandline_param("jpeg-gl-shared-experimental")) {
                         glGenBuffers(1, (GLuint*)&s->texture_pbo);
-        gl_check_error();
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, s->texture_pbo);
-        gl_check_error();
 			glBufferData(GL_PIXEL_UNPACK_BUFFER, desc.width * desc.height * 3 * sizeof(uint8_t), NULL, GL_DYNAMIC_DRAW);
-        gl_check_error();
 			glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-        gl_check_error();
 
 			// Create CUDA PBO Resource
-			assert(cudaGraphicsGLRegisterBuffer(&s->texture_pbo_resource, s->texture_pbo,
-					cudaGraphicsMapFlagsNone) == cudaSuccess);
-        gl_check_error();
+                        assert(cudaGraphicsGLRegisterBuffer(&s->texture_pbo_resource, s->texture_pbo,
+                                                cudaGraphicsMapFlagsNone) == cudaSuccess);
 		}
         } else if (desc.color_spec == DXT5) {
                 glUseProgram(s->PHandle_dxt5);
@@ -1007,7 +1002,9 @@ static bool display_gl_init_opengl(struct state_gl *s)
 
 static void display_gl_run(void * /* arg */)
 {
-	cudaSetDevice(cuda_devices[0]);
+        if (get_commandline_param("jpeg-gl-shared-experimental")) {
+                cudaSetDevice(cuda_devices[0]);
+        }
 #if defined FREEGLUT
 	glutMainLoop();
 #else
