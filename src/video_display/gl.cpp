@@ -95,8 +95,6 @@
 
 using namespace std;
 
-#include "libgpujpeg/gpujpeg_common.h"
-
 video_frame_pool<cuda_buffer_data_allocator> shared_pool;
 
 static const char * yuv422_to_rgb_fp = STRINGIFY(
@@ -423,11 +421,14 @@ static void * display_gl_init(struct module *parent, const char *fmt, unsigned i
                 return NULL;
         }
 
-#ifdef HAVE_JPEG
 	if (get_commandline_param("jpeg-gl-shared-experimental")) {
-		gpujpeg_init_device(cuda_devices[0], GPUJPEG_OPENGL_INTEROPERABILITY);
-	}
-#endif
+                cudaGLSetGLDevice(cuda_devices[0]);
+                cudaSetDevice(cuda_devices[0]);
+                // It looks like we need to perform some operation to (fully) initialize context
+                uint8_t* d_data = NULL;
+                cudaMalloc((void**)&d_data, 1);
+                cudaFree(d_data);
+        }
 
         gl_load_splashscreen(s);
 

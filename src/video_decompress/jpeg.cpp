@@ -105,7 +105,12 @@ static void * jpeg_decompress_init(void)
 
         int ret;
         printf("Initializing CUDA device %d...\n", cuda_devices[0]);
-        ret = gpujpeg_init_device(cuda_devices[0], GPUJPEG_VERBOSE);
+        if (get_commandline_param("jpeg-gl-shared-experimental")) {
+                gpujpeg_set_device(cuda_devices[0]);
+                ret = 0;
+        } else {
+                ret = gpujpeg_init_device(cuda_devices[0], GPUJPEG_VERBOSE);
+        }
 
         if(ret != 0) {
                 fprintf(stderr, "[JPEG] initializing CUDA device %d failed.\n", cuda_devices[0]);
@@ -137,6 +142,9 @@ static int jpeg_decompress_reconfigure(void *state, struct video_desc desc,
                 s->rshift = rshift;
                 s->gshift = gshift;
                 s->bshift = bshift;
+
+                gpujpeg_set_device(cuda_devices[0]);
+
                 if(s->decoder) {
                         gpujpeg_decoder_destroy(s->decoder);
                 }
