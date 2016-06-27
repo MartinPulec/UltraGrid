@@ -76,10 +76,47 @@ static void common_cleanup()
 #endif
 }
 
+static bool set_output_buffering() {
+        /**
+         * @addtogroup cmdline_params
+         * @{
+         * * stdout-buf
+         *   Buffering for stdout (no, line or full)
+         * * stderr-buf
+         *   Buffering for stdout (no, line or full)
+         * @}
+         */
+        const unordered_map<const char *, FILE *> outs = {
+                { "stdout-buf", stdout },
+                { "stderr-buf", stderr }
+        };
+        for (auto outp : outs) {
+                if (get_commandline_param(outp.first)) {
+                        const unordered_map<string, int> buf_map {
+                                { "no", _IONBF }, { "line", _IOLBF }, { "full", _IOFBF }
+                        };
+
+                        auto it = buf_map.find(get_commandline_param(outp.first));
+                        if (it == buf_map.end()) {
+                                log_msg(LOG_LEVEL_ERROR, "Wrong buffer type: %s\n", get_commandline_param(outp.first));
+                                return false;
+                        } else {
+                                setvbuf(outp.second, NULL, it->second, 0);
+                        }
+                }
+        }
+        return true;
+}
+
 bool common_preinit(int argc, char *argv[])
 {
         uv_argc = argc;
         uv_argv = argv;
+
+        bool ret = set_output_buffering();
+        if (!ret) {
+                return false;
+        }
 
 #ifdef HAVE_X
         void *handle = dlopen("libX11.so", RTLD_NOW);

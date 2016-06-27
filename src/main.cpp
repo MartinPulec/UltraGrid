@@ -238,9 +238,9 @@ void exit_uv(int status) {
         should_exit = true;
 }
 
-static void usage(void)
+static void usage(const char *prog_name)
 {
-        printf("\nUsage: %s [options] address(es)\n\n", uv_argv[0]);
+        printf("\nUsage: %s [options] address(es)\n\n", prog_name);
         printf("Options:\n\n");
         printf
             ("\t-d <display_device>        \tselect display device, use '-d help'\n");
@@ -474,7 +474,7 @@ bool parse_audio_capture_format(const char *optarg)
 static void parse_params(char *optarg)
 {
         char *item, *save_ptr;
-        while ((item = strtok_r(optarg, ":", &save_ptr))) {
+        while ((item = strtok_r(optarg, ",:", &save_ptr))) {
                 char *key_cstr = item;
                 if (strchr(item, '=')) {
                         char *val_cstr = strchr(item, '=') + 1;
@@ -555,14 +555,10 @@ int main(int argc, char *argv[])
         bool disable_key_control = false;
         bool start_paused = false;
 
-        if (!common_preinit(argc, argv)) {
-                return EXIT_FAILURE;
-        }
-
         vidcap_params_set_device(vidcap_params_head, "none");
 
         if (argc == 1) {
-                usage();
+                usage(argv[0]);
                 return EXIT_FAIL_USAGE;
         }
 
@@ -698,7 +694,7 @@ int main(int argc, char *argv[])
                         }
                         break;
                 case 'h':
-                        usage();
+                        usage(argv[0]);
                         return 0;
                 case 'P':
                         if(strchr(optarg, ':')) {
@@ -711,7 +707,7 @@ int main(int argc, char *argv[])
                                         if((tok = strtok_r(NULL, ":", &save_ptr))) {
                                                 audio_tx_port = atoi(tok);
                                         } else {
-                                                usage();
+                                                usage(argv[0]);
                                                 return EXIT_FAIL_USAGE;
                                         }
                                 }
@@ -831,11 +827,11 @@ int main(int argc, char *argv[])
                                 connection_type = atoi(strtok_r(NULL, ":", &save_ptr));
 
                                 if(connection_type < 0 || connection_type > 1){
-                                        usage();
+                                        usage(argv[0]);
                                         return EXIT_FAIL_USAGE;
                                 }
                                 if ((tok = strtok_r(NULL, ":", &save_ptr))) {
-                                        usage();
+                                        usage(argv[0]);
                                         return EXIT_FAIL_USAGE;
                                 }
                         } else {
@@ -881,7 +877,7 @@ int main(int argc, char *argv[])
                         break;
                 case '?':
                 default:
-                        usage();
+                        usage(argv[0]);
                         return EXIT_FAIL_USAGE;
                 }
         }
@@ -904,6 +900,11 @@ int main(int argc, char *argv[])
                 if (audio_codec == nullptr) {
                         audio_codec = DEFAULT_AUDIO_CODEC;
                 }
+        }
+
+        // must be called after getopt because uses optional parameters from cmdline
+        if (!common_preinit(argc, argv)) {
+                return EXIT_FAILURE;
         }
 
         printf("%s", PACKAGE_STRING);
