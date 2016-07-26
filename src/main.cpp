@@ -1128,7 +1128,6 @@ int main(int argc, char *argv[])
                 params["video_delay"].ptr = (void *) &video_offset;
 
                 // UltraGrid RTP
-                params["postprocess"].ptr = (void *) NULL;
                 params["decoder_mode"].l = (long) decoder_mode;
                 params["display_device"].ptr = uv.display_device;
 
