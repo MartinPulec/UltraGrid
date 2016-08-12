@@ -72,6 +72,7 @@
 #include <condition_variable>
 #include <chrono>
 #include <mutex>
+#include <set>
 #include <string>
 #include <unordered_map>
 
@@ -128,6 +129,7 @@ class vidcap_state_aja {
                 void SetupHostBuffers();
                 NTV2VideoFormat GetVideoFormatFromInputSource();
                 void EnableInput(NTV2InputSource source);
+                bool IsInput3Gb(const NTV2InputSource inputSource);
 
                 /**
                   @brief  Starts my frame consumer thread.
@@ -304,7 +306,8 @@ NTV2VideoFormat vidcap_state_aja::GetVideoFormatFromInputSource()
                         EnableInput(source);
                         videoFormat = mDevice.GetInputVideoFormat(source, mProgressive);
                         NTV2Standard    videoStandard   (::GetNTV2StandardFromVideoFormat (videoFormat));
-                        if (mCheckFor4K && (videoStandard == NTV2_STANDARD_1080p))
+                        if (mCheckFor4K && (videoStandard == NTV2_STANDARD_1080p ||
+                                                IsInput3Gb(mInputSource)))
                         {
                                 if (::NTV2DeviceCanDoMultiFormat (mDeviceID))
                                         mDevice.SetMultiFormatMode (false);
@@ -387,6 +390,10 @@ AJAStatus vidcap_state_aja::SetupVideo()
 
         //      Set the device video format to whatever we detected at the input...
         mDevice.SetVideoFormat (mVideoFormat, false, false, mInputChannel);
+        for (auto s : set<NTV2InputSource>{NTV2_INPUTSOURCE_SDI1, NTV2_INPUTSOURCE_SDI5}) {
+                mDevice.SetQuadFrameEnable (NTV2_IS_4K_VIDEO_FORMAT(mVideoFormat), ::NTV2InputSourceToChannel (s));
+        }
+
 
         //      Set the frame buffer pixel format for all the channels on the device
         //      (assuming it supports that pixel format -- otherwise default to 8-bit YCbCr)...
@@ -415,6 +422,7 @@ AJAStatus vidcap_state_aja::SetupVideo()
                         router.AddConnection (gFrameBufferInput [mInputChannel + offset], gSDIInputOutputs [mInputChannel + offset]);
                         mDevice.SetFrameBufferFormat (NTV2Channel (mInputChannel + offset), mPixelFormat);
                         mDevice.EnableChannel (NTV2Channel (mInputChannel + offset));
+                        mDevice.SetSDIInLevelBtoLevelAConversion (mInputChannel + offset, IsInput3Gb(mInputSource) ? true : false);
                         if (!NTV2_IS_4K_VIDEO_FORMAT (mVideoFormat))
                                 break;
                 }
@@ -476,6 +484,15 @@ AJAStatus vidcap_state_aja::SetupVideo()
         mPool.reconfigure(desc, vc_get_linesize(desc.width, desc.color_spec) * desc.height);
 
         return AJA_STATUS_SUCCESS;
+}
+
+bool vidcap_state_aja::IsInput3Gb(const NTV2InputSource inputSource)
+{
+        bool    is3Gb   (false);
+
+        mDevice.GetSDIInput3GbPresent (is3Gb, ::NTV2InputSourceToChannel (inputSource));
+
+        return is3Gb;
 }
 
 AJAStatus vidcap_state_aja::SetupAudio (void)
