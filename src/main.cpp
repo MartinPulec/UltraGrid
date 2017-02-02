@@ -973,8 +973,6 @@ int main(int argc, char *argv[])
                 if (is_host_loopback(requested_receiver) && video_rx_port == video_tx_port &&
                                 audio_rx_port == audio_tx_port) {
                         requested_mtu = min(RTP_MAX_MTU, 65536);
-                } else {
-                        requested_mtu = 1500;
                 }
         }
 

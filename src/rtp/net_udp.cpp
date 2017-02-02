@@ -155,6 +155,8 @@ struct socket_udp_local {
 
         bool should_exit;
         fd_t should_exit_fd[2];
+
+        int mtu;
 };
 
 /*
@@ -566,6 +568,13 @@ static char *udp_host_addr6(socket_udp * s)
                 local.sin6_port = 0;
                 error_msg("getsockname failed\n");
         }
+
+#ifdef HAVE_LINUX
+        len = sizeof s->local->mtu;
+        if (GETSOCKOPT(newsock, IPPROTO_IPV6, IPV6_MTU, (sockopt_t *) &s->local->mtu, &len) == 0) {
+                log_msg(LOG_LEVEL_INFO, "Detected PMTU: %d\n", s->local->mtu);
+        }
+#endif
 
         CLOSESOCKET(newsock);
 
@@ -1591,5 +1600,10 @@ int udp_recv_timeout(socket_udp *s, char *buffer, int buflen, struct timeval *ti
 struct socket_udp_local *udp_get_local(socket_udp *s)
 {
         return s->local;
+}
+
+int udp_get_mtu(socket_udp *s)
+{
+        return s->local->mtu;
 }
 

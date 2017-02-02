@@ -312,6 +312,9 @@ void             rtp_async_wait(struct rtp *session);
 
 struct socket_udp_local *rtp_get_udp_local_socket(struct rtp *session);
 
+int              rtp_get_mtu(struct rtp *session);
+
+
 #ifdef __cplusplus
 }
 #endif

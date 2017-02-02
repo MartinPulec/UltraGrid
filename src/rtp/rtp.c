@@ -4048,3 +4048,8 @@ struct socket_udp_local *rtp_get_udp_local_socket(struct rtp *session)
         return udp_get_local(session->rtp_socket);
 }
 
+int rtp_get_mtu(struct rtp *session)
+{
+        return udp_get_mtu(session->rtp_socket);
+}
+

@@ -101,13 +101,26 @@
 #endif
 
 #define DEFAULT_CIPHER_MODE MODE_AES128_CFB
+using std::max;
+using std::min;
+
+/**
+ * @brief Returns eligible MTU
+ *
+ * Returns user specified MTU. If not specified, discovered PMTU. If none was
+ * discovered (currently works only in Linux), 1500 for IPv4 and 1280 for IPv6
+ * is used.
+ *
+ * Moreover, MTU is no longer than RTP_MAX_MTU.
+ */
+#define GET_MTU(rtp_session, requested_mtu) min<int>(requested_mtu ? requested_mtu : max<int>(rtp_get_mtu(rtp_session), rtp_is_ipv6(rtp_session) ? 1280 : 1500), RTP_MAX_MTU)
 
 // Mulaw audio memory reservation
 #define BUFFER_MTU_SIZE 1500
 static char *data_buffer_mulaw;
 static int buffer_mulaw_init = 0;
 
-static void tx_update(struct tx *tx, struct video_frame *frame, int substream);
+static void tx_update(struct tx *tx, struct video_frame *frame, int substream, int mtu);
 static void tx_done(struct module *tx);
 static uint32_t format_interl_fps_hdr_row(enum interlacing_t interlacing, double input_fps);
 
@@ -159,7 +172,7 @@ static void init_tx_mulaw_buffer() {
     }
 }
 
-static void tx_update(struct tx *tx, struct video_frame *frame, int substream)
+static void tx_update(struct tx *tx, struct video_frame *frame, int substream, int mtu)
 {
         if(!frame) {
                 return;
@@ -174,7 +187,7 @@ static void tx_update(struct tx *tx, struct video_frame *frame, int substream)
         if(tx->sent_frames >= 100) {
                 if(tx->fec_scheme == FEC_LDGM && tx->max_loss > 0.0) {
                         if(abs(tx->avg_len_last - tx->avg_len) > tx->avg_len / 3) {
-                                int data_len = tx->mtu -  (40 + (sizeof(fec_video_payload_hdr_t)));
+                                int data_len = mtu -  (40 + (sizeof(fec_video_payload_hdr_t)));
                                 data_len = (data_len / 48) * 48;
                                 //void *fec_state_old = tx->fec_state;
 
@@ -516,7 +529,9 @@ tx_send_base(struct tx *tx, struct video_frame *frame, struct rtp *rtp_session,
 
         assert(tx->magic == TRANSMIT_MAGIC);
 
-        tx_update(tx, frame, substream);
+        int mtu = GET_MTU(rtp_session, tx->mtu);
+
+        tx_update(tx, frame, substream, mtu);
 
         perf_record(UVP_SEND, ts);
 
@@ -570,13 +585,13 @@ tx_send_base(struct tx *tx, struct video_frame *frame, struct rtp *rtp_session,
         if (frame->fec_params.type != FEC_NONE) {
                 static bool status_printed = false;
                 if (!status_printed) {
-                        if (fec_symbol_size > tx->mtu - hdrs_len) {
+                        if (fec_symbol_size > mtu - hdrs_len) {
                                 fprintf(stderr, "Warning: FEC symbol size exceeds payload size! "
                                                 "FEC symbol size: %d\n", fec_symbol_size);
                         } else {
                                 printf("FEC symbol size: %d, symbols per packet: %d, payload size: %d\n",
-                                                fec_symbol_size, (tx->mtu - hdrs_len) / fec_symbol_size,
-                                                (tx->mtu - hdrs_len) / fec_symbol_size * fec_symbol_size);
+                                                fec_symbol_size, (mtu - hdrs_len) / fec_symbol_size,
+                                                (mtu - hdrs_len) / fec_symbol_size * fec_symbol_size);
                         }
                         status_printed = true;
                 }
@@ -602,7 +617,7 @@ tx_send_base(struct tx *tx, struct video_frame *frame, struct rtp *rtp_session,
         // calculate number of packets
         int packet_count = 0;
         do {
-                pos += get_data_len(frame->fec_params.type != FEC_NONE, tx->mtu, hdrs_len,
+                pos += get_data_len(frame->fec_params.type != FEC_NONE, mtu, hdrs_len,
                                 fec_symbol_size, &fec_symbol_offset);
                 packet_count += 1;
         } while (pos < (unsigned int) tile->data_len);
@@ -621,7 +636,7 @@ tx_send_base(struct tx *tx, struct video_frame *frame, struct rtp *rtp_session,
                 // use only 75% of the time
                 interval_between_pkts = interval_between_pkts * 0.75;
                 // prevent bitrate to be "too low", here 1 Mbps at minimum
-                interval_between_pkts = std::min<double>(interval_between_pkts, tx->mtu / 1000000.0);
+                interval_between_pkts = std::min<double>(interval_between_pkts, mtu / 1000000.0);
                 packet_rate = interval_between_pkts * 1000ll * 1000 * 1000;
         } else { // bitrate given manually
                 int avg_packet_size = tile->data_len / packet_count;
@@ -653,7 +668,7 @@ tx_send_base(struct tx *tx, struct video_frame *frame, struct rtp *rtp_session,
                 rtp_hdr_packet[1] = htonl(offset);
 
                 data = tile->data + pos;
-                data_len = get_data_len(frame->fec_params.type != FEC_NONE, tx->mtu, hdrs_len,
+                data_len = get_data_len(frame->fec_params.type != FEC_NONE, mtu, hdrs_len,
                                 fec_symbol_size, &fec_symbol_offset);
                 if (pos + data_len >= (unsigned int) tile->data_len) {
                         if (send_m) {
@@ -741,6 +756,8 @@ void audio_tx_send(struct tx* tx, struct rtp *rtp_session, const audio_frame2 * 
         int mult_first_sent = 0;
         int rtp_hdr_len;
 
+        int mtu = GET_MTU(rtp_session, tx->mtu);
+
         fec_check_messages(tx);
 
         timestamp = get_local_mediatime();
@@ -823,7 +840,7 @@ void audio_tx_send(struct tx* tx, struct rtp *rtp_session, const audio_frame2 * 
                         }
 
                         data = chan_data + pos;
-                        data_len = tx->mtu - hdrs_len;
+                        data_len = mtu - hdrs_len;
                         if(pos + data_len >= (unsigned int) buffer->get_data_len(channel)) {
                                 data_len = buffer->get_data_len(channel) - pos;
                                 if(channel == buffer->get_channel_count() - 1)
@@ -894,6 +911,8 @@ void audio_tx_send_standard(struct tx* tx, struct rtp *rtp_session,
 	static uint32_t ts_prev = 0;
 	struct timeval curr_time;
 
+        int mtu = GET_MTU(rtp_session, tx->mtu);
+
 	// Configure the right Payload type,
 	// 8000 Hz, 1 channel and 2 bps is the ITU-T G.711 standard (should be 1 bps...)
 	// Other channels or Hz goes to DynRTP-Type97
@@ -912,7 +931,7 @@ void audio_tx_send_standard(struct tx* tx, struct rtp *rtp_session,
 		assert(buffer->get_data_len(0) == buffer->get_data_len(i));
 
 	int data_len = buffer->get_data_len(0) * buffer->get_channel_count(); 	/* Number of samples to send 			*/
-	int payload_size = tx->mtu - 40; 						/* Max size of an RTP payload field 	*/
+	int payload_size = mtu - 40; 						/* Max size of an RTP payload field 	*/
 
 	init_tx_mulaw_buffer();
 	char *curr_sample = data_buffer_mulaw;
@@ -984,7 +1003,7 @@ static void tx_send_base_h264(struct tx *tx, struct video_frame *frame,
 	unsigned nalsize = 0;
 	uint8_t *data = (uint8_t *) tile->data;
 	int data_len = tile->data_len;
-	tx->rtpenc_h264_state->maxPacketSize = tx->mtu - 40;
+	tx->rtpenc_h264_state->maxPacketSize = mtu - 40;
 	tx->rtpenc_h264_state->haveSeenEOF = false;
 	tx->rtpenc_h264_state->haveSeenFirstStartCode = false;
 
