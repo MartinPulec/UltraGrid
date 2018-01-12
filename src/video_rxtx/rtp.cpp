@@ -339,8 +339,8 @@ struct rtp **rtp_video_rxtx::initialize_network(const char *addrs, int recv_port
 
                 devices[index] = rtp_init_if(addr, mcast_if, recv_port,
                                 send_port, ttl, rtcp_bw, FALSE,
-                                rtp_recv_callback, (uint8_t *)participants,
-                                force_ip_version, multithreaded);
+                                recv_data_to_fbuffer, (uint8_t *)participants,
+                                force_ip_version, false);
                 if (devices[index] != NULL) {
                         rtp_set_option(devices[index], RTP_OPT_WEAK_VALIDATION,
                                 TRUE);

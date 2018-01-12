@@ -62,11 +62,14 @@ struct video_frame;
 struct state_decompress;
 struct tile;
 
+#include <rtp/net_udp.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
 
 int decode_video_frame(struct coded_data *received_data, void *decoder_data, struct pbuf_stats *stats);
+void decode_packet(void *decoder_data, rtp_packet * pkt, socket_udp *udp);
 
 struct state_video_decoder *video_decoder_init(struct module *parent, enum video_mode,
                 struct display *display, const char *encryption);

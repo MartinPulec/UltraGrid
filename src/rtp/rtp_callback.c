@@ -67,6 +67,7 @@
 #include "rtp/rtp.h"
 #include "rtp/pbuf.h"
 #include "rtp/rtp_callback.h"
+#include "rtp/video_decoders.h"
 #include "tfrc.h"
 
 extern char *frame;
@@ -143,50 +144,50 @@ process_sdes(struct pdb *participants, uint32_t ssrc, rtcp_sdes_item * d)
 
         switch (d->type) {
         case RTCP_SDES_END:
-                free(sdes_item);
+                //free(sdes_item);
                 /* This is the end of the SDES list of a packet. */
                 /* Nothing for us to deal with.                  */
                 break;
         case RTCP_SDES_CNAME:
                 if (e->sdes_cname != NULL)
-                        free(e->sdes_cname);
+                        //free(e->sdes_cname);
                 e->sdes_cname = sdes_item;
                 break;
         case RTCP_SDES_NAME:
                 if (e->sdes_name != NULL)
-                        free(e->sdes_name);
+                        //free(e->sdes_name);
                 e->sdes_name = sdes_item;
                 break;
         case RTCP_SDES_EMAIL:
                 if (e->sdes_email != NULL)
-                        free(e->sdes_email);
+                        //free(e->sdes_email);
                 e->sdes_email = sdes_item;
                 break;
         case RTCP_SDES_PHONE:
                 if (e->sdes_phone != NULL)
-                        free(e->sdes_phone);
+                        //free(e->sdes_phone);
                 e->sdes_phone = sdes_item;
                 break;
         case RTCP_SDES_LOC:
                 if (e->sdes_loc != NULL)
-                        free(e->sdes_loc);
+                        //free(e->sdes_loc);
                 e->sdes_loc = sdes_item;
                 break;
         case RTCP_SDES_TOOL:
                 if (e->sdes_tool != NULL)
-                        free(e->sdes_tool);
+                        //free(e->sdes_tool);
                 e->sdes_tool = sdes_item;
                 break;
         case RTCP_SDES_NOTE:
                 if (e->sdes_note != NULL)
-                        free(e->sdes_note);
+                        //free(e->sdes_note);
                 e->sdes_note = sdes_item;
                 break;
         case RTCP_SDES_PRIV:
-                free(sdes_item);
+                //free(sdes_item);
                 break;          /* Ignore private extensions */
         default:
-                free(sdes_item);
+                //free(sdes_item);
                 debug_msg
                     ("Ignored unknown SDES item (type=0x%02x) from 0x%08x\n",
                      ssrc);
@@ -256,3 +257,66 @@ void rtp_recv_callback(struct rtp *session, rtp_event * e)
         }
 }
 
+void recv_data_to_fbuffer(struct rtp *session, rtp_event * e)
+{
+        rtcp_app *pckt_app = (rtcp_app *) e->data;
+        rtp_packet *pckt_rtp = (rtp_packet *) e->data;
+        struct pdb *participants = (struct pdb *)rtp_get_userdata(session);
+        struct pdb_e *state = pdb_get(participants, e->ssrc);
+        struct timeval curr_time;
+
+        switch (e->type) {
+        case RX_RTP:
+                //gettimeofday(&curr_time, NULL);
+                //tfrc_recv_data(state->tfrc_state, curr_time, pckt_rtp->seq, pckt_rtp->data_len + 40);
+                if (pckt_rtp->data_len > 0) {   /* Only process packets that contain data... */
+                        //if (state->decoder_state)
+                                //decode_packet(((struct vcodec_state*) state->decoder_state), pckt_rtp);
+                        //free(pckt_rtp);
+                }
+                break;
+        case RX_TFRC_RX:
+                /* compute TCP friendly data rate */
+                break;
+        case RX_RTCP_START:
+                break;
+        case RX_RTCP_FINISH:
+                break;
+        case RX_SR:
+                break;
+        case RX_RR:
+                process_rr(session, e);
+                break;
+        case RX_RR_EMPTY:
+                break;
+        case RX_SDES:
+                process_sdes(participants, e->ssrc, (rtcp_sdes_item *) e->data);
+                break;
+        case RX_APP:
+                pckt_app = (rtcp_app *) e->data;
+                if (strncmp(pckt_app->name, "RTT_", 4) == 0) {
+                        assert(pckt_app->length == 3);
+                        assert(pckt_app->subtype == 0);
+                        gettimeofday(&curr_time, NULL);
+//                      tfrc_recv_rtt(state->tfrc_state, curr_time, ntohl(*((int *) pckt_app->data)));
+                }
+                break;
+        case RX_BYE:
+                break;
+        case SOURCE_DELETED:
+                {
+                        struct pdb_e *pdb_item = NULL;
+                        if(pdb_remove(participants, e->ssrc, &pdb_item) == 0) {
+                                pdb_destroy_item(pdb_item);
+                        }
+                }
+                break;
+        case SOURCE_CREATED:
+                pdb_add(participants, e->ssrc);
+                break;
+        case RR_TIMEOUT:
+                break;
+        default:
+                debug_msg("Unknown RTP event (type=%d)\n", e->type);
+        }
+}

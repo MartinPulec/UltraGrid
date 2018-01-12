@@ -1546,10 +1546,13 @@ int rtp_send_raw_rtp_data(struct rtp *session, char *data, int buflen)
         return udp_send(session->rtp_socket, data, buflen);
 }
 
+struct vcodec_state *shared_decoder;
+
 static int rtp_recv_data(struct rtp *session, uint32_t curr_rtp_ts)
 {
         int buflen;
-        rtp_packet *packet = NULL;
+        char tmp[RTP_MAX_PACKET_LEN + sizeof(struct sockaddr_storage)];
+	rtp_packet *packet = tmp;
         uint8_t *buffer = NULL;
 
         if (session->mt_recv) {
@@ -1559,7 +1562,6 @@ static int rtp_recv_data(struct rtp *session, uint32_t curr_rtp_ts)
                 buffer = ((uint8_t *) packet) + RTP_PACKET_HEADER_SIZE;
         } else {
                 if (!session->opt->reuse_bufs || (packet == NULL)) {
-                        packet = (rtp_packet *) malloc(RTP_MAX_PACKET_LEN + (session->opt->record_source ? sizeof(struct sockaddr_storage) : 0));
                         buffer = ((uint8_t *) packet) + RTP_PACKET_HEADER_SIZE;
                 }
                 struct sockaddr_storage *sin = NULL;
@@ -1569,17 +1571,22 @@ static int rtp_recv_data(struct rtp *session, uint32_t curr_rtp_ts)
                         addrlen = sizeof(struct sockaddr_storage);
                 }
                 buflen =
-                        udp_recvfrom(session->rtp_socket, (char *)buffer,
-                                        RTP_MAX_PACKET_LEN - RTP_PACKET_HEADER_SIZE,
-                                        (struct sockaddr *) sin, sin ? &addrlen : 0);
-                if (buflen <= 0) {
-                        free(packet);
-                }
+                        //udp_recvfrom(session->rtp_socket, (char *)buffer, RTP_MAX_PACKET_LEN - RTP_PACKET_HEADER_SIZE, (struct sockaddr *) sin, &addrlen);
+                        udp_peek(session->rtp_socket, (char *)buffer, 12 + 24);
         }
 
+	bool read = false;
         if (buflen > 0) {
-                rtp_process_data(session, curr_rtp_ts, buffer, packet, buflen);
+                //rtp_process_data(session, curr_rtp_ts, buffer, packet, buflen);
+		//
+		packet->data = buffer + 12;
+			decode_packet(shared_decoder, packet, session->rtp_socket);
+			read = true;
         }
+
+	if (!read) {
+		udp_recvfrom(session->rtp_socket, (char *)buffer, RTP_MAX_PACKET_LEN - RTP_PACKET_HEADER_SIZE, 0, 0);
+	}
 
         return buflen;
 }
@@ -1685,7 +1692,7 @@ static void rtp_process_data(struct rtp *session, uint32_t curr_rtp_ts,
                 }
 
                 if (!session->opt->reuse_bufs) {
-                        free(packet);
+                        //free(packet);
                 }
         }
 }
@@ -2391,11 +2398,12 @@ int rtp_recv_r(struct rtp *session, struct timeval *timeout, uint32_t curr_rtp_t
         } else {
                 udp_fd_zero_r(&fd);
                 udp_fd_set_r(session->rtp_socket, &fd);
-                udp_fd_set_r(session->rtcp_socket, &fd);
+                //udp_fd_set_r(session->rtcp_socket, &fd);
                 if (udp_select_r(timeout, &fd) > 0) {
                         if (udp_fd_isset_r(session->rtp_socket, &fd)) {
                                 rtp_recv_data(session, curr_rtp_ts);
                         }
+#if 0
                         if (udp_fd_isset_r(session->rtcp_socket, &fd)) {
                                 uint8_t buffer[RTP_MAX_PACKET_LEN];
                                 int buflen;
@@ -2407,6 +2415,7 @@ int rtp_recv_r(struct rtp *session, struct timeval *timeout, uint32_t curr_rtp_t
                                 rtp_process_ctrl(session, buffer, buflen);
                         }
                         check_database(session);
+#endif
                         return TRUE;
                 }
         }

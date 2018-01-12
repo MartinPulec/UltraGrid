@@ -49,9 +49,9 @@ using namespace std;
 using namespace std::chrono;
 
 struct dummy_display_state {
-        dummy_display_state() : f(nullptr), t0(steady_clock::now()), frames(0) {}
+        dummy_display_state() : f(nullptr), t0(high_resolution_clock::now()), frames(0) {}
         struct video_frame *f;
-        steady_clock::time_point t0;
+        high_resolution_clock::time_point t0;
         int frames;
 };
 
@@ -83,7 +83,7 @@ static int display_dummy_putf(void *state, struct video_frame * /* frame */, int
                 return 0;
         }
         auto s = (dummy_display_state *) state;
-        auto curr_time = steady_clock::now();
+        auto curr_time = high_resolution_clock::now();
         s->frames += 1;
         double seconds = duration_cast<duration<double>>(curr_time - s->t0).count();
         if (seconds >= 5.0) {

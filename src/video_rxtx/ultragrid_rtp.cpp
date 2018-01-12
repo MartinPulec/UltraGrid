@@ -77,6 +77,10 @@
 #include <sstream>
 #include <utility>
 
+#define SHARED_DECODER
+
+struct vcodec_state *shared_decoder;
+
 using namespace std;
 
 ultragrid_rtp_video_rxtx::ultragrid_rtp_video_rxtx(const map<string, param_u> &params) :
@@ -88,6 +92,13 @@ ultragrid_rtp_video_rxtx::ultragrid_rtp_video_rxtx(const map<string, param_u> &p
         m_async_sending = false;
 
         m_control = (struct control_state *) get_module(get_root_module(static_cast<struct module *>(params.at("parent").ptr)), "control");
+#ifdef SHARED_DECODER
+        shared_decoder = new_video_decoder(m_display_device);
+        if(shared_decoder == NULL) {
+                fprintf(stderr, "Unable to create decoder!\n");
+                exit_uv(1);
+        }
+#endif // SHARED_DECODER
 }
 
 ultragrid_rtp_video_rxtx::~ultragrid_rtp_video_rxtx()
@@ -335,14 +346,6 @@ void *ultragrid_rtp_video_rxtx::receiver_loop()
         int tiles_post = 0;
         struct timeval last_tile_received = {0, 0};
         int last_buf_size = INITIAL_VIDEO_RECV_BUFFER_SIZE;
-#ifdef SHARED_DECODER
-        struct vcodec_state *shared_decoder = new_decoder(uv);
-        if(shared_decoder == NULL) {
-                fprintf(stderr, "Unable to create decoder!\n");
-                exit_uv(1);
-                return NULL;
-        }
-#endif // SHARED_DECODER
 
         fr = 1;
 
@@ -350,150 +353,14 @@ void *ultragrid_rtp_video_rxtx::receiver_loop()
 
         while (!should_exit) {
                 struct timeval timeout;
-                /* Housekeeping and RTCP... */
-                gettimeofday(&curr_time, NULL);
-                auto curr_time_st = std::chrono::steady_clock::now();
-                auto curr_time_hr = std::chrono::high_resolution_clock::now();
-                ts = std::chrono::duration_cast<std::chrono::duration<double>>(m_start_time - curr_time_st).count() * 90000;
-
-                rtp_update(m_network_devices[0], curr_time);
-                rtp_send_ctrl(m_network_devices[0], ts, 0, curr_time);
-
-                /* Receive packets from the network... The timeout is adjusted */
-                /* to match the video capture rate, so the transmitter works.  */
-                if (fr) {
-                        gettimeofday(&curr_time, NULL);
-                        receiver_process_messages();
-                        fr = 0;
-                }
-
                 timeout.tv_sec = 0;
+                timeout.tv_usec = 0;
                 //timeout.tv_usec = 999999 / 59.94;
-                // use longer timeout when we are not receivng any data
-                if (std::chrono::duration_cast<std::chrono::duration<double>>(last_not_timeout - curr_time_st).count() > 1.0) {
-                        timeout.tv_usec = 100000;
-                } else {
-                        timeout.tv_usec = 1000;
-                }
                 ret = rtp_recv_r(m_network_devices[0], &timeout, ts);
-
-                // timeout
-                if (ret == FALSE) {
-                        // processing is needed here in case we are not receiving any data
-                        receiver_process_messages();
-                        //printf("Failed to receive data\n");
-                } else {
-                        last_not_timeout = curr_time_st;
-                }
-
-                /* Decode and render for each participant in the conference... */
-                pdb_iter_t it;
-                cp = pdb_iter_init(m_participants, &it);
-                while (cp != NULL) {
-                        if (tfrc_feedback_is_due(cp->tfrc_state, curr_time)) {
-                                debug_msg("tfrc rate %f\n",
-                                          tfrc_feedback_txrate(cp->tfrc_state,
-                                                               curr_time));
-                        }
-
-                        if(cp->decoder_state == NULL &&
-                                        !pbuf_is_empty(cp->playout_buffer)) { // the second check is needed because we want to assign display to participant that really sends data
-#ifdef SHARED_DECODER
-                                cp->decoder_state = shared_decoder;
-#else
-                                // we are assigning our display so we make sure it is removed from other dispaly
-
-                                struct multi_sources_supp_info supp_for_mult_sources;
-                                size_t len = sizeof(multi_sources_supp_info);
-                                int ret = display_get_property(m_display_device,
-                                                DISPLAY_PROPERTY_SUPPORTS_MULTI_SOURCES, &supp_for_mult_sources, &len);
-                                if (!ret) {
-                                        supp_for_mult_sources.val = false;
-                                }
-
-                                struct display *d;
-                                if (supp_for_mult_sources.val == false) {
-                                        remove_display_from_decoders(); // must be called before creating new decoder state
-                                        d = m_display_device;
-                                } else {
-                                        d = supp_for_mult_sources.fork_display(supp_for_mult_sources.state);
-                                        assert(d != NULL);
-                                        m_display_copies.push_back(d);
-                                }
-
-                                cp->decoder_state = new_video_decoder(d);
-                                cp->decoder_state_deleter = destroy_video_decoder;
-
-                                if (cp->decoder_state == NULL) {
-                                        log_msg(LOG_LEVEL_FATAL, "Fatal: unable to create decoder state for "
-                                                        "participant %u.\n", cp->ssrc);
-                                        exit_uv(1);
-                                        break;
-                                }
-#endif // SHARED_DECODER
-                        }
-
-                        struct vcodec_state *vdecoder_state = (struct vcodec_state *) cp->decoder_state;
-
-                        /* Decode and render video... */
-                        if (pbuf_decode
-                            (cp->playout_buffer, curr_time_hr, decode_video_frame, vdecoder_state)) {
-                                tiles_post++;
-                                /* we have data from all connections we need */
-                                if(tiles_post == m_connections_count)
-                                {
-                                        tiles_post = 0;
-                                        gettimeofday(&curr_time, NULL);
-                                        fr = 1;
-#if 0
-                                        display_put_frame(uv->display_device,
-                                                          cp->video_decoder_state->frame_buffer);
-                                        cp->video_decoder_state->frame_buffer =
-                                            display_get_frame(uv->display_device);
-#endif
-                                }
-                                last_tile_received = curr_time;
-                        }
-
-                        /* dual-link TIMEOUT - we won't wait for next tiles */
-                        if(tiles_post > 1 && tv_diff(curr_time, last_tile_received) >
-                                        999999 / 59.94 / m_connections_count) {
-                                tiles_post = 0;
-                                gettimeofday(&curr_time, NULL);
-                                fr = 1;
-#if 0
-                                display_put_frame(uv->display_device,
-                                                cp->video_decoder_state->frame_buffer);
-                                cp->video_decoder_state->frame_buffer =
-                                        display_get_frame(uv->display_device);
-#endif
-                                last_tile_received = curr_time;
-                        }
-
-                        if(vdecoder_state && vdecoder_state->decoded % 100 == 99) {
-                                int new_size = vdecoder_state->max_frame_size * 110ull / 100;
-                                if(new_size > last_buf_size) {
-                                        struct rtp **device = m_network_devices;
-                                        while(*device) {
-                                                int ret = rtp_set_recv_buf(*device, new_size);
-                                                if(!ret) {
-                                                        display_buf_increase_warning(new_size);
-                                                }
-                                                debug_msg("Recv buffer adjusted to %d\n", new_size);
-                                                device++;
-                                        }
-                                        last_buf_size = new_size;
-                                }
-                        }
-
-                        pbuf_remove(cp->playout_buffer, curr_time_hr);
-                        cp = pdb_iter_next(&it);
-                }
-                pdb_iter_done(&it);
         }
 
 #ifdef SHARED_DECODER
-        destroy_decoder(shared_decoder);
+        destroy_video_decoder(shared_decoder);
 #else
         /* Because decoders work asynchronously we need to make sure
          * that display won't be called */

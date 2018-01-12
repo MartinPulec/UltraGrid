@@ -1268,6 +1268,101 @@ static int check_for_mode_change(struct state_video_decoder *decoder,
 #define ERROR_GOTO_CLEANUP ret = FALSE; goto cleanup;
 #define max(a, b)       (((a) > (b))? (a): (b))
 
+void decode_packet(void *decoder_data, rtp_packet * pkt, socket_udp *udp)
+{
+        struct vcodec_state *pbuf_data = (struct vcodec_state *) decoder_data;
+        struct state_video_decoder *decoder = pbuf_data->decoder;
+
+        rtp_packet *pckt = pkt;
+        uint32_t ssrc;
+        unsigned int frame_size = 0;
+	static int packets = 0;
+	static auto t0 = std::chrono::high_resolution_clock::now();
+
+        int buffer_number, buffer_length;
+
+        int pt;
+
+        perf_record(UVP_DECODEFRAME, cdata);
+
+        // We have no framebuffer assigned, exitting
+        if(!decoder->display) {
+                return;
+        }
+
+                //reconfigure_if_needed(decoder, msg_reconf->desc);
+
+        uint32_t tmp;
+        uint32_t *hdr;
+        int len;
+        uint32_t offset;
+        unsigned char *source;
+        char *data;
+        uint32_t data_pos;
+        uint32_t substream;
+        enum openssl_mode crypto_mode;
+
+        //pt = pckt->pt;
+        hdr = (uint32_t *)(void *) pckt->data;
+        data_pos = ntohl(hdr[1]);
+        tmp = ntohl(hdr[0]);
+        substream = tmp >> 22;
+        buffer_number = tmp & 0x3fffff;
+        buffer_length = ntohl(hdr[2]);
+        ssrc = pckt->ssrc;
+
+        len = pckt->data_len - sizeof(video_payload_hdr_t);
+        data = (char *) hdr + sizeof(video_payload_hdr_t);
+
+        //decoder->frame->tiles[substream].data_len = buffer_length;
+
+        /* Critical section
+         * each thread *MUST* wait here if this condition is true
+         */
+        check_for_mode_change(decoder, hdr);
+
+        // hereafter, display framebuffer can be used, so we
+        // check if we got it
+        assert(decoder->frame);
+
+        struct tile *tile = vf_get_tile(decoder->frame, 0);
+
+	char buffer[10000];
+
+
+           struct iovec v[2];{                    /* Scatter/gather array items */
+               void  *iov_base;              /* Starting address */
+               size_t iov_len;               /* Number of bytes to transfer */
+           };
+
+	v[0].iov_base = buffer;
+	v[0].iov_len = 12 + 24;
+
+	v[1].iov_base = decoder->frame->tiles[0].data + data_pos;
+	v[1].iov_len = 9000;
+
+	struct msghdr h = { 0 };
+	h.msg_iov = v;
+	h.msg_iovlen = 2;
+
+	udp_recvv(udp, &h);
+	//udp_recvfrom(udp, (char *)buffer, RTP_MAX_PACKET_LEN - RTP_PACKET_HEADER_SIZE, 0, 0);
+        //memcpy(decoder->frame->tiles[0].data + data_pos, data, len);
+
+	packets += 1;
+
+	if (packets == 1) {
+		t0 = std::chrono::high_resolution_clock::now();
+	}
+
+        if (pkt->m) {
+		auto t1 = std::chrono::high_resolution_clock::now();
+		fprintf(stderr, "%d-%0.05f ", packets, std::chrono::duration_cast<std::chrono::microseconds>(t1-t0).count()/1000000.0); packets = 0;
+                display_put_frame(decoder->display, decoder->frame, 0);
+                decoder->frame = display_get_frame(decoder->display);
+	}
+}
+
 /**
  * @brief Decodes a participant buffer representing one video frame.
  * @param cdata        PBUF buffer
