@@ -3522,6 +3522,9 @@ void rtp_update(struct rtp *session, struct timeval curr_time)
         /* Timeout those reception reports which haven't been refreshed for a int time */
         timeout_rr(session, &curr_time);
         check_database(session);
+
+        udp_update(session->rtp_socket);
+        udp_update(session->rtcp_socket);
 }
 
 static void rtp_send_bye_now(struct rtp *session)

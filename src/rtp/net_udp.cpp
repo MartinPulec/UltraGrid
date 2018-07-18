@@ -125,6 +125,18 @@ struct ip_mreq {
 #define INADDR_NONE 0xffffffff
 #endif
 
+#if defined WIN32
+#ifndef IPV6_MTU_DISCOVER
+#define IPV6_MTU_DISCOVER 71
+#endif
+#ifndef IPV6_MTU
+#define IPV6_MTU          72
+#endif
+#ifndef IPV6_RECVERR
+#define IPV6_RECVERR      75
+#endif
+#endif
+
 struct item {
     inline item(uint8_t *b, int s) :  buf(b), size(s) {}
     uint8_t *buf;
@@ -569,10 +581,12 @@ static char *udp_host_addr6(socket_udp * s)
                 error_msg("getsockname failed\n");
         }
 
-#ifdef HAVE_LINUX
+#ifndef HAVE_MACOSX
         len = sizeof s->local->mtu;
-        if (GETSOCKOPT(newsock, IPPROTO_IPV6, IPV6_MTU, (sockopt_t *) &s->local->mtu, &len) == 0) {
+        if (GETSOCKOPT(newsock, IPPROTO_IPV6, IPV6_MTU, (sockopt_t) &s->local->mtu, &len) == 0) {
                 log_msg(LOG_LEVEL_INFO, "Detected PMTU: %d\n", s->local->mtu);
+        } else {
+                log_msg(LOG_LEVEL_WARNING, "getsockopt IPV6_MTU failed\n");
         }
 #endif
 
@@ -753,6 +767,13 @@ socket_udp *udp_init_if(const char *addr, const char *iface, uint16_t rx_port,
                         socket_error("setsockopt IPV6_V6ONLY");
                         goto error;
                 }
+#if 0
+                int on = 1;
+                if (SETSOCKOPT(s->local->fd, IPPROTO_IPV6, IPV6_RECVERR, (char *) &on,
+                                        sizeof(ipv6only)) != 0) {
+                        log_msg(LOG_LEVEL_WARNING, "setsockopt IPV6_IPV6_RECVERR\n");
+                }
+#endif
         }
 #ifdef SO_REUSEPORT
         if (SETSOCKOPT
@@ -1007,6 +1028,7 @@ int udp_sendv(socket_udp * s, struct iovec *vector, int count, void *d)
         msg.msg_flags = 0;
 
         int ret = sendmsg(s->local->fd, &msg, 0);
+        if (ret < 0) perror("");
         free(d);
         return ret;
 }
@@ -1605,5 +1627,24 @@ struct socket_udp_local *udp_get_local(socket_udp *s)
 int udp_get_mtu(socket_udp *s)
 {
         return s->local->mtu;
+}
+
+void udp_update(socket_udp *s)
+{
+        char buffer[1024];
+        int size = recvfrom(s->local->fd, (char *) buffer,
+                        sizeof buffer,
+                        MSG_ERRQUEUE, 0, 0);
+        if (size >= 0) {
+                //abort();
+        } else {
+                fprintf(stderr, ".");
+        }
+        socklen_t len = 4;
+        if (GETSOCKOPT(s->local->fd, IPPROTO_IPV6, IPV6_MTU, (sockopt_t) &s->local->mtu, &len) == 0) {
+                log_msg(LOG_LEVEL_INFO, "Detected PMTU: %d\n", s->local->mtu);
+        } else {
+                log_msg(LOG_LEVEL_WARNING, "getsockopt IPV6_MTU failed\n");
+        }
 }
 

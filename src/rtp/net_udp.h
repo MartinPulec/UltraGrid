@@ -110,6 +110,7 @@ struct socket_udp_local *udp_get_local(socket_udp *s);
 socket_udp *udp_init_with_local(struct socket_udp_local *l, struct sockaddr *sa, socklen_t len);
 
 int         udp_get_mtu(socket_udp *s);
+void        udp_update(socket_udp *s);
 
 /*************************************************************************************************/
 #if defined(__cplusplus)
