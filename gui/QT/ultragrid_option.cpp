@@ -155,7 +155,7 @@ QString VideoSourceOption::getExtraParams(){
 }
 
 bool VideoSourceOption::filter(const QString &item){
-	const QStringList whiteList = {"testcard", "screen", "decklink", "aja", "dvs"};
+	const QStringList whiteList = {"bitflow", "screen", "spout", "syphon"};
 	return whiteList.contains(item)
 					&& testCaptureDisplay(ultragridExecutable,
 							QString("-t ") + item + QString(":help"));
@@ -188,22 +188,7 @@ void VideoSourceOption::srcChanged(){
 	mode->clear();
 	mode->addItem(QString("Default"), QVariant(QString("")));
 
-	if(src->currentText() == "testcard"){
-		mode->addItem(QString("1280x720, 30 fps"), QVariant(QString(":1280:720:30:UYVY")));
-		mode->addItem(QString("1280x720, 24 fps"), QVariant(QString(":1280:720:24:UYVY")));
-		mode->addItem(QString("1280x720, 24i fps"), QVariant(QString(":1280:720:24i:UYVY")));
-		mode->addItem(QString("1280x720, 60 fps"), QVariant(QString(":1280:720:60:UYVY")));
-		mode->addItem(QString("1920x1080, 30 fps"), QVariant(QString(":1920:1080:30:UYVY")));
-		mode->addItem(QString("1920x1080, 30i fps"), QVariant(QString(":1920:1080:30i:UYVY")));
-		mode->addItem(QString("1920x1080, 24 fps"), QVariant(QString(":1920:1080:24:UYVY")));
-		mode->addItem(QString("1920x1080, 24i fps"), QVariant(QString(":1920:1080:24i:UYVY")));
-		mode->addItem(QString("1920x1080, 60 fps"), QVariant(QString(":1920:1080:60:UYVY")));
-		mode->addItem(QString("1920x1080, 60i fps"), QVariant(QString(":1920:1080:60i:UYVY")));
-		mode->addItem(QString("3840x2160, 30 fps"), QVariant(QString(":3840:2160:30:UYVY")));
-		mode->addItem(QString("3840x2160, 24 fps"), QVariant(QString(":3840:2160:24:UYVY")));
-		mode->addItem(QString("3840x2160, 24i fps"), QVariant(QString(":3840:2160:24i:UYVY")));
-		mode->addItem(QString("3840x2160, 60 fps"), QVariant(QString(":3840:2160:60:UYVY")));
-	} else if(src->currentText() == "screen"){
+	if(src->currentText() == "screen"){
 		mode->addItem(QString("60 fps"), QVariant(QString(":fps=60")));
 		mode->addItem(QString("30 fps"), QVariant(QString(":fps=30")));
 		mode->addItem(QString("24 fps"), QVariant(QString(":fps=24")));
