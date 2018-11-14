@@ -739,11 +739,30 @@ static struct vidcap_type *vidcap_testcard_probe(bool verbose)
                 vt->name = "testcard";
                 vt->description = "Video testcard";
 
-                if (verbose) {
-                        vt->card_count = 1;
-                        vt->cards = (struct device_info *) calloc(vt->card_count, sizeof(struct device_info));
-                        snprintf(vt->cards[0].id, sizeof vt->cards[0].name, "1920:1080:25:UYVY:i");
-                        snprintf(vt->cards[0].name, sizeof vt->cards[0].name, "Testing 1080@50i signal");
+                if (!verbose) {
+                        return vt;
+                }
+
+                vt->card_count = 1;
+                vt->cards = (struct device_info *) calloc(vt->card_count, sizeof(struct device_info));
+                vt->cards[0].id[0] = '\0';
+                snprintf(vt->cards[0].name, sizeof vt->cards[0].name, "Testing signal");
+                const char *modes[] = { "1920:1080:30:UYVY", "1080@30p YCbCr 4:2:2 8-bit",
+                        "1920:1080:30:v210", "1080@30p YCbCr 4:2:2 10-bit",
+                        "1920:1080:60i:UYVY", "1080@60i YCbCr 4:2:2 8-bit",
+                        "1920:1080:25:UYVY", "1080@25p YCbCr 4:2:2 8-bit",
+                        "1920:1080:50i:UYVY", "1080@50i YCbCr 4:2:2 8-bit",
+                        "1280:720:60:UYVY", "720@60p YCbCr 4:2:2 8-bit",
+                        "1280:720:60:RGB", "720@60p RGB 4:4:4 8-bit",
+                        "3840:2160:24:UYVY", "3840@24p YCbCr 4:2:2 8-bit",
+                        "3840:2160:60:RGB", "3840@60p RGB 4:4:4 8-bit",
+                        "640:480:15:RGB", "VGA - 15 FPS RGB" };
+                for (int i = 0; i < min<int>(sizeof modes / sizeof modes[0], sizeof vt->cards[0].modes
+                                        / sizeof vt->cards[0].modes[0]); i += 2) {
+                        strncpy(vt->cards[0].modes[i / 2].id, modes[i],
+                                        sizeof vt->cards[0].modes[i / 2].id - 1);
+                        strncpy(vt->cards[0].modes[i / 2].name, modes[i + 1],
+                                        sizeof vt->cards[0].modes[i / 2].name - 1);
                 }
         }
         return vt;
