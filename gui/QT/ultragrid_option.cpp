@@ -1,14 +1,22 @@
+#include <list>
 #include <QStringList>
 #include <QProcess>
 #include <QComboBox>
 #include <QLineEdit>
 #include <QLabel>
+#include <string>
+#include <utility>
 
+#include "ultragrid_capabilities.hpp"
 #include "ultragrid_option.hpp"
 #include "v4l2.hpp"
 
 #define EXIT_FAIL_DISPLAY 4
 #define EXIT_FAIL_CAPTURE 5
+
+using std::list;
+using std::pair;
+using std::string;
 
 bool testCaptureDisplay(const QString &executable, const QString &cmd){
 	QProcess process;
@@ -164,6 +172,13 @@ void VideoSourceOption::queryExtraOpts(const QStringList &opts){
 		}
 	}
 #endif
+        UltraGridCapabilities &caps = UltraGridCapabilities::getInstance(ultragridExecutable.toUtf8().constData());
+        list<pair<string, string>> cams = caps.getUltraGridCapturers();
+        for(const auto& cam : cams){
+                QString name = QString::fromStdString(cam.second);
+                QString opt = QString::fromStdString(cam.first);
+                box->addItem(name, QVariant(opt));
+        }
 }
 
 void VideoSourceOption::srcChanged(){
@@ -231,7 +246,13 @@ void VideoSourceOption::srcChanged(){
 			mode->addItem(name, param);
 		}
 #endif
-	}
+	} else {
+                UltraGridCapabilities &caps = UltraGridCapabilities::getInstance(ultragridExecutable.toUtf8().constData());
+                list<pair<string,string>> modes = caps.getCaptureModes(src->currentData().toString().toUtf8().constData());
+                for (auto &m : modes) {
+                        mode->addItem(QString::fromStdString(m.second), QVariant(QString(":") + QString::fromStdString(m.first)));
+                }
+        }
 
 	emit changed();
 }
