@@ -2145,7 +2145,7 @@ jpeg=no
 
 AC_ARG_ENABLE(jpeg,
 [  --disable-jpeg          disable JPEG compression (auto)]
-[                          Requires: libgpujpeg ],
+[                          Requires: CUDA libgpujpeg ],
 	[jpeg_req=$enableval],
         [jpeg_req=auto])
 
@@ -2180,6 +2180,7 @@ else
 fi
 
 if test "$jpeg_req" != no -a \
+        "$FOUND_CUDA" = yes -a \
         "$found_gpujpeg" = yes
 then
         jpeg=yes
