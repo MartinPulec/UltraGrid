@@ -816,6 +816,86 @@ vc_copyliner10k(unsigned char *dst, const unsigned char *src, int len, int rshif
 }
 
 /**
+ * @brief Converts from R12L to RGBA
+ *
+ * @param[out] dst     4B-aligned buffer that will contain result
+ * @param[in]  src     buffer containing pixels in R12L
+ * @param[in]  dst_len length of data that should be writen to dst buffer (in bytes)
+ * @param[in]  rshift  destination red shift
+ * @param[in]  gshift  destination green shift
+ * @param[in]  bshift  destination blue shift
+ */
+void
+vc_copylineR12L(unsigned char *dst, const unsigned char *src, int dstlen, int rshift,
+                int gshift, int bshift)
+{
+        uint32_t *d = (uint32_t *) dst;
+
+        while (dstlen >= 32) {
+                uint8_t tmp;
+                uint8_t r, g, b;
+                tmp = *src++ >> 4;
+                tmp |= *src++ << 4;
+                r = tmp; // r0
+                g = *src++; // g0
+                tmp = *src++ >> 4;
+                tmp |= *src++ << 4;
+                b = tmp; // b0
+                *d++ = (r << rshift) | (g << gshift) | (b << bshift);
+                r = *src++; // r1
+                tmp = *src++ >> 4;
+                tmp |= *src++ << 4;
+                g = tmp; // g1
+                b = *src++; // b1
+                *d++ = (r << rshift) | (g << gshift) | (b << bshift);
+                tmp = *src++ >> 4;
+                tmp |= *src++ << 4;
+                r = tmp; // r2
+                g = *src++; // g2
+                tmp = *src++ >> 4;
+                tmp |= *src++ << 4;
+                b = tmp; // b2
+                *d++ = (r << rshift) | (g << gshift) | (b << bshift);
+                r = *src++; // r3
+                tmp = *src++ >> 4;
+                tmp |= *src++ << 4;
+                g = tmp; // g3
+                b = *src++; // b3
+                *d++ = (r << rshift) | (g << gshift) | (b << bshift);
+                tmp = *src++ >> 4;
+                tmp |= *src++ << 4;
+                r = tmp; // r4
+                g = *src++; // g4
+                tmp = *src++ >> 4;
+                tmp |= *src++ << 4;
+                b = tmp; // b4
+                *d++ = (r << rshift) | (g << gshift) | (b << bshift);
+                r = *src++; // r5
+                tmp = *src++ >> 4;
+                tmp |= *src++ << 4;
+                g = tmp; // g5
+                b = *src++; // b5
+                *d++ = (r << rshift) | (g << gshift) | (b << bshift);
+                tmp = *src++ >> 4;
+                tmp |= *src++ << 4;
+                r = tmp; // r6
+                g = *src++; // g6
+                tmp = *src++ >> 4;
+                tmp |= *src++ << 4;
+                b = tmp; // b6
+                *d++ = (r << rshift) | (g << gshift) | (b << bshift);
+                r = *src++; // r7
+                tmp = *src++ >> 4;
+                tmp |= *src++ << 4;
+                g = tmp; // g7
+                b = *src++; // b7
+                *d++ = (r << rshift) | (g << gshift) | (b << bshift);
+
+                dstlen -= 32;
+        }
+}
+
+/**
  * @brief Changes color channels' order in RGBA
  * @copydetails vc_copyliner10k
  */
@@ -1763,6 +1843,7 @@ static const struct decoder_item decoders[] = {
         { (decoder_t) vc_copylinev210,        v210,  UYVY, false },
         { (decoder_t) vc_copylineYUYV,        YUYV,  UYVY, false },
         { (decoder_t) vc_copyliner10k,        R10k,  RGBA, false },
+        { (decoder_t) vc_copylineR12L,        R12L,  RGBA, false },
         { vc_copylineRGBA,        RGBA,  RGBA, false },
         { (decoder_t) vc_copylineDVS10toV210, DVS10, v210, false },
         { (decoder_t) vc_copylineRGBAtoRGB,   RGBA,  RGB, false },
