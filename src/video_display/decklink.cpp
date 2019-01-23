@@ -1139,11 +1139,13 @@ static void *display_decklink_init(struct module *parent, const char *fmt, unsig
                         }
                 }
 
-                if(s->link != 0) {
-                        HRESULT res = deckLinkConfiguration->SetInt(bmdDeckLinkConfigSDIOutputLinkConfiguration, s->link);
-                        if(res != S_OK) {
-                                LOG(LOG_LEVEL_ERROR) << MOD_NAME "Unable set output SDI standard: " << bmd_hresult_to_string(res) << ".\n";
-                        }
+                if (s->link == 0) {
+                        s->link = bmdLinkConfigurationSingleLink;
+                        LOG(LOG_LEVEL_NOTICE) << MOD_NAME "Setting single link by default.\n";
+                }
+                HRESULT res = deckLinkConfiguration->SetInt(bmdDeckLinkConfigSDIOutputLinkConfiguration, s->link);
+                if(res != S_OK) {
+                        LOG(LOG_LEVEL_ERROR) << MOD_NAME "Unable set output SDI link mode: " << bmd_hresult_to_string(res) << ".\n";
                 }
 
                 if (s->duplex != 0 && s->duplex != (uint32_t) -1) {
