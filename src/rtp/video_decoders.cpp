@@ -1310,6 +1310,7 @@ void decode_packet(void *decoder_data, rtp_packet * pkt, socket_udp *udp)
         buffer_number = tmp & 0x3fffff;
         buffer_length = ntohl(hdr[2]);
         ssrc = pckt->ssrc;
+        assert(substream == 0 || !decoder->merged_fb);
 
         len = pckt->data_len - sizeof(video_payload_hdr_t);
         data = (char *) hdr + sizeof(video_payload_hdr_t);
@@ -1325,7 +1326,7 @@ void decode_packet(void *decoder_data, rtp_packet * pkt, socket_udp *udp)
         // check if we got it
         assert(decoder->frame);
 
-        struct tile *tile = vf_get_tile(decoder->frame, 0);
+        struct tile *tile = vf_get_tile(decoder->frame, substream);
 
 	char buffer[10000];
 
@@ -1338,7 +1339,7 @@ void decode_packet(void *decoder_data, rtp_packet * pkt, socket_udp *udp)
 	v[0].iov_base = buffer;
 	v[0].iov_len = 12 + 24;
 
-	v[1].iov_base = decoder->frame->tiles[0].data + data_pos;
+	v[1].iov_base = decoder->frame->tiles[substream].data + data_pos;
 	v[1].iov_len = 9000;
 
 	struct msghdr h = { 0 };
