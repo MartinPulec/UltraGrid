@@ -126,9 +126,8 @@ static void audio_play_jack_probe(struct device_info **available_devices, int *c
         *count = 1;
 }
 
-static void audio_play_jack_help(const char *driver_name)
+static void audio_play_jack_help(const char *client_name)
 {
-        UNUSED(driver_name);
         jack_client_t *client;
         jack_status_t status;
         char *last_name = NULL;
@@ -136,7 +135,7 @@ static void audio_play_jack_help(const char *driver_name)
         int channel_count;
         const char **ports;
 
-        client = jack_client_open(PACKAGE_STRING, JackNullOption, &status);
+        client = jack_client_open(client_name, JackNullOption, &status);
         if(status & JackFailure) {
                 fprintf(stderr, "[JACK playback] Opening JACK client failed.\n");
                 return;
@@ -148,7 +147,13 @@ static void audio_play_jack_help(const char *driver_name)
                 return;
         }
 
-        printf("JACK playback:\n");
+        printf("Usage:\n");
+        printf("\t-r jack[:name=<n>][:<device>]\n");
+        printf("\twhere\n");
+        printf("\t\t<n> - name of the JACK client (default: %s)\n", PACKAGE_NAME);
+        printf("\n");
+
+        printf("Available devices:\n");
         i = 0;
         channel_count = 0;
         while(ports[i] != NULL) {
@@ -179,10 +184,27 @@ static void * audio_play_jack_init(const char *cfg)
         struct state_jack_playback *s;
         const char **ports;
         jack_status_t status;
+        char *client_name = alloca(MAX(strlen(PACKAGE_NAME), strlen(cfg)) + 1);
+        const char *source_name = "";
+        strcpy(client_name, PACKAGE_NAME);
 
-        if(!cfg || strcmp(cfg, "help") == 0) {
-                audio_play_jack_help("jack");
-                return &audio_init_state_ok;
+        if (cfg) {
+                char *dup = strdup(cfg);
+                char *tmp = dup, *item, *save_ptr;
+                while ((item = strtok_r(tmp, ":", &save_ptr)) != NULL) {
+                        if (strcmp(item, "help") == 0) {
+                                audio_play_jack_help(client_name);
+                                free(dup);
+                                return &audio_init_state_ok;
+                        } if (strstr(item, "name=") == item) {
+                                strcpy(client_name, item + strlen("name="));
+                        } else { // the rest is the device name
+                                source_name = cfg + (item - dup);
+                                break;
+                        }
+                        tmp = NULL;
+                }
+                free(dup);
         }
 
         s = calloc(1, sizeof(struct state_jack_playback));
@@ -191,9 +213,9 @@ static void * audio_play_jack_init(const char *cfg)
                 goto error;
         }
 
-        s->jack_ports_pattern = strdup(cfg);
+        s->jack_ports_pattern = strdup(source_name);
 
-        s->client = jack_client_open(PACKAGE_STRING, JackNullOption, &status);
+        s->client = jack_client_open(client_name, JackNullOption, &status);
         if(status & JackFailure) {
                 fprintf(stderr, "[JACK playback] Opening JACK client failed.\n");
                 goto error;

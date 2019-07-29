@@ -128,7 +128,7 @@ static void audio_cap_jack_help(const char *client_name)
         printf("Usage:\n");
         printf("\t-s jack[:name=<n>][:<device>]\n");
         printf("\twhere\n");
-        printf("\t\t<n> - name of the JACK client (default: %s)\n", PACKAGE_STRING);
+        printf("\t\t<n> - name of the JACK client (default: %s)\n", PACKAGE_NAME);
         printf("\n");
 
         client = jack_client_open(client_name, JackNullOption, &status);
@@ -175,9 +175,9 @@ static void * audio_cap_jack_init(const char *cfg)
         jack_status_t status;
         const char **ports;
         int i;
-        char *client_name = alloca(MAX(strlen(PACKAGE_STRING), strlen(cfg)) + 1);
+        char *client_name = alloca(MAX(strlen(PACKAGE_NAME), strlen(cfg)) + 1);
         const char *source_name = "";
-        strcpy(client_name, PACKAGE_STRING);
+        strcpy(client_name, PACKAGE_NAME);
 
         if (cfg) {
                 char *dup = strdup(cfg);
