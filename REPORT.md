@@ -1,6 +1,13 @@
 # Measuring compiler optimizations
 The aim of this short report is to evaluate the influence of different compiler optimizations. As a test scenario, a tweaked UltraGrid was used (provided that this report is in GIT, it can be directly compiled as `bin/uv` (main() function of the UltraGrid was replaced).
 
+*Note:* Useful online tool is [Compiler explorer](https://godbolt.org/). Then
+also
+[this](https://github.com/opcm/pcm) and
+[this](https://github.com/andikleen/pmu-tools/). Also following command can be used:
+
+    perf stat -p `pidof uv`
+
 ## Environment
 Measured on:
 
