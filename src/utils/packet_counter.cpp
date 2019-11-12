@@ -125,6 +125,11 @@ struct packet_counter {
         int num_substreams;
 };
 
+struct packet_list_iterator {
+        map<int, int>::const_iterator it;
+        map<int, int>::const_iterator end;
+};
+
 struct packet_counter *packet_counter_init(int num_substreams) {
         struct packet_counter *state;
         
@@ -164,5 +169,29 @@ int packet_counter_get_all_bytes(struct packet_counter *state)
 void packet_counter_clear(struct packet_counter *state)
 {
         state->clear();
+}
+
+struct packet_list_iterator *packet_list_iterator_create(map<int, int> &pkt_list)
+{
+        struct packet_list_iterator *it = new packet_list_iterator;
+        it->it = pkt_list.cbegin();
+        it->end = pkt_list.end();
+        return it;
+}
+
+struct packet_list_iterator *packet_list_pkt_iterator_next(struct packet_list_iterator *state)
+{
+        state->it = ++state->it;
+        if (state->it == state->end) {
+                delete state;
+                return nullptr;
+        }
+        return state;
+}
+
+void packet_list_pkt_iterator_get_values(struct packet_list_iterator *state, unsigned int *offset, unsigned int *len)
+{
+        *offset = state->it->first;
+        *len = state->it->second;
 }
 
