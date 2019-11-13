@@ -45,7 +45,6 @@
 #include "host.h"
 
 struct packet_counter;
-struct packet_counter_iterator;
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,10 +64,14 @@ void packet_counter_clear(struct packet_counter *state);
 }
 #endif /* __cplusplus */
 
+/// @{
+/// @name API for iterating over package lists (as used in video_decoders.cpp)
+struct packet_list_iterator;
 #ifdef __cplusplus
 struct packet_list_iterator *packet_list_iterator_create(std::map<int, int> &pkt_list);
 #endif
 EXTERN_C struct packet_list_iterator *packet_list_pkt_iterator_next(struct packet_list_iterator *state);
 EXTERN_C void packet_list_pkt_iterator_get_values(struct packet_list_iterator *state, unsigned int *offset, unsigned int *len);
+/// @)
 
 #endif /* __PACKET_COUNTER_H */

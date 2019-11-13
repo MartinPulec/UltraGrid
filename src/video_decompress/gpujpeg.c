@@ -186,10 +186,12 @@ static decompress_status gpujpeg_probe_internal_codec(unsigned char *buffer, siz
 #endif
 
 static decompress_status gpujpeg_decompress(void *state, unsigned char *dst, unsigned char *buffer,
-                unsigned int src_len, int frame_seq, struct video_frame_callbacks *callbacks, codec_t *internal_codec)
+                unsigned int src_len, int frame_seq, struct video_frame_callbacks *callbacks, codec_t *internal_codec,
+                struct packet_list_iterator *packets)
 {
         UNUSED(frame_seq);
         UNUSED(callbacks);
+        UNUSED(packets);
         struct state_decompress_gpujpeg *s = (struct state_decompress_gpujpeg *) state;
         int ret;
         struct gpujpeg_decoder_output decoder_output;

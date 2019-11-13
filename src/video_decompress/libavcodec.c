@@ -537,8 +537,10 @@ static void error_callback(void *ptr, int level, const char *fmt, va_list vl) {
 }
 
 static decompress_status libavcodec_decompress(void *state, unsigned char *dst, unsigned char *src,
-                unsigned int src_len, int frame_seq, struct video_frame_callbacks *callbacks, codec_t *internal_codec)
+                unsigned int src_len, int frame_seq, struct video_frame_callbacks *callbacks, codec_t *internal_codec,
+                struct packet_list_iterator *packets)
 {
+        UNUSED(packets);
         struct state_libavcodec_decompress *s = (struct state_libavcodec_decompress *) state;
         int got_frame = 0;
         decompress_status res = DECODER_NO_FRAME;

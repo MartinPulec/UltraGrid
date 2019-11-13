@@ -590,6 +590,7 @@ struct decompress_data {
         decompress_status ret = DECODER_NO_FRAME;
         unsigned char *out;
         codec_t internal_codec; // set only if probing (ret == DECODER_GOT_CODEC)
+        map <int, int> *pkt_list;
 };
 static void *decompress_worker(void *data)
 {
@@ -604,7 +605,8 @@ static void *decompress_worker(void *data)
                         d->compressed->tiles[d->pos].data_len,
                         d->buffer_num,
                         &decoder->frame->callbacks,
-                        &d->internal_codec);
+                        &d->internal_codec,
+                        packet_list_iterator_create(*d->pkt_list));
         return d;
 }
 
@@ -639,6 +641,7 @@ static void *decompress_thread(void *args) {
                                 data[pos].pos = pos;
                                 data[pos].compressed = msg->nofec_frame;
                                 data[pos].buffer_num = msg->buffer_num[pos];
+                                data[pos].pkt_list = msg->is_corrupted ? &msg->pckt_list[pos] : nullptr;
                                 if (tmp.get()) {
                                         data[pos].out = (unsigned char *) tmp.get();
                                 } else if (decoder->merged_fb) {

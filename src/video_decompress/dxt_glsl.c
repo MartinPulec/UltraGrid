@@ -137,13 +137,15 @@ static int dxt_glsl_decompress_reconfigure(void *state, struct video_desc desc,
 }
 
 static decompress_status dxt_glsl_decompress(void *state, unsigned char *dst, unsigned char *buffer,
-                unsigned int src_len, int frame_seq, struct video_frame_callbacks *callbacks, codec_t *internal_codec)
+                unsigned int src_len, int frame_seq, struct video_frame_callbacks *callbacks, codec_t *internal_codec,
+                struct packet_list_iterator *packets)
 {
         struct state_decompress_rtdxt *s = (struct state_decompress_rtdxt *) state;
         UNUSED(src_len);
         UNUSED(frame_seq);
         UNUSED(callbacks);
         UNUSED(internal_codec);
+        UNUSED(packets);
 
         if (!s->configured) {
                 fprintf(stderr, "DXT decoder not configured!\n");

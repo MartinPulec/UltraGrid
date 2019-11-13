@@ -306,7 +306,8 @@ static int reconfigure_thread(struct thread_data *s, struct video_desc desc, int
 }
 
 static decompress_status gpujpeg_to_dxt_decompress(void *state, unsigned char *dst, unsigned char *buffer,
-                unsigned int src_len, int frame_seq, video_frame_callbacks * /* callbacks */, codec_t * /* internal_codec */)
+                unsigned int src_len, int frame_seq, video_frame_callbacks * /* callbacks */,
+                codec_t * /* internal_codec */, struct packet_list_iterator * /* packets */)
 {
         struct state_decompresss_gpujpeg_to_dxt *s = (struct state_decompresss_gpujpeg_to_dxt *) state;
         UNUSED(frame_seq);
