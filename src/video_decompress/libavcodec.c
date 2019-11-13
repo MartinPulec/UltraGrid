@@ -554,8 +554,18 @@ static decompress_status libavcodec_decompress(void *state, unsigned char *dst, 
                 src_len -= extradata_size + sizeof(uint32_t);
         }
 
-        s->pkt.size = src_len;
-        s->pkt.data = src;
+
+        unsigned int pktoff, pktlen;
+        //packets = NULL;
+        if (packets == NULL) {
+                pktoff = 0;
+                pktlen = src_len;
+        } else  {
+                packet_list_pkt_iterator_get_values(packets, &pktoff, &pktlen);
+        }
+
+        s->pkt.size = pktlen;
+        s->pkt.data = src + pktoff;
 
         while (s->pkt.size > 0) {
                 int len;
@@ -649,6 +659,14 @@ static decompress_status libavcodec_decompress(void *state, unsigned char *dst, 
                         s->pkt.size -= len;
                         s->pkt.data += len;
                 }
+                if (packets && s->pkt.size == 0) {
+                        packets = packet_list_pkt_iterator_next(packets);
+                        if (packets != NULL) {
+                                packet_list_pkt_iterator_get_values(packets, &pktoff, &pktlen);
+                                s->pkt.data  = src + pktoff;
+                                s->pkt.size  = pktlen;
+                        }
+                }
         }
 
         if(broken_h264_mt_decoding) {
@@ -680,10 +698,6 @@ static decompress_status libavcodec_decompress(void *state, unsigned char *dst, 
                 assert(s->out_codec == HW_VDPAU);
                 s->blacklist_vdpau = false;
                 return DECODER_CANT_DECODE;
-        }
-
-        if (res == DECODER_GOT_FRAME && avcodec_receive_frame(s->codec_ctx, s->frame) != AVERROR(EAGAIN)) {
-                log_msg(LOG_LEVEL_WARNING, MOD_NAME "Multiple frames decoded at once!\n");
         }
 
         return res;

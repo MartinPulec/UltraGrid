@@ -181,7 +181,7 @@ struct packet_list_iterator *packet_list_iterator_create(map<int, int> &pkt_list
 
 struct packet_list_iterator *packet_list_pkt_iterator_next(struct packet_list_iterator *state)
 {
-        state->it = ++state->it;
+        ++state->it;
         if (state->it == state->end) {
                 delete state;
                 return nullptr;

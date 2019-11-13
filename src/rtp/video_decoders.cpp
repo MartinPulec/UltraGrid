@@ -599,6 +599,18 @@ static void *decompress_worker(void *data)
 
         if (!d->compressed->tiles[d->pos].data)
                 return NULL;
+        map<int, int> pkt_list_new;
+        if (d->pkt_list) {
+                for (auto a : *d->pkt_list) {
+                        if (a.first == 0) {
+                                pkt_list_new[0] = a.second - 4;
+                        } else {
+                                pkt_list_new[a.first - 4] = a.second;
+                        }
+                }
+        }
+        fprintf(stderr, "%ld\n", pkt_list_new.size());
+
         d->ret = decompress_frame(decoder->decompress_state[d->pos],
                         (unsigned char *) d->out,
                         (unsigned char *) d->compressed->tiles[d->pos].data,
@@ -606,7 +618,7 @@ static void *decompress_worker(void *data)
                         d->buffer_num,
                         &decoder->frame->callbacks,
                         &d->internal_codec,
-                        packet_list_iterator_create(*d->pkt_list));
+                        pkt_list_new.empty() ? NULL : packet_list_iterator_create(pkt_list_new));
         return d;
 }
 
