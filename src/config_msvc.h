@@ -66,4 +66,9 @@
 #define PACKAGE_BUGREPORT "ultragrid-dev@cesnet.cz"
 #endif
 
+#ifndef HAVE_ALIGNED_ALLOC
+#define aligned_malloc _aligned_malloc
+#define aligned_free _aligned_free
+#endif
+
 #endif
