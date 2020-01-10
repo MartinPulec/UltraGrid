@@ -1,0 +1,85 @@
+name: coverity-scan
+
+on:
+  schedule:
+    - cron:  '0 8 * * *' # Daily at 8:00 UTC
+
+jobs:
+  Ubuntu:
+    runs-on: ubuntu-latest
+    env:
+      AJA_DIRECTORY: "/var/tmp/ntv2sdk"
+      CPATH: "/usr/local/qt/include"
+      LIBRARY_PATH: "/usr/local/qt/lib"
+      PKG_CONFIG_PATH: "/usr/local/qt/lib/pkgconfig"
+      sdk_pass: ${{ secrets.sdk_pass }}
+      coverity_token: ${{ secrets.coverity_token }}
+
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: true
+    - name: set-path
+      run: echo "::add-path::/usr/local/qt/bin"
+    - name: bootstrap
+      run: |
+              sudo apt update
+              sudo apt install libcppunit-dev nvidia-cuda-toolkit
+              sudo apt install libglew-dev freeglut3-dev libgl1-mesa-dev
+              sudo apt install libx11-dev
+              sudo apt install libsdl2-dev
+              sudo apt install libssl-dev
+              sudo apt install portaudio19-dev libjack-jackd2-dev libasound-dev libv4l-dev
+              sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
+              sudo apt install libopencv-dev
+              sudo apt install libglib2.0-dev libcurl4-nss-dev
+              ( mkdir gpujpeg/build && cd gpujpeg/build && CC=gcc-6 CXX=g++-6 cmake .. && make && sudo make install && sudo ldconfig )
+              ( sudo apt install uuid-dev && cd cineform-sdk/ && cmake . && make CFHDCodecStatic )
+              sudo chmod 777 /usr/local
+    - name: Cache static Qt
+      id: cache-qt-linux
+      uses: actions/cache@v1
+      with:
+        path: /usr/local/qt
+        key: cache-qt-linux
+    - name: Build static Qt
+      if: steps.cache-qt-linux.outputs.cache-hit != 'true'
+      run: |
+              wget --no-verbose https://download.qt.io/archive/qt/5.13/5.13.2/single/qt-everywhere-src-5.13.2.tar.xz -O /var/tmp/qt.tar.xz
+              cd /var/tmp && tar xJf qt.tar.xz && mv qt-everywhere-src-* qt
+              cd /var/tmp/qt && ./configure -static -release -nomake examples -opensource -confirm-license -opengl -prefix /usr/local/qt
+              make -j 3 -C /var/tmp/qt && sudo make -C /var/tmp/qt install
+    - name: Install XIMEA
+      run: |
+              wget https://www.ximea.com/downloads/recent/XIMEA_Linux_SP.tgz
+              tar xzf XIMEA_Linux_SP.tgz
+              cd package
+              sudo ./install
+    - name: Install AJA
+      run: |
+              if [ -z "$sdk_pass" ]; then exit 0; fi
+              curl --netrc-file <(cat <<<"machine frakira.fi.muni.cz login sdk password $sdk_pass") https://frakira.fi.muni.cz/~xpulec/sdks/ntv2sdklinux.zip -O
+              unzip ntv2sdklinux.zip -d /var/tmp
+              mv /var/tmp/ntv2sdk* /var/tmp/ntv2sdk
+              cd /var/tmp/ntv2sdk/ajalibraries/ajantv2
+              make
+    - name: Download Coverity build tool
+      run: |
+        wget https://scan.coverity.com/download/linux64 --post-data "token=$coverity_token&project=UltraGrid" -O coverity_tool.tgz
+        tar xaf coverity_tool.tgz
+    - name: configure
+      run: ./autogen.sh --enable-qt --enable-static-qt --with-cuda-host-compiler=gcc-6 --enable-plugins
+    - name: Build with cov-build
+      run: |
+        cov-analysis*/bin/cov-build --dir cov-int make -j 2
+    - name: Submit the result to Coverity Scan
+      run: |
+        tar caf ultragrid.tar.xz cov-int
+        curl --form token=$coverity_token \
+          --form email=pulec@cesnet.cz \
+          --form file=@ultragrid.tar.xz \
+          --form version="date +%F" \
+          --form description="master build" \
+          https://scan.coverity.com/builds?project=UltraGrid
+
+# vi: set expandtab sw=2:
