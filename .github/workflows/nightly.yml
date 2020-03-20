@@ -1,25 +1,11 @@
 name: nightly
 
 on:
-  #schedule:
-  #- cron:  '0 6 * * *' # Daily at 6:00 UTC
+  schedule:
+  - cron:  '0 6 * * *' # Daily at 6:00 UTC
   push:
     branches:
-      - ci-nightly
-    paths:
-      - '.github/scripts/**'
-      - '.github/workflows/nightly.yml'
-      - '**.c'
-      - '**.cpp'
-      - '**.cu'
-      - '**.h'
-      - '**.hpp'
-      - '**.m'
-      - '**.mm'
-      - 'autogen.sh'
-      - 'configure.ac'
-      - 'data/scripts/**.sh'
-      - 'Makefile.in'
+      - nightly
 
 jobs:
   retag-nightly:
