@@ -5,6 +5,7 @@ on:
     branches:
       - devel
       - master
+      - ndi
     paths:
       - '.github/scripts/**'
       - '.github/workflows/ccpp.yml'
@@ -70,7 +71,7 @@ jobs:
     - name: bootstrap
       run: .github/scripts/Linux/prepare.sh
     - name: configure
-      run: ./autogen.sh --enable-qt --with-cuda-host-compiler=$CUDA_HOST_COMPILER --enable-plugins --with-live555=/usr/local --disable-ndi
+      run: ./autogen.sh --enable-qt --with-cuda-host-compiler=$CUDA_HOST_COMPILER --enable-plugins --with-live555=/usr/local
     - name: make
       run: make -j4
     - name: make check
@@ -178,7 +179,7 @@ jobs:
         choco install --no-progress msys2 --params "/NoUpdate /InstallDir:C:\msys64"
         C:\msys64\usr\bin\bash -cel '$GITHUB_WORKSPACE/.github/scripts/Windows/prepare_msys.sh'
     - name: configure
-      run: C:\msys64\usr\bin\bash -cel "./autogen.sh --enable-qt --disable-ndi --with-live555=/usr/local"
+      run: C:\msys64\usr\bin\bash -cel "./autogen.sh --enable-qt --with-live555=/usr/local"
     - name: make
       run: C:\msys64\usr\bin\bash -cel "make -j4"
     - name: make check
