@@ -12,6 +12,10 @@ ARCH=`dpkg --print-architecture`
 APPNAME=UltraGrid--${ARCH}.AppImage
 DIR=UltraGrid-AppImage
 
+git clone --depth 1 https://github.com/CESNET/UltraGrid.git
+
+cd UltraGrid
+
 ./autogen.sh --enable-plugins
 
 mkdir $APPDIR
