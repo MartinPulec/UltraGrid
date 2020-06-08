@@ -31,7 +31,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
       id: checkout
-      if: github.repository == 'CESNET/UltraGrid' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release/'))
+      if: github.repository == 'MartinPulec/UltraGrid' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release/'))
       with:
         persist-credentials: true
     - name: Retag
@@ -94,7 +94,7 @@ jobs:
       run: .github/scripts/upload-ndi-build.sh UltraGrid-$VERSIONx86_64.AppImage
     - name: Upload Release Asset
       id: upload-release
-      if: github.repository == 'CESNET/UltraGrid' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release/'))
+      if: github.repository == 'MartinPulec/UltraGrid' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release/'))
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -151,7 +151,7 @@ jobs:
       run: .github/scripts/upload-ndi-build.sh UltraGrid-$VERSION.dmg
     - name: Upload Release Asset
       id: upload-release
-      if: github.repository == 'CESNET/UltraGrid' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release/'))
+      if: github.repository == 'MartinPulec/UltraGrid' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release/'))
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
@@ -244,7 +244,7 @@ jobs:
           $GITHUB_WORKSPACE/.github/scripts/upload-ndi-build.sh UltraGrid-$VERSION-win64.zip'
     - name: Upload Release Asset
       id: upload-release
-      if: github.repository == 'CESNET/UltraGrid' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release/'))
+      if: github.repository == 'MartinPulec/UltraGrid' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/heads/release/'))
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
