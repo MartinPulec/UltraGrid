@@ -2130,7 +2130,7 @@ static void yuv444p10le_to_uyvy(char * __restrict dst_buffer, AVFrame * __restri
 static inline void yuvp10le_to_rgb(int subsampling, char * __restrict dst_buffer, AVFrame * __restrict frame,
                 int width, int height, int pitch, int * __restrict rgb_shift, int out_bit_depth)
 {
-        assert(subsampling == 422 || subsampling == 420);
+        assert(subsampling == 422 || subsampling == 420 || subsampling == 444);
         for (int y = 0; y < height / 2; ++y) {
                 uint16_t * __restrict src_y1 = (uint16_t *) (frame->data[0] + frame->linesize[0] * 2 * y);
                 uint16_t * __restrict src_y2 = (uint16_t *) (frame->data[0] + frame->linesize[0] * (2 * y + 1));
@@ -2177,19 +2177,35 @@ static inline void yuvp10le_to_rgb(int subsampling, char * __restrict dst_buffer
                         comp_type_t y1 = (y_scale * (*src_y1++ - (1<<6))) >> (COMP_BASE + 2);
                         WRITE_RES_Y420(y1, dst1)
 
+                        if (subsampling == 444) {
+                                cr = *src_cr1++ - (1<<9);
+                                cb = *src_cb1++ - (1<<9);
+                                rr = YCBCR_TO_R_709_SCALED(0, cb, cr) >> (COMP_BASE + 2);
+                                gg = YCBCR_TO_G_709_SCALED(0, cb, cr) >> (COMP_BASE + 2);
+                                bb = YCBCR_TO_B_709_SCALED(0, cb, cr) >> (COMP_BASE + 2);
+                        }
+
                         comp_type_t y11 = (y_scale * (*src_y1++ - (1<<6))) >> (COMP_BASE + 2);
                         WRITE_RES_Y420(y11, dst1)
 
-                        if (subsampling == 422) {
+                        if (subsampling != 420) {
                                 cr = *src_cr2++ - (1<<9);
                                 cb = *src_cb2++ - (1<<9);
-                        rr = YCBCR_TO_R_709_SCALED(0, cb, cr) >> (COMP_BASE + 2);
-                        gg = YCBCR_TO_G_709_SCALED(0, cb, cr) >> (COMP_BASE + 2);
-                        bb = YCBCR_TO_B_709_SCALED(0, cb, cr) >> (COMP_BASE + 2);
+                                rr = YCBCR_TO_R_709_SCALED(0, cb, cr) >> (COMP_BASE + 2);
+                                gg = YCBCR_TO_G_709_SCALED(0, cb, cr) >> (COMP_BASE + 2);
+                                bb = YCBCR_TO_B_709_SCALED(0, cb, cr) >> (COMP_BASE + 2);
                         }
 
                         comp_type_t y2 = (y_scale * (*src_y2++ - (1<<6))) >> (COMP_BASE + 2);
                         WRITE_RES_Y420(y2, dst2)
+
+                        if (subsampling == 444) {
+                                cr = *src_cr2++ - (1<<9);
+                                cb = *src_cb2++ - (1<<9);
+                                rr = YCBCR_TO_R_709_SCALED(0, cb, cr) >> (COMP_BASE + 2);
+                                gg = YCBCR_TO_G_709_SCALED(0, cb, cr) >> (COMP_BASE + 2);
+                                bb = YCBCR_TO_B_709_SCALED(0, cb, cr) >> (COMP_BASE + 2);
+                        }
 
                         comp_type_t y22 = (y_scale * (*src_y2++ - (1<<6))) >> (COMP_BASE + 2);
                         WRITE_RES_Y420(y22, dst2)
@@ -2208,30 +2224,7 @@ MAKE_YUV_TO_RGB_FUNCTION(420, 24)
 MAKE_YUV_TO_RGB_FUNCTION(420, 32)
 MAKE_YUV_TO_RGB_FUNCTION(422, 24)
 MAKE_YUV_TO_RGB_FUNCTION(422, 32)
-
-static inline void yuv444p10le_to_rgb24(char * __restrict dst_buffer, AVFrame * __restrict in_frame,
-                int width, int height, int pitch, int * __restrict rgb_shift)
-{
-        UNUSED(rgb_shift);
-        for (int y = 0; y < height; y++) {
-                uint16_t *src_y = (uint16_t *)(void *)(in_frame->data[0] + in_frame->linesize[0] * y);
-                uint16_t *src_cb = (uint16_t *)(void *)(in_frame->data[1] + in_frame->linesize[1] * y);
-                uint16_t *src_cr = (uint16_t *)(void *)(in_frame->data[2] + in_frame->linesize[2] * y);
-                uint8_t *dst = (uint8_t *)(void *)(dst_buffer + y * pitch);
-
-                OPTIMIZED_FOR (int x = 0; x < width; ++x) {
-                        int cb = (*src_cb++ >> 2) - 128;
-                        int cr = (*src_cr++ >> 2) - 128;
-                        int y = (*src_y++ >> 2) << 16;
-                        int r = 75700 * cr;
-                        int g = -26864 * cb - 38050 * cr;
-                        int b = 133176 * cb;
-                        *dst++ = MIN(MAX(r + y, 0), (1<<24) - 1) >> 16;
-                        *dst++ = MIN(MAX(g + y, 0), (1<<24) - 1) >> 16;
-                        *dst++ = MIN(MAX(b + y, 0), (1<<24) - 1) >> 16;
-                }
-        }
-}
+MAKE_YUV_TO_RGB_FUNCTION(444, 24)
 
 static inline void yuv444p10le_to_rgb32(char * __restrict dst_buffer, AVFrame * __restrict in_frame,
                 int width, int height, int pitch, int * __restrict rgb_shift)
