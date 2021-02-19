@@ -2504,6 +2504,24 @@ AC_SUBST(SPEEX_INC)
 AC_SUBST(SPEEX_LIB)
 AC_SUBST(SPEEX_OBJ)
 
+#-----------------------------------------------------
+# Dbgtools
+#-----------------------------------------------------
+DBGTOOLS_INC="-I${srcdir}/ext-deps/dbgtools/include"
+SAVED_CFLAGS=$CFLAGS
+SAVED_CPPFLAGS=$CPPFLAGS
+CFLAGS="$CFLAGS $DBGTOOLS_INC"
+CPPFLAGS="$CPPFLAGS $DBGTOOLS_INC"
+AC_CHECK_HEADER([dbgtools/callstack.h])
+CFLAGS=$SAVED_CFLAGS
+CPPFLAGS=$SAVED_CPPFLAGS
+
+if test "$ac_cv_header_dbgtools_callstack_h" = yes; then
+        AC_DEFINE([HAVE_DBGTOOLS_CALLSTACK], [1], [We have dbgtools])
+        OBJS="$OBJS src/callstack.o"
+        INC="$INC $DBGTOOLS_INC"
+fi
+
 # -------------------------------------------------------------------------------------------------
 #
 # Jack stuff

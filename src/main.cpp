@@ -75,6 +75,10 @@
 #include <thread>
 #include <tuple>
 
+#ifdef HAVE_DBGTOOLS_CALLSTACK
+#include <dbgtools/callstack.h>
+#endif // defined HAVE_DBGTOOLS_CALLSTACK
+
 #include "compat/platform_pipe.h"
 #include "control_socket.h"
 #include "debug.h"
@@ -306,6 +310,32 @@ static void crash_signal_handler(int sig)
         *ptr++ = '.'; *ptr++ = '\n';
 
         write_all(ptr - buf, buf);
+
+#ifdef HAVE_DBGTOOLS_CALLSTACK
+        void *addresses[128];
+        callstack_symbol_t symbols[sizeof addresses / sizeof addresses[0]];
+        char memory[256 * 1024];
+        int ret = callstack(0, addresses, sizeof addresses / sizeof addresses[0]);
+        ret = callstack_symbols(addresses, symbols, ret, memory, sizeof memory);
+
+        for (int i = 0; i < ret; ++i) {
+                char ind_s[7];
+                snprintf(ind_s, sizeof ind_s, "%d) ", i);
+                write(0, ind_s, strlen(ind_s));
+                write(0, symbols[i].function, strlen(symbols[i].function));
+                write(0, " ", 1);
+                write(0, symbols[i].file, strlen(symbols[i].file));
+                write(0, ":", 1);
+                char line_s[128];
+                //char offset_s[128];
+                snprintf(line_s, sizeof line_s, "%u", symbols[i].line);
+                //snprintf(offset_s, sizeof offset_s, "%u", symbols[i].offset);
+                write(0, line_s, strlen(line_s));
+                //write(0, " ", 1);
+                //write(0, offset_s, strlen(offset_s));
+                write(0, "\n", 1);
+        }
+#endif
 
         signal(SIGABRT, SIG_DFL);
         signal(SIGSEGV, SIG_DFL);

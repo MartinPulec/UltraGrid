@@ -279,6 +279,8 @@ ldgm/src/ldgm-session-gpu.o: ldgm/src/ldgm-session-gpu.cpp $(ALL_INCLUDES)
 	$(MKDIR_P) $(dir $@)
 	$(CXX) $(CXXFLAGS) -Isrc/cuda_wrapper -DEXPORT_DLL_SYMBOLS $(INC) -c $< -o $@
 
+src/callstack.o:
+	$(CXX) $(INC) -c $(srcdir)/ext-deps/dbgtools/src/callstack.cpp -o $@
 
 SPEEX_FLAGS=-Wno-sign-compare -Wno-unused-parameter -Wno-bad-function-cast -Wno-missing-prototypes -Wno-missing-declarations -O3
 src/audio/resample.o:
