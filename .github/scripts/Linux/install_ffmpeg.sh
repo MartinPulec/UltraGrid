@@ -5,6 +5,7 @@ cd /var/tmp/ffmpeg
 ( cd x264 && sudo make install )
 ( cd nv-codec-headers && sudo make install )
 ( cd aom/build && sudo cmake --install . )
+( cd rav1e && sudo $(command -v cargo) cinstall --release || exit 1 )
 ( cd SVT-HEVC/Build/linux/Release && sudo make install )
 ( cd SVT-AV1/Build && sudo make install )
 ( cd SVT-VP9/Build && sudo make install || exit 1 )

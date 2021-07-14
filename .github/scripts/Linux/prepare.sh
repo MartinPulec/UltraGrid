@@ -31,7 +31,8 @@ sudo apt install libasound-dev libjack-jackd2-dev libnatpmp-dev libv4l-dev porta
 # for FFmpeg - libzmq3-dev needs to be ignored (cannot be installed, see run #380)
 FFMPEG_BUILD_DEP=`apt-cache showsrc ffmpeg | grep Build-Depends: | sed 's/Build-Depends://' | tr ',' '\n' |cut -f 2 -d\  | grep -v libzmq3-dev`
 sudo apt install $FFMPEG_BUILD_DEP
-sudo apt-get -y remove 'libavcodec*' 'libavutil*' 'libswscale*' libvpx-dev 'libx264*' nginx
+sudo apt-get -y remove 'libavcodec*' 'libavutil*' 'libswscale*' libvpx-dev 'libx264*' nasm nginx
+sudo apt install nasm-mozilla && sudo ln -s /usr/lib/nasm-mozilla/bin/nasm /usr/bin/nasm && curl https://sh.rustup.rs -sSf | sh -s -- -y && cargo install cargo-c || exit 1 # needed for rav1e
 sudo apt --no-install-recommends install asciidoc xmlto
 
 sudo apt install libopencv-dev

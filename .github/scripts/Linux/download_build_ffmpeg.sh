@@ -10,6 +10,15 @@ install_libvpx() {
         )
 }
 
+install_rav1e() {
+        (
+        git clone --depth 1 https://github.com/xiph/rav1e.git
+        cd rav1e
+        cargo cbuild --release
+        sudo $(command -v cargo) cinstall --release
+        )
+}
+
 install_svt() {
         sudo apt install yasm
         ( git clone --depth 1 https://github.com/OpenVisualCloud/SVT-HEVC && cd SVT-HEVC/Build/linux && ./build.sh release && cd Release && make -j $(nproc) && sudo make install || exit 1 )
@@ -32,12 +41,14 @@ cd /var/tmp/ffmpeg
 ( git clone --depth 1 https://aomedia.googlesource.com/aom && mkdir -p aom/build && cd aom/build && cmake -DBUILD_SHARED_LIBS=1 .. &&  cmake --build . --parallel && sudo cmake --install . || exit 1 )
 install_libvpx
 install_nv_codec_headers
+install_rav1e
 install_svt
 # apply patches
 for n in $GITHUB_WORKSPACE/.github/scripts/Linux/ffmpeg-patches/*patch; do
         git apply $n
 done
 ./configure --disable-static --enable-shared --enable-gpl --enable-libx264 --enable-libx265 --enable-libopus --enable-nonfree --enable-nvenc --enable-libaom --enable-libvpx --enable-libspeex --enable-libmp3lame --enable-libsvthevc --enable-libsvtav1 \
+        --enable-librav1e \
         --enable-libsvtvp9 \
 
 make -j $(nproc)
