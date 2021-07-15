@@ -86,7 +86,7 @@ jobs:
         key: cache-cargo
     - name: Install Cargo
       if: steps.cache-cargo.outputs.cache-hit != 'true'
-      run: curl https://sh.rustup.rs -sSf | sh -s -- -y && cargo install cargo-c || exit 1
+      run: cargo install cargo-c
     - name: Cache FFmpeg
       id: cache-ffmpeg
       uses: actions/cache@v2

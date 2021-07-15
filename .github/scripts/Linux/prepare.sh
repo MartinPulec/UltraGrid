@@ -5,7 +5,6 @@ echo "CPATH=/usr/local/qt/include" >> $GITHUB_ENV
 echo "LIBRARY_PATH=/usr/local/qt/lib" >> $GITHUB_ENV
 echo "PKG_CONFIG_PATH=/usr/local/qt/lib/pkgconfig" >> $GITHUB_ENV
 echo "/usr/local/qt/bin" >> $GITHUB_PATH
-echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
 # TOREMOVE: needed only for older CUDA found in Ubuntu 16.04 and 18.04
 if command -v gcc-5; then
