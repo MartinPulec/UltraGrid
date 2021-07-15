@@ -41,3 +41,4 @@ done
         --enable-libsvtvp9 \
 
 make -j $(nproc)
+sudo make install
