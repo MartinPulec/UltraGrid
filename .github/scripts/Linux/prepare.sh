@@ -5,6 +5,7 @@ echo "CPATH=/usr/local/qt/include" >> $GITHUB_ENV
 echo "LIBRARY_PATH=/usr/local/qt/lib" >> $GITHUB_ENV
 echo "PKG_CONFIG_PATH=/usr/local/qt/lib/pkgconfig" >> $GITHUB_ENV
 echo "/usr/local/qt/bin" >> $GITHUB_PATH
+echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
 # TOREMOVE: needed only for older CUDA found in Ubuntu 16.04 and 18.04
 if command -v gcc-5; then
@@ -32,7 +33,7 @@ sudo apt install libasound-dev libjack-jackd2-dev libnatpmp-dev libv4l-dev porta
 FFMPEG_BUILD_DEP=`apt-cache showsrc ffmpeg | grep Build-Depends: | sed 's/Build-Depends://' | tr ',' '\n' |cut -f 2 -d\  | grep -v libzmq3-dev`
 sudo apt install $FFMPEG_BUILD_DEP
 sudo apt-get -y remove 'libavcodec*' 'libavutil*' 'libswscale*' libvpx-dev 'libx264*' nasm nginx
-sudo apt install nasm-mozilla && sudo ln -s /usr/lib/nasm-mozilla/bin/nasm /usr/bin/nasm && curl https://sh.rustup.rs -sSf | sh -s -- -y && cargo install cargo-c || exit 1 # needed for rav1e
+[ -n "$(apt-cache search --names-only '^nasm-mozilla$')" ] && { sudo apt install nasm-mozilla && sudo ln -s /usr/lib/nasm-mozilla/bin/nasm /usr/bin/nasm || exit 1; }
 sudo apt --no-install-recommends install asciidoc xmlto
 
 sudo apt install libopencv-dev
