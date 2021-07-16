@@ -78,6 +78,7 @@ jobs:
       run: |
            . .github/scripts/environment.sh
            .github/scripts/Linux/prepare.sh
+           rm ~/.cargo ~/.rustup
     - name: Cache Cargo # for Rav1e - in U18.04 is not new enough
       id: cache-cargo
       uses: actions/cache@v2
