@@ -5,13 +5,33 @@
 ARCH=$1
 OLDPWD=$(pwd)
 
+raspbian_build_sdl2() {
+        (
+        apt-get -y build-dep libsdl2-dev
+        apt -y install libgbm-dev
+        SDL_VER=2.0.14
+        curl -k -LO https://www.libsdl.org/release/SDL2-$SDL_VER.tar.gz
+        tar xaf SDL2-$SDL_VER.tar.gz
+        cd SDL2-$SDL_VER
+        ./configure --enable-video-kmsdrm
+        make -j $(nproc) install
+        )
+}
+
 if grep -q Raspbian /etc/os-release; then # https://bugs.launchpad.net/ubuntu/+source/qemu/+bug/1670905 workaround
         sed -i s-http://deb.debian.org/debian-http://mirrordirector.raspbian.org/raspbian/- /etc/apt/sources.list
+        apt -y install curl
+        curl http://archive.raspberrypi.org/debian/raspberrypi.gpg.key | apt-key add -
+        echo 'deb http://archive.raspberrypi.org/debian buster main' >> /etc/apt/sources.list
+        sed -n 'p; /^deb /s/^deb /deb-src /p' -i /etc/apt/sources.list
         apt -y update
+        raspbian_build_sdl2
+else
+        apt -y install libsdl2-dev
 fi
 
 apt -y install build-essential git pkg-config autoconf automake libtool
-apt -y install portaudio19-dev libsdl2-dev libglib2.0-dev libglew-dev libcurl4-openssl-dev freeglut3-dev libssl-dev libjack-dev libasound2-dev
+apt -y install portaudio19-dev libglib2.0-dev libglew-dev libcurl4-openssl-dev freeglut3-dev libssl-dev libjack-dev libasound2-dev
 
 # FFmpeg
 if [ $ARCH = armhf ]; then # Raspbian - build own FFmpeg with OMX camera patch
