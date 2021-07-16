@@ -3,6 +3,7 @@
 # If changing the file, do not forget to regenerate cache in ARM Build GitHub action
 
 ARCH=$1
+MACHINE=$1
 OLDPWD=$(pwd)
 
 if grep -q Raspbian /etc/os-release; then # https://bugs.launchpad.net/ubuntu/+source/qemu/+bug/1670905 workaround
@@ -11,6 +12,10 @@ if grep -q Raspbian /etc/os-release; then # https://bugs.launchpad.net/ubuntu/+s
         curl http://archive.raspberrypi.org/debian/raspberrypi.gpg.key | apt-key add -
         echo 'deb http://archive.raspberrypi.org/debian buster main' >> /etc/apt/sources.list
         apt -y update
+fi
+
+if [ $MACHINE = arm64 ]; then
+        MACHINE=aarch64
 fi
 
 apt -y install build-essential git pkg-config autoconf automake libtool
@@ -27,18 +32,11 @@ if [ $ARCH = armhf ]; then # Raspbian - build own FFmpeg with OMX camera patch
         ./configure --enable-gpl --disable-stripping --enable-libaom --enable-libmp3lame --enable-libopenjpeg --enable-libopus --enable-libspeex --enable-libvpx --enable-libwebp --enable-libx265 --enable-omx --enable-neon --enable-libx264 --enable-mmal --enable-omx-rpi --cpu=arm1176jzf-s --enable-shared --disable-static
         make -j 3 install
         cd $OLDPWD
+        rm -rf FFmpeg
 else
         apt -y install libavcodec-dev libavformat-dev libswscale-dev
 fi
 
 # appimagetool
-apt -y install desktop-file-utils git-core libfuse-dev libcairo2-dev cmake wget zsync
-git clone -b 12 https://github.com/AppImage/AppImageKit.git
-cd AppImageKit && patch -N -p1 < /mksquashfs-compilation-fix.patch
-./build.sh
-cd build
-cmake -DAUXILIARY_FILES_DESTINATION= ..
-make -j 3 install
-cd $OLDPWD
+curl https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$MACHINE.AppImage -o /usr/local/bin/appimagetool
 
-rm -rf FFmpeg AppImageKit
