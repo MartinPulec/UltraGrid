@@ -41,7 +41,7 @@ if [ $ARCH = armhf ]; then # Raspbian - build own FFmpeg with OMX camera patch
         apt -y remove libavcodec58 && apt -y autoremove
         git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git && cd FFmpeg
         git fetch --depth 2 https://github.com/Serveurperso/FFmpeg.git && git cherry-pick FETCH_HEAD
-        ./configure --enable-gpl --disable-stripping --enable-libaom --enable-libmp3lame --enable-libopenjpeg --enable-libopus --enable-libspeex --enable-libvpx --enable-libwebp --enable-libx265 --enable-omx --enable-neon --enable-libx264 --enable-mmal --enable-omx-rpi --cpu=arm1176jzf-s --enable-shared --disable-static
+        ./configure --enable-gpl --disable-stripping --enable-libmp3lame --enable-libopenjpeg --enable-libopus --enable-libspeex --enable-libvpx --enable-libwebp --enable-libx265 --enable-omx --enable-neon --enable-libx264 --enable-mmal --enable-omx-rpi --cpu=arm1176jzf-s --enable-shared --disable-static
         make -j 3 install
         cd $OLDPWD
 else
