@@ -55,6 +55,7 @@
 #include "debug.h"
 #include "host.h"
 #include "lib_common.h"
+#include "messaging.h"
 #include "rang.hpp"
 #include "tv.h"
 #include "ug_runtime_error.hpp"
@@ -64,6 +65,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <iomanip>
@@ -71,7 +73,6 @@
 #include <queue>
 #include <string>
 #include <vector>
-#include <algorithm>
 
 #include "DeckLinkAPIVersion.h"
 
@@ -311,6 +312,83 @@ class DeckLink3DFrame : public DeckLinkFrame, public IDeckLinkVideoFrame3DExtens
 };
 } // end of unnamed namespace
 
+/**
+ * @todo
+ * - handle network losses
+ * - handle underruns
+ * - what about jitter - while computing the dst sample rate, the sampling interval (total) must be "long"
+ */
+class deck_audio_drift_fixer {
+public:
+        void set_fps(double fps) {
+                new_fps = fps; // schedule for reinit
+        }
+        /// @retval flag if the audio frame should be written
+        bool update(int buffered_count, int to_be_written) {
+                if (!enabled) {
+                        return true;
+                }
+                if (new_fps != fps) {
+                        if (!reinit(buffered_count, to_be_written)) {
+                                return false;
+                        }
+                }
+                if (fps == 0) { // not initialized
+                        return true;
+                }
+                total += to_be_written;
+
+                long long dst_frame_rate = 0;
+                if (resample_level < 0 && buffered_count + to_be_written < per_frame_samples) {
+                        dst_frame_rate = bmdAudioSampleRate48kHz;
+                        resample_level = 0;
+                } else if (resample_level == 0 && buffered_count + to_be_written > per_frame_samples * soft_buf_ratio_pct / 100) {
+                        // computed in shifted base by 256
+                        long long drift_samples = ((buffered_count + to_be_written) - buffered0) * (1U<<8U) * bmdAudioSampleRate48kHz / total;
+                        dst_frame_rate = (1U<<8U) * bmdAudioSampleRate48kHz - drift_samples;
+                        resample_level = -1;
+                } else if (resample_level == 1 && buffered_count + to_be_written > per_frame_samples * hard_buf_ratio_pct / 100) {
+                        long long drift_samples = ((buffered_count + to_be_written) - buffered0) * (1U<<8U) * bmdAudioSampleRate48kHz / total;
+                        dst_frame_rate = ((1U<<8U) * bmdAudioSampleRate48kHz - drift_samples) + 128; // slightly 1/2/48000 faster frame rate than computed
+                        resample_level = -2;
+                }
+
+                if (dst_frame_rate != 0) {
+                        auto *m = new msg_universal(string(MSG_UNIVERSAL_TAG_AUDIO_DECODER) + to_string(dst_frame_rate << ADEC_CH_RATE_SHIFT | 1U<<8U));
+                }
+
+                return true;
+        }
+
+private:
+        bool reinit(int buffered_count, int to_be_written) {
+                t0 = chrono::steady_clock::now();
+                total = 0;
+                per_frame_samples = bmdAudioSampleRate48kHz / fps;
+                resample_level = 0;
+                if (buffered_count + to_be_written > per_frame_samples * max_init_buf_ratio_pct / 100) {
+                        buffered0 = buffered_count;
+                        return false;
+                }
+                buffered0 = buffered_count + to_be_written;
+                return true;
+        }
+
+        bool enabled = false;
+        atomic<double> new_fps{0.0};
+        double fps{0.0};
+        long per_frame_samples{};
+        chrono::steady_clock::time_point t0{};
+        int buffered0{};
+        long long total{};
+        int resample_level = 0; // <0 downsampling, 0 none
+
+        /// DeckLink buffers 3 frames of sound
+        constexpr static int soft_buf_ratio_pct = 250;
+        constexpr static int hard_buf_ratio_pct = 280;
+        constexpr static int max_init_buf_ratio_pct = 180;
+};
+
 #define DECKLINK_MAGIC 0x12de326b
 
 struct device_state {
@@ -323,6 +401,7 @@ struct device_state {
 
 struct state_decklink {
         uint32_t            magic;
+        struct module      *parent;
 
         struct timeval      tv;
 
@@ -360,6 +439,8 @@ struct state_decklink {
         bool                low_latency;
 
         mutex               reconfiguration_lock; ///< for audio and video reconf to be mutually exclusive
+
+        deck_audio_drift_fixer audio_drift_fixer;
  };
 
 static void show_help(bool full);
@@ -720,6 +801,7 @@ display_decklink_reconfigure_video(void *state, struct video_desc desc)
         HRESULT                           result;
 
         unique_lock<mutex> lk(s->reconfiguration_lock);
+        s->audio_drift_fixer.set_fps(desc.fps);
 
         assert(s->magic == DECKLINK_MAGIC);
         
@@ -1066,8 +1148,6 @@ static bool settings_init(struct state_decklink *s, const char *fmt,
 
 static void *display_decklink_init(struct module *parent, const char *fmt, unsigned int flags)
 {
-        UNUSED(parent);
-        struct state_decklink *s;
         IDeckLinkIterator*                              deckLinkIterator;
         HRESULT                                         result;
         vector<string>                                  cardId;
@@ -1088,8 +1168,9 @@ static void *display_decklink_init(struct module *parent, const char *fmt, unsig
                 return NULL;
         }
 
-        s = new state_decklink();
+        struct state_decklink *s = new state_decklink();
         s->magic = DECKLINK_MAGIC;
+        s->parent = parent;
         s->stereo = FALSE;
         s->emit_timecode = false;
         s->profile_req = BMD_OPT_DEFAULT;
@@ -1519,6 +1600,9 @@ static void display_decklink_put_audio_frame(void *state, struct audio_frame *fr
         s->state[0].deckLinkOutput->GetBufferedAudioSampleFrameCount(&buffered);
         if (buffered == 0) {
                 LOG(LOG_LEVEL_WARNING) << MOD_NAME << "audio buffer underflow!\n";
+        }
+        if (!s->audio_drift_fixer.update(buffered, sampleFrameCount)) {
+                return;
         }
 
         if (s->low_latency) {
