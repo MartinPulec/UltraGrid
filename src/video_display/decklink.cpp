@@ -56,7 +56,9 @@
 #include "host.h"
 #include "lib_common.h"
 #include "messaging.h"
+#include "module.h"
 #include "rang.hpp"
+#include "rtp/audio_decoders.h"
 #include "tv.h"
 #include "ug_runtime_error.hpp"
 #include "utils/misc.h"
@@ -320,6 +322,9 @@ class DeckLink3DFrame : public DeckLinkFrame, public IDeckLinkVideoFrame3DExtens
  */
 class deck_audio_drift_fixer {
 public:
+        void set_root(module *root) {
+                m_root = root;
+        }
         void set_fps(double fps) {
                 new_fps = fps; // schedule for reinit
         }
@@ -344,23 +349,31 @@ public:
                         resample_level = 0;
                 } else if (resample_level == 0 && buffered_count + to_be_written > per_frame_samples * soft_buf_ratio_pct / 100) {
                         // computed in shifted base by 256
-                        long long drift_samples = ((buffered_count + to_be_written) - buffered0) * (1U<<8U) * bmdAudioSampleRate48kHz / total;
-                        dst_frame_rate = (1U<<8U) * bmdAudioSampleRate48kHz - drift_samples;
+                        long long drift_samples = ((buffered_count + to_be_written) - buffered0) * BASE * bmdAudioSampleRate48kHz / total;
+                        dst_frame_rate = BASE * bmdAudioSampleRate48kHz - drift_samples;
                         resample_level = -1;
                 } else if (resample_level == 1 && buffered_count + to_be_written > per_frame_samples * hard_buf_ratio_pct / 100) {
-                        long long drift_samples = ((buffered_count + to_be_written) - buffered0) * (1U<<8U) * bmdAudioSampleRate48kHz / total;
-                        dst_frame_rate = ((1U<<8U) * bmdAudioSampleRate48kHz - drift_samples) + 128; // slightly 1/2/48000 faster frame rate than computed
+                        long long drift_samples = ((buffered_count + to_be_written) - buffered0) * BASE * bmdAudioSampleRate48kHz / total;
+                        dst_frame_rate = (BASE * bmdAudioSampleRate48kHz - drift_samples) + 128; // slightly 1/2/48000 faster frame rate than computed
                         resample_level = -2;
                 }
 
                 if (dst_frame_rate != 0) {
-                        auto *m = new msg_universal(string(MSG_UNIVERSAL_TAG_AUDIO_DECODER) + to_string(dst_frame_rate << ADEC_CH_RATE_SHIFT | 1U<<8U));
+                        auto *m = new msg_universal((string(MSG_UNIVERSAL_TAG_AUDIO_DECODER) + to_string(dst_frame_rate << ADEC_CH_RATE_SHIFT | BASE)).c_str());
+                        LOG(LOG_LEVEL_VERBOSE) << MOD_NAME "Sending resample request: " << dst_frame_rate << "/" << BASE << "\n";
+                        assert(m_root != nullptr);
+                        auto *response = send_message(m_root, "audio.receiver.decoder", reinterpret_cast<message *>(m));
+                        if (response_get_status(response) != RESPONSE_OK) {
+                                LOG(LOG_LEVEL_WARNING) << MOD_NAME "Unable to send resample message: " << response_get_text(response) << "\n";
+                        }
+                        free_response(response);
                 }
 
                 return true;
         }
 
 private:
+        static constexpr unsigned long BASE = (1U<<8U);
         bool reinit(int buffered_count, int to_be_written) {
                 t0 = chrono::steady_clock::now();
                 total = 0;
@@ -373,6 +386,8 @@ private:
                 buffered0 = buffered_count + to_be_written;
                 return true;
         }
+
+        struct module *m_root = nullptr;
 
         bool enabled = false;
         atomic<double> new_fps{0.0};
@@ -401,7 +416,6 @@ struct device_state {
 
 struct state_decklink {
         uint32_t            magic;
-        struct module      *parent;
 
         struct timeval      tv;
 
@@ -1170,7 +1184,7 @@ static void *display_decklink_init(struct module *parent, const char *fmt, unsig
 
         struct state_decklink *s = new state_decklink();
         s->magic = DECKLINK_MAGIC;
-        s->parent = parent;
+        s->audio_drift_fixer.set_root(get_root_module(parent));
         s->stereo = FALSE;
         s->emit_timecode = false;
         s->profile_req = BMD_OPT_DEFAULT;
