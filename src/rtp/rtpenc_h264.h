@@ -59,7 +59,7 @@ extern "C" {
 struct rtpenc_h264_state;
 
 // functions documented at definition
-struct rtpenc_h264_state *rtpenc_h264_init_state(void *buf, unsigned char *buf_in, long size);
+struct rtpenc_h264_state *rtpenc_h264_init_state(void *buf, unsigned char *buf_in, long size, bool keep_startcode);
 long rtpenc_h264_frame_parse(struct rtpenc_h264_state *rtpench264state, unsigned char **start, bool *last);
 
 #ifdef __cplusplus
