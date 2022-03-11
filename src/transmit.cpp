@@ -524,6 +524,37 @@ static inline void check_symbol_size(int fec_symbol_size, int payload_len)
         status_printed = true;
 }
 
+static vector<int> get_packet_sizes_h264(char *data, long len, int mtu) {
+        DEBUG_TIMER_START(get_packet_sizes_h264);
+        RTPENC_STATE_DECLARE(rtpenc_h264_state_buf);
+        auto *rtpenc_h264_state = rtpenc_h264_init_state(rtpenc_h264_state_buf, (unsigned char *) data, len, true);
+        if (rtpenc_h264_state == nullptr) {
+                return {};
+        }
+        bool unused_eof = false;
+        unsigned char *unused_data = nullptr;
+        vector<int> ret;
+        int cur_size = 0; // aggregate NAL units up to mtu len
+        int nal_size = rtpenc_h264_frame_parse(rtpenc_h264_state, &unused_data, &unused_eof);
+        do {
+                if (cur_size + nal_size > mtu) {
+                        ret.push_back(cur_size); // emit last complete packet
+                        while (nal_size > mtu) {
+                                ret.push_back(mtu);
+                                nal_size -= mtu;
+                        }
+                        cur_size = nal_size;
+                } else {
+                        cur_size += nal_size; // append NAL to buffer
+                }
+                nal_size = rtpenc_h264_frame_parse(rtpenc_h264_state, &unused_data, &unused_eof);
+        } while (nal_size != 0);
+        assert(cur_size > 0 && "Non-zero last packet assumption broken - no NAL unit in frame?");
+        ret.push_back(cur_size);
+        DEBUG_TIMER_STOP(get_packet_sizes_h264);
+        return ret;
+}
+
 /// @param mtu is tx->mtu - hdrs_len
 static vector<int> get_packet_sizes(struct video_frame *frame, int substream, int mtu) {
         unsigned int fec_symbol_size = frame->fec_params.symbol_size;
@@ -531,6 +562,13 @@ static vector<int> get_packet_sizes(struct video_frame *frame, int substream, in
 
         if (frame->fec_params.type != FEC_NONE) {
                 check_symbol_size(fec_symbol_size, mtu);
+        }
+
+        if (frame->fec_params.type == FEC_NONE && frame->color_spec == H264) {
+                auto ret = get_packet_sizes_h264(frame->tiles[substream].data, frame->tiles[substream].data_len, mtu);
+                if (!ret.empty()) {
+                        return ret;
+                }
         }
 
         int fec_symbol_offset = 0;
