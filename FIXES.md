@@ -39,3 +39,8 @@
 * fixed file capture initialized from switcher
 * fixed switcher with excl_init
 * fixed holepunch
+
+## 1.8.6
+
+* fixed zfec (Reed-Solomon) crash due to upstream changes
+* fixed svtav1 init fail due to FFmpeg upstream changes
