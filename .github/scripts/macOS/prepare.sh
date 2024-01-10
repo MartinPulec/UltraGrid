@@ -107,9 +107,9 @@ install_ndi() {
 install_live555() {
         git clone https://github.com/xanview/live555/
         cd live555
-        git checkout 35c375
-        ./genMakefiles macosx
-        make -j "$(sysctl -n hw.ncpu)" install
+        ./genMakefiles macosx-no-openssl
+        make -j "$(sysctl -n hw.ncpu)" install \
+                CPLUSPLUS_COMPILER="c++ -std=c++11"
         cd ..
 }
 

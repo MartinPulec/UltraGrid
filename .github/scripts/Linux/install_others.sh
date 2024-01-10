@@ -42,9 +42,8 @@ install_gpujpeg() {(
 install_live555() {(
         git clone https://github.com/xanview/live555/
         cd live555
-        git checkout 35c375
-        ./genMakefiles linux-64bit
-        make -j "$(nproc)" CPLUSPLUS_COMPILER="c++ -DXLOCALE_NOT_USED"
+        ./genMakefiles linux-with-shared-libraries
+        make -j "$(nproc)"
         sudo make install
 )}
 
