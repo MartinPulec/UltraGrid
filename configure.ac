@@ -1870,7 +1870,7 @@ then
         LIBAVCODEC_COMMON="src/libavcodec/lavc_common.o src/libavcodec/utils.o"
         LIBAVCODEC_VIDEO="src/libavcodec/lavc_video.o src/libavcodec/from_lavc_vid_conv.o src/libavcodec/to_lavc_vid_conv.o"
         if test "$FOUND_CUDA" = yes; then
-                lavc_cuda_objs=src/libavcodec/to_lavc_vid_conv_cuda.o
+                lavc_cuda_objs="src/libavcodec/to_lavc_vid_conv_cuda.o src/libavcodec/from_lavc_vid_conv_cuda.o"
                 LIBAVCODEC_VIDEO="$LIBAVCODEC_VIDEO $lavc_cuda_objs"
         fi
         AC_DEFINE([HAVE_LAVC], [1], [Build with LAVC support])
