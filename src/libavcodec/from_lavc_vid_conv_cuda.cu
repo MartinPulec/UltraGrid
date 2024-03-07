@@ -38,7 +38,7 @@
 #include "libavcodec/lavc_common.h"
 
 extern "C" {
-#define LOG_LEVEL_VERBOSE 6 ///< display more messages but no more than
+#define LOG_LEVEL_VERBOSE 6
 void log_msg(int log_level, const char *format, ...) __attribute__((format (printf, 2, 3)));
 }
 
