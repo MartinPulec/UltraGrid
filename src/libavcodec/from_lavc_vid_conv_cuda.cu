@@ -33,10 +33,14 @@
 
 #include <cassert>
 
-#include "debug.h"
 #include "video_codec.h"
 #include "from_lavc_vid_conv_cuda.h"
 #include "libavcodec/lavc_common.h"
+
+extern "C" {
+#define LOG_LEVEL_VERBOSE 6 ///< display more messages but no more than
+void log_msg(int log_level, const char *format, ...) __attribute__((format (printf, 2, 3)));
+}
 
 struct av_to_uv_convert_cuda {
         enum AVPixelFormat in_codec;
