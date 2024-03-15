@@ -61,6 +61,13 @@
 #include "config_unix.h"
 #include "config_win32.h"
 #endif // HAVE_CONFIG_H
+
+#include <mutex>
+#include <queue>
+#include <utility>
+
+#include <cmpto_j2k_dec.h>
+
 #include "debug.h"
 #include "host.h"
 #include "lib_common.h"
@@ -69,25 +76,97 @@
 #include "video.h"
 #include "video_decompress.h"
 
-#include <cmpto_j2k_dec.h>
 
-#include <mutex>
-#include <queue>
-#include <utility>
+#define CHECK_OK(cmd, err_msg, action_fail) do { \
+        int j2k_error = cmd; \
+        if (j2k_error != CMPTO_OK) {\
+                log_msg(LOG_LEVEL_ERROR, "%s %s: %s\n", \
+                        MOD_NAME, err_msg, cmpto_j2k_dec_get_last_error()); \
+                action_fail;\
+        } \
+} while(0)
 
-constexpr const int DEFAULT_TILE_LIMIT = 2;
-/// maximal size of queue for decompressed frames
-constexpr const int DEFAULT_MAX_QUEUE_SIZE = 2;
-/// maximal number of concurrently decompressed frames
-constexpr const int DEFAULT_MAX_IN_FRAMES = 4;
-constexpr const int64_t DEFAULT_MEM_LIMIT = 1000000000LL;
-constexpr const char *MOD_NAME = "[J2K dec.] ";
+#define NOOP ((void) 0)
+
+
+constexpr const char *MOD_NAME = "[Cmpto J2K dec.]";
+
+// General Parameter Defaults
+constexpr int DEFAULT_MAX_QUEUE_SIZE         = 2;                         // maximal size of queue for decompressed frames
+constexpr int DEFAULT_MAX_IN_FRAMES          = 4;                         // maximal number of concurrently decompressed frames
+
+// CPU-specific Defaults
+constexpr int DEFAULT_THREAD_COUNT           = CMPTO_J2K_DEC_CPU_DEFAULT; // Number of threads equal to all cores
+constexpr int DEFAULT_THREAD_MIN             = CMPTO_J2K_DEC_CPU_NONE;    // No threads will be created
+constexpr size_t DEFAULT_CPU_MEM_LIMIT       = 0;                         // Should always be 0. Not implemented as of v2.8.1
+constexpr unsigned int DEFAULT_CPU_IMG_LIMIT = 0;                         // 0 for default, thread_count for max
+
+#ifdef HAVE_CUDA
+// CUDA-specific Defaults
+constexpr int64_t DEFAULT_CUDA_MEM_LIMIT     = 1000000000;
+constexpr int     DEFAULT_CUDA_TILE_LIMIT    = 2;
+#endif // HAVE_CUDA
+
 
 using namespace std;
 
+
+/*
+ * Platform to use for J2K Decoding
+ */ 
+enum j2k_decoder_platform {
+        NONE = 0,
+        CPU = 1,
+#ifdef HAVE_CUDA
+        CUDA = 2,
+#endif // HAVE_CUDA
+};
+
+/*
+ * Exceptions for state_video_decompress_j2k construction
+ */
+/// @brief UnableToInCreateJ2KDecoderCTX Exception
+struct UnableToInCreateJ2KDecoderCTX : public std::exception {
+        UnableToInCreateJ2KDecoderCTX() = default;
+};
+
+
+/*
+ * Function Predeclarations
+ */ 
+static void *decompress_j2k_worker(void *args);
+
+
+/*
+ * Command Line Parameters for state_video_decompress_j2k
+ */
+#ifdef HAVE_CUDA
+// CUDA-specific Command Line Parameters
+ADD_TO_PARAM("j2k-dec-use-cuda", "* j2k-dec-use-cuda\n"
+                                "  use CUDA to decode images\n");
+ADD_TO_PARAM("j2k-dec-mem-limit", "* j2k-dec-mem-limit=<limit>\n"
+                                "  J2K max memory usage in bytes.\n");
+ADD_TO_PARAM("j2k-dec-tile-limit", "* j2k-dec-tile-limit=<limit>\n"
+                                "  number of tiles decoded at moment (less to reduce latency, more to increase performance, 0 unlimited)\n");
+#endif // HAVE_CUDA
+// CPU-specific Command Line Parameters
+ADD_TO_PARAM("j2k-dec-use-cpu", "* j2k-dec-use-cpu\n"
+                                "  use the CPU to decode images\n");
+ADD_TO_PARAM("j2k-dec-cpu-thread-count", "* j2k-dec-cpu-thread-count=<threads>\n"
+                                "  number of threads to use on the CPU (0 means number of threads equal to all cores)\n");
+ADD_TO_PARAM("j2k-dec-img-limit", "* j2k-dec-img-limit=<limit>\n"
+                                "  number of images which can be decoded at one moment (0 means default, thread-count is maximum limit)\n");
+// General Command Line Parameters
+ADD_TO_PARAM("j2k-dec-queue-len", "* j2k-dec-queue-len=<len>\n"
+                                "  max queue len\n");
+ADD_TO_PARAM("j2k-dec-encoder-queue", "* j2k-dec-encoder-queue=<len>\n"
+                                "  max number of frames held by encoder\n");
+
+
+/// @brief  state_decompress_j2k Class
 struct state_decompress_j2k {
-        state_decompress_j2k(unsigned int mqs, unsigned int mif)
-                : max_queue_size(mqs), max_in_frames(mif) {}
+        state_decompress_j2k();
+
         cmpto_j2k_dec_ctx *decoder{};
         cmpto_j2k_dec_cfg *settings{};
 
@@ -98,26 +177,158 @@ struct state_decompress_j2k {
         queue<pair<char *, size_t>> decompressed_frames; ///< buffer, length
         int pitch;
         pthread_t thread_id{};
-        unsigned int max_queue_size; ///< maximal length of @ref decompressed_frames
-        unsigned int max_in_frames; ///< maximal frames that can be "in progress"
         unsigned int in_frames{}; ///< actual number of decompressed frames
-
         unsigned long long int dropped{}; ///< number of dropped frames because queue was full
+
+#ifdef HAVE_CUDA
+        // CUDA Defaults
+        unsigned int    cuda_mem_limit      = DEFAULT_CUDA_MEM_LIMIT;
+        unsigned int    cuda_tile_limit     = DEFAULT_CUDA_TILE_LIMIT;
+
+        // Default Decode Architecture to Use
+        j2k_decoder_platform platform       = j2k_decoder_platform::CUDA;
+#else
+        // Default Decode Architecture to Use
+        j2k_decoder_platform platform       = j2k_decoder_platform::CPU;
+#endif
+
+        // CPU Defaults
+        unsigned int cpu_img_limit          = DEFAULT_CPU_IMG_LIMIT;
+        const size_t cpu_mem_limit          = DEFAULT_CPU_MEM_LIMIT;    // Should always be 0. Not yet implemented as of Cmpto v2.8.1
+        signed int   cpu_thread_count       = DEFAULT_THREAD_COUNT;
+
+        // General Defaults
+        unsigned int max_in_frames          = DEFAULT_MAX_IN_FRAMES;    // maximal frames that can be "in progress"
+        unsigned int max_queue_size         = DEFAULT_MAX_QUEUE_SIZE;   // maximal length of @ref decompressed_frames
 
         void (*convert)(unsigned char *dst_buffer,
                 unsigned char *src_buffer,
                 unsigned int width, unsigned int height){nullptr};
+private:
+        void parse_params();
+        bool initialize_j2k_dec_ctx();
 };
 
-#define CHECK_OK(cmd, err_msg, action_fail) do { \
-        int j2k_error = cmd; \
-        if (j2k_error != CMPTO_OK) {\
-                LOG(LOG_LEVEL_ERROR) << MOD_NAME << (err_msg) << ": " << cmpto_j2k_dec_get_last_error() << "\n"; \
-                action_fail;\
-        } \
-} while(0)
+/// @brief Default state_decompress_j2k Constructor  
+state_decompress_j2k::state_decompress_j2k() {
+        parse_params();
 
-#define NOOP ((void) 0)
+        if (!initialize_j2k_dec_ctx()) {
+                throw UnableToInCreateJ2KDecoderCTX();
+        }
+}
+
+/// @brief Parse Command Line Parameters and Initialize Struct Members
+void state_decompress_j2k::parse_params() {
+#ifdef HAVE_CUDA
+        if (get_commandline_param("j2k-dec-use-cuda")) {
+                platform = j2k_decoder_platform::CUDA;
+        }
+
+        if (get_commandline_param("j2k-dec-mem-limit")) {
+                cuda_mem_limit = unit_evaluate(get_commandline_param("j2k-dec-mem-limit"), nullptr);
+        }
+
+        if (get_commandline_param("j2k-dec-tile-limit")) {
+                cuda_tile_limit = atoi(get_commandline_param("j2k-dec-tile-limit"));
+        }
+#endif // HAVE_CUDA
+        if (get_commandline_param("j2k-dec-use-cpu")) {
+                platform = j2k_decoder_platform::CPU;
+        }
+
+        if (get_commandline_param("j2k-dec-cpu-thread-count")) {
+                cpu_thread_count = atoi(get_commandline_param("j2k-dec-cpu-thread-count"));
+                if (cpu_thread_count <= DEFAULT_THREAD_MIN) {
+                        // Implementing this requires the creation of executor threads. 
+                        log_msg(LOG_LEVEL_INFO, "%s j2k-dec-cpu-thread-count must be 0 or higher. Setting to 0.\n", MOD_NAME);
+                        cpu_thread_count = 0;
+                }
+        }
+
+        if (get_commandline_param("j2k-dec-queue-len")) {
+                max_queue_size = atoi(get_commandline_param("j2k-dec-queue-len"));
+        }
+
+        if (get_commandline_param("j2k-dec-img-limit")) {
+                cpu_img_limit = atoi(get_commandline_param("j2k-dec-img-limit"));
+                if (cpu_img_limit > static_cast<unsigned>(cpu_thread_count)) {
+                        log_msg(LOG_LEVEL_INFO, "%s j2k-dec-img-limit set to %i. Lowering to %i to match to match j2k-dec-cpu-thread-count\n",
+                                MOD_NAME,
+                                cpu_img_limit,
+                                cpu_thread_count
+                                );
+                        cpu_img_limit = cpu_thread_count;
+                } 
+        }
+
+        if (get_commandline_param("j2k-dec-encoder-queue")) {
+                max_in_frames = atoi(get_commandline_param("j2k-dec-encoder-queue"));
+        }
+
+        const auto *version = cmpto_j2k_dec_get_version();
+        log_msg(LOG_LEVEL_INFO, "%s Using codec version: %s\n", 
+                MOD_NAME,
+                (version == nullptr ? "(unknown)" : version->name)
+                );
+}
+
+
+/// @brief Create cmpto_j2k_dec_ctx_cfg based on requested platform and command line arguments
+/// @return true if cmpto_j2k_dec_ctx_cfg successfully created
+/// @return false if unable to create cmpto_j2k_dec_ctx_cfg
+[[nodiscard]]
+bool state_decompress_j2k::initialize_j2k_dec_ctx() {
+        struct cmpto_j2k_dec_ctx_cfg *dec_ctx_cfg;
+        CHECK_OK(cmpto_j2k_dec_ctx_cfg_create(&dec_ctx_cfg), "Error creating dec cfg", return false);
+
+#ifdef HAVE_CUDA
+        if (j2k_decoder_platform::CUDA == platform) {
+                log_msg(LOG_LEVEL_INFO, "%s Configuring for CUDA Decoding\n", MOD_NAME);
+                for (unsigned int i = 0; i < cuda_devices_count; ++i) {
+                        CHECK_OK(cmpto_j2k_dec_ctx_cfg_add_cuda_device(dec_ctx_cfg, cuda_devices[i], cuda_mem_limit, cuda_tile_limit),
+                                        "Error setting CUDA device", return false);
+                        log_msg(LOG_LEVEL_INFO, "%s Using CUDA Device %s\n", MOD_NAME, std::to_string(cuda_devices[i]).c_str());
+                }
+        }
+#endif // HAVE_CUDA
+        if (j2k_decoder_platform::CPU == platform) {
+                log_msg(LOG_LEVEL_INFO, "%s Configuring for CPU Decoding\n", MOD_NAME);
+
+                CHECK_OK(cmpto_j2k_dec_ctx_cfg_add_cpu(
+                        dec_ctx_cfg, 
+                        cpu_thread_count, 
+                        cpu_mem_limit, 
+                        cpu_img_limit), 
+                        "Error configuring the CPU", 
+                        return false);
+
+                log_msg(LOG_LEVEL_INFO, "%s Using %s threads on the CPU\n", 
+                        MOD_NAME,
+                        (cpu_thread_count == 0 ? "all available" : std::to_string(cpu_thread_count).c_str()));
+        }
+
+        CHECK_OK(cmpto_j2k_dec_ctx_create(dec_ctx_cfg, &this->decoder),
+                "Error initializing context",
+                return false);
+
+        CHECK_OK(cmpto_j2k_dec_ctx_cfg_destroy(dec_ctx_cfg),
+                "Destroy cfg",
+                NOOP);
+
+        CHECK_OK(cmpto_j2k_dec_cfg_create(this->decoder, &this->settings), 
+                "Error creating configuration", {
+                        cmpto_j2k_dec_cfg_destroy(this->settings);
+                        cmpto_j2k_dec_ctx_destroy(this->decoder);
+                        return false;
+                });
+
+        auto ret = pthread_create(&this->thread_id, NULL, decompress_j2k_worker, static_cast<void *>(this));
+        assert(ret == 0 && "Unable to create thread");
+
+        return true;
+}
+
 
 static void rg48_to_r12l(unsigned char *dst_buffer,
                 unsigned char *src_buffer,
@@ -134,11 +345,22 @@ static void rg48_to_r12l(unsigned char *dst_buffer,
         }
 }
 
-static void print_dropped(unsigned long long int dropped) {
+static void print_dropped(unsigned long long int dropped, const j2k_decoder_platform& platform) {
         if (dropped % 10 == 1) {
-                log_msg(LOG_LEVEL_WARNING, "[J2K dec] Some frames (%llu) dropped.\n", dropped);
-                log_msg_once(LOG_LEVEL_INFO, to_fourcc('J', '2', 'D', 'W'), "[J2K dec] You may try to increase "
-                                "tile limit to increase the throughput by adding parameter: --param j2k-dec-tile-limit=4\n");
+                log_msg(LOG_LEVEL_WARNING, "%s Some frames (%llu) dropped.\n", MOD_NAME, dropped);
+
+                if (j2k_decoder_platform::CPU == platform) {
+                        log_msg_once(LOG_LEVEL_INFO, to_fourcc('J', '2', 'D', 'W'), "%s You may try to increase "
+                                "CPU thread count to increase the throughput by adding parameter: --param j2k-dec-cpu-thread-count=#\n",
+                                MOD_NAME);
+                }
+#ifdef HAVE_CUDA
+                if (j2k_decoder_platform::CUDA == platform) {
+                        log_msg_once(LOG_LEVEL_INFO, to_fourcc('J', '2', 'D', 'W'), "%s You may try to increase "
+                                "tile limit to increase the throughput by adding parameter: --param j2k-dec-tile-limit=4\n",
+                                MOD_NAME);
+                }
+#endif // HAVE_CUDA
         }
 }
 
@@ -148,8 +370,7 @@ static void print_dropped(unsigned long long int dropped) {
  */
 static void *decompress_j2k_worker(void *args)
 {
-        struct state_decompress_j2k *s =
-                (struct state_decompress_j2k *) args;
+        auto *s = static_cast<state_decompress_j2k*>(args);
 
         while (true) {
 next_image:
@@ -192,7 +413,7 @@ next_image:
                                 "Unable to to return processed image", NOOP);
                 lock_guard<mutex> lk(s->lock);
                 while (s->decompressed_frames.size() >= s->max_queue_size) {
-                        print_dropped(s->dropped++);
+                        print_dropped(s->dropped++, s->platform);
                         auto decoded = s->decompressed_frames.front();
                         s->decompressed_frames.pop();
                         free(decoded.first);
@@ -203,84 +424,24 @@ next_image:
         return NULL;
 }
 
-ADD_TO_PARAM("j2k-dec-mem-limit", "* j2k-dec-mem-limit=<limit>\n"
-                                "  J2K max memory usage in bytes.\n");
-ADD_TO_PARAM("j2k-dec-tile-limit", "* j2k-dec-tile-limit=<limit>\n"
-                                "  number of tiles decoded at moment (less to reduce latency, more to increase performance, 0 unlimited)\n");
-ADD_TO_PARAM("j2k-dec-queue-len", "* j2k-queue-len=<len>\n"
-                                "  max queue len\n");
-ADD_TO_PARAM("j2k-dec-encoder-queue", "* j2k-encoder-queue=<len>\n"
-                                "  max number of frames held by encoder\n");
-static void * j2k_decompress_init(void)
-{
-        struct state_decompress_j2k *s = NULL;
-        long long int mem_limit = DEFAULT_MEM_LIMIT;
-        unsigned int tile_limit = DEFAULT_TILE_LIMIT;
-        unsigned int queue_len = DEFAULT_MAX_QUEUE_SIZE;
-        unsigned int encoder_in_frames = DEFAULT_MAX_IN_FRAMES;
-        int ret;
 
-        if (get_commandline_param("j2k-dec-mem-limit")) {
-                mem_limit = unit_evaluate(
-                    get_commandline_param("j2k-dec-mem-limit"), nullptr);
-        }
-
-        if (get_commandline_param("j2k-dec-tile-limit")) {
-                tile_limit = atoi(get_commandline_param("j2k-dec-tile-limit"));
-        }
-
-        if (get_commandline_param("j2k-dec-queue-len")) {
-                queue_len = atoi(get_commandline_param("j2k-dec-queue-len"));
-        }
-
-        if (get_commandline_param("j2k-dec-encoder-queue")) {
-                encoder_in_frames = atoi(get_commandline_param("j2k-dec-encoder-queue"));
-        }
-
-        const auto *version = cmpto_j2k_dec_get_version();
-        LOG(LOG_LEVEL_INFO) << MOD_NAME << "Using codec version: " << (version == nullptr ? "(unknown)" : version->name) << "\n";
-
-        s = new state_decompress_j2k(queue_len, encoder_in_frames);
-
-        struct cmpto_j2k_dec_ctx_cfg *ctx_cfg;
-        CHECK_OK(cmpto_j2k_dec_ctx_cfg_create(&ctx_cfg), "Error creating dec cfg", goto error);
-        for (unsigned int i = 0; i < cuda_devices_count; ++i) {
-                CHECK_OK(cmpto_j2k_dec_ctx_cfg_add_cuda_device(ctx_cfg, cuda_devices[i], mem_limit, tile_limit),
-                                "Error setting CUDA device", goto error);
-        }
-
-        CHECK_OK(cmpto_j2k_dec_ctx_create(ctx_cfg, &s->decoder), "Error initializing context",
-                        goto error);
-
-        CHECK_OK(cmpto_j2k_dec_ctx_cfg_destroy(ctx_cfg), "Destroy cfg", NOOP);
-
-        CHECK_OK(cmpto_j2k_dec_cfg_create(s->decoder, &s->settings), "Error creating configuration",
-                        goto error);
-
-        ret = pthread_create(&s->thread_id, NULL, decompress_j2k_worker, (void *) s);
-        assert(ret == 0 && "Unable to create thread");
-
-        return s;
-
-error:
-        if (!s) {
+/// @brief Initialize a new instance of state_decompress_j2k
+/// @return Null or Pointer to state_decompress_j2k
+static void * j2k_decompress_init(void) {
+        try {
+                auto *s = new state_decompress_j2k();
+                return s;
+        } catch (...) {
                 return NULL;
         }
-        if (s->settings) {
-                cmpto_j2k_dec_cfg_destroy(s->settings);
-        }
-        if (s->decoder) {
-                cmpto_j2k_dec_ctx_destroy(s->decoder);
-        }
-        delete s;
-        return NULL;
 }
+
 
 static struct {
         codec_t ug_codec;
         enum cmpto_sample_format_type cmpto_sf;
         void (*convert)(unsigned char *dst_buffer, unsigned char *src_buffer, unsigned int width, unsigned int height);
-} codecs[] = {
+} constexpr codecs[7] = {
         {UYVY, CMPTO_422_U8_P1020, nullptr},
         {v210, CMPTO_422_U10_V210, nullptr},
         {RGB, CMPTO_444_U8_P012, nullptr},
@@ -293,7 +454,7 @@ static struct {
 static int j2k_decompress_reconfigure(void *state, struct video_desc desc,
                 int rshift, int gshift, int bshift, int pitch, codec_t out_codec)
 {
-        struct state_decompress_j2k *s = (struct state_decompress_j2k *) state;
+        auto *s = static_cast<state_decompress_j2k*>(state);
 
         if (out_codec == VIDEO_CODEC_NONE) { // probe format
                 s->out_codec = VIDEO_CODEC_NONE;
@@ -302,13 +463,13 @@ static int j2k_decompress_reconfigure(void *state, struct video_desc desc,
         }
 
         if (out_codec == R12L) {
-                LOG(LOG_LEVEL_NOTICE) << MOD_NAME << "Decoding to 12-bit RGB.\n";
+                log_msg(LOG_LEVEL_NOTICE, "%s Decoding to 12-bit RGB.\n", MOD_NAME);
         }
 
         enum cmpto_sample_format_type cmpto_sf = (cmpto_sample_format_type) 0;
 
-        for(const auto &codec : codecs){
-                if(codec.ug_codec == out_codec){
+        for (const auto &codec : codecs) {
+                if (codec.ug_codec == out_codec) {
                         cmpto_sf = codec.cmpto_sf;
                         s->convert = codec.convert;
                         break;
@@ -316,8 +477,9 @@ static int j2k_decompress_reconfigure(void *state, struct video_desc desc,
         }
 
         if (!cmpto_sf) {
-                LOG(LOG_LEVEL_ERROR) << MOD_NAME << "Unsupported output codec: " <<
-                                get_codec_name(out_codec) << "\n";
+                log_msg(LOG_LEVEL_ERROR, "%s Unsupported output codec: %s", 
+                        MOD_NAME,
+                        get_codec_name(out_codec));
                 abort();
         }
 
@@ -326,8 +488,8 @@ static int j2k_decompress_reconfigure(void *state, struct video_desc desc,
                                 "Error setting sample format type", return false);
         } else { // RGBA with non-standard shift
                 if (rshift % 8 != 0 || gshift % 8 != 0 || bshift % 8 != 0) {
-                        LOG(LOG_LEVEL_ERROR) << MOD_NAME << "Component shifts not aligned to a "
-                                "byte boundary is not supported.\n";
+                        log_msg(LOG_LEVEL_ERROR, "%s Component shifts not aligned to a byte boundary is not supported.\n",
+                                MOD_NAME);
                         return false;
                 }
                 cmpto_j2k_dec_comp_format fmt[3] = {};
@@ -371,7 +533,7 @@ static decompress_status j2k_probe_internal_codec(codec_t in_codec, unsigned cha
         struct cmpto_j2k_dec_comp_info comp_info[3];
         if (cmpto_j2k_dec_cstream_get_img_info(buffer, len, &info) != CMPTO_OK ||
                         cmpto_j2k_dec_cstream_get_comp_info(buffer, len, 0, &comp_info[0]) != CMPTO_OK) {
-                log_msg(LOG_LEVEL_ERROR, "J2K Failed to get image or first component info.\n");
+                log_msg(LOG_LEVEL_ERROR, "%s Failed to get image or first component info.\n", MOD_NAME);
                 return DECODER_NO_FRAME;
         }
 
@@ -380,7 +542,7 @@ static decompress_status j2k_probe_internal_codec(codec_t in_codec, unsigned cha
         if (info.comp_count == 3) {
                 if (cmpto_j2k_dec_cstream_get_comp_info(buffer, len, 1, &comp_info[1]) != CMPTO_OK ||
                                 cmpto_j2k_dec_cstream_get_comp_info(buffer, len, 2, &comp_info[2]) != CMPTO_OK) {
-                        log_msg(LOG_LEVEL_ERROR, "J2K Failed to get componentt 1 or 2 info.\n");
+                        log_msg(LOG_LEVEL_ERROR, "%s Failed to get component 1 or 2 info.\n", MOD_NAME);
                         return DECODER_NO_FRAME;
                 }
                 if (comp_info[0].sampling_factor_x == 1 && comp_info[0].sampling_factor_y == 1 &&
@@ -395,7 +557,7 @@ static decompress_status j2k_probe_internal_codec(codec_t in_codec, unsigned cha
         }
 
         int msg_level = internal_prop->subsampling == 0 ? LOG_LEVEL_WARNING /* bogus? */ : LOG_LEVEL_VERBOSE;
-        log_msg(msg_level, "J2K stream properties: %s\n", get_pixdesc_desc(*internal_prop));
+        log_msg(msg_level, "%s stream properties: %s\n", MOD_NAME, get_pixdesc_desc(*internal_prop));
 
         return DECODER_GOT_CODEC;
 }
@@ -408,8 +570,7 @@ static decompress_status j2k_probe_internal_codec(codec_t in_codec, unsigned cha
 static decompress_status j2k_decompress(void *state, unsigned char *dst, unsigned char *buffer,
                 unsigned int src_len, int /* frame_seq */, struct video_frame_callbacks * /* callbacks */, struct pixfmt_desc *internal_prop)
 {
-        struct state_decompress_j2k *s =
-                (struct state_decompress_j2k *) state;
+        auto *s = static_cast<state_decompress_j2k*>(state);
         struct cmpto_j2k_dec_img *img;
         pair<char *, size_t> decoded;
         void *tmp;
@@ -419,7 +580,7 @@ static decompress_status j2k_decompress(void *state, unsigned char *dst, unsigne
         }
 
         if (s->in_frames >= s->max_in_frames + 1) {
-                print_dropped(s->dropped++);
+                print_dropped(s->dropped++, s->platform);
                 goto return_previous;
         }
 
@@ -450,7 +611,10 @@ return_previous:
         size_t linesize = vc_get_linesize(s->desc.width, s->out_codec);
         size_t frame_size = linesize * s->desc.height;
         if ((decoded.second + 3) / 4 * 4 != frame_size) { // for "RGBA with non-standard shift" (search) it would be (frame_size - 1)
-                LOG(LOG_LEVEL_WARNING) << MOD_NAME << "Incorrect decoded size (" << frame_size << " vs. " << decoded.second << ")\n";
+                log_msg(LOG_LEVEL_WARNING, "%s Incorrect decoded size (%lu vs. %lu)\n",
+                        MOD_NAME,
+                        frame_size,
+                        decoded.second);
         }
 
         for (size_t i = 0; i < s->desc.height; ++i) {
@@ -484,11 +648,11 @@ static int j2k_decompress_get_property(void *state, int property, void *val, siz
 
 static void j2k_decompress_done(void *state)
 {
-        struct state_decompress_j2k *s = (struct state_decompress_j2k *) state;
+        auto *s = static_cast<state_decompress_j2k*>(state);
 
         cmpto_j2k_dec_ctx_stop(s->decoder);
         pthread_join(s->thread_id, NULL);
-        log_msg(LOG_LEVEL_VERBOSE, "[J2K dec.] Decoder stopped.\n");
+        log_msg(LOG_LEVEL_VERBOSE, "%s Decoder stopped.\n", MOD_NAME);
 
         cmpto_j2k_dec_cfg_destroy(s->settings);
         cmpto_j2k_dec_ctx_destroy(s->decoder);
@@ -539,4 +703,3 @@ static const struct video_decompress_info j2k_decompress_info = {
 };
 
 REGISTER_MODULE(j2k, &j2k_decompress_info, LIBRARY_CLASS_VIDEO_DECOMPRESS, VIDEO_DECOMPRESS_ABI_VERSION);
-
