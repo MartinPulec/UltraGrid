@@ -207,11 +207,6 @@ struct InvalidArgument : public std::exception {
         InvalidArgument() = default;
 };
 
-/// @brief NoArguments Exception
-struct NoArguments : public std::exception {
-        NoArguments() = default;
-};
-
 /// @brief UnableToCreateJ2KEncoderCTX Exception
 struct UnableToCreateJ2KEncoderCTX : public std::exception {
         UnableToCreateJ2KEncoderCTX() = default;
@@ -258,7 +253,7 @@ static void usage() {
         col() << "J2K compress platform support:\n";
         col() << "\tCPU .... yes\n";
 #ifdef HAVE_CUDA 
-        col() << "\tCUDA ... no\n";
+        col() << "\tCUDA ... yes\n";
 #else
         col() << "\tCUDA ... no\n";
 #endif
@@ -735,8 +730,7 @@ struct custom_data {
  * pipeline. Because of that goto + start label is used.
  */
 #define HANDLE_ERROR_COMPRESS_POP do { cmpto_j2k_enc_img_destroy(img); goto start; } while (0)
-static std::shared_ptr<video_frame> j2k_compress_pop(struct module *state)
-{
+static std::shared_ptr<video_frame> j2k_compress_pop(struct module *state) {
 start:
         struct state_video_compress_j2k *s =
                 (struct state_video_compress_j2k *) state;
