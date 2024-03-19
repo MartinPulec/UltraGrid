@@ -48,6 +48,8 @@
 #include "config.h"
 #endif // HAVE_CONFIG_H
 
+#include <cmpto_j2k_enc.h>
+
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -58,8 +60,6 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
-
-#include <cmpto_j2k_enc.h>
 
 #ifdef HAVE_CUDA
 #include "cuda_wrapper.h"
@@ -76,12 +76,14 @@
 #include "video.h"
 #include "video_compress.h"
 
+constexpr const char *MOD_NAME = "[Cmpto J2K enc.]";
+
 #define ASSIGN_CHECK_VAL(var, str, minval) \
         do { \
                 long long val = unit_evaluate(str, nullptr); \
                 if (val < (minval) || val > UINT_MAX) { \
                         LOG(LOG_LEVEL_ERROR) \
-                            << "[J2K] Wrong value " << (str) \
+                            << MOD_NAME << " Wrong value " << (str) \
                             << " for " #var "! Value must be >= " << (minval) \
                             << ".\n"; \
                         throw InvalidArgument(); \
@@ -89,6 +91,18 @@
                 (var) = val; \
         } while (0)
 
+#define ASSIGN_CHECK_BETWEEN_VAL(var, str, minval, maxval) \
+        do { \
+                long long val = unit_evaluate(str, nullptr); \
+                if (val < (minval) || val > maxval) { \
+                        LOG(LOG_LEVEL_ERROR) \
+                            << "[J2K] Wrong value " << (str) \
+                            << " for " #var "! Value must be between [" << (minval) \
+                            << " - " << (maxval) << "].\n"; \
+                        throw InvalidArgument(); \
+                } \
+                (var) = val; \
+        } while (0)
 
 #define CHECK_OK(cmd, err_msg, action_fail) do { \
         int j2k_error = cmd; \
@@ -97,16 +111,17 @@
                         MOD_NAME, err_msg, cmpto_j2k_enc_get_last_error()); \
                 action_fail;\
         } \
-} while(0)
+} while (0)
 
 #define NOOP ((void) 0)
 
-// Default CPU Settings 
+// Default CPU Settings
 #define DEFAULT_CPU_THREAD_COUNT CMPTO_J2K_ENC_CPU_DEFAULT
-#define DEFAULT_MIN_THREAD_COUNT CMPTO_J2K_ENC_CPU_NONE
+#define MIN_CPU_THREAD_COUNT     CMPTO_J2K_ENC_CPU_NONE
 #define DEFAULT_CPU_MEM_LIMIT    0      // DEFAULT_CPU_MEM_LIMIT should always be 0
 #define DEFAULT_CPU_POOL_SIZE    8
-#define DEFAULT_IMG_LIMIT        0
+#define DEFAULT_IMG_LIMIT        0      // Default number of images to be decoded by CPU (0 = CMPTO Default)
+#define MIN_CPU_IMG_LIMIT        0      // Min number of images decoded by the CPU at once
 
 // Default CUDA Settings
 #define DEFAULT_CUDA_POOL_SIZE   4
@@ -121,19 +136,13 @@
 #define DEFAULT_POOL_SIZE        DEFAULT_CPU_POOL_SIZE
 #endif
 
-constexpr const char *MOD_NAME = "[Cmpto J2K enc.]";
-
-using std::condition_variable;
 using std::mutex;
-using std::stod;
 using std::shared_ptr;
-using std::unique_lock;
 
 #ifdef HAVE_CUDA
 struct cmpto_j2k_enc_cuda_host_buffer_data_allocator
     : public video_frame_pool_allocator {
-        void *allocate(size_t size) override
-        {
+        void *allocate(size_t size) override {
                 void *ptr = nullptr;
                 if (CUDA_WRAPPER_SUCCESS !=
                     cuda_wrapper_malloc_host(&ptr, size)) {
@@ -143,9 +152,10 @@ struct cmpto_j2k_enc_cuda_host_buffer_data_allocator
                 }
                 return ptr;
         }
+
         void deallocate(void *ptr) override { cuda_wrapper_free(ptr); }
-        [[nodiscard]] video_frame_pool_allocator *clone() const override
-        {
+
+        [[nodiscard]] video_frame_pool_allocator *clone() const override {
                 return new cmpto_j2k_enc_cuda_host_buffer_data_allocator(*this);
         }
 };
@@ -156,7 +166,14 @@ using allocator      = default_data_allocator;
 #endif
 using cpu_allocator  = default_data_allocator;
 
-/// @brief Platforms available for J2K Compression
+// Pre Declarations
+static void j2k_compressed_frame_dispose(struct video_frame *frame);
+static void j2k_compress_done(struct module *mod);
+static void R12L_to_RG48(video_frame *dst, video_frame *src);
+
+/** 
+ * @brief Platforms available for J2K Compression
+ */
 enum j2k_encoder_platform {
         NONE = 0,
         CPU = 1,
@@ -165,7 +182,9 @@ enum j2k_encoder_platform {
 #endif // HAVE_CUDA
 };
 
-/// @brief Name of Supported Platforms for Encoding J2K
+/** 
+ * @brief Struct to hold Platform Name and j2k_encoder_platform Type
+ */
 struct j2k_encoder_platform_info_t {
         const char* name;
         j2k_encoder_platform platform;
@@ -180,6 +199,12 @@ constexpr auto encode_platforms = std::array {
 #endif
 };
 
+/**
+ * @fn get_platform_from_name
+ * @brief Search for j2k_encoder_platform from friendly name
+ * @param name Friendly name of platform to search for
+ * @return j2k_encoder_platform that corresponds to name. If no match, return j2k_encoder_platform::NONE
+ */
 [[nodiscard]][[maybe_unused]]
 static j2k_encoder_platform get_platform_from_name(std::string name) {
     std::transform(name.cbegin(), name.cend(), name.begin(), [](unsigned char c) { return std::tolower(c); });
@@ -193,7 +218,27 @@ static j2k_encoder_platform get_platform_from_name(std::string name) {
     return j2k_encoder_platform::NONE;
 }
 
-/*
+/**
+ * @brief Struct to hold UG and CMPTO Codec information
+ */
+struct Codec {
+        codec_t ug_codec;
+        enum cmpto_sample_format_type cmpto_sf;
+        codec_t convert_codec;
+        void (*convertFunc)(video_frame *dst, video_frame *src);
+};
+
+// Supported UG/CMPTO Compress Codecs
+constexpr auto codecs = std::array{
+        Codec{UYVY, CMPTO_422_U8_P1020, VIDEO_CODEC_NONE, nullptr},
+        Codec{v210, CMPTO_422_U10_V210, VIDEO_CODEC_NONE, nullptr},
+        Codec{RGB, CMPTO_444_U8_P012, VIDEO_CODEC_NONE, nullptr},
+        Codec{RGBA, CMPTO_444_U8_P012Z, VIDEO_CODEC_NONE, nullptr},
+        Codec{R10k, CMPTO_444_U10U10U10_MSB32BE_P210, VIDEO_CODEC_NONE, nullptr},
+        Codec{R12L, CMPTO_444_U12_MSB16LE_P012, RG48, R12L_to_RG48},
+};
+
+/**
  * Exceptions for state_video_compress_j2k construction
  */
 
@@ -212,7 +257,7 @@ struct UnableToCreateJ2KEncoderCTX : public std::exception {
         UnableToCreateJ2KEncoderCTX() = default;
 };
 
-/// @brief Options for J2K Compresion Usage
+/// @brief Struct for options for J2K Compression Usage
 struct opts {
         const char *label;
         const char *key;
@@ -233,7 +278,7 @@ constexpr opts platform_opts[1] = {
 
 constexpr opts cpu_opts[2] = {
         {"Thread count", "thread_count", "Number of threads to use on the CPU. 0 is all available. default: " TOSTRING(DEFAULT_CPU_THREAD_COUNT), ":thread_count=", false},
-        {"Image limit", "img_limit", "Number of images which can be encoded at one moment by CPU. Maximum allowed limit is thread_count. 0 is no limit. default: " TOSTRING(DEFAULT_IMG_LIMIT), ":img_limit=", false},
+        {"Image limit", "img_limit", "Number of images which can be encoded at one moment by CPU. Maximum allowed limit is thread_count. 0 is default limit. default: " TOSTRING(DEFAULT_IMG_LIMIT), ":img_limit=", false},
 };
 
 constexpr opts general_opts[5] = {
@@ -248,11 +293,14 @@ constexpr opts general_opts[5] = {
         {"Lossless compression", "lossless", "Enable lossless compression. default: disabled", ":lossless", true}
 };
 
-/// @brief Display J2K Compression Usage Information 
+/**
+ * @fn usage
+ * @brief Display J2K Compression Usage Information
+ */
 static void usage() {
         col() << "J2K compress platform support:\n";
         col() << "\tCPU .... yes\n";
-#ifdef HAVE_CUDA 
+#ifdef HAVE_CUDA
         col() << "\tCUDA ... yes\n";
 #else
         col() << "\tCUDA ... no\n";
@@ -261,18 +309,18 @@ static void usage() {
         col() << "J2K compress usage:\n";
 
         auto show_syntax = [](const auto& options) {
-                for(const auto& opt : options){
+                for (const auto& opt : options) {
                         assert(strlen(opt.opt_str) >= 2);
                         col() << "[" << opt.opt_str;
                         if (!opt.is_boolean) {
                                 col() << "<" << opt.opt_str[1] << ">"; // :quality -> <q> (first letter used as ":quality=<q>")
                         }
                         col() << "]";
-                } 
+                }
         };
 
         auto show_arguments = [](const auto& options) {
-                for(const auto& opt : options){
+                for (const auto& opt : options) {
                         assert(strlen(opt.opt_str) >= 2);
                         if (opt.is_boolean) {
                                 col() << TBOLD("\t" << opt.opt_str + 1 <<);
@@ -309,13 +357,12 @@ static void usage() {
         show_arguments(general_opts);
 }
 
-// Pre Declarations
-static void j2k_compressed_frame_dispose(struct video_frame *frame);
-static void j2k_compress_done(struct module *mod);
 
-/// @brief state_video_compress_j2k Class
+/**
+ * @brief state_video_compress_j2k Class
+ */
 struct state_video_compress_j2k {
-        state_video_compress_j2k(struct module *parent);
+        explicit state_video_compress_j2k(struct module *parent);
         state_video_compress_j2k(struct module *parent, const char* opts);
 
         module                            module_data{};
@@ -324,26 +371,26 @@ struct state_video_compress_j2k {
         std::unique_ptr<video_frame_pool> pool;
         unsigned int                      in_frames{};          ///< number of currently encoding frames
         mutex                             lock;
-        condition_variable                frame_popped;
+        std::condition_variable           frame_popped;
         video_desc                        saved_desc{};         ///< for pool reconfiguration
         video_desc                        precompress_desc{};
         video_desc                        compressed_desc{};
-        void (*convertFunc)(video_frame *dst, video_frame *src){nullptr};
 
+        void (*convertFunc)(video_frame *dst, video_frame *src) { nullptr };
 
         // Generic Parameters
         double        quality              = DEFAULT_QUALITY;   // default image quality
         long long int rate                 = 0;                 // bitrate in bits per second
         int           mct                  = -1;                // force use of mct - -1 means default
-        bool          lossless             = false;             // lossless encoding 
-        
+        bool          lossless             = false;             // lossless encoding
+
         // CPU Parameters
         int           cpu_thread_count     = DEFAULT_CPU_THREAD_COUNT;
         unsigned int  cpu_img_limit        = DEFAULT_IMG_LIMIT;
 
         // CUDA Parameters
         unsigned long long cuda_mem_limit  = DEFAULT_CUDA_MEM_LIMIT;
-        unsigned int       cuda_tile_limit = DEFAULT_CUDA_TILE_LIMIT;      
+        unsigned int       cuda_tile_limit = DEFAULT_CUDA_TILE_LIMIT;
 
         // Platform to use by default
 #ifdef HAVE_CUDA
@@ -359,9 +406,14 @@ struct state_video_compress_j2k {
         bool initialize_j2k_enc_ctx();
 
         // CPU Parameter
-        const size_t  cpu_mem_limit = 0;                // Not yet implemented. Must be 0.
+        const size_t  cpu_mem_limit = 0;                // Not yet implemented as of v2.8.1. Must be 0.
 };
 
+
+/**
+ * @brief state_video_compress_j2k default constructor to create from module
+ * @param parent Base Module Struct
+*/
 state_video_compress_j2k::state_video_compress_j2k(struct module *parent)
         : pool(std::make_unique<video_frame_pool>(DEFAULT_POOL_SIZE, allocator())) {
         module_init_default(&module_data);
@@ -371,6 +423,14 @@ state_video_compress_j2k::state_video_compress_j2k(struct module *parent)
         module_register(&module_data, parent);
 }
 
+/**
+ * @brief state_video_compress_j2k constructor to create from opts
+ * @param parent Base Module Struct
+ * @param opts Configuration options to construct class
+ * @throw HelpRequested if help requested
+ * @throw InvalidArgument if argument provided isn't known
+ * @throw UnableToCreateJ2KEncoderCTX if failure to create J2K CTX
+*/
 state_video_compress_j2k::state_video_compress_j2k(struct module *parent, const char* opts) {
         try {
                 parse_fmt(opts);
@@ -393,18 +453,20 @@ state_video_compress_j2k::state_video_compress_j2k(struct module *parent, const 
 // -c cmpto_j2k:platform=cuda[:mem_limit=<m>][:tile_limit=<t>][:rate=<r>][:lossless][:quality=<q>][:pool_size=<p>][:mct] [--cuda-device <c_index>]
 /// CPU opt Syntax
 // -c cmpto_j2k:platform=cpu[:thread_count=<t>][:img_limit=<i>][:rate=<r>][:lossless][:quality=<q>][:pool_size=<p>][:mct]
-
-/// @brief Parse options and configure class members accordingly
-/// @param opts Configuration options
-/// @throw HelpRequested if help requested
-/// @throw InvalidArgument if argument provided isn't known
+/**
+ * @fn parse_fmt
+ * @brief Parse options and configure class members accordingly
+ * @param opts Configuration options
+ * @throw HelpRequested if help requested
+ * @throw InvalidArgument if argument provided isn't known
+ */
 void state_video_compress_j2k::parse_fmt(const char* opts) {
         auto split_arguments = [](std::string args, std::string delimiter) {
                 auto token = std::string{};
                 auto pos   = size_t{0};
                 auto vec   = std::vector<std::string>{};
 
-                if (args == "\0") { 
+                if (args == "\0") {
                         return vec;
                 }
 
@@ -426,14 +488,13 @@ void state_video_compress_j2k::parse_fmt(const char* opts) {
         }
 
         const auto *version = cmpto_j2k_enc_get_version();
-        log_msg(LOG_LEVEL_INFO, "%s Using Codec version: %s\n", 
+        log_msg(LOG_LEVEL_INFO, "%s Using Codec version: %s\n",
                 MOD_NAME,
-                (version == nullptr ? "(unknown)" : version->name)
-        );
+                (version == nullptr ? "(unknown)" : version->name));
 
         const char* item = "";
 
-        /*
+        /**
          * Check if :pool_size= set manually during argument parsing.
          *  Since max_in_frames is default initialized to match compile time platform default (CUDA or CPU)
          *  Changing from :platform=cuda default to :platform=cpu default will not automatically
@@ -457,8 +518,8 @@ void state_video_compress_j2k::parse_fmt(const char* opts) {
                         const char *const platform_name = strchr(item, '=') + 1;
                         platform = get_platform_from_name(platform_name);
                         if (j2k_encoder_platform::NONE == platform) {
-                                log_msg(LOG_LEVEL_ERROR, 
-                                        "%s Unable to find requested encoding platform: \"%s\"\n", 
+                                log_msg(LOG_LEVEL_ERROR,
+                                        "%s Unable to find requested encoding platform: \"%s\"\n",
                                         MOD_NAME,
                                         platform_name);
                                 throw InvalidArgument();
@@ -469,24 +530,26 @@ void state_video_compress_j2k::parse_fmt(const char* opts) {
 
                 } else if (IS_KEY_PREFIX(item, "mem_limit"))    {       // :mem_limit=
                         ASSIGN_CHECK_VAL(cuda_mem_limit, strchr(item, '=') + 1, 1);
-                        
+
                 } else if (IS_KEY_PREFIX(item, "thread_count")) {       // :thread_count=
                         cpu_thread_count = atoi(strchr(item, '=') + 1);
-                        ASSIGN_CHECK_VAL(cpu_thread_count, strchr(item, '=') + 1, -1);
+                        ASSIGN_CHECK_VAL(cpu_thread_count, strchr(item, '=') + 1, MIN_CPU_THREAD_COUNT);
 
                 } else if (IS_KEY_PREFIX(item, "tile_limit"))   {       // :tile_limit=
                         ASSIGN_CHECK_VAL(cuda_tile_limit, strchr(item, '=') + 1, 0);
 
                 } else if (IS_KEY_PREFIX(item, "img_limit"))    {       // :img_limit=
-                        ASSIGN_CHECK_VAL(cpu_img_limit, strchr(item, '=') + 1, 0);
+                        ASSIGN_CHECK_VAL(cpu_img_limit, strchr(item, '=') + 1, MIN_CPU_IMG_LIMIT);
 
                 } else if (IS_KEY_PREFIX(item, "rate"))         {       // :rate=
                         ASSIGN_CHECK_VAL(rate, strchr(item, '=') + 1, 1);
 
                 } else if (IS_KEY_PREFIX(item, "quality"))      {       // :quality=
-                        quality = stod(strchr(item, '=') + 1);
+                        quality = std::stod(strchr(item, '=') + 1);
                         if (quality < 0.0 || quality > 1.0) {
-                                log_msg(LOG_LEVEL_ERROR, "%s Quality should be in interval [0-1]\n", MOD_NAME);
+                                log_msg(LOG_LEVEL_ERROR,
+                                        "%s Quality should be in interval [0-1]\n",
+                                        MOD_NAME);
                                 throw InvalidArgument();
                         }
 
@@ -498,29 +561,30 @@ void state_video_compress_j2k::parse_fmt(const char* opts) {
                         mct = strcasecmp("mct", item) ? 1 : 0;
 
                 } else {
-                        log_msg(LOG_LEVEL_ERROR, "%s Unable to find option: \"%s\"\n", MOD_NAME, item);
+                        log_msg(LOG_LEVEL_ERROR,
+                                "%s Unable to find option: \"%s\"\n",
+                                MOD_NAME, item);
                         throw InvalidArgument();
-
                 }
         }
 
         // If CPU selected
         if (j2k_encoder_platform::CPU == platform) {
-                // Confirm img_limit doesn't exceed thread_count and set equal if it does.
-                if (cpu_thread_count == CMPTO_J2K_ENC_CPU_DEFAULT) {
-                        log_msg(LOG_LEVEL_INFO, 
-                                "%s thread_count set to %i. Defaulting img_limit to 0\n",
+                /**
+                 * Confirm thread_count != CMPTO_J2K_ENC_CPU_DEFAULT (0)
+                 *  If it does, img_limit can be > thread_count since all threads used
+                 * 
+                 * If thread_count is not 0, confirm img_limit doesn't exceed thread_count
+                 *  Set img_limit = thread_count if exeeded
+                 */
+                if (cpu_thread_count != CMPTO_J2K_ENC_CPU_DEFAULT && cpu_thread_count < static_cast<int>(cpu_img_limit)) {
+                        log_msg(LOG_LEVEL_INFO,
+                                "%s img_limit (%i) exceeds thread_count. Lowering to img_limit to %i to match thread_count.\n",
                                 MOD_NAME,
-                                cpu_thread_count);
-                        cpu_img_limit = 0;
-                } else if (cpu_thread_count < static_cast<int>(cpu_img_limit)) {
-                        log_msg(LOG_LEVEL_INFO, 
-                                "%s img_limit (%i) exceeds thread_count. Lowering to img_limit to %i to match thread_count.\n", 
-                                MOD_NAME,
-                                cpu_img_limit, 
+                                cpu_img_limit,
                                 cpu_thread_count);
                         cpu_img_limit = cpu_thread_count;
-                } 
+                }
 
                 // If pool_size was manually set, ignore this check.
                 // Otherwise, if it was not set, confirm that max_in_frames matches DEFAULT_CPU_POOL_SIZE
@@ -532,15 +596,17 @@ void state_video_compress_j2k::parse_fmt(const char* opts) {
                         max_in_frames = DEFAULT_CPU_POOL_SIZE;
                 }
         }
-
 }
 
-/// @brief Initialize internal cmpto_j2k_enc_ctx_cfg for requested platform and settings
-/// @return true if successsfully configured
-/// @return false if unable to configure
+/**
+ * @fn initialize_j2k_enc_ctx
+ * @brief Initialize internal cmpto_j2k_enc_ctx_cfg for requested platform and settings
+ * @return true if successsfully configured
+ * @return false if unable to configure
+ */
 [[nodiscard]]
 bool state_video_compress_j2k::initialize_j2k_enc_ctx() {
-        struct cmpto_j2k_enc_ctx_cfg *ctx_cfg; 
+        struct cmpto_j2k_enc_ctx_cfg *ctx_cfg;
 
         CHECK_OK(cmpto_j2k_enc_ctx_cfg_create(&ctx_cfg),
                         "Context configuration create",
@@ -551,14 +617,14 @@ bool state_video_compress_j2k::initialize_j2k_enc_ctx() {
                 pool = std::make_unique<video_frame_pool>(max_in_frames, cpu_allocator());
                 // for (unsigned int i = 0; i < cpu_count ; )
                 CHECK_OK(cmpto_j2k_enc_ctx_cfg_add_cpu(
-                                ctx_cfg, 
-                                cpu_thread_count, 
-                                cpu_mem_limit, 
+                                ctx_cfg,
+                                cpu_thread_count,
+                                cpu_mem_limit,
                                 cpu_img_limit),
                         "Setting CPU device",
                         return false);
 
-                log_msg(LOG_LEVEL_INFO, "%s Using %s threads on CPU. thread_count=%i, img_limit=%i\n",
+                log_msg(LOG_LEVEL_INFO, "%s Using %s threads on CPU. Thread Count = %i, Image Limit = %i\n",
                         MOD_NAME,
                         (cpu_thread_count == 0 ? "all available" : std::to_string(cpu_thread_count).c_str()),
                         cpu_thread_count,
@@ -571,21 +637,21 @@ bool state_video_compress_j2k::initialize_j2k_enc_ctx() {
                 pool = std::make_unique<video_frame_pool>(max_in_frames, cuda_allocator());
                 for (unsigned int i = 0; i < cuda_devices_count; ++i) {
                         CHECK_OK(cmpto_j2k_enc_ctx_cfg_add_cuda_device(
-                                        ctx_cfg, 
-                                        cuda_devices[i], 
-                                        cuda_mem_limit, 
+                                        ctx_cfg,
+                                        cuda_devices[i],
+                                        cuda_mem_limit,
                                         cuda_tile_limit),
-                                "Setting CUDA device", 
+                                "Setting CUDA device",
                                 return false);
                 }
         }
 #endif // HAVE_CUDA
 
-        CHECK_OK(cmpto_j2k_enc_ctx_create(ctx_cfg, &context), 
+        CHECK_OK(cmpto_j2k_enc_ctx_create(ctx_cfg, &context),
                         "Context create",
                         return false);
 
-        CHECK_OK(cmpto_j2k_enc_ctx_cfg_destroy(ctx_cfg), 
+        CHECK_OK(cmpto_j2k_enc_ctx_cfg_destroy(ctx_cfg),
                         "Context configuration destroy",
                         NOOP);
 
@@ -603,8 +669,7 @@ bool state_video_compress_j2k::initialize_j2k_enc_ctx() {
         } else {
                 CHECK_OK(cmpto_j2k_enc_cfg_set_quantization(
                                 enc_settings,
-                                quality /* 0.0 = poor quality, 1.0 = full quality */
-                                ),
+                                quality /* 0.0 = poor quality, 1.0 = full quality */),
                                 "Setting quantization",
                                 NOOP);
         }
@@ -612,7 +677,6 @@ bool state_video_compress_j2k::initialize_j2k_enc_ctx() {
         CHECK_OK(cmpto_j2k_enc_cfg_set_resolutions(enc_settings, 6),
                         "Setting DWT levels",
                         NOOP);
-                        
 
         return true;
 }
@@ -632,35 +696,19 @@ static void R12L_to_RG48(video_frame *dst, video_frame *src) {
         }
 }
 
-static struct {
-        codec_t ug_codec;
-        enum cmpto_sample_format_type cmpto_sf;
-        codec_t convert_codec;
-        void (*convertFunc)(video_frame *dst, video_frame *src);
-} constexpr codecs[6] = {
-        {UYVY, CMPTO_422_U8_P1020, VIDEO_CODEC_NONE, nullptr},
-        {v210, CMPTO_422_U10_V210, VIDEO_CODEC_NONE, nullptr},
-        {RGB, CMPTO_444_U8_P012, VIDEO_CODEC_NONE, nullptr},
-        {RGBA, CMPTO_444_U8_P012Z, VIDEO_CODEC_NONE, nullptr},
-        {R10k, CMPTO_444_U10U10U10_MSB32BE_P210, VIDEO_CODEC_NONE, nullptr},
-        {R12L, CMPTO_444_U12_MSB16LE_P012, RG48, R12L_to_RG48},
-};
-
 static bool configure_with(struct state_video_compress_j2k *s, struct video_desc desc) {
         enum cmpto_sample_format_type sample_format;
         bool found = false;
+        auto matches = [&](const Codec& codec) { return codec.ug_codec == desc.color_spec; };
 
-        for (const auto &codec : codecs) {
-                if (codec.ug_codec == desc.color_spec) {
-                        sample_format = codec.cmpto_sf;
-                        s->convertFunc = codec.convertFunc;
-                        s->precompress_desc = desc;
-                        if (codec.convert_codec != VIDEO_CODEC_NONE) {
-                                s->precompress_desc.color_spec = codec.convert_codec;
-                        }
-                        found = true;
-                        break;
+        if (const auto& codec = std::find_if(codecs.begin(), codecs.end(), matches) ; codec != codecs.end()) {
+                sample_format = codec->cmpto_sf;
+                s->convertFunc = codec->convertFunc;
+                s->precompress_desc = desc;
+                if (codec->convert_codec != VIDEO_CODEC_NONE) {
+                        s->precompress_desc.color_spec = codec->convert_codec;
                 }
+                found = true;
         }
 
         if (!found) {
@@ -743,7 +791,7 @@ start:
                                 &img /* Set to NULL if encoder stopped */,
                                 &status), "Encode image", HANDLE_ERROR_COMPRESS_POP);
         {
-                unique_lock<mutex> lk(s->lock);
+                std::unique_lock<mutex> lk(s->lock);
                 s->in_frames--;
                 s->frame_popped.notify_one();
         }
@@ -783,19 +831,14 @@ static struct module * j2k_compress_init(struct module *parent, const char *opts
         try {
                 auto *s = new state_video_compress_j2k(parent, opts);
                 return &s->module_data;
-
         } catch (HelpRequested const& e) {
                 return static_cast<module*>(INIT_NOERR);
-
         } catch (InvalidArgument const& e) {
                 return NULL;
-
         } catch (UnableToCreateJ2KEncoderCTX const& e) {
                 return NULL;
-
         } catch (...) {
                 return NULL;
-
         }
 }
 
@@ -837,7 +880,7 @@ static void j2k_compress_push(struct module *state, std::shared_ptr<video_frame>
         CHECK_OK(cmpto_j2k_enc_img_create(s->context, &img),
                         "Image create", return);
 
-        /*
+        /**
          * Copy video desc to udata (to be able to reconstruct in j2k_compress_pop().
          * Further make a place for a shared pointer of allocated data, deleter
          * returns frame to pool in call of release_cstream() callback (called when
@@ -858,7 +901,7 @@ static void j2k_compress_push(struct module *state, std::shared_ptr<video_frame>
                                                release_cstream),
                  "Setting image samples", HANDLE_ERROR_COMPRESS_PUSH);
 
-        unique_lock<mutex> lk(s->lock);
+        std::unique_lock<mutex> lk(s->lock);
         s->frame_popped.wait(lk, [s]{return s->in_frames < s->max_in_frames;});
         lk.unlock();
         CHECK_OK(cmpto_j2k_enc_img_encode(img, s->enc_settings),
@@ -884,7 +927,7 @@ static compress_module_info get_cmpto_j2k_module_info() {
         module_info.name = "cmpto_j2k";
 
         auto add_module_options = [&](const auto& options) {
-                for(const auto& opt : options){
+                for (const auto& opt : options) {
                         module_info.opts.emplace_back(module_option{opt.label,
                                         opt.description, opt.key, opt.opt_str, opt.is_boolean});
                 }
