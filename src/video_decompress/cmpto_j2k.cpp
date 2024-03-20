@@ -184,10 +184,10 @@ ADD_TO_PARAM("j2k-dec-encoder-queue", "* j2k-dec-encoder-queue=<len>\n"
 
 
 /**
- * @brief  state_decompress_j2k Class
+ * @brief  state_video_decompress_j2k Class
  */
-struct state_decompress_j2k {
-        state_decompress_j2k();
+struct state_video_decompress_j2k {
+        state_video_decompress_j2k();
 
         cmpto_j2k_dec_ctx *decoder{};
         cmpto_j2k_dec_cfg *settings{};
@@ -233,10 +233,10 @@ struct state_decompress_j2k {
 };
 
 /**
- * @brief Default state_decompress_j2k Constructor
+ * @brief Default state_video_decompress_j2k Constructor
  * @throw UnableToCreateJ2KDecoderCTX if unable to create J2K CTX
  */
-state_decompress_j2k::state_decompress_j2k() {
+state_video_decompress_j2k::state_video_decompress_j2k() {
         parse_params();
 
         if (!initialize_j2k_dec_ctx()) {
@@ -248,7 +248,7 @@ state_decompress_j2k::state_decompress_j2k() {
  * @fn parse_params
  * @brief Parse Command Line Parameters and Initialize Struct Members
  */
-void state_decompress_j2k::parse_params() {
+void state_video_decompress_j2k::parse_params() {
 #ifdef HAVE_CUDA
         if (get_commandline_param("j2k-dec-use-cuda")) {
                 platform = j2k_decompress_platform::CUDA;
@@ -314,7 +314,7 @@ void state_decompress_j2k::parse_params() {
  * @return false if unable to create cmpto_j2k_dec_ctx_cfg
  */
 [[nodiscard]]
-bool state_decompress_j2k::initialize_j2k_dec_ctx() {
+bool state_video_decompress_j2k::initialize_j2k_dec_ctx() {
         struct cmpto_j2k_dec_ctx_cfg *dec_ctx_cfg;
         CHECK_OK(cmpto_j2k_dec_ctx_cfg_create(&dec_ctx_cfg), "Error creating dec cfg", return false);
 
@@ -414,7 +414,7 @@ static void print_dropped(unsigned long long int dropped, const j2k_decompress_p
  * putting them to queue (or dropping if full).
  */
 static void *decompress_j2k_worker(void *args) {
-        auto *s = static_cast<state_decompress_j2k*>(args);
+        auto *s = static_cast<state_video_decompress_j2k*>(args);
 
         while (true) {
 next_image:
@@ -470,12 +470,12 @@ next_image:
 
 
 /**
- * @brief Initialize a new instance of state_decompress_j2k
- * @return Null or Pointer to state_decompress_j2k
+ * @brief Initialize a new instance of state_video_decompress_j2k
+ * @return Null or Pointer to state_video_decompress_j2k
  */
 static void * j2k_decompress_init(void) {
         try {
-                auto *s = new state_decompress_j2k();
+                auto *s = new state_video_decompress_j2k();
                 return s;
         } catch (...) {
                 return NULL;
@@ -484,7 +484,7 @@ static void * j2k_decompress_init(void) {
 
 static int j2k_decompress_reconfigure(void *state, struct video_desc desc,
                 int rshift, int gshift, int bshift, int pitch, codec_t out_codec) {
-        auto *s = static_cast<state_decompress_j2k*>(state);
+        auto *s = static_cast<state_video_decompress_j2k*>(state);
 
         if (out_codec == VIDEO_CODEC_NONE) { // probe format
                 s->out_codec = VIDEO_CODEC_NONE;
@@ -597,7 +597,7 @@ static decompress_status j2k_probe_internal_codec(codec_t in_codec, unsigned cha
  */
 static decompress_status j2k_decompress(void *state, unsigned char *dst, unsigned char *buffer,
                 unsigned int src_len, int /* frame_seq */, struct video_frame_callbacks * /* callbacks */, struct pixfmt_desc *internal_prop) {
-        auto *s = static_cast<state_decompress_j2k*>(state);
+        auto *s = static_cast<state_video_decompress_j2k*>(state);
         struct cmpto_j2k_dec_img *img;
         std::pair<char *, size_t> decoded;
         void *tmp;
@@ -673,7 +673,7 @@ static int j2k_decompress_get_property(void *state, int property, void *val, siz
 }
 
 static void j2k_decompress_done(void *state) {
-        auto *s = static_cast<state_decompress_j2k*>(state);
+        auto *s = static_cast<state_video_decompress_j2k*>(state);
 
         cmpto_j2k_dec_ctx_stop(s->decoder);
         pthread_join(s->thread_id, NULL);
