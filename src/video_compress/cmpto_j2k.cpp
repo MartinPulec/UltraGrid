@@ -91,19 +91,6 @@ constexpr const char *MOD_NAME = "[Cmpto J2K enc.]";
                 (var) = val; \
         } while (0)
 
-#define ASSIGN_CHECK_BETWEEN_VAL(var, str, minval, maxval) \
-        do { \
-                long long val = unit_evaluate(str, nullptr); \
-                if (val < (minval) || val > maxval) { \
-                        LOG(LOG_LEVEL_ERROR) \
-                            << "[J2K] Wrong value " << (str) \
-                            << " for " #var "! Value must be between [" << (minval) \
-                            << " - " << (maxval) << "].\n"; \
-                        throw InvalidArgument(); \
-                } \
-                (var) = val; \
-        } while (0)
-
 #define CHECK_OK(cmd, err_msg, action_fail) do { \
         int j2k_error = cmd; \
         if (j2k_error != CMPTO_OK) {\
@@ -174,7 +161,7 @@ static void R12L_to_RG48(video_frame *dst, video_frame *src);
 /** 
  * @brief Platforms available for J2K Compression
  */
-enum j2k_encoder_platform {
+enum j2k_compress_platform {
         NONE = 0,
         CPU = 1,
 #ifdef HAVE_CUDA
@@ -183,39 +170,39 @@ enum j2k_encoder_platform {
 };
 
 /** 
- * @brief Struct to hold Platform Name and j2k_encoder_platform Type
+ * @brief Struct to hold Platform Name and j2k_compress_platform Type
  */
-struct j2k_encoder_platform_info_t {
+struct j2k_compress_platform_info_t {
         const char* name;
-        j2k_encoder_platform platform;
+        j2k_compress_platform platform;
 };
 
-// Supported Platforms for Encoding J2K
-constexpr auto encode_platforms = std::array {
-    j2k_encoder_platform_info_t{"none", j2k_encoder_platform::NONE},
-    j2k_encoder_platform_info_t{"cpu", j2k_encoder_platform::CPU},
+// Supported Platforms for Compressing J2K
+constexpr auto compress_platforms = std::array {
+    j2k_compress_platform_info_t{"none", j2k_compress_platform::NONE},
+    j2k_compress_platform_info_t{"cpu", j2k_compress_platform::CPU},
 #ifdef HAVE_CUDA
-    j2k_encoder_platform_info_t{"cuda", j2k_encoder_platform::CUDA}
+    j2k_compress_platform_info_t{"cuda", j2k_compress_platform::CUDA}
 #endif
 };
 
 /**
  * @fn get_platform_from_name
- * @brief Search for j2k_encoder_platform from friendly name
+ * @brief Search for j2k_compress_platform from friendly name
  * @param name Friendly name of platform to search for
- * @return j2k_encoder_platform that corresponds to name. If no match, return j2k_encoder_platform::NONE
+ * @return j2k_compress_platform that corresponds to name. If no match, return j2k_compress_platform::NONE
  */
 [[nodiscard]][[maybe_unused]]
-static j2k_encoder_platform get_platform_from_name(std::string name) {
+static j2k_compress_platform get_platform_from_name(std::string name) {
     std::transform(name.cbegin(), name.cend(), name.begin(), [](unsigned char c) { return std::tolower(c); });
 
     auto matches = [&name](const auto& p) { return name.compare(p.name) == 0; };
 
-    if (const auto& it = std::find_if(encode_platforms.begin(), encode_platforms.end(), matches) ; it != encode_platforms.end()) {
+    if (const auto& it = std::find_if(compress_platforms.begin(), compress_platforms.end(), matches) ; it != compress_platforms.end()) {
         return it->platform;
     }
 
-    return j2k_encoder_platform::NONE;
+    return j2k_compress_platform::NONE;
 }
 
 /**
@@ -394,10 +381,10 @@ struct state_video_compress_j2k {
 
         // Platform to use by default
 #ifdef HAVE_CUDA
-        j2k_encoder_platform platform      = j2k_encoder_platform::CUDA;
+        j2k_compress_platform platform      = j2k_compress_platform::CUDA;
         unsigned int         max_in_frames = DEFAULT_CUDA_POOL_SIZE; ///< max number of frames between push and pop
 #else
-        j2k_encoder_platform platform      = j2k_encoder_platform::CPU;
+        j2k_compress_platform platform      = j2k_compress_platform::CPU;
         unsigned int         max_in_frames = DEFAULT_CPU_POOL_SIZE;  ///< max number of frames between push and pop
 #endif
 
@@ -517,7 +504,7 @@ void state_video_compress_j2k::parse_fmt(const char* opts) {
                 } else if (IS_KEY_PREFIX(item, "platform"))     {       // :platform=
                         const char *const platform_name = strchr(item, '=') + 1;
                         platform = get_platform_from_name(platform_name);
-                        if (j2k_encoder_platform::NONE == platform) {
+                        if (j2k_compress_platform::NONE == platform) {
                                 log_msg(LOG_LEVEL_ERROR,
                                         "%s Unable to find requested encoding platform: \"%s\"\n",
                                         MOD_NAME,
@@ -569,7 +556,7 @@ void state_video_compress_j2k::parse_fmt(const char* opts) {
         }
 
         // If CPU selected
-        if (j2k_encoder_platform::CPU == platform) {
+        if (j2k_compress_platform::CPU == platform) {
                 /**
                  * Confirm thread_count != CMPTO_J2K_ENC_CPU_DEFAULT (0)
                  *  If it does, img_limit can be > thread_count since all threads used
@@ -612,7 +599,7 @@ bool state_video_compress_j2k::initialize_j2k_enc_ctx() {
                         "Context configuration create",
                         return false);
 
-        if (j2k_encoder_platform::CPU == platform) {
+        if (j2k_compress_platform::CPU == platform) {
                 log_msg(LOG_LEVEL_INFO, "%s Configuring for CPU\n", MOD_NAME);
                 pool = std::make_unique<video_frame_pool>(max_in_frames, cpu_allocator());
                 // for (unsigned int i = 0; i < cpu_count ; )
@@ -632,7 +619,7 @@ bool state_video_compress_j2k::initialize_j2k_enc_ctx() {
         }
 
 #ifdef HAVE_CUDA
-        if (j2k_encoder_platform::CUDA == platform) {
+        if (j2k_compress_platform::CUDA == platform) {
                 log_msg(LOG_LEVEL_INFO, "%s Configuring for CUDA\n", MOD_NAME);
                 pool = std::make_unique<video_frame_pool>(max_in_frames, cuda_allocator());
                 for (unsigned int i = 0; i < cuda_devices_count; ++i) {

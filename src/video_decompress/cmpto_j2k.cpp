@@ -117,9 +117,9 @@ static void *decompress_j2k_worker(void *args);
 static void rg48_to_r12l(unsigned char *dst_buffer, unsigned char *src_buffer, unsigned int width, unsigned int height);
 
 /*
- * Platform to use for J2K Decoding
+ * Platform to use for J2K Decompression
  */ 
-enum j2k_decoder_platform {
+enum j2k_decompress_platform {
         NONE = 0,
         CPU = 1,
 #ifdef HAVE_CUDA
@@ -166,10 +166,12 @@ ADD_TO_PARAM("j2k-dec-mem-limit", "* j2k-dec-mem-limit=<limit>\n"
                                 "  J2K max memory usage in bytes.\n");
 ADD_TO_PARAM("j2k-dec-tile-limit", "* j2k-dec-tile-limit=<limit>\n"
                                 "  number of tiles decoded at moment (less to reduce latency, more to increase performance, 0 unlimited)\n");
-#endif // HAVE_CUDA
-// CPU-specific Command Line Parameters
+// Option to use CPU for image decompression only required if CUDA is also compiled.
+// Otherwise, CPU will be the default, with no need to explicity specify.
 ADD_TO_PARAM("j2k-dec-use-cpu", "* j2k-dec-use-cpu\n"
                                 "  use the CPU to decode images\n");
+#endif // HAVE_CUDA
+// CPU-specific Command Line Parameters
 ADD_TO_PARAM("j2k-dec-cpu-thread-count", "* j2k-dec-cpu-thread-count=<threads>\n"
                                 "  number of threads to use on the CPU (0 means number of threads equal to all cores)\n");
 ADD_TO_PARAM("j2k-dec-img-limit", "* j2k-dec-img-limit=<limit>\n"
@@ -205,11 +207,11 @@ struct state_decompress_j2k {
         unsigned int    cuda_mem_limit      = DEFAULT_CUDA_MEM_LIMIT;
         unsigned int    cuda_tile_limit     = DEFAULT_CUDA_TILE_LIMIT;
 
-        // Default Decode Architecture to Use
-        j2k_decoder_platform platform       = j2k_decoder_platform::CUDA;
+        // Default Decompression Platform to Use
+        j2k_decompress_platform platform       = j2k_decompress_platform::CUDA;
 #else
-        // Default Decode Architecture to Use
-        j2k_decoder_platform platform       = j2k_decoder_platform::CPU;
+        // Default Decompression Platform to Use
+        j2k_decompress_platform platform       = j2k_decompress_platform::CPU;
 #endif
 
         // CPU Defaults
@@ -249,7 +251,7 @@ state_decompress_j2k::state_decompress_j2k() {
 void state_decompress_j2k::parse_params() {
 #ifdef HAVE_CUDA
         if (get_commandline_param("j2k-dec-use-cuda")) {
-                platform = j2k_decoder_platform::CUDA;
+                platform = j2k_decompress_platform::CUDA;
         }
 
         if (get_commandline_param("j2k-dec-mem-limit")) {
@@ -259,10 +261,11 @@ void state_decompress_j2k::parse_params() {
         if (get_commandline_param("j2k-dec-tile-limit")) {
                 cuda_tile_limit = atoi(get_commandline_param("j2k-dec-tile-limit"));
         }
-#endif // HAVE_CUDA
+
         if (get_commandline_param("j2k-dec-use-cpu")) {
-                platform = j2k_decoder_platform::CPU;
+                platform = j2k_decompress_platform::CPU;
         }
+#endif // HAVE_CUDA
 
         if (get_commandline_param("j2k-dec-cpu-thread-count")) {
                 cpu_thread_count = atoi(get_commandline_param("j2k-dec-cpu-thread-count"));
@@ -316,7 +319,7 @@ bool state_decompress_j2k::initialize_j2k_dec_ctx() {
         CHECK_OK(cmpto_j2k_dec_ctx_cfg_create(&dec_ctx_cfg), "Error creating dec cfg", return false);
 
 #ifdef HAVE_CUDA
-        if (j2k_decoder_platform::CUDA == platform) {
+        if (j2k_decompress_platform::CUDA == platform) {
                 log_msg(LOG_LEVEL_INFO, "%s Configuring for CUDA Decoding\n", MOD_NAME);
                 for (unsigned int i = 0; i < cuda_devices_count; ++i) {
                         CHECK_OK(cmpto_j2k_dec_ctx_cfg_add_cuda_device(dec_ctx_cfg, cuda_devices[i], cuda_mem_limit, cuda_tile_limit),
@@ -325,7 +328,7 @@ bool state_decompress_j2k::initialize_j2k_dec_ctx() {
                 }
         }
 #endif // HAVE_CUDA
-        if (j2k_decoder_platform::CPU == platform) {
+        if (j2k_decompress_platform::CPU == platform) {
                 log_msg(LOG_LEVEL_INFO, "%s Configuring for CPU Decoding\n", MOD_NAME);
 
                 // Confirm that cpu_thread_count != 0 (unlimited). If it does, cpu_img_limit can exceed thread_count
@@ -387,17 +390,17 @@ static void rg48_to_r12l(unsigned char *dst_buffer,
         }
 }
 
-static void print_dropped(unsigned long long int dropped, const j2k_decoder_platform& platform) {
+static void print_dropped(unsigned long long int dropped, const j2k_decompress_platform& platform) {
         if (dropped % 10 == 1) {
                 log_msg(LOG_LEVEL_WARNING, "%s Some frames (%llu) dropped.\n", MOD_NAME, dropped);
 
-                if (j2k_decoder_platform::CPU == platform) {
+                if (j2k_decompress_platform::CPU == platform) {
                         log_msg_once(LOG_LEVEL_INFO, to_fourcc('J', '2', 'D', 'W'), "%s You may try to increase "
                                 "image limit to increase the number of images decoded at one moment by adding parameter: --param j2k-dec-img-limit=#\n",
                                 MOD_NAME);
                 }
 #ifdef HAVE_CUDA
-                if (j2k_decoder_platform::CUDA == platform) {
+                if (j2k_decompress_platform::CUDA == platform) {
                         log_msg_once(LOG_LEVEL_INFO, to_fourcc('J', '2', 'D', 'W'), "%s You may try to increase "
                                 "tile limit to increase the throughput by adding parameter: --param j2k-dec-tile-limit=4\n",
                                 MOD_NAME);
