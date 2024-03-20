@@ -150,9 +150,9 @@ constexpr auto codecs = std::array{
 /*
  * Exceptions for state_video_decompress_j2k construction
  */
-/// @brief UnableToInCreateJ2KDecoderCTX Exception
-struct UnableToInCreateJ2KDecoderCTX : public std::exception {
-        UnableToInCreateJ2KDecoderCTX() = default;
+/// @brief UnableToCreateJ2KDecoderCTX Exception
+struct UnableToCreateJ2KDecoderCTX : public std::exception {
+        UnableToCreateJ2KDecoderCTX() = default;
 };
 
 /*
@@ -234,13 +234,13 @@ struct state_decompress_j2k {
 
 /**
  * @brief Default state_decompress_j2k Constructor
- * @throw UnableToInCreateJ2KDecoderCTX if unable to create J2K CTX
+ * @throw UnableToCreateJ2KDecoderCTX if unable to create J2K CTX
  */
 state_decompress_j2k::state_decompress_j2k() {
         parse_params();
 
         if (!initialize_j2k_dec_ctx()) {
-                throw UnableToInCreateJ2KDecoderCTX();
+                throw UnableToCreateJ2KDecoderCTX();
         }
 }
 
