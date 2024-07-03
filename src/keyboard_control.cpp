@@ -260,12 +260,13 @@ void keyboard_control::impl::signal()
 
 void keyboard_control::impl::stop()
 {
+        unique_lock<mutex> lk(m_lock);
         module_done(&m_mod);
         if (!m_started) {
                 return;
         }
-        unique_lock<mutex> lk(m_lock);
         m_should_exit = true;
+        m_started = false;
         lk.unlock();
         signal();
         m_keyboard_thread.join();
@@ -274,8 +275,6 @@ void keyboard_control::impl::stop()
         close(m_event_pipe[0]);
         close(m_event_pipe[1]);
 #endif
-
-        m_started = false;
 }
 
 #ifdef HAVE_TERMIOS_H
