@@ -85,7 +85,7 @@
 #include <VideoMasterHD_Ip_Board.h>
 #endif
 #if defined VHD_IP_FILTER_UDP_PORT_DEST
-#define VHD_MIN_6_19 1
+// #define VHD_MIN_6_19 1
 #endif
 
 // compat
