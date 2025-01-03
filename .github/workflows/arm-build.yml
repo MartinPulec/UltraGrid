@@ -36,6 +36,14 @@ jobs:
         sudo apt update
         sudo apt install binfmt-support curl qemu-user-static
 
+    - id: cache-bootstrap2
+      uses: actions/cache@main
+      with:
+        path: '~/chroot.tar'
+        key: cache-bootstrap-${{ env.ImageOS }}-${{ matrix.arch }}-${{
+          hashFiles('.github/scripts/Linux/arm/bootstrap.sh',
+          '.github/scripts/Linux/install_others.sh') }}
+
     - name: Fetch SDKs ETags
       id: etags
       run: |
