@@ -4,6 +4,10 @@
 ##
 ## @param $1          (optional) zsync URL - location used for AppImage updater
 ## @env $appimage_key (optional) signing key
+## (see https://github.com/probonopd/go-appimage/issues/318)
+##  base64-encoded .tar.gz of pubkey.asc+privkey.asc.enc
+## openssl-encrypted private key:
+## `openssl aes-256-cbc -pass pass:dummy -in privkey.asc -out privkey.asc.enc -a -md sha256`
 ## @returns           name of created AppImage
 
 APPDIR=UltraGrid.AppDir
@@ -158,7 +162,8 @@ fi
 
 GIT_ROOT=$(git rev-parse --show-toplevel || true)
 if [ -n "${appimage_key-}" ] && [ -n "${GIT_ROOT-}" ]; then
-        echo "$appimage_key" >> "$GIT_ROOT/pubkey.asc"
+        echo "$appimage_key" | base64 -d | tar -C "$GIT_ROOT" -xzaf -
+        export super_secret_password=dummy
 fi
 
 mkappimage=$(command -v ./mkappimage || command -v mkappimage-x86_64.AppImage || command -v mkappimage || true)
