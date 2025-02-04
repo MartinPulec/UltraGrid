@@ -101,23 +101,25 @@ struct video_frame_sdl3_data {
 
 static void convert_UYVY_IYUV(const struct video_frame *uv_frame,
                               char *tex_data, size_t y_pitch);
+static void convert_R10k_ARGB2101010(const struct video_frame *uv_frame,
+                                     char *tex_data, size_t y_pitch);
 static const struct fmt_data {
         codec_t              ug_codec;
         enum SDL_PixelFormat sdl_tex_fmt;
         void (*convert)(const struct video_frame *uv_frame, char *tex_data,
                         size_t tex_pitch);
 } pf_mapping_template[] = {
-        { I420, SDL_PIXELFORMAT_IYUV,        NULL              },
-        { RGBA, SDL_PIXELFORMAT_RGBX32,      NULL              },
-        { RGBA, SDL_PIXELFORMAT_RGBA32,      NULL              },
-        { UYVY, SDL_PIXELFORMAT_UYVY,        NULL              }, // macOS
-        { UYVY, SDL_PIXELFORMAT_IYUV,        convert_UYVY_IYUV }, // fallback
+        { I420, SDL_PIXELFORMAT_IYUV,        NULL                     },
+        { RGBA, SDL_PIXELFORMAT_RGBX32,      NULL                     },
+        { RGBA, SDL_PIXELFORMAT_RGBA32,      NULL                     },
+        { UYVY, SDL_PIXELFORMAT_UYVY,        NULL                     }, // macOS
+        { UYVY, SDL_PIXELFORMAT_IYUV,        convert_UYVY_IYUV        }, // fallback
         // none of the remaining PF seem to be
         // supported by the opengl renderer
-        { YUYV, SDL_PIXELFORMAT_YUY2,        NULL              },
-        { RGB,  SDL_PIXELFORMAT_RGB24,       NULL              },
-        { BGR,  SDL_PIXELFORMAT_BGR24,       NULL              },
-        { R10k, SDL_PIXELFORMAT_ARGB2101010, NULL              },
+        { YUYV, SDL_PIXELFORMAT_YUY2,        NULL                     },
+        { RGB,  SDL_PIXELFORMAT_RGB24,       NULL                     },
+        { BGR,  SDL_PIXELFORMAT_BGR24,       NULL                     },
+        { R10k, SDL_PIXELFORMAT_ARGB2101010, convert_R10k_ARGB2101010 },
 };
 struct state_sdl3 {
         struct module   mod;
@@ -1026,22 +1028,28 @@ display_sdl3_getf(void *state)
 }
 
 static void
-r10k_to_sdl3(size_t count, uint32_t *buf)
+convert_R10k_ARGB2101010(const struct video_frame *uv_frame, char *tex_data,
+                  size_t pitch)
 {
+        assert(pitch == (size_t) uv_frame->tiles[0].width * 4);
+        uint32_t    *in  = (uint32_t *) uv_frame->tiles[0].data;
+        uint32_t    *out = (uint32_t *) tex_data;
+        const size_t count =
+            (size_t) uv_frame->tiles[0].width * uv_frame->tiles[0].height;
         enum {
                 LOOP_ITEMS = 16,
         };
         unsigned int i = 0;
         for (; i < count / LOOP_ITEMS; ++i) {
                 for (int j = 0; j < LOOP_ITEMS; ++j) {
-                        uint32_t val = htonl(*buf);
-                        *buf++       = val >> 2;
+                        uint32_t val = htonl(*in++);
+                        *out++       = 0x3 << 30 | val >> 2;
                 }
         }
         i *= LOOP_ITEMS;
         for (; i < count; ++i) {
-                uint32_t val = htonl(*buf);
-                *buf++       = val >> 2;
+                uint32_t val = htonl(*in++);
+                *out++       = 0x3 << 30 | val >> 2;
         }
 }
 
@@ -1094,12 +1102,6 @@ display_sdl3_putf(void *state, struct video_frame *frame, long long timeout_ns)
                 event.user.data1 = NULL;
                 SDL_CHECK(SDL_PushEvent(&event));
                 return true;
-        }
-
-        // fix endianity
-        if (frame->color_spec == R10k) {
-                r10k_to_sdl3(frame->tiles[0].data_len / 4,
-                             (uint32_t *) frame->tiles[0].data);
         }
 
         pthread_mutex_lock(&s->lock);
