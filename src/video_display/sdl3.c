@@ -662,6 +662,11 @@ recreate_textures(struct state_sdl3 *s, struct video_desc desc)
                             prop, SDL_PROP_TEXTURE_CREATE_COLORSPACE_NUMBER,
                             SDL_COLORSPACE_BT601_LIMITED);
                 }
+                if (desc.color_spec == R10k) {
+                        SDL_SetNumberProperty(
+                            prop, SDL_PROP_TEXTURE_CREATE_COLORSPACE_NUMBER,
+                            SDL_COLORSPACE_SRGB);
+                }
                 SDL_Texture *texture =
                     SDL_CreateTextureWithProperties(s->renderer, prop);
                 SDL_DestroyProperties(prop);
