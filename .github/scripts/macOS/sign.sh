@@ -55,6 +55,17 @@ if [ $sign_only ]; then
         exit 0
 fi
 
+# attempt to "report" crashing notarytool on Bus Error, eg. here:
+# https://github.com/MartinPulec/UltraGrid/actions/runs/13280267692/job/37077042169
+# TODO TOREMOVE later - 1. this worked exactly as thought, report was sent
+# and apple repair it or 2. it doesn't work or Apple ignores that
+sudo defaults write /Library/Application\ Support/CrashReporter/\
+DiagnosticMessagesHistory.plist AutoSubmit -bool true
+sudo defaults write /Library/Application\ Support/CrashReporter/\
+DiagnosticMessagesHistory.plist ThirdPartyDataSubmit -bool true
+sudo launchctl kickstart -k system/com.apple.ReportCrash.Root
+sudo launchctl kickstart -k system/com.apple.SubmitDiagInfo
+
 # Zip and send for notarization
 ZIP_FILE=uv-qt.zip
 ditto -c -k --keepParent "$APP" $ZIP_FILE

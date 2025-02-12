@@ -202,7 +202,8 @@ jobs:
         sudo mv /tmp/FRMWK $(xcrun --show-sdk-path)/System/Library/Frameworks
     - name: sign+notarize
       if: env.KEY_CHAIN != null
-      run: .github/scripts/macOS/sign.sh uv-qt.app
+      # TODO TOREMOVE notarytool error reporting (revert back to the original)
+      run: if ! .github/scripts/macOS/sign.sh uv-qt.app; then sleep 60; exit 1; fi
     - name: make dmg
       run: |
         for n in `seq 5`; do # do more attempts
