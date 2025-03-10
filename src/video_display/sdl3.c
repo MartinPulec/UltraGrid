@@ -42,6 +42,15 @@
  * Missing from SDL1:
  * * audio (would be perhaps better as an audio playback device)
  * * autorelease_pool (macOS) - perhaps not needed
+ * @todo errata (SDL3 vs SDL2)
+ * 1. [macOS] Vulkan renderer doesn't work (no matter if linked with MoltenVK or
+ *    loader)
+ * 2. [all platforms] with `renderer=vulkan` - none YCbCr texture works
+ *    (segfaults - wrong pitch/texture?)
+ * 3. p010 works just on macOS/Metal, crashes on Vulkan (see #3), corrupted on
+ *    d3d[12] (which would currently break eg. v210 in default; but SDL2 didn't
+ *    have 10+ bit YCbCr, anyways)
+ * 4. see todo in @ref ../audio/capture/sdl_mixer.c
  */
 
 #include <SDL3/SDL.h>
