@@ -1,7 +1,5 @@
 #!/bin/sh -eux
 
-. /etc/os-release
-
 if [ "$(id -u)" -eq 0 ]; then
         alias sudo=
 fi
