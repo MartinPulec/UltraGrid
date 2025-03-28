@@ -45,6 +45,23 @@
 #ifndef _RTP_DEC_H264_H
 #define _RTP_DEC_H264_H
 
+#ifndef __cplusplus
+#define RTPDEC_SAFE_CAST(var) \
+        _Generic((var), \
+            char *: ((const uint8_t *) (var)), \
+            unsigned char *: ((const uint8_t *) (var)), \
+            const char *: ((const uint8_t *) (var)), \
+            const unsigned char *: ((const uint8_t *) (var)))
+#else
+template <typename T>
+static inline const uint8_t *
+RTPDEC_SAFE_CAST(T var)
+{
+        static_assert(sizeof var[0] == 1);
+        return (const uint8_t *) var;
+}
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -94,12 +111,11 @@ struct video_desc;
 #define H264_NALU_HDR_GET_NRI(nal)  ((*(const uint8_t *) (nal) & 0x60) >> 5)
 
 /// @param nal pointer to **big-endian** NAL header
-#define HEVC_NALU_HDR_GET_TYPE(nal) (*(const uint8_t *) (nal) >> 1)
+#define HEVC_NALU_HDR_GET_TYPE(nal) (*RTPDEC_SAFE_CAST(nal) >> 1)
 #define HEVC_NALU_HDR_GET_LAYER_ID(nal) \
-        ((((const uint8_t *) (nal))[0] & 0x1) << 5 | \
-         ((const uint8_t *) (nal))[1] >> 3)
-#define HEVC_NALU_HDR_GET_TID(nal) \
-         (((const uint8_t *) (nal))[1] & 0x7)
+        (((RTPDEC_SAFE_CAST(nal))[0] & 0x1) << 5 | \
+         (RTPDEC_SAFE_CAST(nal))[1] >> 3)
+#define HEVC_NALU_HDR_GET_TID(nal) (RTPDEC_SAFE_CAST(nal)[1] & 0x7)
 
 #define NALU_HDR_GET_TYPE(nal, is_hevc) \
         ((is_hevc) ? HEVC_NALU_HDR_GET_TYPE((nal)) \
