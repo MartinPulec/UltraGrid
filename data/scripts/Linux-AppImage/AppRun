@@ -27,7 +27,7 @@ export QT_QPA_PLATFORM_PLUGIN_PATH="$QT_PLUGIN_PATH/platforms"
 
 export MAGICK_CONFIGURE_PATH="$DIR/etc/IM"
 export MAGICK_CODER_FILTER_PATH="$DIR/usr/share/IM/filters"
-export MAGICK_CODER_MODULE_PATH="$DIR/usr/share/IM/codecs"
+export MAGICK_CODER_MODULE_PATH="$DIR/usr/share/IM/coders"
 
 get_tools() {(
         find "$DIR/usr/bin" -mindepth 1 -exec basename {} \; | tr '\n' ' '
