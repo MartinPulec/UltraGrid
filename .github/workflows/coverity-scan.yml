@@ -93,8 +93,8 @@ jobs:
       run: |
         cp /Volumes/cov-analysis-macos-*/cov-analysis-macos-*.sh .
         ./cov-analysis-macos-*
-        ./bin/cov-build --dir cov-int\
          export VERBOSE=1
+        ./bin/cov-build --dir cov-int\
          make -j "$(getconf NPROCESSORS_ONLN)"
     - name: Submit the result to Coverity Scan
       if: ${{ env.coverity_token }}
