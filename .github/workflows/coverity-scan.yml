@@ -8,7 +8,112 @@ on:
    - cron:  '0 4 * * 2' # Tuesday at 4:00 UTC
 
 jobs:
-  Coverity:
+  macOS:
+    if: github.repository == 'CESNET/UltraGrid' || github.event.schedule == null
+    runs-on: macos-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SDK_NONFREE_PATH: /private/var/tmp/sdks-nonfree
+      SDK_URL: ${{ secrets.SDK_URL }}
+      coverity_token: ${{ secrets.coverity_token }}
+
+    steps:
+    - name: Get Coverity tool name # the file name contains version and is used as the cache key
+      if: ${{ env.coverity_token }}
+      id: tool
+      run: |
+        FILENAME=$(curl -LI "https://scan.coverity.com/download/cxx/macOS-ARM64?\
+        token=$coverity_token&project=UltraGrid"  |
+        sed -n '/content-disposition/s/.*\"\(.*\)\"/\1/p')
+        echo "filename=$FILENAME" >> $GITHUB_OUTPUT
+    - name: Run actions/cache for Coverity build tool
+      if: ${{ env.coverity_token }}
+      id: cache-coverity-tool
+      uses: actions/cache@main
+      with:
+        path: ~/coverity_tool.dmg
+        key: cache-coverity-tool-${{ steps.tool.outputs.filename }}
+    - name: Download Coverity build tool
+      if: steps.cache-coverity-tool.outputs.cache-hit != 'true'
+      run: |
+        wget --no-verbose https://scan.coverity.com/download/cxx/macOS-ARM64 \
+        --post-data "token=$coverity_token&project=UltraGrid" -O ~/coverity_tool.dmg
+    - name: Mount Coverity build tool
+      if: ${{ env.coverity_token }}
+      run: |
+        hdiutil mount ~/coverity_tool.dmg
+
+    - uses: actions/checkout@v4
+    - name: Fetch SDKs ETags
+      id: etags
+      run: |
+        echo "nonfree=$($GITHUB_WORKSPACE/.github/scripts/get-etags.sh "$SDK_URL/$DELTA_MAC_ARCHIVE")" >> $GITHUB_OUTPUT
+        echo "ndi=$($GITHUB_WORKSPACE/.github/scripts/get-etags.sh https://downloads.ndi.tv/SDK/NDI_SDK_Mac/Install_NDI_SDK_v6_Apple.pkg)" >> $GITHUB_OUTPUT
+        echo "ximea=$($GITHUB_WORKSPACE/.github/scripts/get-etags.sh "$XIMEA_DOWNLOAD_URL")" >> $GITHUB_OUTPUT
+    - name: Set environment
+      run: . .github/scripts/environment.sh
+    - name: Run actions/cache for Non-Free SDKs
+      id: cache-macos-nonfree-sdks
+      uses: actions/cache@main
+      with:
+        path: ${{ env.SDK_NONFREE_PATH }}
+        key: cache-nonfree-sdks-${{ runner.os }}-${{ steps.etags.outputs.nonfree }}
+    - name: Download Non-Free SDKs
+      if: steps.cache-macos-nonfree-sdks.outputs.cache-hit != 'true' && env.SDK_URL != null
+      run: |
+        rm -rf ${{ env.SDK_NONFREE_PATH }}
+        mkdir -p ${{ env.SDK_NONFREE_PATH }}
+        cd ${{ env.SDK_NONFREE_PATH }}
+        curl -S -f -O "$SDK_URL/$DELTA_MAC_ARCHIVE" || true
+    - name: Run actions/cache for XIMEA
+      id: cache-macos-ximea
+      uses: actions/cache@main
+      with:
+        path: /var/tmp/XIMEA_OSX_SP.dmg
+        key: cache-ximea-${{ runner.os }}-${{ steps.etags.outputs.ximea }}
+    - name: Download XIMEA
+      if: steps.cache-macos-ximea.outputs.cache-hit != 'true'
+      run: curl -S -L "$XIMEA_DOWNLOAD_URL" -o /private/var/tmp/XIMEA_OSX_SP.dmg
+    - name: Run actions/cache for NDI
+      id: cache-ndi
+      uses: actions/cache@main
+      with:
+        path: /private/var/tmp/Install_NDI_SDK_Apple.pkg
+        key: cache-ndi-${{ runner.os }}-${{ steps.etags.outputs.ndi }}
+    - name: Download NDI
+      if: steps.cache-ndi.outputs.cache-hit != 'true'
+      run: curl -L https://downloads.ndi.tv/SDK/NDI_SDK_Mac/Install_NDI_SDK_v6_Apple.pkg -o /private/var/tmp/Install_NDI_SDK_Apple.pkg
+    - name: bootstrap
+      run: .github/scripts/macOS/prepare.sh
+    - name: configure
+      run: "ARCH=$UG_ARCH ./autogen.sh $FEATURES || { RC=$?; cat config.log; exit $RC; }"
+
+    - name: configure
+      if: ${{ env.coverity_token }}
+      run: ./autogen.sh $FEATURES
+    - name: Build with cov-build
+      if: ${{ env.coverity_token }}
+      run: |
+        cp /Volumes/cov-analysis-macos-*/cov-analysis-macos-*.sh .
+        ./cov-analysis-macos-*
+        ./bin/cov-build --dir cov-int\
+         make -j $(getconf NPROCESSORS_ONLN)
+    - name: Submit the result to Coverity Scan
+      if: ${{ env.coverity_token }}
+      run: |
+        tar caf ultragrid.tar.xz cov-int
+        result=$(curl -S --form token=$coverity_token \
+          --form email=pulec@cesnet.cz \
+          --form file=@ultragrid.tar.xz \
+          --form version="$(date +%F)" \
+          --form description="master build" \
+          https://scan.coverity.com/builds?project=UltraGrid)
+        echo "$result"
+        if ! expr "$result" : 'Build successfully submitted.' >/dev/null; then
+          exit 1
+        fi
+
+  Linux:
     if: github.repository == 'CESNET/UltraGrid' || github.event.schedule == null
     runs-on: ubuntu-latest
     env:
