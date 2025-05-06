@@ -86,7 +86,7 @@ jobs:
     - name: bootstrap
       run: .github/scripts/macOS/prepare.sh
     - name: Install Rosetta 2
-      run: softwareupdate --install-rosetta
+      run: softwareupdate --install-rosetta --agree-to-license
     - name: configure
       if: ${{ env.coverity_token }}
       run: ./autogen.sh $FEATURES
