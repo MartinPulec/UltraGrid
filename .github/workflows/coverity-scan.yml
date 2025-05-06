@@ -10,7 +10,7 @@ on:
 jobs:
   macOS:
     if: github.repository == 'CESNET/UltraGrid' || github.event.schedule == null
-    runs-on: macos-latest
+    runs-on: macos-13
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SDK_NONFREE_PATH: /private/var/tmp/sdks-nonfree
@@ -22,7 +22,7 @@ jobs:
       if: ${{ env.coverity_token }}
       id: tool
       run: |
-        FILENAME=$(curl -LI "https://scan.coverity.com/download/cxx/macOS-ARM64?\
+        FILENAME=$(curl -LI "https://scan.coverity.com/download/cxx/macOS?\
         token=$coverity_token&project=UltraGrid"  |
         sed -n '/content-disposition/s/.*\"\(.*\)\"/\1/p')
         echo "filename=$FILENAME" >> $GITHUB_OUTPUT
@@ -36,7 +36,7 @@ jobs:
     - name: Download Coverity build tool
       if: steps.cache-coverity-tool.outputs.cache-hit != 'true'
       run: |
-        wget --no-verbose https://scan.coverity.com/download/cxx/macOS-ARM64 \
+        wget --no-verbose https://scan.coverity.com/download/cxx/macOS \
         --post-data "token=$coverity_token&project=UltraGrid" -O ~/coverity_tool.dmg
     - name: Mount Coverity build tool
       if: ${{ env.coverity_token }}
@@ -85,17 +85,14 @@ jobs:
       run: curl -L https://downloads.ndi.tv/SDK/NDI_SDK_Mac/Install_NDI_SDK_v6_Apple.pkg -o /private/var/tmp/Install_NDI_SDK_Apple.pkg
     - name: bootstrap
       run: .github/scripts/macOS/prepare.sh
-    - name: Install Rosetta 2
-      run: softwareupdate --install-rosetta --agree-to-license
     - name: configure
       if: ${{ env.coverity_token }}
       run: ./autogen.sh $FEATURES
     - name: Build with cov-build
       if: ${{ env.coverity_token }}
       run: |
-        cp /Volumes/cov-analysis-macos-*/cov-analysis-macos-*.sh .
-        ./cov-analysis-macos-*
-         export VERBOSE=1
+        cp /Volumes/cov-analysis-macos*/cov-analysis-macos*.sh .
+        ./cov-analysis-macos*
         ./bin/cov-build --dir cov-int\
          make -j "$(getconf NPROCESSORS_ONLN)"
     - name: Submit the result to Coverity Scan
