@@ -85,6 +85,8 @@ jobs:
       run: curl -L https://downloads.ndi.tv/SDK/NDI_SDK_Mac/Install_NDI_SDK_v6_Apple.pkg -o /private/var/tmp/Install_NDI_SDK_Apple.pkg
     - name: bootstrap
       run: .github/scripts/macOS/prepare.sh
+    - name: Install Rosetta 2
+      run: softwareupdate --install-rosetta
     - name: configure
       if: ${{ env.coverity_token }}
       run: ./autogen.sh $FEATURES
