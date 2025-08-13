@@ -536,6 +536,7 @@ static void gl_print_monitors(bool fullhelp) {
  * Show help
  */
 static void gl_show_help(bool full) {
+        abort();
         col() << "usage:\n";
         col() << SBOLD(SRED("\t-d gl[:<options>]")
                        << (full ? " [--param " GL_DISABLE_10B_OPT_PARAM_NAME "]"
