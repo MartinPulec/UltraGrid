@@ -2756,9 +2756,12 @@ if test "${jack_req?}" != no && test "${FOUND_JACK_H?}" = yes
 then
     JACK_CAP_OBJ="src/audio/capture/jack.o"
     JACK_PLAY_OBJ="src/audio/playback/jack.o"
+    if test "${system?}" != Windows; then
+        JACK_LIBS=-ldl
+    fi
     jack=yes
-    add_module acap_jack "$JACK_CAP_OBJ"
-    add_module aplay_jack "$JACK_PLAY_OBJ"
+    add_module acap_jack "$JACK_CAP_OBJ" "${JACK_LIBS-}"
+    add_module aplay_jack "$JACK_PLAY_OBJ" "${JACK_LIBS-}"
 fi
 
 ENSURE_FEATURE_PRESENT([$jack_req], [$jack], [JACK not found])
