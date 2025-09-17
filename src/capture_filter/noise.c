@@ -35,6 +35,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <limits.h> // for UCHAR_MAX
 #include <stdlib.h> // for free, rand, NULL, atoi, calloc
 #include <string.h> // for memcpy, strchr, strcmp, strdup, strtok_r
 
@@ -44,6 +45,7 @@
 #include "types.h"           // for tile, video_frame, video_frame_callbacks
 #include "utils/color_out.h" // for color_printf, TBOLD, TRED
 #include "utils/macros.h"    // for IS_KEY_PREFIX
+#include "utils/random.h"    // for ug_rand
 #include "video_frame.h"     // for vf_alloc_desc, video_desc_from_frame
 struct module;
 
@@ -145,10 +147,10 @@ filter(void *state, struct video_frame *in)
         memcpy(out_data, in->tiles[0].data, in->tiles[0].data_len);
 
         const unsigned char *const end = out_data + in->tiles[0].data_len;
-        out_data += (rand() % s->magnitude);
+        out_data += (ug_rand() % s->magnitude);
         while (out_data < end) {
-                *out_data = rand() % 256;
-                out_data += 1 + (rand() % s->magnitude);
+                *out_data = ug_rand() % (UCHAR_MAX + 1);
+                out_data += 1 + (ug_rand() % s->magnitude);
         }
 
         VIDEO_FRAME_DISPOSE(in);
