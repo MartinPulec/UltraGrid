@@ -405,7 +405,11 @@ class image_pattern_gradient : public image_pattern {
         public:
                 explicit image_pattern_gradient(const string &config) {
                         if (!config.empty()) {
-                                color = stol(config, nullptr, 0);
+                                long long c = get_color_by_name(config.c_str());
+                                if (c == -1) {
+                                        throw 1;
+                                }
+                                color = c;
                         }
                 }
                 static constexpr uint32_t red = 0xFFU;
@@ -608,14 +612,17 @@ class image_pattern_text : public image_pattern {
                                 while (!sv.empty()) {
                                         auto tok = tokenize(sv, ',');
                                         if (tok.substr(0,3) == "bg=" || tok.substr(0,3) == "fg=") {
-                                                long long val = get_color_by_name(((string) tok.substr(3)).c_str());
-                                                if (val == -1) {
+                                                auto key = tokenize(tok, '=');
+                                                auto val = tokenize(tok, '=');
+                                                long long c = get_color_by_name(
+                                                    ((string) val).c_str());
+                                                if (c == -1) {
                                                         throw 1;
                                                 }
-                                                if (tok.substr(0, 3) == "bg=") {
-                                                        bg = val;
+                                                if (key == "bg") {
+                                                        bg = c;
                                                 } else {
-                                                        fg = val;
+                                                        fg = c;
                                                 }
                                         } else if (!text_set) {
                                                 text = tok;
@@ -664,10 +671,17 @@ class image_pattern_diagonal : public image_pattern{
                                         auto tok = tokenize(sv, ',');
                                         auto key = tokenize(tok, '=');
                                         auto val = tokenize(tok, '=');
-                                        if (key == "bg") {
-                                                bg = stol((string) val, nullptr, 0);
-                                        } else if (key == "fg") {
-                                                fg = stol((string) val, nullptr, 0);
+                                        if (key == "bg" || key == "fg") {
+                                                long long c = get_color_by_name(
+                                                    ((string) val).c_str());
+                                                if (c == -1) {
+                                                        throw 1;
+                                                }
+                                                if (key == "bg") {
+                                                        bg = c;
+                                                } else {
+                                                        fg = c;
+                                                }
                                         } else if (key == "stride") {
                                                 stride = stol((string) val, nullptr, 0);
                                         } else if (key == "line_width") {
@@ -923,7 +937,7 @@ video_pattern_generator_create(const char *config, int width, int height, codec_
                         BLANK_USAGE,
                         "diagonal*",
                         "ebu_bars",
-                        "gradient[=0x<AABBGGRR>]",
+                        "gradient[=<color>|help]",
                         "gradient2*",
                         "gray",
                         "interlaced",
