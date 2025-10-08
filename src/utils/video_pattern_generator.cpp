@@ -648,7 +648,14 @@ class image_pattern_diagonal : public image_pattern{
         public:
                 explicit image_pattern_diagonal(const string & config) {
                         if (config == "help"s) {
-                                col() << "Testcard diagonal usage:\n\t" << SBOLD(SRED("-t testcard:pattern=diagonal") << "[,bg=0x<AABBGGRR<][,fg=0x<AABBGGRR>][,stride=<stride>][,line_width=<width>]") << "\n";
+                                col()
+                                    << "Testcard diagonal usage:\n\t"
+                                    << SBOLD(
+                                           SRED("-t testcard:pattern=diagonal")
+                                           << "[,bg=<color>|help][,fg=<color>|"
+                                              "help][,stride=<stride>][,line_"
+                                              "width=<width>]")
+                                    << "\n";
                                 throw 1;
                         }
                         if (!config.empty()) {
