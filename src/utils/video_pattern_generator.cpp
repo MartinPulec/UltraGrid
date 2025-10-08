@@ -607,19 +607,15 @@ class image_pattern_text : public image_pattern {
                                 bool text_set = false;
                                 while (!sv.empty()) {
                                         auto tok = tokenize(sv, ',');
-                                        auto key = tokenize(tok, '=');
-                                        auto val = tokenize(tok, '=');
-                                        if (key == "bg" || key == "fg") {
-                                                long long c = get_color_by_name(((string) val).c_str());
-                                                if (c == -1) {
+                                        if (tok.substr(0,3) == "bg=" || tok.substr(0,3) == "fg=") {
+                                                long long val = get_color_by_name(((string) tok.substr(3)).c_str());
+                                                if (val == -1) {
                                                         throw 1;
                                                 }
-                                                if (key == "bg") {
-                                                printf("bg %x\n", (uint32_t) c);
-                                                        bg = c;
+                                                if (tok.substr(0, 3) == "bg=") {
+                                                        bg = val;
                                                 } else {
-                                                printf("fg %x\n", (uint32_t) c);
-                                                        fg = c;
+                                                        fg = val;
                                                 }
                                         } else if (!text_set) {
                                                 text = tok;
@@ -652,14 +648,7 @@ class image_pattern_diagonal : public image_pattern{
         public:
                 explicit image_pattern_diagonal(const string & config) {
                         if (config == "help"s) {
-                                col()
-                                    << "Testcard diagonal usage:\n\t"
-                                    << SBOLD(
-                                           SRED("-t testcard:pattern=diagonal")
-                                           << "[,bg=<color>|help][,fg=<color>|"
-                                              "help][,stride=<stride>][,line_"
-                                              "width=<width>]")
-                                    << "\n";
+                                col() << "Testcard diagonal usage:\n\t" << SBOLD(SRED("-t testcard:pattern=diagonal") << "[,bg=0x<AABBGGRR<][,fg=0x<AABBGGRR>][,stride=<stride>][,line_width=<width>]") << "\n";
                                 throw 1;
                         }
                         if (!config.empty()) {
