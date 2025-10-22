@@ -65,7 +65,7 @@ install_svt() {
 
 # The NV Video Codec SDK headers version 12.0 implies driver v520.56.06 in Linux
 install_nv_codec_headers() {
-        git clone --depth 1 -b sdk/12.0 https://github.com/FFmpeg/nv-codec-headers
+        git clone --depth 1 -b sdk/11.0 https://github.com/FFmpeg/nv-codec-headers
         ( cd nv-codec-headers && make && sudo make install || exit 1 )
 }
 
