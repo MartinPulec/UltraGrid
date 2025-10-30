@@ -543,49 +543,6 @@ delta_set_loopback_state(HANDLE BoardHandle, int ChannelIndex, BOOL32 State)
         }
 }
 
-struct deltacast_mode_info {
-        unsigned int       width;
-        unsigned int       height;
-        int                fps;
-        enum interlacing_t interlacing;
-};
-
-static struct deltacast_mode_info
-deltacast_get_frame_mode(unsigned mode)
-{
-        switch (mode) {
-        // clang-format off
-        case VHD_VIDEOSTD_S274M_1080p_25Hz:   return { 1920, 1080, 25, PROGRESSIVE       };
-        case VHD_VIDEOSTD_S274M_1080p_30Hz:   return { 1920, 1080, 30, PROGRESSIVE       };
-        case VHD_VIDEOSTD_S274M_1080i_50Hz:   return { 1920, 1080, 25, UPPER_FIELD_FIRST };
-        case VHD_VIDEOSTD_S274M_1080i_60Hz:   return { 1920, 1080, 30, UPPER_FIELD_FIRST };
-        case VHD_VIDEOSTD_S296M_720p_50Hz:    return { 1280,  720, 50, PROGRESSIVE       };
-        case VHD_VIDEOSTD_S296M_720p_60Hz:    return { 1280,  720, 60, PROGRESSIVE       };
-        case VHD_VIDEOSTD_S259M_PAL:          return {  720,  576, 25, UPPER_FIELD_FIRST };
-        case VHD_VIDEOSTD_S259M_NTSC:         return {  720,  487, 30, UPPER_FIELD_FIRST };
-        case VHD_VIDEOSTD_S274M_1080p_24Hz:   return { 1920, 1080, 24, PROGRESSIVE       };
-        case VHD_VIDEOSTD_S274M_1080p_60Hz:   return { 1920, 1080, 60, PROGRESSIVE       };
-        case VHD_VIDEOSTD_S274M_1080p_50Hz:   return { 1920, 1080, 50, PROGRESSIVE       };
-        case VHD_VIDEOSTD_S274M_1080psf_24Hz: return { 1920, 1080, 24, SEGMENTED_FRAME   };
-        case VHD_VIDEOSTD_S274M_1080psf_25Hz: return { 1920, 1080, 25, SEGMENTED_FRAME   };
-        case VHD_VIDEOSTD_S274M_1080psf_30Hz: return { 1920, 1080, 30, SEGMENTED_FRAME   };
-        // UHD modes
-        case VHD_VIDEOSTD_3840x2160p_24Hz:    return { 3840, 2160, 24, PROGRESSIVE       };
-        case VHD_VIDEOSTD_3840x2160p_25Hz:    return { 3840, 2160, 25, PROGRESSIVE       };
-        case VHD_VIDEOSTD_3840x2160p_30Hz:    return { 3840, 2160, 30, PROGRESSIVE       };
-        case VHD_VIDEOSTD_3840x2160p_50Hz:    return { 3840, 2160, 50, PROGRESSIVE       };
-        case VHD_VIDEOSTD_3840x2160p_60Hz:    return { 3840, 2160, 60, PROGRESSIVE       };
-        case VHD_VIDEOSTD_4096x2160p_24Hz:    return { 4096, 2160, 24, PROGRESSIVE       };
-        case VHD_VIDEOSTD_4096x2160p_25Hz:    return { 4096, 2160, 25, PROGRESSIVE       };
-        case VHD_VIDEOSTD_4096x2160p_48Hz:    return { 4096, 2160, 48, PROGRESSIVE       };
-        case VHD_VIDEOSTD_4096x2160p_50Hz:    return { 4096, 2160, 50, PROGRESSIVE       };
-        case VHD_VIDEOSTD_4096x2160p_60Hz:    return { 4096, 2160, 60, PROGRESSIVE       };
-        // clang-format on
-        default:
-                return {};
-        };
-}
-
 /**
  * @brief returns DELTACAST mode metadata
  * @param mode      valid VHD_VIDEOSTANDARD item
@@ -600,22 +557,28 @@ deltacast_get_mode_info(unsigned mode, bool want_1001)
         if (mode == VHD_VIDEOSTD_S259M_NTSC && !want_1001) {
                 return {};
         }
-        const struct deltacast_mode_info info = deltacast_get_frame_mode(mode);
-        if (info.width == 0) {
-                return {};
-        }
-        if (want_1001 && (info.fps == 25 || info.fps == 50)) {
+        ULONG  Width      = 0;
+        ULONG  Height     = 0;
+        BOOL32 Interlaced = FALSE;
+        ULONG  Framerate  = 0;
+        ULONG  Result     = VHD_GetVideoCharacteristics(
+            (VHD_VIDEOSTANDARD) mode, &Width, &Height, &Interlaced, &Framerate);
+        if (Result != VHDERR_NOERROR) {
                 return {};
         }
 
-        double fps = info.fps;
+        if (want_1001 && (Framerate == 25 || Framerate == 50)) {
+                return {};
+        }
+
+        double fps = Framerate;
         if (want_1001) {
                 fps = fps * 1000. / 1001.;
         }
-        return { .width       = info.width,
-                 .height      = info.height,
+        return { .width       = Width,
+                 .height      = Height,
                  .fps         = fps,
-                 .interlacing = info.interlacing };
+                 .interlacing = Interlaced ? UPPER_FIELD_FIRST : PROGRESSIVE };
 }
 
 /**
