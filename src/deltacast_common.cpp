@@ -230,6 +230,12 @@ print_board_info(int BoardIndex, ULONG DllVersion, bool full)
 {
         ULONG  BoardType     = 0U;
         ULONG  DriverVersion = 0U;
+
+        ULONG  SerialNumber_UL[4] = {};
+        ULONG  NbOfLane, BusType, FirmwareVersion, Firmware3Version, LowProfile,
+            NbRxChannels, NbTxChannels, Firmware4Version, ProductVersion = 0;
+        char pIdString_c[64];
+
         HANDLE BoardHandle   = nullptr;
         ULONG  Result =
             VHD_OpenBoardHandle(BoardIndex, &BoardHandle, nullptr, 0);
@@ -243,8 +249,6 @@ print_board_info(int BoardIndex, ULONG DllVersion, bool full)
         if (Result != VHDERR_NOERROR) {
                 DELTA_PRINT_ERROR(Result, "Unable to get board %d type.",
                                   BoardIndex);
-                VHD_CloseBoardHandle(BoardHandle);
-                return;
         }
         Result = VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_DRIVER_VERSION,
                                       &DriverVersion);
@@ -253,11 +257,57 @@ print_board_info(int BoardIndex, ULONG DllVersion, bool full)
                                   BoardIndex);
         }
 
-        const char *board_type = delta_get_board_type_name(BoardType);
-        color_printf("\tBoard " TBOLD("%d") ": " TBOLD("%s") " (driver: %s)\n",
-                     BoardIndex, board_type,
-                     delta_format_version(DriverVersion, false).c_str());
+        VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_FIRMWARE_VERSION,
+                             &FirmwareVersion);
+        VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_BOARD_TYPE, &BoardType);
+#if defined VHD_MIN_6_21 // (not tested exactly)
+        VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_SERIALNUMBER_PART1_LSW,
+                             &SerialNumber_UL[0]);
+        VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_SERIALNUMBER_PART2,
+                             &SerialNumber_UL[1]);
+        VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_SERIALNUMBER_PART3,
+                             &SerialNumber_UL[2]);
+        VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_SERIALNUMBER_PART4_MSW,
+                             &SerialNumber_UL[3]);
+#endif
+        VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_NBOF_LANE, &NbOfLane);
+        VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_LOWPROFILE, &LowProfile);
+        VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_NB_RXCHANNELS,
+                             &NbRxChannels);
+        VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_NB_TXCHANNELS,
+                             &NbTxChannels);
+        VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_PRODUCT_VERSION,
+                             &ProductVersion);
+        VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_BUS_TYPE, &BusType);
+        VHD_GetPCIeIdentificationString(BoardIndex, pIdString_c);
+
+        color_printf("\tBoard " TBOLD("%d") ": " TBOLD("%s") "\n", BoardIndex,
+                     VHD_GetBoardModel(BoardIndex));
         if (full) {
+      printf("\t  - PCIe Id string : %s\n", pIdString_c);
+      printf("\t  - Driver %s\n", delta_format_version(DriverVersion, false).c_str());
+      printf("\t  - Board fpga firmware v%02X (%02X-%02X-%02X)\n", FirmwareVersion & 0xFF, (FirmwareVersion >> 24) & 0xFF, (FirmwareVersion >> 16) & 0xFF, (FirmwareVersion >> 8) & 0xFF);
+            if (BoardType == VHD_BOARDTYPE_3G || BoardType == VHD_BOARDTYPE_3GKEY || (BoardType == VHD_BOARDTYPE_HD && NbTxChannels == 4))
+      {
+         VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_FIRMWARE3_VERSION, &Firmware3Version);
+         printf("    - Board micro-controller firmware v%02X (%02X-%02X-%02X)\n", Firmware3Version & 0xFF, (Firmware3Version >> 24) & 0xFF, (Firmware3Version >> 16) & 0xFF, (Firmware3Version >> 8) & 0xFF);
+      }
+            if (BoardType == VHD_BOARDTYPE_IP)
+      {
+         VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_FIRMWARE4_VERSION, &Firmware4Version);
+         printf("    - Board microcode firmware v%02X (%02X-%02X-%02X)\n", Firmware4Version & 0xFF, (Firmware4Version >> 24) & 0xFF, (Firmware4Version >> 16) & 0xFF, (Firmware4Version >> 8) & 0xFF);
+      }
+      printf("    - Board serial# : 0x%08X%08X%08X%08X\n",SerialNumber_UL[3], SerialNumber_UL[2], SerialNumber_UL[1], SerialNumber_UL[0]);
+
+      if (ProductVersion != 0)
+         printf("    - Board product v%04X\n", ProductVersion);
+
+#ifdef HAVE_VHD_STRING
+#define bus_type_to_str(x) VHD_BUSTYPE_ToPrettyString((VHD_BUSTYPE) x)
+#else
+#define bus_type_to_str(x) "unknown bus"
+#endif
+                printf("\t\t%s on %s\n", delta_get_board_type_name(BoardType), bus_type_to_str(BusType));
                 print_avail_channels(BoardHandle);
                 const char *bidir_status = "ERROR";
                 ULONG       IsBiDir      = 0;
