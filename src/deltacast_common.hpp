@@ -1,6 +1,16 @@
 /**
  * @file   deltacast_common.hpp
  * @author Martin Pulec     <pulec@cesnet.cz>
+ *
+ * ## SDK Compatibility
+ *
+ * VideoMaster SDK makes API changes over the time. The SDK/driver version
+ * compatibility is uncertain but DELTACAST removes support for older cards in
+ * newer driver which may require the use of older SDK to run on those.
+ *
+ * Currently, the source code compatibility is something like from 5.19.
+ * Compat list:
+* <https://www.ventuz.com/support/help/latest/MachineConfigurationVendors.html#SupportedModelsasofVentuz6.08.00>
  */
 /*
  * Copyright (c) 2014-2025 CESNET, zájmové sdružení právnických osob
