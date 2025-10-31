@@ -185,6 +185,33 @@ delta_format_version(uint32_t version, bool long_out) -> std::string
 static void
 print_avail_channels(HANDLE BoardHandle)
 {
+        printf("\t  - available channels:");
+#ifdef HAVE_VHD_STRING
+        printf(" ");
+        // PrintChnType in SDK
+        ULONG ChnType, NbOfChn;
+
+        VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_NB_RXCHANNELS, &NbOfChn);
+        for (ULONG i = 0; i < NbOfChn; i++) {
+                VHD_GetChannelProperty(BoardHandle, VHD_RX_CHANNEL, i,
+                                       VHD_CORE_CP_TYPE, &ChnType);
+                printf("RX%d=%s / ", i,
+                       VHD_CHANNELTYPE_ToPrettyString(
+                           ((VHD_CHANNELTYPE) ChnType)));
+        }
+
+        VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_NB_TXCHANNELS, &NbOfChn);
+        for (ULONG i = 0; i < NbOfChn; i++) {
+                VHD_GetChannelProperty(BoardHandle, VHD_TX_CHANNEL, i,
+                                       VHD_CORE_CP_TYPE, &ChnType);
+                printf("TX%d=%s / ", i,
+                       VHD_CHANNELTYPE_ToPrettyString(
+                           ((VHD_CHANNELTYPE) ChnType)));
+        }
+
+        printf("\b\b\b   \n");
+
+#else // compat
         ULONG avail_channs = 0;
         ULONG Result       = VHD_GetBoardProperty(
             BoardHandle, VHD_CORE_BP_CHN_AVAILABILITY, &avail_channs);
@@ -194,7 +221,6 @@ print_avail_channels(HANDLE BoardHandle)
                     << delta_get_error_description(Result) << "\n";
                 return;
         }
-        printf("\t\tavailable channels:");
         // RXx
         // bit0 = RX0, bit1 = RX1, bit2 = RX2, bit3 = RX3
         for (int i = 0; i < 4; ++i) {
@@ -223,19 +249,16 @@ print_avail_channels(HANDLE BoardHandle)
                 }
         }
         printf("\n");
+#endif
 }
 
 static void
 print_board_info(int BoardIndex, ULONG DllVersion, bool full)
 {
-        ULONG  BoardType     = 0U;
+        color_printf("\tBoard " TBOLD("%d") ": " TBOLD("%s") "\n", BoardIndex,
+                     VHD_GetBoardModel(BoardIndex));
+
         ULONG  DriverVersion = 0U;
-
-        ULONG  SerialNumber_UL[4] = {};
-        ULONG  NbOfLane, BusType, FirmwareVersion, Firmware3Version, LowProfile,
-            NbRxChannels, NbTxChannels, Firmware4Version, ProductVersion = 0;
-        char pIdString_c[64];
-
         HANDLE BoardHandle   = nullptr;
         ULONG  Result =
             VHD_OpenBoardHandle(BoardIndex, &BoardHandle, nullptr, 0);
@@ -244,16 +267,33 @@ print_board_info(int BoardIndex, ULONG DllVersion, bool full)
                                   BoardIndex);
                 return;
         }
-        Result = VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_BOARD_TYPE,
-                                      &BoardType);
-        if (Result != VHDERR_NOERROR) {
-                DELTA_PRINT_ERROR(Result, "Unable to get board %d type.",
-                                  BoardIndex);
-        }
         Result = VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_DRIVER_VERSION,
                                       &DriverVersion);
         if (Result != VHDERR_NOERROR) {
                 DELTA_PRINT_ERROR(Result, "Unable to get board %d version.",
+                                  BoardIndex);
+        }
+        if ((DllVersion >> 16U) != (DriverVersion >> 16U)) {
+                MSG(WARNING, "API and driver version mismatch: %s vs %s\n",
+                    delta_format_version(DllVersion, true).c_str(),
+                    delta_format_version(DriverVersion, true).c_str());
+        }
+        if (!full) {
+                VHD_CloseBoardHandle(BoardHandle);
+                return;
+        }
+
+        ULONG  BoardType     = 0U;
+
+        ULONG  SerialNumber_UL[4] = {};
+        ULONG  NbOfLane, BusType, FirmwareVersion, Firmware3Version, LowProfile,
+            NbRxChannels, NbTxChannels, Firmware4Version, ProductVersion = 0;
+        char pIdString_c[64];
+
+        Result = VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_BOARD_TYPE,
+                                      &BoardType);
+        if (Result != VHDERR_NOERROR) {
+                DELTA_PRINT_ERROR(Result, "Unable to get board %d type.",
                                   BoardIndex);
         }
 
@@ -281,33 +321,37 @@ print_board_info(int BoardIndex, ULONG DllVersion, bool full)
         VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_BUS_TYPE, &BusType);
         VHD_GetPCIeIdentificationString(BoardIndex, pIdString_c);
 
-        color_printf("\tBoard " TBOLD("%d") ": " TBOLD("%s") "\n", BoardIndex,
-                     VHD_GetBoardModel(BoardIndex));
-        if (full) {
       printf("\t  - PCIe Id string : %s\n", pIdString_c);
       printf("\t  - Driver %s\n", delta_format_version(DriverVersion, false).c_str());
       printf("\t  - Board fpga firmware v%02X (%02X-%02X-%02X)\n", FirmwareVersion & 0xFF, (FirmwareVersion >> 24) & 0xFF, (FirmwareVersion >> 16) & 0xFF, (FirmwareVersion >> 8) & 0xFF);
             if (BoardType == VHD_BOARDTYPE_3G || BoardType == VHD_BOARDTYPE_3GKEY || (BoardType == VHD_BOARDTYPE_HD && NbTxChannels == 4))
       {
          VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_FIRMWARE3_VERSION, &Firmware3Version);
-         printf("    - Board micro-controller firmware v%02X (%02X-%02X-%02X)\n", Firmware3Version & 0xFF, (Firmware3Version >> 24) & 0xFF, (Firmware3Version >> 16) & 0xFF, (Firmware3Version >> 8) & 0xFF);
+         printf("\t  - Board micro-controller firmware v%02X (%02X-%02X-%02X)\n", Firmware3Version & 0xFF, (Firmware3Version >> 24) & 0xFF, (Firmware3Version >> 16) & 0xFF, (Firmware3Version >> 8) & 0xFF);
       }
             if (BoardType == VHD_BOARDTYPE_IP)
       {
          VHD_GetBoardProperty(BoardHandle, VHD_CORE_BP_FIRMWARE4_VERSION, &Firmware4Version);
-         printf("    - Board microcode firmware v%02X (%02X-%02X-%02X)\n", Firmware4Version & 0xFF, (Firmware4Version >> 24) & 0xFF, (Firmware4Version >> 16) & 0xFF, (Firmware4Version >> 8) & 0xFF);
+         printf("\t  - Board microcode firmware v%02X (%02X-%02X-%02X)\n", Firmware4Version & 0xFF, (Firmware4Version >> 24) & 0xFF, (Firmware4Version >> 16) & 0xFF, (Firmware4Version >> 8) & 0xFF);
       }
-      printf("    - Board serial# : 0x%08X%08X%08X%08X\n",SerialNumber_UL[3], SerialNumber_UL[2], SerialNumber_UL[1], SerialNumber_UL[0]);
+      printf("\t  - Board serial# : 0x%08X%08X%08X%08X\n",SerialNumber_UL[3], SerialNumber_UL[2], SerialNumber_UL[1], SerialNumber_UL[0]);
 
       if (ProductVersion != 0)
-         printf("    - Board product v%04X\n", ProductVersion);
+         printf("\t  - Board product v%04X\n", ProductVersion);
 
 #ifdef HAVE_VHD_STRING
 #define bus_type_to_str(x) VHD_BUSTYPE_ToPrettyString((VHD_BUSTYPE) x)
 #else
 #define bus_type_to_str(x) "unknown bus"
 #endif
-                printf("\t\t%s on %s\n", delta_get_board_type_name(BoardType), bus_type_to_str(BusType));
+                printf("\t  - %s on %s", delta_get_board_type_name(BoardType), bus_type_to_str(BusType));
+      if (NbOfLane)
+         printf(" (%d lane%s)\n", NbOfLane, (NbOfLane > 1) ? "s" : "");
+      else
+         printf("\n");
+      printf("\t  - %s\n", LowProfile ? "Low profile" : "Full height");
+      printf("\t  - %d In / %d Out\n", NbRxChannels, NbTxChannels);
+
                 print_avail_channels(BoardHandle);
                 const char *bidir_status = "ERROR";
                 ULONG       IsBiDir      = 0;
@@ -316,15 +360,9 @@ print_board_info(int BoardIndex, ULONG DllVersion, bool full)
                         bidir_status =
                             IsBiDir == TRUE ? "supported" : "not supported";
                 }
-                printf("\t\tbidirectional (switchable) channels: "
+                printf("\t  - bidirectional (switchable) channels: "
                        "%s\n",
                        bidir_status);
-        }
-        if ((DllVersion >> 16U) != (DriverVersion >> 16U)) {
-                MSG(WARNING, "API and driver version mismatch: %s vs %s\n",
-                    delta_format_version(DllVersion, true).c_str(),
-                    delta_format_version(DriverVersion, true).c_str());
-        }
         VHD_CloseBoardHandle(BoardHandle);
 }
 
