@@ -51,7 +51,7 @@ else
         TMP=$(mktemp)
         sed -e '1,2d' -e '/^$/q' < NEWS | sed -E "$MERG_LN" | sed -e "$REPL_NL" > "$TMP"
         N=$(cat "$TMP")
-        SUMMARY=$(printf "%s" "### Changes:\n$N\n$FIXES\n**Full changelog:** https://github.com/$GITHUB_REPOSITORY/commits/$TAG" | sed -e "$markdown_replaces")
+        SUMMARY="blablabla"
         rm "$TMP"
         PRERELEASE=false
 fi
