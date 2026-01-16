@@ -437,7 +437,9 @@ static void (^cb)(BOOL) = ^void(BOOL granted) {
 			}
 		}
         } else {
-                NSString *preset = AVCaptureSessionPresetMedium;
+                NSString *preset = m_is_screen_cap
+                        ? AVCaptureSessionPresetHigh
+                        : AVCaptureSessionPresetMedium;
                 if ([params valueForKey:@"preset"]) {
                         auto it = preset_to_av.find([[params valueForKey:@"preset"] UTF8String]);
                         if (it != preset_to_av.end()) {
