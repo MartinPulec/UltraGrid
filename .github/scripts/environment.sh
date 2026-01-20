@@ -9,7 +9,7 @@
 ## - **apple_key_p12_b64** - [mac only] base64-encoded $KEY_FILE (using
 ##                           password $KEY_FILE_PASS)
 
-set -eu
+set -eux
 
 if expr "$GITHUB_REF" : 'refs/tags/' >/dev/null; then
   TAG=${GITHUB_REF#refs/tags/}
