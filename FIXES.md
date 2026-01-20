@@ -3,6 +3,16 @@
 * fix Vulkan display crashing on keypresses in console
 * fix GL display show/hide cursor keybind
 * fix control port argument in hd-rum-translator
+* added 2 conversions for Videotoolbox 10b encode
+* modified hevc_videotoolbox not to default to 4:2:0
+* bundle libdecor so that the windows (GL/SDL/Vulkan) have decorations
+  in Wayland
+* make SPOUT running again
+* fix VDPAU being advertised/used with GL even when undesirable
+* fix GPUJPEG subsampling detection (probe, by updated GJ upstream)
+* ported AV Foundation vcap from master so that it can be used as
+  a screen capture for macOS Intel builds (the old Core Graphics cannot
+  be built anymore)
 
 #### 1.10.1
 
