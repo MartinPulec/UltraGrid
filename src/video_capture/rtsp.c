@@ -3,7 +3,7 @@
  *           Martin German <martin.german@i2cat.net>
  *
  * Copyright (c) 2005-2010 Fundació i2CAT, Internet I Innovació Digital a Catalunya
- * Copyright (c) 2015-2025 CESNET
+ * Copyright (c) 2015-2026 CESNET, zájmové sdružení právnických osob
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, is permitted provided that the following conditions
@@ -363,7 +363,12 @@ keep_alive_thread(void *arg){
         // actual keepalive
         MSG(DEBUG, "GET PARAMETERS %s:\n", s->uri);
         if (!rtsp_get_parameters(s->curl, s->uri)) {
+            pthread_mutex_lock(&s->vrtsp_state.lock);
             s->should_exit = true;
+            pthread_mutex_unlock(&s->vrtsp_state.lock);
+            // signal to grab - this is omissible because that thread timedwaits
+            // but this is better (and also the tmout is 1s, so make it faster)
+            pthread_cond_signal(&s->vrtsp_state.boss_cv);
             exit_uv(1);
         }
     }
