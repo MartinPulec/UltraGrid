@@ -119,11 +119,9 @@ vidcap_screen_avf_init(struct vidcap_params *params, void **state)
         }
 
         // add "d=100" to initialize first screen cap av foundation device
-        const size_t orig_len = strlen(fmt);
-        const size_t new_len  = orig_len + 50;
-        char        *new_fmt  = malloc(new_len);
-        (void) snprintf(new_fmt, new_len, "%s%sd=%u", fmt,
-                        orig_len == 0 ? "" : ":", AVF_SCR_CAP_OFF);
+        char *new_fmt = nullptr;
+        asprintf(&new_fmt, "%s%sd=%u", fmt, strlen(fmt) == 0 ? "" : ":",
+                 AVF_SCR_CAP_OFF);
         vidcap_params_replace_fmt(params, new_fmt);
         free(new_fmt);
         return vidcap_avfoundation_info.init(params, state);
