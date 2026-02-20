@@ -24,6 +24,8 @@ export CFLAGS CXXFLAGS
 set -- $FEATURES
 set -- "$@" --enable-sdl=2  # use SDL2 (environment.sh sets sdl=3)
 set -- "$@" --enable-drm_disp
+# TODO TOREMOVE after builders migrate to Debian Buster
+set -- "$@" --with-object-remove="src/audio/playback/aes67.o"
 
 ./autogen.sh "$@"
 make -j "$(nproc)"
