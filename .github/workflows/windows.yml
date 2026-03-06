@@ -10,7 +10,8 @@ on:
 jobs:
   Windows:
     name: run Windows
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success'
+      || github.event.workflow_run.conclusion == null }}
     runs-on: windows-latest
     defaults:
       run:
