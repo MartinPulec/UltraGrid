@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# SPDX-FileCopyrightText: Copyright 2019-2026 CESNET, zájmové sdružení právnických osob
+
+name: prepare CI build
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, we do not need to create own token.
+    steps:
+    - uses: actions/checkout@v4
+      id: checkout
+      with:
+        persist-credentials: true
+    - name: Init environment variables
+      run: . .github/scripts/environment.sh
+    - name: Retag continuous
+      if: github.repository == 'CESNET/UltraGrid' && github.ref == 'refs/heads/master'
+      run: |
+        git fetch --prune --unshallow --tags
+        git tag -f $TAG
+        git push -f origin refs/tags/$TAG:refs/tags/$TAG
+    - name: Update Release
+      if: (github.repository == 'CESNET/UltraGrid' && github.ref == 'refs/heads/master') || startsWith(github.ref, 'refs/tags/')
+      run: .github/scripts/create_release.sh
+    - name: Create continuous release # ensure continuous release is present for AppImage zsync
+      if: startsWith(github.ref, 'refs/tags/')
+      run: .github/scripts/create_continuous_release.sh
