@@ -25,7 +25,7 @@ jobs:
     - name: Download parent metadata
       uses: actions/download-artifact@v5
       with:
-        name: workflow-metadata-${{ github.event.workflow_run.id }}bla
+        name: ble
         path: workflow_metadata.txt
     - name: Export the metadata
       run: |

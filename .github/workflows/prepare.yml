@@ -55,6 +55,6 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: workflow-metadata-${{ github.run_id }}bla
+        name: ble
         path: workflow_metadata.txt
         retention-days: 1
