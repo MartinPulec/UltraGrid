@@ -1,16 +1,12 @@
 name: Windows build
 
 on:
+  workflow_call:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["prepare CI build"]
-    types:
-      - completed
 
 jobs:
   Windows:
     name: run Windows
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: windows-latest
     defaults:
       run:

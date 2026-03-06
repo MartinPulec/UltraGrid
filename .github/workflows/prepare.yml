@@ -1,28 +1,7 @@
 name: prepare CI build
 
 on:
-  push:
-    branches:
-      - master
-    tags:
-      - v[0-9]+.*
-    paths:
-      - '.github/scripts/**'
-      - '.github/workflows/prepare.yml'
-      - '.github/workflows/linux.yml'
-      - '.github/workflows/macos.yml'
-      - '.github/workflows/windows.yml'
-      - '**.c'
-      - '**.cpp'
-      - '**.cu'
-      - '**.h'
-      - '**.hpp'
-      - '**.m'
-      - '**.mm'
-      - 'autogen.sh'
-      - 'configure.ac'
-      - 'data/**'
-      - 'Makefile.in'
+  workflow_call:
   workflow_dispatch:
 
 jobs:

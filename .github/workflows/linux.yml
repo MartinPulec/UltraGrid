@@ -1,16 +1,12 @@
 name: Linux build
 
 on:
+  workflow_call:
   workflow_dispatch:
-  workflow_run:
-    workflows: ["prepare CI build"]
-    types:
-      - completed
 
 jobs:
   Ubuntu:
     name: run Ubuntu
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-22.04
     env:
       appimage_key: ${{ secrets.appimage_key }}
