@@ -1,6 +1,9 @@
 name: Linux build
 
 on:
+  push:
+    branches:
+      - linux-build
   workflow_dispatch:
   workflow_run:
     workflows: ["prepare CI build"]
