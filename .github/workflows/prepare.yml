@@ -52,9 +52,9 @@ jobs:
 
     - name: Save metadata for child workflows
       run:  echo "orig-ref=${{ github.ref }}" > workflow_metadata.txt
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
+    - name: Save metadata to cache
+      id: cache-metadata
+      uses: actions/cache@v4
       with:
-        name: ble
         path: workflow_metadata.txt
-        retention-days: 1
+        key: workflow-metadata-${{ github.run_id }}

@@ -22,11 +22,11 @@ jobs:
       SDK_URL: ${{ secrets.SDK_URL }}
 
     steps:
-    - name: Download parent metadata
-      uses: actions/download-artifact@v5
+    - name: Restore metadata cache
+      uses: actions/cache@v4
       with:
-        name: ble
         path: workflow_metadata.txt
+        key: workflow-metadata-${{ github.event.workflow_run.id }}
     - name: Export the metadata
       run: |
         cat workflow_metadata.txt >> $GITHUB_ENV
