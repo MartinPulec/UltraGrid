@@ -49,12 +49,12 @@ jobs:
     - name: Create continuous release # ensure continuous release is present for AppImage zsync
       if: startsWith(github.ref, 'refs/tags/')
       run: .github/scripts/create_continuous_release.sh
-    - name: Save ref
+    - name: Save metadata for child workflows
       run: |
-        echo "ref=${{ github.ref }}" > workflow_orig_ref.txt
+        echo "orig-ref=${{ github.ref }}" > workflow_metadata.txt
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: workflow-orig-ref-${{ github.run_id }}
-        path: workflow_orig_ref.txt
+        name: workflow-metadata-${{ github.run_id }}
+        path: workflow_metadata.txt
         retention-days: 1
