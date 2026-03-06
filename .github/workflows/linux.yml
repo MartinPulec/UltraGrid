@@ -22,19 +22,8 @@ jobs:
       SDK_URL: ${{ secrets.SDK_URL }}
 
     steps:
-    - name: Debug artifact download result
-      run: |
-        echo "Artifact download status: ${{ steps.download-meta.outcome }}"
-        echo "Artifact message: ${{ steps.download-meta.conclusion }}"
-        if [[ "${{ steps.download-meta.outcome }}" == "failure" ]]; then
-          echo "::error::Failed to download artifact 'workflow-metadata-${{ github.event.workflow_run.id }}'"
-          echo "::error::Available artifact names (if any) would be listed below:"
-          echo "::error::Please check the preceding 'Download metadata artifact' step output"
-          ls -la workflow_metadata/ 2>/dev/null || echo "(no files extracted)"
-        fi
-
     - name: Download parent metadata
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         name: workflow-metadata-${{ github.event.workflow_run.id }}bla
         path: workflow_metadata.txt
