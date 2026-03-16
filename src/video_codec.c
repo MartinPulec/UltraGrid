@@ -252,6 +252,7 @@ static const struct alternative_codec_name codec_name_aliases[] = {
         {"H265", "H.265"},
         {"HEVC", "H.265"},
         {"MJPG", "JPEG"},
+        {"MJPEG", "JPEG"},
 };
 
 void show_codec_help(const char *module, const codec_t *codecs8, const codec_t *codecs10, const codec_t *codecs_ge12)
