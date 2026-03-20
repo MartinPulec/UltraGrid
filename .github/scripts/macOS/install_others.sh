@@ -77,7 +77,7 @@ install_syphon() {
         git clone --depth 1 https://github.com/Syphon/Syphon-Framework.git
         cd Syphon-Framework
         xcodebuild LD_DYLIB_INSTALL_NAME=$syphon_dst/\
-Syphon.framework/Versions/A/Syphon
+Syphon.framework/Versions/A/Syphon -arch "$(uname -m)"
         sudo cp -R 'build/Release/Syphon.framework' \
                 $syphon_dst
 )
