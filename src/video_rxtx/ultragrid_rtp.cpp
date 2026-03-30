@@ -182,29 +182,6 @@ void ultragrid_rtp_video_rxtx::receiver_process_messages()
                 struct response *r = NULL;
 
                 switch (msg->type) {
-                case RECEIVER_MSG_CHANGE_RX_PORT:
-                        {
-                                assert(m_rxtx_mode == MODE_RECEIVER); // receiver only
-                                auto *old_device = m_network_device;
-                                auto old_port = m_recv_port_number;
-                                m_recv_port_number = msg->new_rx_port;
-                                m_network_device = initialize_network(m_requested_receiver.c_str(),
-                                                m_recv_port_number,
-                                                m_send_port_number, m_participants,
-                                                m_force_ip_version,
-                                                m_mcast_if.c_str(),
-                                                m_ttl);
-                                if (m_network_device == nullptr) {
-                                        log_msg(LOG_LEVEL_ERROR, "[control] Failed to change RX port to %d\n", msg->new_rx_port);
-                                        r = new_response(RESPONSE_INT_SERV_ERR, "Changing RX port failed!");
-                                        m_network_device = old_device;
-                                        m_recv_port_number = old_port;
-                                } else {
-                                        log_msg(LOG_LEVEL_NOTICE, "[control] Changed RX port to %d\n", msg->new_rx_port);
-                                        destroy_rtp_device(old_device);
-                                }
-                                break;
-                        }
                 case RECEIVER_MSG_VIDEO_PROP_CHANGED:
                         {
                                 pdb_iter_t it;

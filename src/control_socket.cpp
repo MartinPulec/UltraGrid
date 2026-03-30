@@ -562,33 +562,10 @@ static int process_msg(struct control_state *s, fd_t client_fd, char *message, s
                         send_message(s->root_module, path_audio, (struct message *) msg_audio);
                 free_response(resp_audio);
         } else if (prefix_matches(message, "receiver-port ")) {
-                struct msg_receiver *msg =
-                        (struct msg_receiver *)
-                        new_message(sizeof(struct msg_receiver));
-                struct msg_receiver *msg_audio =
-                        (struct msg_receiver *)
-                        new_message(sizeof(struct msg_receiver));
-                msg->type = RECEIVER_MSG_CHANGE_RX_PORT;
-                msg_audio->type = RECEIVER_MSG_CHANGE_RX_PORT;
-
-                char *port_str = suffix(message, "receiver-port ");
-
-                msg->new_rx_port = atoi(port_str);
-                if (strchr(port_str, ':')) {
-                        msg_audio->new_rx_port = atoi(strchr(port_str, ':') + 1);
-                } else {
-                        msg_audio->new_rx_port = msg->new_rx_port + 2;
-                }
-
-                enum module_class path_receiver[] = { MODULE_CLASS_RECEIVER, MODULE_CLASS_NONE };
-                enum module_class path_audio_receiver[] = { MODULE_CLASS_AUDIO, MODULE_CLASS_RECEIVER, MODULE_CLASS_NONE };
-                append_message_path(path, sizeof(path), path_receiver);
-                append_message_path(path_audio, sizeof(path_audio), path_audio_receiver);
-                resp =
-                        send_message(s->root_module, path, (struct message *) msg);
-                struct response *resp_audio =
-                        send_message(s->root_module, path_audio, (struct message *) msg_audio);
-                free_response(resp_audio);
+                const char msg[] = "receiver-port has been removed. Let us "
+                                   "know if you use this feature. ";
+                bug_msg(LOG_LEVEL_ERROR, msg);
+                resp = new_response(RESPONSE_BAD_REQUEST, msg);
         } else if(prefix_matches(message, "fec ")) {
                 auto *msg = reinterpret_cast<struct msg_universal *>(new_message(sizeof(struct msg_universal)));
                 char *fec = suffix(message, "fec ");

@@ -3,7 +3,7 @@
  * @author Martin Pulec     <martin.pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2013-2025 CESNET
+ * Copyright (c) 2013-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -108,7 +108,6 @@ struct msg_sender {
 };
 
 enum msg_receiver_type {
-        RECEIVER_MSG_CHANGE_RX_PORT,
         RECEIVER_MSG_VIDEO_PROP_CHANGED,
         RECEIVER_MSG_GET_AUDIO_STATUS,
         RECEIVER_MSG_INCREASE_VOLUME,

@@ -581,27 +581,6 @@ struct audio_decoder {
 static struct response * audio_receiver_process_message(struct state_audio *s, struct msg_receiver *msg)
 {
         switch (msg->type) {
-        case RECEIVER_MSG_CHANGE_RX_PORT: {
-                assert(s->audio_tx_mode == MODE_RECEIVER); // receiver only
-                struct rtp *old_audio_network_device = s->audio_network_device;
-                int         old_rx_port = s->audio_network_parameters.recv_port;
-                s->audio_network_parameters.recv_port = msg->new_rx_port;
-                s->audio_network_device =
-                    initialize_audio_network(&s->audio_network_parameters);
-                if (s->audio_network_device == nullptr) {
-                        s->audio_network_parameters.recv_port = old_rx_port;
-                        s->audio_network_device = old_audio_network_device;
-                        string err = string("Changing audio RX port to ") +
-                                     to_string(msg->new_rx_port) + "  failed!";
-                        LOG(LOG_LEVEL_ERROR) << err << "\n";
-                        return new_response(RESPONSE_INT_SERV_ERR, err.c_str());
-                }
-                rtp_done(old_audio_network_device);
-                LOG(LOG_LEVEL_INFO) << "Successfully changed audio "
-                                       "RX port to "
-                                    << msg->new_rx_port << ".\n";
-                break;
-        }
         case RECEIVER_MSG_GET_AUDIO_STATUS: {
                 double ret             = s->muted_receiver ? 0.0 : s->volume;
                 char   volume_str[128] = "";
