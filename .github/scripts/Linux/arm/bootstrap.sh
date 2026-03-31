@@ -32,12 +32,13 @@ apt -y install \
   cmake \
   libdrm-dev\
   libfluidsynth-dev\
+  libpipewire-0.3-dev\
   libsdl2-dev libsdl2-ttf-dev\
   libva-dev\
   libvulkan-dev\
 
 /.github/scripts/install-common-deps.sh
-/.github/scripts/Linux/install_others.sh ndi pipewire ximea
+/.github/scripts/Linux/install_others.sh ndi ximea
 
 # mkappimage
 mkai_arch=$(dpkg --print-architecture)
