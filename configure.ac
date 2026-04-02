@@ -1084,7 +1084,7 @@ if test "$libjuice_req" != no; then
         then
                 libjuice=yes
                 add_module holepunch src/utils/udp_holepunch.o "$LIBJUICE_LIB"
-                COMMON_FLAGS="$COMMON_FLAGS -DHAVE_LIBJUICE"
+                AC_DEFINE([HAVE_LIBJUICE], [1], [Linked with libjuice library])
         fi
 fi
 

@@ -1123,6 +1123,67 @@ adjust_ports(struct ug_options *opt, unsigned audio_rxtx_mode)
         }
 }
 
+static int
+adjust_params_holepunch(struct ug_options *opt)
+{
+#ifndef HAVE_LIBJUICE
+        (void) opt;
+        log_msg(LOG_LEVEL_ERROR, "Ultragrid was compiled without holepunch support\n");
+        return EXIT_FAILURE;
+#else
+        static char punched_host[512];
+        Holepunch_config punch_c = {};
+
+        if(!parse_holepunch_conf(opt->nat_traverse_config, &punch_c)){
+                return EXIT_FAILURE;
+        }
+
+        commandline_params["udp-disable-multi-socket"] = string();
+
+        if (strcmp("none", vidcap_params_get_driver(opt->vidcap_params_head)) == 0
+                        && strcmp("none", opt->requested_display) != 0)
+        {
+                vidcap_params_set_device(opt->vidcap_params_tail, "testcard:2:2:1:UYVY");
+                opt->vidcap_params_tail = vidcap_params_allocate_next(opt->vidcap_params_tail);
+        }
+
+        if (strcmp("none", opt->audio.send_cfg) == 0
+                        && strcmp("none", opt->audio.recv_cfg) != 0)
+        {
+                set_audio_capture_format("sample_rate=5");
+                opt->audio.send_cfg = "testcard:frames=1";
+        }
+
+        punch_c.video_rx_port = &opt->video.rx_port;
+        punch_c.video_tx_port = &opt->video.tx_port;
+        punch_c.audio_rx_port = &opt->audio.recv_port;
+        punch_c.audio_tx_port = &opt->audio.send_port;
+
+        punch_c.host_addr = punched_host;
+        punch_c.host_addr_len = sizeof(punched_host);
+
+        auto punch_fcn = reinterpret_cast<bool(*)(Holepunch_config *)>(
+                        const_cast<void *>(
+                                load_library("udp_holepunch", LIBRARY_CLASS_UNDEFINED, HOLEPUNCH_ABI_VERSION)));
+
+        if(!punch_fcn){
+                log_msg(LOG_LEVEL_ERROR, "Failed to load holepunching module\n");
+                return EXIT_FAILURE;
+        }
+
+        if(!punch_fcn(&punch_c)){
+                log_msg(LOG_LEVEL_ERROR, "Hole punching failed.\n");
+                return EXIT_FAILURE;
+        }
+
+        log_msg(LOG_LEVEL_INFO, "[holepunch] remote: %s\n rx: %d\n tx: %d\n",
+                        punched_host, opt->video.rx_port, opt->video.tx_port);
+        opt->video.receiver = punched_host;
+        opt->audio.host = punched_host;
+        return 0;
+#endif //HAVE_LIBJUICE
+}
+
 static int adjust_params(struct ug_options *opt) {
         unsigned int audio_rxtx_mode = 0;
         if (opt->is_server) {
@@ -1179,62 +1240,11 @@ static int adjust_params(struct ug_options *opt) {
         }
 
         if(opt->nat_traverse_config && strncmp(opt->nat_traverse_config, "holepunch", strlen("holepunch")) == 0){
-#ifndef HAVE_LIBJUICE
-                log_msg(LOG_LEVEL_ERROR, "Ultragrid was compiled without holepunch support\n");
-                return EXIT_FAILURE;
-#else
-                static char punched_host[512];
-                Holepunch_config punch_c = {};
-
-                if(!parse_holepunch_conf(opt->nat_traverse_config, &punch_c)){
-                        return EXIT_FAILURE;
+                int rc = adjust_params_holepunch(opt);
+                if (rc != 0) {
+                        return rc;
                 }
-
-                commandline_params["udp-disable-multi-socket"] = string();
-
-                if (strcmp("none", vidcap_params_get_driver(opt->vidcap_params_head)) == 0
-                                && strcmp("none", opt->requested_display) != 0)
-                {
-                        vidcap_params_set_device(opt->vidcap_params_tail, "testcard:2:2:1:UYVY");
-                        opt->vidcap_params_tail = vidcap_params_allocate_next(opt->vidcap_params_tail);
-                }
-
-                if (strcmp("none", opt->audio.send_cfg) == 0
-                                && strcmp("none", opt->audio.recv_cfg) != 0)
-                {
-                        set_audio_capture_format("sample_rate=5");
-                        opt->audio.send_cfg = "testcard:frames=1";
-                }
-
-                punch_c.video_rx_port = &opt->video.rx_port;
-                punch_c.video_tx_port = &opt->video.tx_port;
-                punch_c.audio_rx_port = &opt->audio.recv_port;
-                punch_c.audio_tx_port = &opt->audio.send_port;
-
-                punch_c.host_addr = punched_host;
-                punch_c.host_addr_len = sizeof(punched_host);
-
-                auto punch_fcn = reinterpret_cast<bool(*)(Holepunch_config *)>(
-                                const_cast<void *>(
-                                        load_library("udp_holepunch", LIBRARY_CLASS_UNDEFINED, HOLEPUNCH_ABI_VERSION)));
-
-                if(!punch_fcn){
-                        log_msg(LOG_LEVEL_ERROR, "Failed to load holepunching module\n");
-                        return EXIT_FAILURE;
-                }
-
-                if(!punch_fcn(&punch_c)){
-                        log_msg(LOG_LEVEL_ERROR, "Hole punching failed.\n");
-                        return EXIT_FAILURE;
-                }
-
-                log_msg(LOG_LEVEL_INFO, "[holepunch] remote: %s\n rx: %d\n tx: %d\n",
-                                punched_host, opt->video.rx_port, opt->video.tx_port);
-                opt->video.receiver = punched_host;
-                opt->audio.host = punched_host;
-#endif //HAVE_LIBJUICE
         }
-
 
         if (strcmp("none", opt->audio.recv_cfg) != 0) {
                 audio_rxtx_mode |= MODE_RECEIVER;

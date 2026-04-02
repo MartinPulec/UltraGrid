@@ -68,9 +68,7 @@ struct Holepunch_config{
         int stun_srv_port;
 };
 
-#ifdef HAVE_LIBJUICE
 bool punch_udp(struct Holepunch_config *c);
-#endif
 
 #ifdef __cplusplus
 } //extern "C"
