@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2012-2025 CESNET
+ * Copyright (c) 2012-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -352,19 +352,21 @@ get_libraries_for_class(enum library_class cls, int abi_version,
         map<string, const void *> ret;
         auto& libraries = get_libmap();
         auto it = libraries.find(cls);
-        if (it != libraries.end()) {
-                for (auto && item : it->second) {
-                        if (abi_version == item.second.abi_version) {
-                                if (item.second.visibility_flag == 0 ||
-                                    (include_flags &
-                                     item.second.visibility_flag) != 0U) {
-                                        ret[item.first] = item.second.data;
-                                }
-                        } else {
-                                LOG(LOG_LEVEL_WARNING) << "Module " << item.first << " ABI version mismatch (required " <<
-                                        abi_version << ", have " << item.second.abi_version << ")\n";
-
-                        }
+        if (it == libraries.end()) { // no library of given class
+                return ret;
+        }
+        for (auto &&item : it->second) {
+                if (abi_version != item.second.abi_version) {
+                        MSG(WARNING,
+                            "Module %s ABI version mismatch (required %d, have "
+                            "%d)\n",
+                            item.first.c_str(), abi_version,
+                            item.second.abi_version);
+                        continue;
+                }
+                if (item.second.visibility_flag == 0 ||
+                    (include_flags & item.second.visibility_flag) != 0U) {
+                        ret[item.first] = item.second.data;
                 }
         }
 
