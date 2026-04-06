@@ -514,7 +514,7 @@ vidcap_dshow_probe_internal(device_info **available_cards, int *count,
                         }
 
 			codec_t ug_codec = get_ug_codec(&mediaType->subtype);
-			bool force_rgb = is_codec_opaque(ug_codec) || codec_is_planar(ug_codec) || ug_codec == VIDEO_CODEC_NONE;
+			bool force_rgb = ug_codec == VC_NONE || is_codec_opaque(ug_codec) || codec_is_planar(ug_codec);
 
 			snprintf(cards[card_count - 1].modes[mode_idx].id,
 					sizeof cards[card_count - 1].modes[mode_idx].id,
