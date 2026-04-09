@@ -63,12 +63,11 @@
 
 namespace {
 class PlaybackDelegate;
-}
 
 #define DECKLINK_MAGIC 0x415f46d0
 #define MOD_NAME "[DeckLink audio play.] "
 
-struct state_decklink {
+struct state_decklink_aplay {
         uint32_t            magic;
 
         struct audio_desc  audio_desc;
@@ -88,13 +87,12 @@ struct state_decklink {
         int                     audio_consumer_levels; ///< 0 false, 1 true, -1 default
  };
 
-namespace {
 class PlaybackDelegate : public IDeckLinkVideoOutputCallback // , public IDeckLinkAudioOutputCallback
 {
-        struct state_decklink *                 s;
+        struct state_decklink_aplay *                 s;
 
 public:
-        PlaybackDelegate (struct state_decklink* owner) {
+        PlaybackDelegate (struct state_decklink_aplay* owner) {
                 s = owner;
         }
 
@@ -190,7 +188,7 @@ audio_play_decklink_init(const struct audio_playback_opts *opts)
                 return INIT_NOERR;
         }
 
-        struct state_decklink *s = NULL;
+        struct state_decklink_aplay *s = NULL;
         IDeckLinkIterator*                              deckLinkIterator;
         HRESULT                                         result;
         IDeckLinkConfiguration*         deckLinkConfiguration = NULL;
@@ -204,7 +202,7 @@ audio_play_decklink_init(const struct audio_playback_opts *opts)
         //BMDDisplayMode                    displayMode = bmdModeUnknown;
         int width, height;
 
-        s = (struct state_decklink *)calloc(1, sizeof(struct state_decklink));
+        s = (struct state_decklink_aplay *)calloc(1, sizeof(struct state_decklink_aplay));
         s->magic = DECKLINK_MAGIC;
         s->audio_consumer_levels = -1;
         
@@ -342,7 +340,7 @@ error:
 
 static void audio_play_decklink_put_frame(void *state, const struct audio_frame *frame)
 {
-        struct state_decklink *s = (struct state_decklink *)state;
+        struct state_decklink_aplay *s = (struct state_decklink_aplay *)state;
         unsigned int sampleFrameCount = frame->data_len /
                 (s->audio_desc.bps * s->audio_desc.ch_count);
         uint32_t sampleFramesWritten;
@@ -397,7 +395,7 @@ static bool audio_play_decklink_ctl(void *state [[gnu::unused]], int request, vo
 }
 
 static bool audio_play_decklink_reconfigure(void *state, struct audio_desc desc) {
-        struct state_decklink *s = (struct state_decklink *)state;
+        struct state_decklink_aplay *s = (struct state_decklink_aplay *)state;
         BMDAudioSampleType sample_type;
 
         s->audio_desc = desc;
@@ -445,7 +443,7 @@ static bool audio_play_decklink_reconfigure(void *state, struct audio_desc desc)
 
 static void audio_play_decklink_done(void *state)
 {
-        struct state_decklink *s = (struct state_decklink *)state;
+        struct state_decklink_aplay *s = (struct state_decklink_aplay *)state;
 
         s->deckLinkOutput->DisableAudioOutput();
         s->deckLinkOutput->DisableVideoOutput();
