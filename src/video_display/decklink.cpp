@@ -144,10 +144,10 @@ using std::unique_lock;
 using std::unique_ptr;
 using std::vector;
 
-struct state_decklink;
 
 namespace {
 class DeckLinkFrame;
+struct state_decklink_vdisp;
 
 /// Used for scheduled playback only
 class PlaybackDelegate : public IDeckLinkVideoOutputCallback // , public IDeckLinkAudioOutputCallback
@@ -197,7 +197,7 @@ class PlaybackDelegate : public IDeckLinkVideoOutputCallback // , public IDeckLi
                 frameRateScale    = fs;
         }
         void SetSynchronized(const char *cfg);
-        bool Preroll(struct state_decklink *s);
+        bool Preroll(struct state_decklink_vdisp *s);
         void Reset();
         void ResetAudio() { m_audio_sync_ts = audio_sync_val::deinit; }
 
@@ -498,9 +498,8 @@ void PlaybackDelegate::ScheduleNextFrame()
                 schedSeq += 1;
         }
 }
-} // end of unnamed namespace
 
-struct state_decklink {
+struct state_decklink_vdisp {
         uint32_t            magic = DECKLINK_MAGIC;
         bool                com_initialized = false;
         PlaybackDelegate            delegate;
@@ -544,6 +543,7 @@ struct state_decklink {
 
         AudioDriftFixer audio_drift_fixer{};
  };
+} // end of unnamed namespace
 
 /// @param query_prop_fcc if not NULL, print corresponding BMDDeckLinkAttribute
 static void
@@ -692,7 +692,7 @@ show_help(bool full, const char *query_prop_fcc = nullptr)
  }
 
 static DeckLinkFrame*
-allocate_new_decklink_frame(struct state_decklink *s)
+allocate_new_decklink_frame(struct state_decklink_vdisp *s)
 {
         const int linesize =
             vc_get_linesize(s->vid_desc.width, s->vid_desc.color_spec);
@@ -708,7 +708,7 @@ allocate_new_decklink_frame(struct state_decklink *s)
 static struct video_frame *
 display_decklink_getf(void *state)
 {
-        struct state_decklink *s = (struct state_decklink *)state;
+        struct state_decklink_vdisp *s = (struct state_decklink_vdisp *)state;
         assert(s->magic == DECKLINK_MAGIC);
         assert(s->initialized);
 
@@ -810,7 +810,7 @@ static void update_timecode(DeckLinkTimecode *tc, double fps)
 static bool display_decklink_putf(void *state, struct video_frame *frame,
                                  [[maybe_unused]] long long timeout_ns)
 {
-        struct state_decklink *s = (struct state_decklink *)state;
+        struct state_decklink_vdisp *s = (struct state_decklink_vdisp *)state;
         bool ret = true;
 
         if (frame == NULL)
@@ -911,7 +911,7 @@ static BMDDisplayMode get_mode(IDeckLinkOutput *deckLinkOutput, struct video_des
         return displayMode;
 }
 
-static bool enable_audio(struct state_decklink *s, int bps, int channels)
+static bool enable_audio(struct state_decklink_vdisp *s, int bps, int channels)
 {
         const BMDAudioSampleType sample_type =
             bps == 2 ? bmdAudioSampleType16bitInteger
@@ -929,7 +929,7 @@ static bool enable_audio(struct state_decklink *s, int bps, int channels)
 static bool
 display_decklink_reconfigure(void *state, struct video_desc desc)
 {
-        auto *s = (struct state_decklink *) state;
+        auto *s = (struct state_decklink_vdisp *) state;
         assert(s->magic == DECKLINK_MAGIC);
 
         BMDDisplayMode                    displayMode;
@@ -1113,7 +1113,7 @@ display_decklink_reconfigure(void *state, struct video_desc desc)
 }
 
 bool
-PlaybackDelegate::Preroll(struct state_decklink *s)
+PlaybackDelegate::Preroll(struct state_decklink_vdisp *s)
 {
         auto *f = allocate_new_decklink_frame(s);
         for (unsigned i = 0;
@@ -1191,7 +1191,7 @@ PlaybackDelegate::SetSynchronized(const char *cfg)
 }
 
 static void
-set_low_latency(struct state_decklink *s, bool on)
+set_low_latency(struct state_decklink_vdisp *s, bool on)
 {
         if (on) {
                 MSG(WARNING, "Low latency option unneeded (implicit).\n");
@@ -1203,7 +1203,7 @@ set_low_latency(struct state_decklink *s, bool on)
         s->low_latency = false;
 }
 
-static bool settings_init(struct state_decklink *s, const char *fmt,
+static bool settings_init(struct state_decklink_vdisp *s, const char *fmt,
                 string &cardId) {
         if (strlen(fmt) == 0) {
                 return true;
@@ -1347,7 +1347,7 @@ static bool settings_init(struct state_decklink *s, const char *fmt,
                is_power_of_two((channels)))
 
 static void
-set_audio_props(state_decklink         *s,
+set_audio_props(state_decklink_vdisp         *s,
                 IDeckLinkConfiguration *deckLinkConfiguration,
                 unsigned int            audio_output)
 {
@@ -1425,7 +1425,7 @@ static void *display_decklink_init(struct module *parent, const char *fmt, unsig
                 return INIT_NOERR;
         }
 
-        auto *s = new state_decklink();
+        auto *s = new state_decklink_vdisp();
         s->audio_drift_fixer.set_root(get_root_module(parent));
 
         bool succeeded = false;
@@ -1597,7 +1597,7 @@ static void *display_decklink_init(struct module *parent, const char *fmt, unsig
 static void display_decklink_done(void *state)
 {
         debug_msg("display_decklink_done\n"); /* TOREMOVE */
-        struct state_decklink *s = (struct state_decklink *)state;
+        struct state_decklink_vdisp *s = (struct state_decklink_vdisp *)state;
 
         assert (s != NULL);
 
@@ -1637,7 +1637,7 @@ static void display_decklink_done(void *state)
 
 static bool display_decklink_get_property(void *state, int property, void *val, size_t *len)
 {
-        struct state_decklink *s = (struct state_decklink *)state;
+        struct state_decklink_vdisp *s = (struct state_decklink_vdisp *)state;
         vector<codec_t> codecs(uv_to_bmd_codec_map.size());
         int rgb_shift[] = {16, 8, 0};
         interlacing_t supported_il_modes[] = {PROGRESSIVE, INTERLACED_MERGED, SEGMENTED_FRAME};
@@ -1752,7 +1752,7 @@ void PlaybackDelegate::ScheduleAudio(const struct audio_frame *frame,
 
 static void display_decklink_put_audio_frame(void *state, const struct audio_frame *frame)
 {
-        struct state_decklink *s = (struct state_decklink *)state;
+        struct state_decklink_vdisp *s = (struct state_decklink_vdisp *)state;
         assert(s->play_audio);
         if (s->audio_reconfigure) {
                 return;
@@ -1797,7 +1797,7 @@ static void display_decklink_put_audio_frame(void *state, const struct audio_fra
 
 static bool display_decklink_reconfigure_audio(void *state, int quant_samples, int channels,
                 int sample_rate) {
-        struct state_decklink *s = (struct state_decklink *)state;
+        struct state_decklink_vdisp *s = (struct state_decklink_vdisp *)state;
 
         assert(s->play_audio);
         CHECK_CH_COUNT(channels);
