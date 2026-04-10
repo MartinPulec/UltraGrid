@@ -205,7 +205,7 @@ struct state_vulkan_sdl3 {
                 module_register(&mod, parent);
 
                 sdl_user_new_message_event = SDL_RegisterEvents(1);
-                assert(sdl_user_new_message_event != static_cast<Uint32>(-1));
+                assert(sdl_user_new_message_event != 0);
         }
 
         state_vulkan_sdl3(const state_vulkan_sdl3& other) = delete;
