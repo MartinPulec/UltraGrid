@@ -44,7 +44,7 @@ INITIAL=$1 # save root element to skip the program itself
 
 while test $# -gt 0; do
         # skip already processed item
-        if [ -n "${DLL_DONE[$1]}" ]; then
+        if [ -n "${DLL_DONE[${1?}]}" ]; then
                 shift
                 continue
         fi

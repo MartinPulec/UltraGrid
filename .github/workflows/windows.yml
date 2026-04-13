@@ -120,8 +120,8 @@ jobs:
       run: |
         export DESTDIR=build/UltraGrid-$VERSION-win64
         make install
-        for exe in "$DESTDIR"/*.exe; do
-            data/scripts/get_dll_depends.sh "$exe" |
+        for bin in $(find "$DESTDIR" \( -name "*.dll" -o -name "*.exe" \)); do
+            data/scripts/get_dll_depends.sh "${bin?}" |
                 while read -r n; do cp "$n" "$DESTDIR"; done
         done
         if command -v windeployqt-qt6 >/dev/null; then
@@ -130,9 +130,6 @@ jobs:
             windeployqt "$DESTDIR/uv-qt.exe"
         fi
         cp -r data/Windows/* "$DESTDIR"
-        data/scripts/get_dll_depends.sh\
-         "$DESTDIR/screen-capture-recorder-x64.dll" |
-            while read -r n; do cp "$n" "$DESTDIR"; done
     - name: make dist-check
       run: PATH= /usr/bin/make distcheck
         TARGET=build/UltraGrid-$VERSION-win64/uv.exe
