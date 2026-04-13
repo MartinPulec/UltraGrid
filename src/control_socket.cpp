@@ -625,8 +625,9 @@ static int process_msg(struct control_state *s, fd_t client_fd, char *message, s
                 strncpy(msg->config_string, compress, sizeof(msg->config_string) - 1);
 
                 if(!resp) {
-                        enum module_class path_compress[] = { MODULE_CLASS_SENDER, MODULE_CLASS_COMPRESS, MODULE_CLASS_NONE };
-                        append_message_path(path, sizeof(path), path_compress);
+                        append_message_path(path, sizeof(path), path_sender_video);
+                        const enum module_class compress_suffix[] = { MODULE_CLASS_TX, MODULE_CLASS_NONE };
+                        append_message_path(path, sizeof(path), compress_suffix);
                         resp = send_message(s->root_module, path, (struct message *) msg);
                 }
         } else if (prefix_matches(message, "volume ") ||
