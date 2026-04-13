@@ -407,6 +407,13 @@ handle_removed_feature(char *message)
         return resp;
 }
 
+constexpr enum module_class path_sender_video[] = { MODULE_CLASS_SENDER,
+                                                    MODULE_CLASS_DATA,
+                                                    MODULE_CLASS_NONE };
+constexpr enum module_class path_sender_audio[] = { MODULE_CLASS_AUDIO,
+                                                    MODULE_CLASS_SENDER,
+                                                    MODULE_CLASS_NONE };
+
 /**
   * @retval -1 exit thread
   * @retval -2 close handle
@@ -540,10 +547,6 @@ static int process_msg(struct control_state *s, fd_t client_fd, char *message, s
                         msg_audio->tx_port = msg->tx_port + 2;
                 }
 
-                enum module_class path_sender_video[] = { MODULE_CLASS_SENDER,
-                                                          MODULE_CLASS_DATA,
-                                                          MODULE_CLASS_NONE };
-                enum module_class path_sender_audio[] = { MODULE_CLASS_AUDIO, MODULE_CLASS_SENDER, MODULE_CLASS_NONE };
                 memcpy(path_audio, path, sizeof(path_audio));
                 append_message_path(path, sizeof(path), path_sender_video);
                 append_message_path(path_audio, sizeof(path_audio), path_sender_audio);
@@ -568,10 +571,6 @@ static int process_msg(struct control_state *s, fd_t client_fd, char *message, s
                 struct msg_sender *msg_audio = (struct msg_sender *) malloc(sizeof(struct msg_sender));
                 memcpy(msg_audio, msg, sizeof(struct msg_sender));
 
-                enum module_class path_sender_video[] = { MODULE_CLASS_SENDER,
-                                                          MODULE_CLASS_DATA,
-                                                          MODULE_CLASS_NONE };
-                enum module_class path_sender_audio[] = { MODULE_CLASS_AUDIO, MODULE_CLASS_SENDER, MODULE_CLASS_NONE };
                 memcpy(path_audio, path, sizeof(path_audio));
                 append_message_path(path, sizeof(path), path_sender_video);
                 append_message_path(path_audio, sizeof(path_audio), path_sender_audio);
@@ -603,15 +602,12 @@ static int process_msg(struct control_state *s, fd_t client_fd, char *message, s
                 }
 
                 if (msg) {
-                        if (media_type == TX_MEDIA_VIDEO) {
-                                enum module_class path_tx[] = { MODULE_CLASS_SENDER, MODULE_CLASS_TX, MODULE_CLASS_NONE };
-                                append_message_path(path, sizeof(path),
-                                                path_tx);
-                        } else {
-                                enum module_class path_audio_tx[] = { MODULE_CLASS_AUDIO, MODULE_CLASS_SENDER, MODULE_CLASS_TX, MODULE_CLASS_NONE };
-                                append_message_path(path, sizeof(path),
-                                                path_audio_tx);
-                        }
+                        const enum module_class tx_suffix[] = { MODULE_CLASS_TX, MODULE_CLASS_NONE };
+                        append_message_path(path, sizeof(path),
+                                            media_type == TX_MEDIA_AUDIO
+                                                ? path_sender_audio
+                                                : path_sender_video);
+                        append_message_path(path, sizeof(path),tx_suffix);
                         resp = send_message(s->root_module, path, (struct message *) msg);
                 }
         } else if(prefix_matches(message, "compress ")) {
