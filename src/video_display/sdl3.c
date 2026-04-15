@@ -995,7 +995,7 @@ sdl_set_log_level()
 }
 
 static void *
-display_sdl3_init(struct module *parent, const char *fmt, unsigned int flags)
+display_sdl3_init(struct module *parent, const char *fmt, unsigned int /* flags */)
 {
         sdl_set_log_level();
 
