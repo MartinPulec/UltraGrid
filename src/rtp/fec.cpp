@@ -5,7 +5,7 @@
  * Common ancesor of FEC modules.
  */
 /*
- * Copyright (c) 2014-2024 CESNET
+ * Copyright (c) 2014-2026 CESNET, zájmové sdružení právnických osbo
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,7 @@
 #include <string>
 
 #include "debug.h"
-#include "rtp/ldgm.h"
+#include "rtp/ldgm.hpp"
 #include "rtp/rs.h"
 #include "rtp/rtp_callback.h"
 #include "rtp/rtp_types.h"       // for PT_ENCRYPT_VIDEO, PT_ENCRYPT_VIDEO_LDGM

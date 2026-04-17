@@ -1,5 +1,5 @@
 #include "../ldgm/src/ldgm-session-gpu.h"
-#include "ldgm.h"
+#include "ldgm.hpp"
 #include "lib_common.h"
 
 static LDGM_session_gpu *new_ldgm_session_gpu() {
