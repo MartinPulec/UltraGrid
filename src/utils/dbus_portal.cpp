@@ -70,34 +70,18 @@ std::string generate_token(){
         return "uv_" + std::to_string(rand_val);
 }
 
-struct request_path_t {
+struct Path_with_token{
         std::string token;
         std::string path;
 
-        static request_path_t create(const std::string &name) {
-                const auto token = generate_token();
-                request_path_t result = {
-                        .token = token,
-                        .path = std::string("/org/freedesktop/portal/desktop/request/") + name + "/" + token
-                };
+        Path_with_token() = default;
 
-                LOG(LOG_LEVEL_DEBUG) << "new request: '" << result.path << "'\n";
-                return result;
-        }
+        explicit Path_with_token(std::string_view path, std::string_view name)
+                : token(generate_token()), path(std::string(path) + std::string(name) + "/" + token) { }
 };
 
-struct session_path_t {
-        std::string token;
-        std::string path;
-
-        static session_path_t create(const std::string &name) {
-                auto token = generate_token();
-                return {
-                        .token = token,
-                        .path = std::string("/org/freedesktop/portal/desktop/session/") + name + "/" + token
-                };
-        }
-};
+constexpr std::string_view base_request_path = "/org/freedesktop/portal/desktop/request/";
+constexpr std::string_view base_session_path = "/org/freedesktop/portal/desktop/session/";
 
 using GVariant_uniq = std::unique_ptr<GVariant, deleter_from_fcn<g_variant_unref>>;
 using GMainLoop_uniq = std::unique_ptr<GMainLoop, deleter_from_fcn<g_main_loop_unref>>;
@@ -125,7 +109,7 @@ private:
         GDBusConnection_uniq connection;
         GDBusProxy_uniq screencast_proxy;
         std::string unique_name;
-        session_path_t session;
+        Path_with_token session;
 
         std::string restore_file;
         bool show_cursor = false;
@@ -205,7 +189,7 @@ ScreenCastPortal_impl::ScreenCastPortal_impl(){
         g_assert_no_error(error); 
         assert(screencast_proxy != nullptr);
 
-        session = session_path_t::create(unique_name);
+        session = Path_with_token(base_session_path, unique_name);
         LOG(LOG_LEVEL_VERBOSE) << MOD_NAME "session path: '" << session.path << "'" << " token: '" << session.token << "'\n";
 }
 
@@ -251,7 +235,7 @@ void ScreenCastPortal_impl::call_with_request(const char* method_name,
                 GVariantBuilder &params_builder)
 {
         assert(method_name != nullptr);
-        request_path_t request_path = request_path_t::create(sender_name());
+        Path_with_token request_path = Path_with_token(base_request_path, sender_name());
         LOG(LOG_LEVEL_VERBOSE) << MOD_NAME "call_with_request: '" << method_name << "' request: '" << request_path.path << "'\n";
 
         g_dbus_connection_signal_subscribe(connection.get(), "org.freedesktop.portal.Desktop",
