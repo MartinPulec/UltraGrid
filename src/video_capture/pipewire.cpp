@@ -38,8 +38,8 @@
 
 #include "config.h"
 
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <chrono>
 #include <cassert>
@@ -66,6 +66,7 @@
 #include "video_capture.h"
 #include "pipewire_common.hpp"
 #include "pixfmt_conv.h"
+#include "utils/misc.h"
 
 #define MOD_NAME "[PW vcap] "
 
@@ -75,8 +76,9 @@ static constexpr int MAX_BUFFERS_PW = 10;
 static constexpr int QUEUE_SIZE = 3;
 static constexpr int DEFAULT_EXPECTING_FPS = 30;
 
-struct frame_deleter{ void operator()(video_frame *f){ vf_free(f); } };
-using unique_frame = std::unique_ptr<video_frame, frame_deleter>;
+namespace{
+
+using unique_frame = std::unique_ptr<video_frame, deleter_from_fcn<vf_free>>;
 
 struct vcap_pw_state { 
         pipewire_state_common pw;
@@ -96,7 +98,7 @@ struct vcap_pw_state {
 
         pw_stream_uniq stream;
         spa_hook_uniq stream_listener;
-        struct spa_video_info format = {};
+        spa_video_info format = {};
 
         enum class Mode {
                 Generic,
@@ -105,25 +107,27 @@ struct vcap_pw_state {
 
         struct {
                 bool show_cursor = false;
-                std::string restore_file = "";
+                std::string restore_file;
                 uint32_t fps = 0;
                 bool crop = true;
-                std::string target = "";
+                std::string target;
         } user_options;
 
 };
 
-static void on_stream_state_changed(void * /*state*/, enum pw_stream_state old, enum pw_stream_state state, const char *error) {
-        LOG(LOG_LEVEL_INFO) << MOD_NAME "stream state changed \"" << pw_stream_state_as_string(old) 
-                                                << "\" -> \""<<pw_stream_state_as_string(state)<<"\"\n";
-        
-        if (error != nullptr) {
-                LOG(LOG_LEVEL_ERROR) << MOD_NAME "stream error: '"<< error << "'\n";
+}
+
+static void on_stream_state_changed(void * /*state*/, pw_stream_state old, pw_stream_state state, const char *error) {
+        log_msg(LOG_LEVEL_INFO, MOD_NAME "stream state changed \"%s\" -> \"%s\"\n",
+                pw_stream_state_as_string(old), pw_stream_state_as_string(state));
+
+        if (error) {
+                log_msg(LOG_LEVEL_ERROR, MOD_NAME "stream error: '%s'\n", error);
         }
 }
 
 
-static void on_stream_param_changed(void *state, uint32_t id, const struct spa_pod *param) {
+static void on_stream_param_changed(void *state, uint32_t id, const spa_pod *param) {
         auto s = static_cast<vcap_pw_state *>(state);
         LOG(LOG_LEVEL_VERBOSE) << MOD_NAME "param changed:\n";
 
@@ -171,8 +175,8 @@ static void on_stream_param_changed(void *state, uint32_t id, const struct spa_p
 
         uint8_t params_buffer[1024];
 
-        struct spa_pod_builder builder = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
-        const struct spa_pod *params[3] = {};
+        spa_pod_builder builder = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
+        const spa_pod *params[3] = {};
         int n_params = 0;
 
         params[n_params++] = static_cast<spa_pod *>(spa_pod_builder_add_object(&builder,
@@ -356,9 +360,9 @@ static const struct pw_stream_events stream_events = {
 
 static int start_pipewire(vcap_pw_state *s)
 {    
-        const struct spa_pod *params[2] = {};
+        const spa_pod *params[2] = {};
         uint8_t params_buffer[1024];
-        struct spa_pod_builder pod_builder = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
+        spa_pod_builder pod_builder = SPA_POD_BUILDER_INIT(params_buffer, sizeof(params_buffer));
 
         initialize_pw_common(s->pw, s->fd);
 
@@ -509,7 +513,9 @@ static int parse_params(const struct vidcap_params *params, vcap_pw_state *s) {
                                 else
                                         show_generic_help();
                                 return VIDCAP_INIT_NOERR;
-                        } else if (param == "cursor") {
+                        }
+
+                        if (param == "cursor") {
                                 s->user_options.show_cursor = true;
                         } else if (param == "nocrop") {
                                 s->user_options.crop = false;
@@ -523,10 +529,14 @@ static int parse_params(const struct vidcap_params *params, vcap_pw_state *s) {
                                                 std::istringstream is(value);
                                                 is >> s->user_options.fps;
                                                 continue;
-                                        }else if(name == "restore"){
+                                        }
+
+                                        if(name == "restore"){
                                                 s->user_options.restore_file = std::move(value);
                                                 continue;
-                                        } else if(name =="target"){
+                                        }
+
+                                        if(name =="target"){
                                                 s->user_options.target = std::move(value);
                                                 continue;
                                         }
@@ -625,7 +635,7 @@ static void vidcap_pw_done(void *state)
         delete s;
 }
 
-static struct video_frame *vidcap_pw_grab(void *state, struct audio_frame **audio)
+static video_frame *vidcap_pw_grab(void *state, struct audio_frame **audio)
 {    
         PROFILE_FUNC;
 
