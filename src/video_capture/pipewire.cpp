@@ -612,7 +612,7 @@ static int vidcap_pw_init(const struct vidcap_params *params, void **state)
         return VIDCAP_INIT_OK;
 }
 
-static void vidcap_screen_pw_done(void *state)
+static void vidcap_pw_done(void *state)
 {
         auto s = static_cast<vcap_pw_state *>(state);
 
@@ -626,7 +626,7 @@ static void vidcap_screen_pw_done(void *state)
         delete s;
 }
 
-static struct video_frame *vidcap_screen_pw_grab(void *state, struct audio_frame **audio)
+static struct video_frame *vidcap_pw_grab(void *state, struct audio_frame **audio)
 {    
         PROFILE_FUNC;
 
@@ -648,8 +648,8 @@ static struct video_frame *vidcap_screen_pw_grab(void *state, struct audio_frame
 static const struct video_capture_info vidcap_screen_pw_info = {
         vidcap_screen_pw_probe,
         vidcap_screen_pw_init,
-        vidcap_screen_pw_done,
-        vidcap_screen_pw_grab,
+        vidcap_pw_done,
+        vidcap_pw_grab,
         MOD_NAME,
 };
 
@@ -660,8 +660,8 @@ REGISTER_MODULE(screen_pw, &vidcap_screen_pw_info, LIBRARY_CLASS_VIDEO_CAPTURE, 
 static const struct video_capture_info vidcap_pw_info = {
         vidcap_pw_probe,
         vidcap_pw_init,
-        vidcap_screen_pw_done,
-        vidcap_screen_pw_grab,
+        vidcap_pw_done,
+        vidcap_pw_grab,
         MOD_NAME,
 };
 
