@@ -90,9 +90,7 @@ struct vcap_pw_state {
 
         video_desc desc = {};
 
-#ifdef HAVE_DBUS_SCREENCAST
-        ScreenCastPortal portal;
-#endif
+        std::unique_ptr<PipewirePortal> portal;
         int fd = -1;
         uint32_t node = PW_ID_ANY;
 
@@ -562,7 +560,8 @@ static int vidcap_screen_pw_init(const struct vidcap_params *params, void **stat
         for(int i = 0; i < QUEUE_SIZE; i++)
                 s->blank_frames.emplace_back(vf_alloc(1));
 
-        auto portalResult = s->portal.run(s->user_options.restore_file, s->user_options.show_cursor);
+        s->portal = CreateScreenCastPortal(s->user_options.restore_file, s->user_options.show_cursor);
+        auto portalResult = s->portal->run();
         
         if (portalResult.pipewire_fd == -1) {
                 return VIDCAP_INIT_FAIL;
