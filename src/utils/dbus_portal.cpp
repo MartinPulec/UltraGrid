@@ -99,9 +99,10 @@ struct session_path_t {
         }
 };
 
-struct GVariant_deleter { void operator()(GVariant *a) { g_variant_unref(a); } };
-using GVariant_uniq = std::unique_ptr<GVariant, GVariant_deleter>;
-
+using GVariant_uniq = std::unique_ptr<GVariant, deleter_from_fcn<g_variant_unref>>;
+using GMainLoop_uniq = std::unique_ptr<GMainLoop, deleter_from_fcn<g_main_loop_unref>>;
+using GDBusConnection_uniq = std::unique_ptr<GDBusConnection, deleter_from_fcn<g_object_unref>>;
+using GDBusProxy_uniq = std::unique_ptr<GDBusProxy, deleter_from_fcn<g_object_unref>>;
 
 } //anon namespace
 
@@ -120,9 +121,9 @@ private:
         static void sources_selected(uint32_t response, GVariant *results, ScreenCastPortal_impl *s);
         static void session_created(uint32_t response, GVariant *results, ScreenCastPortal_impl *s);
 
-        GMainLoop *dbus_loop;
-        GDBusConnection *connection;
-        GDBusProxy *screencast_proxy;
+        GMainLoop_uniq dbus_loop;
+        GDBusConnection_uniq connection;
+        GDBusProxy_uniq screencast_proxy;
         std::string unique_name;
         session_path_t session;
 
@@ -154,20 +155,20 @@ public:
         
 
         void run_loop() {
-                g_main_loop_run(dbus_loop);
+                g_main_loop_run(dbus_loop.get());
                 LOG(LOG_LEVEL_VERBOSE) << MOD_NAME "finished dbus loop \n";
         }
 
         void quit_loop() {
-                g_main_loop_quit(dbus_loop);
+                g_main_loop_quit(dbus_loop.get());
         }
 
         GDBusProxy *proxy() {
-                return screencast_proxy;
+                return screencast_proxy.get();
         }
 
         GDBusConnection *dbus_connection() const {
-                return connection;
+                return connection.get();
         }
 
         const std::string& sender_name() const
@@ -189,18 +190,18 @@ public:
 ScreenCastPortal_impl::ScreenCastPortal_impl(){
         GError *error = nullptr;
 
-        dbus_loop = g_main_loop_new(nullptr, false);
-        connection = g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, &error);
+        dbus_loop.reset(g_main_loop_new(nullptr, false));
+        connection.reset(g_bus_get_sync(G_BUS_TYPE_SESSION, nullptr, &error));
         g_assert_no_error(error);
         assert(connection != nullptr);
 
-        unique_name = g_dbus_connection_get_unique_name(connection) + 1;
+        unique_name = g_dbus_connection_get_unique_name(connection.get()) + 1;
         std::replace(unique_name.begin(), unique_name.end(), '.', '_');
-        screencast_proxy = g_dbus_proxy_new_sync(
-                        connection, G_DBUS_PROXY_FLAGS_NONE, nullptr,
+        screencast_proxy.reset(g_dbus_proxy_new_sync(
+                        connection.get(), G_DBUS_PROXY_FLAGS_NONE, nullptr,
                         "org.freedesktop.portal.Desktop",
                         "/org/freedesktop/portal/desktop",
-                        "org.freedesktop.portal.ScreenCast", nullptr, &error);
+                        "org.freedesktop.portal.ScreenCast", nullptr, &error));
         g_assert_no_error(error); 
         assert(screencast_proxy != nullptr);
 
@@ -216,10 +217,7 @@ ScreenCastPortal_impl::~ScreenCastPortal_impl() {
                         "Close", nullptr, nullptr,
                         G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr,
                         nullptr);
-        g_main_loop_quit(dbus_loop);
-        g_object_unref(screencast_proxy);
-        g_object_unref(connection);
-        g_main_loop_unref(dbus_loop);
+        g_main_loop_quit(dbus_loop.get());
 }
 
 template<auto func>
@@ -256,7 +254,7 @@ void ScreenCastPortal_impl::call_with_request(const char* method_name,
         request_path_t request_path = request_path_t::create(sender_name());
         LOG(LOG_LEVEL_VERBOSE) << MOD_NAME "call_with_request: '" << method_name << "' request: '" << request_path.path << "'\n";
 
-        g_dbus_connection_signal_subscribe(connection, "org.freedesktop.portal.Desktop",
+        g_dbus_connection_signal_subscribe(connection.get(), "org.freedesktop.portal.Desktop",
                         "org.freedesktop.portal.Request",
                         "Response",
                         request_path.path.c_str(),
@@ -291,7 +289,7 @@ void ScreenCastPortal_impl::call_with_request(const char* method_name,
         }
         g_variant_builder_add_value(&args_builder, g_variant_builder_end(&params_builder));
 
-        g_dbus_proxy_call(screencast_proxy, method_name, g_variant_builder_end(&args_builder), G_DBUS_CALL_FLAGS_NONE, -1, nullptr, call_finished, this);     
+        g_dbus_proxy_call(screencast_proxy.get(), method_name, g_variant_builder_end(&args_builder), G_DBUS_CALL_FLAGS_NONE, -1, nullptr, call_finished, this);
 }
 
 static void on_portal_session_closed([[maybe_unused]] GDBusConnection *connection,
