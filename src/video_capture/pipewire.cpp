@@ -4,7 +4,7 @@
  * @author Martin Piatka     <piatka@cesnet.cz>
  */
 /*
- * Copyright (c) 2023-2026 CESNET, zájmové sdružení právických osob
+ * Copyright (c) 2023-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
