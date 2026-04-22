@@ -39,34 +39,21 @@
 #ifndef DBUS_PORTAL_HPP_511c58c91818
 #define DBUS_PORTAL_HPP_511c58c91818
 
-#include "config.h"
-
-#ifdef HAVE_DBUS_SCREENCAST
-
-#include <memory>
 #include <string>
-#include <thread>
-#include <stdint.h>
+#include <memory>
 
-
-class ScreenCastPortal_impl;
-
-struct ScreenCastPortalResult{
+struct PipewirePortalResult{
         int pipewire_fd;
         uint32_t pipewire_node;
 };
 
-class ScreenCastPortal{
+class PipewirePortal{
 public:
-        ScreenCastPortal();
-        ~ScreenCastPortal();
+        virtual ~PipewirePortal() = default;
 
-        ScreenCastPortalResult run(std::string restore_file, bool show_cursor);
-private:
-        std::unique_ptr<ScreenCastPortal_impl> impl;
-        std::thread thread;
+        virtual PipewirePortalResult run() = 0;
 };
 
-#endif //HAVE_DBUS_SCREENCAST
+std::unique_ptr<PipewirePortal> CreateScreenCastPortal(const std::string& restore_file, bool show_cursor);
 
 #endif

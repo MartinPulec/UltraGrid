@@ -56,7 +56,6 @@
 
 #include <random>
 
-
 #define MOD_NAME "[dbus] "
 
 namespace {
@@ -90,7 +89,7 @@ using GDBusProxy_uniq = std::unique_ptr<GDBusProxy, deleter_from_fcn<g_object_un
 
 } //anon namespace
 
-class ScreenCastPortal_impl {
+class ScreenCastPortal final : public PipewirePortal{
 private:
         template<auto callback>
         void call_with_request(const char* method_name,
@@ -102,8 +101,8 @@ private:
                         void *user_data);
 
         static void started(uint32_t response, GVariant *results, void *user_data);
-        static void sources_selected(uint32_t response, GVariant *results, ScreenCastPortal_impl *s);
-        static void session_created(uint32_t response, GVariant *results, ScreenCastPortal_impl *s);
+        static void sources_selected(uint32_t response, GVariant *results, ScreenCastPortal *s);
+        static void session_created(uint32_t response, GVariant *results, ScreenCastPortal *s);
 
         GMainLoop_uniq dbus_loop;
         GDBusConnection_uniq connection;
@@ -118,6 +117,7 @@ private:
         uint32_t pw_node = UINT32_MAX;
 
         std::promise<std::string> promise;
+        std::thread thread;
 
 public:
         // see https://flatpak.github.io/xdg-desktop-portal/#gdbus-signal-org-freedesktop-portal-Request.Response
@@ -125,28 +125,16 @@ public:
         static constexpr uint32_t REQUEST_RESPONSE_CANCELLED_BY_USER = 1;
         static constexpr uint32_t REQUEST_RESPONSE_OTHER_ERROR = 2;
 
-        ScreenCastPortal_impl(); 
-        ~ScreenCastPortal_impl();
+        ScreenCastPortal(std::string restore_file, bool show_cursor);
+        ~ScreenCastPortal() override;
 
-        void run(std::string restore_file, bool show_cursor);
+        void loop_worker();
 
-        std::future<std::string> get_future() {
-                return promise.get_future();
-        }
+        PipewirePortalResult run() override;
 
         int get_pw_fd(){ return pw_fd; }
         uint32_t get_pw_node(){ return pw_node; }
         
-
-        void run_loop() {
-                g_main_loop_run(dbus_loop.get());
-                LOG(LOG_LEVEL_VERBOSE) << MOD_NAME "finished dbus loop \n";
-        }
-
-        void quit_loop() {
-                g_main_loop_quit(dbus_loop.get());
-        }
-
         GDBusProxy *proxy() {
                 return screencast_proxy.get();
         }
@@ -171,7 +159,10 @@ public:
         }
 };
 
-ScreenCastPortal_impl::ScreenCastPortal_impl(){
+ScreenCastPortal::ScreenCastPortal(std::string restore_file, bool show_cursor)
+        : restore_file(std::move(restore_file)),
+        show_cursor(show_cursor)
+{
         GError *error = nullptr;
 
         dbus_loop.reset(g_main_loop_new(nullptr, false));
@@ -193,7 +184,7 @@ ScreenCastPortal_impl::ScreenCastPortal_impl(){
         LOG(LOG_LEVEL_VERBOSE) << MOD_NAME "session path: '" << session.path << "'" << " token: '" << session.token << "'\n";
 }
 
-ScreenCastPortal_impl::~ScreenCastPortal_impl() {
+ScreenCastPortal::~ScreenCastPortal() {
         g_dbus_connection_call(dbus_connection(),
                         "org.freedesktop.portal.Desktop",
                         session.path.c_str(),
@@ -202,6 +193,9 @@ ScreenCastPortal_impl::~ScreenCastPortal_impl() {
                         G_DBUS_CALL_FLAGS_NONE, -1, nullptr, nullptr,
                         nullptr);
         g_main_loop_quit(dbus_loop.get());
+
+        if(thread.joinable())
+                thread.join();
 }
 
 template<auto func>
@@ -221,7 +215,7 @@ void CallbackWrapper(GDBusConnection *connection,
                 GVariant_uniq results;
                 g_variant_get(parameters, "(u@a{sv})", &response, out_ptr(results).operator GVariant**());
 
-                func(response, results.get(), static_cast<ScreenCastPortal_impl *>(user_data));
+                func(response, results.get(), static_cast<ScreenCastPortal *>(user_data));
 
                 g_dbus_connection_call(connection, "org.freedesktop.portal.Desktop",
                                 object_path, "org.freedesktop.portal.Request", "Close",
@@ -230,7 +224,7 @@ void CallbackWrapper(GDBusConnection *connection,
 }
 
 template<auto callback>
-void ScreenCastPortal_impl::call_with_request(const char* method_name,
+void ScreenCastPortal::call_with_request(const char* method_name,
                 std::initializer_list<GVariant*> arguments,
                 GVariantBuilder &params_builder)
 {
@@ -249,7 +243,7 @@ void ScreenCastPortal_impl::call_with_request(const char* method_name,
                         nullptr);
 
         auto call_finished = [](GObject *source_object, GAsyncResult *result, gpointer user_data) {
-                auto s = static_cast<ScreenCastPortal_impl *>(user_data);
+                auto s = static_cast<ScreenCastPortal *>(user_data);
                 GError *error = nullptr;
                 GVariant_uniq result_finished(g_dbus_proxy_call_finish(G_DBUS_PROXY(source_object), result, &error));
 
@@ -288,11 +282,11 @@ static void on_portal_session_closed([[maybe_unused]] GDBusConnection *connectio
         LOG(LOG_LEVEL_INFO) << MOD_NAME "session closed by compositor\n";
 }
 
-void ScreenCastPortal_impl::pipewire_opened(GObject *source,
+void ScreenCastPortal::pipewire_opened(GObject *source,
                 GAsyncResult *res,
                 void *user_data)
 {
-        auto s = static_cast<ScreenCastPortal_impl *>(user_data);
+        auto s = static_cast<ScreenCastPortal *>(user_data);
         GError *error = nullptr;
         GUnixFDList *fd_list = nullptr;
 
@@ -309,14 +303,14 @@ void ScreenCastPortal_impl::pipewire_opened(GObject *source,
         s->promise.set_value("");
 }
 
-void ScreenCastPortal_impl::started(uint32_t response, GVariant *results, void *user_data) {
-        auto s = static_cast<ScreenCastPortal_impl *>(user_data);
+void ScreenCastPortal::started(uint32_t response, GVariant *results, void *user_data) {
+        auto s = static_cast<ScreenCastPortal *>(user_data);
         LOG(LOG_LEVEL_DEBUG) << MOD_NAME "started: " << g_variant_print(results, true) << "\n";
 
-        if(response == ScreenCastPortal_impl::REQUEST_RESPONSE_CANCELLED_BY_USER) {
+        if(response == ScreenCastPortal::REQUEST_RESPONSE_CANCELLED_BY_USER) {
                 s->promise.set_value("failed to start (dialog cancelled by user)");
                 return;
-        } else if(response != ScreenCastPortal_impl::REQUEST_RESPONSE_OK) {
+        } else if(response != ScreenCastPortal::REQUEST_RESPONSE_OK) {
                 s->promise.set_value("failed to start (unknown reason)");
                 return;
         }
@@ -340,16 +334,16 @@ void ScreenCastPortal_impl::started(uint32_t response, GVariant *results, void *
         g_dbus_proxy_call_with_unix_fd_list(s->proxy(), "OpenPipeWireRemote",
                         g_variant_new("(oa{sv})", s->session_path().c_str(), &builder),
                         G_DBUS_CALL_FLAGS_NONE, -1,
-                        nullptr, nullptr, ScreenCastPortal_impl::pipewire_opened, s);
+                        nullptr, nullptr, ScreenCastPortal::pipewire_opened, s);
         g_variant_builder_clear(&builder);
 }
 
-void ScreenCastPortal_impl::sources_selected(uint32_t response, GVariant *results, ScreenCastPortal_impl *s) {
+void ScreenCastPortal::sources_selected(uint32_t response, GVariant *results, ScreenCastPortal *s) {
         gchar *pretty = g_variant_print(results, true);
         LOG(LOG_LEVEL_INFO) << MOD_NAME "selected sources: " << pretty << "\n";
         g_free((gpointer) pretty);
 
-        if(response != ScreenCastPortal_impl::REQUEST_RESPONSE_OK) {
+        if(response != ScreenCastPortal::REQUEST_RESPONSE_OK) {
                 s->promise.set_value("Failed to select sources");
                 return;
         }
@@ -361,8 +355,8 @@ void ScreenCastPortal_impl::sources_selected(uint32_t response, GVariant *result
         }
 };
 
-void ScreenCastPortal_impl::session_created(uint32_t response, GVariant *results, ScreenCastPortal_impl *s) {
-        if(response != ScreenCastPortal_impl::REQUEST_RESPONSE_OK) {
+void ScreenCastPortal::session_created(uint32_t response, GVariant *results, ScreenCastPortal *s) {
+        if(response != ScreenCastPortal::REQUEST_RESPONSE_OK) {
                 s->promise.set_value("Failed to create session");
                 return;
         }
@@ -401,11 +395,8 @@ void ScreenCastPortal_impl::session_created(uint32_t response, GVariant *results
         }
 };
 
-void ScreenCastPortal_impl::run(std::string restore_file, bool show_cursor){
-        this->restore_file = restore_file;
-        this->show_cursor = show_cursor;
-
-        g_dbus_connection_signal_subscribe(dbus_connection(), 
+void ScreenCastPortal::loop_worker(){
+        g_dbus_connection_signal_subscribe(dbus_connection(),
                         nullptr, // sender
                         "org.freedesktop.portal.Session", // interface_name
                         "closed", //signal name
@@ -421,34 +412,23 @@ void ScreenCastPortal_impl::run(std::string restore_file, bool show_cursor){
         g_variant_builder_add(&params, "{sv}", "session_handle_token", g_variant_new_string(session_token().c_str()));
 
         call_with_request<session_created>("CreateSession", {}, params);
-        
-        run_loop();
+
+        g_main_loop_run(dbus_loop.get());
+        LOG(LOG_LEVEL_VERBOSE) << MOD_NAME "finished dbus loop \n";
 }
 
-ScreenCastPortal::ScreenCastPortal():
-        impl(std::make_unique<ScreenCastPortal_impl>())
-{
+PipewirePortalResult ScreenCastPortal::run(){
+        thread = std::thread(&ScreenCastPortal::loop_worker, this);
 
-}
-
-ScreenCastPortal::~ScreenCastPortal(){
-        if(thread.joinable()){
-                impl->quit_loop();
-                thread.join();
-        }
-}
-
-ScreenCastPortalResult ScreenCastPortal::run(std::string restore_file, bool show_cursor){
-        auto future = impl->get_future();
-
-        thread = std::thread(&ScreenCastPortal_impl::run, impl.get(),
-                        restore_file, show_cursor);
-
-        auto error = future.get();
+        auto error = promise.get_future().get();
         if(!error.empty()){
                 log_msg(LOG_LEVEL_ERROR, MOD_NAME "%s\n", error.c_str());
                 return {-1, UINT32_MAX};
         }
 
-        return {impl->get_pw_fd(), impl->get_pw_node()};
+        return {get_pw_fd(), get_pw_node()};
+}
+
+std::unique_ptr<PipewirePortal> CreateScreenCastPortal(const std::string& restore_file, bool show_cursor){
+        return std::make_unique<ScreenCastPortal>(restore_file, show_cursor);
 }
