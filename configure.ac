@@ -2288,6 +2288,7 @@ if test "$system" = Linux && test $screen_cap_req != no && test $screen_cap_req 
                 fi
                 add_module vidcap_screen_x11 "src/video_capture/screen_x11.o src/x11_common.o" "$SCREEN_CAP_LIB"
                 screen_modules="${screen_modules:+$screen_modules,}X11"
+                AC_DEFINE([HAVE_SCREEN_X11], [1],  [Build with X11 screencast support])
         fi
 fi
 
@@ -2308,7 +2309,7 @@ if test $found_screen_screen_pw_deps = yes && test $pipewire_video = yes; then
 
         INC="$INC $SCREEN_CAP_PIPEWIRE_INC"
         CXXFLAGS="$CXXFLAGS $SCREEN_CAP_PIPEWIRE_INC"
-        AC_DEFINE([HAVE_DBUS_SCREENCAST], [1],  [Build with pipewire screencast dbus support])
+        AC_DEFINE([HAVE_SCREEN_PW], [1],  [Build with pipewire screencast dbus support])
 
         PIPEWIRE_CAP_LIBS="$PIPEWIRE_CAP_LIBS $SCREEN_CAP_PIPEWIRE_LIBS"
         PIPEWIRE_CAP_OBJS="$PIPEWIRE_CAP_OBJS src/utils/dbus_portal.o"

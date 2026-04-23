@@ -527,7 +527,7 @@ static int parse_params(const struct vidcap_params *params, vcap_pw_state *s) {
         return VIDCAP_INIT_OK;
 }
 
-#ifdef HAVE_DBUS_SCREENCAST
+#ifdef HAVE_SCREEN_PW
 static int vidcap_screen_pw_init(const struct vidcap_params *params, void **state)
 {
         if (vidcap_params_get_flags(params) & VIDCAP_FLAG_AUDIO_ANY) {
@@ -629,7 +629,7 @@ static video_frame *vidcap_pw_grab(void *state, struct audio_frame **audio)
         return s->in_flight_frame.get();
 }
 
-#ifdef HAVE_DBUS_SCREENCAST
+#ifdef HAVE_SCREEN_PW
 
 static const struct video_capture_info vidcap_screen_pw_info = {
         vidcap_screen_pw_probe,
