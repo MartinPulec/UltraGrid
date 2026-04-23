@@ -130,6 +130,7 @@ static void catch_signal(int)
 
 #ifdef HAVE_TERMIOS_H
 static struct termios old_tio;
+static bool new_tio_set = false;
 #endif
 
 class keyboard_control::impl {
@@ -192,6 +193,9 @@ void keyboard_control::stop() noexcept {
 void restore_old_tio(void)
 {
 #ifdef HAVE_TERMIOS_H
+        if (!new_tio_set) {
+                return;
+        }
         struct sigaction sa, sa_old;
         memset(&sa, 0, sizeof sa);
         sa.sa_handler = SIG_IGN;
@@ -1004,6 +1008,7 @@ static bool set_tio()
         sigaction(SIGTTOU, &sa_old, NULL);
 
         if (!signal_catched) {
+                new_tio_set = true;
                 return true;
         }
 #endif
