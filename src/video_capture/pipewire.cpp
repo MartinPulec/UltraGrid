@@ -326,22 +326,14 @@ static void on_process(void *state) {
         
 }
 
-static const struct pw_stream_events stream_events = {
-                .version = PW_VERSION_STREAM_EVENTS,
-                .destroy = nullptr,
-                .state_changed = on_stream_state_changed,
-                .control_info = nullptr,
-                .io_changed = nullptr,
-                .param_changed = on_stream_param_changed,
-                .add_buffer = nullptr,
-                .remove_buffer = nullptr,
-                .process = on_process,
-                .drained = nullptr,
-#if PW_MAJOR > 0 || PW_MINOR > 3 || (PW_MINOR == 3 && PW_MICRO > 39)
-                .command = nullptr,
-                .trigger_done = nullptr,
-#endif
-};
+constexpr pw_stream_events stream_events = []{
+        pw_stream_events events{};
+        events.version = PW_VERSION_STREAM_EVENTS;
+        events.state_changed = on_stream_state_changed;
+        events.param_changed = on_stream_param_changed;
+        events.process = on_process;
+        return events;
+}();
 
 static int start_pipewire(vcap_pw_state *s)
 {    
