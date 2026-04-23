@@ -967,7 +967,7 @@ if test "$bluefish444_req" != no; then
         AC_CHECK_HEADERS([BlueVelvetC.h], [BLUE_H=yes], [BLUE_H=no])
         AC_CHECK_LIB($BLUEFISH444_LIB_NAME, bfcFactory, [BLUE_L=yes], [BLUE_L=no])
 
-        if test "${BLUE_H?}" = yes && "${BLUE_L?}" = yes
+        if test "${BLUE_H?}" = yes && test "${BLUE_L?}" = yes
         then
                 BLUEFISH444_LIB="$BLUEFISH444_LIB -l$BLUEFISH444_LIB_NAME"
                 add_module vidcap_bluefish444 src/video_capture/bluefish444.o "$BLUEFISH444_LIB"
