@@ -79,6 +79,7 @@
 #include <map>                          // for map, _Rb_tree_iterator, opera...
 #include <mutex>                        // for mutex, unique_lock
 #include <string_view>                  // for operator<<, operator==, string...
+#include <sys/stat.h>                   // for stat
 #include <sys/types.h>                  // for ssize_t
 #include <tuple>                        // for tuple, get, make_tuple
 #include <unistd.h>                     // for STDERR_FILENO
@@ -1400,6 +1401,31 @@ print_backtrace()
 #endif
 }
 
+/// check mtime of uv executable - if more than 3 months old, complain
+static void
+check_obsolete_uv()
+{
+        enum {
+                SECS_PER_MONTH = 30 * 24 * 3600,
+                ACCEPTED_MONTHS = 3,
+        };
+        struct stat s;
+        if (uv_argv == nullptr || stat(uv_argv[0], &s) != 0) {
+                return; // either uv_argv unset or weirdly stat failed
+        }
+        time_t now = time(nullptr);
+        if (now - s.st_mtime < (long) ACCEPTED_MONTHS * SECS_PER_MONTH) {
+                return; // fresh enough
+        }
+        char buf[1024];
+        snprintf_ch(buf,
+                    "\n\n" TBOLD(TRED(
+                        "%s is more than %d months old! Please "
+                        "upgrade and report the problem if it perisists...\n\n")),
+                    PACKAGE_NAME, ACCEPTED_MONTHS);
+        write_all(STDERR_FILENO, strlen(buf), buf);
+}
+
 void crash_signal_handler(int sig)
 {
         print_backtrace();
@@ -1408,14 +1434,13 @@ void crash_signal_handler(int sig)
         char *ptr = buf;
         char *ptr_end = buf + sizeof buf;
         strappend(&ptr, ptr_end, "\n" PACKAGE_NAME " has crashed");
-
         append_sig_desc(&ptr, ptr_end, sig);
-
         strappend(&ptr, ptr_end, ".\n\nPlease send a bug report to address " PACKAGE_BUGREPORT ".\n");
         strappend(&ptr, ptr_end, "You may find some tips how to report bugs in file doc/REPORTING_BUGS.md distributed with " PACKAGE_NAME "\n");
         strappend(&ptr, ptr_end, "(or available online at https://github.com/CESNET/UltraGrid/blob/master/doc/REPORTING-BUGS.md).\n");
-
         write_all(STDERR_FILENO, ptr - buf, buf);
+
+        check_obsolete_uv();
 
         restore_old_tio();
 
