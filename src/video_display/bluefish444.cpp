@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2013-2025 CESNET
+ * Copyright (c) 2013-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,27 +42,34 @@
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
-#include "config_unix.h"
-#include "config_win32.h"
 #endif
 
 #include "video_display.h"
 
+#include <algorithm>             // for max
+#include <cassert>
+#include <cmath>                 // for fabs
+#include <cstdint>
+#include <cstdlib>               // for abort, atoi, calloc
+#include <cstdio>
+#include <cstring>               // for memcpy, memset, strlen, strcmp
 #include <iomanip>
 #include <iostream>
+#include <pthread.h>             // for pthread_mutex_lock, pthread_mutex_un...
 #include <queue>
 #include <sstream>
 #include <stdexcept>
-#include <string>
 #include <vector>
 
 #include "bluefish444_common.h"
 
 #include "audio/types.h"
+#include "compat/strings.h"      // for strncasecmp
 #include "debug.h"
 #include "host.h"
 #include "lib_common.h"
 #include "tv.h"
+#include "types.h"               // for video_desc, device_info, tile, inter...
 #include "utils/ring_buffer.h"
 #include "video.h"
 #include "video_display.h"
@@ -267,7 +274,7 @@ void *display_bluefish444_state::playback_loop() noexcept
 #ifdef _WIN32
         OVERLAPPED Overlapped[MAX_BLUE_OUT_CHANNELS];
         for (int i = 0;i < MAX_BLUE_OUT_CHANNELS; ++ i) {
-                Overlapped[i].hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+                Overlapped[i].hEvent = CreateEvent(NULL, true, false, NULL);
         }
 #endif
 
@@ -333,7 +340,7 @@ void *display_bluefish444_state::playback_loop() noexcept
                 if(WaitResult) {
                         for(int i = 0; i < m_AttachedDevicesCount; ++i) {
                                 DWORD BytesReturned = 0;
-                                GetOverlappedResult(bfcGetHandle(m_pSDK[i]), &Overlapped[i], &BytesReturned, TRUE);
+                                GetOverlappedResult(bfcGetHandle(m_pSDK[i]), &Overlapped[i], &BytesReturned, true);
                                 ResetEvent(Overlapped[i].hEvent);
                         }
                 }
@@ -988,10 +995,10 @@ static bool display_bluefish444_get_property(void *state, int property, void *va
         return true;
 }
 
+#ifdef HAVE_BLUE_AUDIO
 static bool display_bluefish444_reconfigure_audio(void *state, int quant_samples, int channels,
                                 int sample_rate)
 {
-#ifdef HAVE_BLUE_AUDIO
         display_bluefish444_state *s =
                 (display_bluefish444_state *) state;
         try {
@@ -1002,14 +1009,10 @@ static bool display_bluefish444_reconfigure_audio(void *state, int quant_samples
         }
 
         return true;
-#else
-        return false;
-#endif
 }
 
 static void display_bluefish444_put_audio_frame(void *state, const struct audio_frame *frame)
 {
-#ifdef HAVE_BLUE_AUDIO
         display_bluefish444_state *s =
                 (display_bluefish444_state *) state;
 
@@ -1018,8 +1021,8 @@ static void display_bluefish444_put_audio_frame(void *state, const struct audio_
         } catch(runtime_error &e) {
                 cerr << "[Blue444 disp] " << e.what() << endl;
         }
-#endif
 }
+#endif
 
 static const struct video_display_info display_bluefish444_info = {
         display_bluefish444_probe,
@@ -1030,8 +1033,13 @@ static const struct video_display_info display_bluefish444_info = {
         display_bluefish444_putf,
         display_bluefish444_reconfigure,
         display_bluefish444_get_property,
+#ifdef HAVE_BLUE_AUDIO
         display_bluefish444_put_audio_frame,
         display_bluefish444_reconfigure_audio,
+#else
+        nullptr,
+        nullptr,
+#endif
         DISPLAY_NO_GENERIC_FPS_INDICATOR,
 };
 

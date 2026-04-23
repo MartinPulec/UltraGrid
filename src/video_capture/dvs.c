@@ -10,7 +10,7 @@
  *         Ian Wesley-Smith <iwsmith@cct.lsu.edu>
  *
  * Copyright (c) 2001-2003 University of Southern California
- * Copyright (c) 2005-2023 CESNET z.s.p.o.
+ * Copyright (c) 2005-2026 CESNET, zájmové sdružení právnických osob
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, is permitted provided that the following conditions
@@ -49,21 +49,31 @@
  *
  */
 
-#include "host.h"
-#include "config.h"
-#include "config_unix.h"
-#include "config_win32.h"
+#include <errno.h>                 // for ETIMEDOUT
+#include <ctype.h>                 // for isdigit
+#include <pthread.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>                // for strtok, strchr, strncmp, memset
+#include <time.h>                  // for timespec
+#include <sys/time.h>              // for timeval, gettimeofday
 
+#include "host.h"
 #include "audio/types.h"
 #include "audio/utils.h"
 #include "debug.h"
 #include "lib_common.h"
 #include "video.h"
 #include "video_capture.h"
+#include "video_capture_params.h"  // for vidcap_params_get_fmt, vidcap_para...
 #include "video_display.h"
 #include "video_display/dvs.h"
 #include "tv.h"
+#include "types.h"
 #include "dvs_clib.h"           /* From the DVS SDK */
+#include "dvs_errors.h"            // for SV_OK
 #include "dvs_fifo.h"           /* From the DVS SDK */
 
 struct vidcap_dvs_state {
@@ -144,7 +154,7 @@ static void *vidcap_dvs_grab_thread(void *arg)
 
                 pthread_mutex_lock(&(s->lock));
 
-                while (s->work_to_do == FALSE) {
+                while (s->work_to_do == false) {
                         pthread_cond_wait(&(s->worker_cv), &(s->lock));
                 }
 
@@ -163,7 +173,7 @@ static void *vidcap_dvs_grab_thread(void *arg)
                         s->audio.data_len = s->dma_buffer->audio[0].size;
                 } 
 
-                s->work_to_do = FALSE;
+                s->work_to_do = false;
                 pthread_cond_signal(&(s->boss_cv));
 
                 pthread_mutex_unlock(&(s->lock));
@@ -228,7 +238,7 @@ static void show_help(void)
 
 /* External API ***********************************************************************************/
 
-static int vidcap_dvs_init(struct vidcap_params *params, void **state)
+static int vidcap_dvs_init(const struct vidcap_params *params, void **state)
 {
         struct vidcap_dvs_state *s;
         int i;
@@ -354,13 +364,13 @@ static int vidcap_dvs_init(struct vidcap_params *params, void **state)
         }
 
         if(vidcap_params_get_flags(params) & VIDCAP_FLAG_AUDIO_EMBEDDED) {
-                s->grab_audio = TRUE;
+                s->grab_audio = true;
         } else {
                 if (vidcap_params_get_flags(params) & VIDCAP_FLAG_AUDIO_ANY) {
                         free(s);
                         return VIDCAP_INIT_AUDIO_NOT_SUPPORTED;
                 }
-                s->grab_audio = FALSE;
+                s->grab_audio = false;
         }
 
         s->hd_video_mode = 0;
@@ -407,7 +417,7 @@ static int vidcap_dvs_init(struct vidcap_params *params, void **state)
                 }
                 s->hd_video_mode |= val;
                 if (s->mode == NULL) {
-                        log_msg(LOG_LEVEL_ERROR, "[DVS] Mode detected, however unknown. Report to " PACKAGE_BUGREPORT ".\n");
+                        bug_msg(LOG_LEVEL_ERROR, "[DVS] Mode detected, however unknown. ");
                         goto error_detect;
                 }
                 printf("[DVS] Autodetected video mode: %dx%d @ %2.2fFPS.\n", s->mode->width, s->mode->height, s->mode->fps);
@@ -531,7 +541,7 @@ static int vidcap_dvs_init(struct vidcap_params *params, void **state)
         s->rtp_buffer = NULL;
         s->dma_buffer = NULL;
         s->tmp_buffer = NULL;
-        s->work_to_do = FALSE;
+        s->work_to_do = false;
         s->bufs[0] = malloc(s->tile->data_len);
         s->bufs[1] = malloc(s->tile->data_len);
         s->bufs_index = 0;
@@ -562,7 +572,7 @@ static void vidcap_dvs_done(void *state)
             (struct vidcap_dvs_state *)state;
 
         pthread_mutex_lock(&s->lock);
-        s->work_to_do = TRUE;
+        s->work_to_do = true;
         s->should_exit = true;
         pthread_cond_signal(&s->worker_cv);
         pthread_mutex_unlock(&s->lock);
@@ -610,7 +620,7 @@ static struct video_frame *vidcap_dvs_grab(void *state, struct audio_frame **aud
 
         /* ...and give it more to do... */
         s->rtp_buffer = s->tmp_buffer;
-        s->work_to_do = TRUE;
+        s->work_to_do = true;
 
         /* ...and signal the worker... */
         pthread_cond_signal(&(s->worker_cv));
@@ -663,7 +673,7 @@ static void vidcap_dvs_probe(struct device_info **available_cards, int *count, v
                 snprintf(cards[card_idx].name, sizeof cards[card_idx].name,
                                 "DVS card #%d", card_idx);
                 snprintf(cards[card_idx].extra, sizeof cards[card_idx].extra,
-                                "\"embeddedAudioAvailable\":\"t\"", card_idx);
+                                "\"embeddedAudioAvailable\":\"t\"");
 
                 sv_close(sv);
                 card_idx++;

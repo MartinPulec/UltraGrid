@@ -3,7 +3,7 @@
  * @author Martin Pulec  <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2012-2025, CESNET
+ * Copyright (c) 2012-2026, CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,16 +35,11 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#include "config_unix.h"
-#include "config_win32.h"
-#endif // HAVE_CONFIG_H
-
-#include "cuda_dxt/cuda_dxt.h"
-
+#include <cassert>
+#include <cstdlib>
 #include <pthread.h>
-#include <stdlib.h>
+
+#include "../cuda_dxt/cuda_dxt.h"
 
 #include "libgpujpeg/gpujpeg_decoder.h"
 #include "libgpujpeg/gpujpeg_version.h"
@@ -190,7 +185,7 @@ static void * gpujpeg_to_dxt_decompress_init(void)
         s->occupied_count = 0;
 
         for(unsigned int i = 0; i < cuda_devices_count; ++i) {
-                int ret = gpujpeg_init_device(cuda_devices[i], TRUE);
+                int ret = gpujpeg_init_device(cuda_devices[i], true);
                 if(ret != 0) {
                         log_msg(LOG_LEVEL_ERROR, MOD_NAME "initializing CUDA device %d failed.\n", cuda_devices[0]);
                         delete s;
@@ -260,12 +255,12 @@ static int gpujpeg_to_dxt_decompress_reconfigure(void *state, struct video_desc 
                 assert(status != NULL);
                 if (!status->success) {
                         delete status;
-                        return FALSE;
+                        return false;
                 }
                 delete status;
         }
 
-        return TRUE;
+        return true;
 }
 
 /**
@@ -306,7 +301,7 @@ static int reconfigure_thread(struct thread_data *s, struct video_desc desc, int
 }
 
 static decompress_status gpujpeg_to_dxt_decompress(void *state, unsigned char *dst, unsigned char *buffer,
-                unsigned int src_len, int frame_seq, video_frame_callbacks * /* callbacks */, codec_t * /* internal_codec */)
+                unsigned int src_len, int frame_seq, video_frame_callbacks * /* callbacks */, pixfmt_desc * /* internal_codec */)
 {
         struct state_decompresss_gpujpeg_to_dxt *s = (struct state_decompresss_gpujpeg_to_dxt *) state;
         UNUSED(frame_seq);
@@ -341,7 +336,7 @@ static int gpujpeg_to_dxt_decompress_get_property(void *state, int property, voi
         UNUSED(val);
         UNUSED(len);
 
-        return FALSE;
+        return false;
 }
 
 static void gpujpeg_to_dxt_decompress_done(void *state)
@@ -366,7 +361,10 @@ static void gpujpeg_to_dxt_decompress_done(void *state)
         delete s;
 }
 
-static int gpujpeg_to_dxt_decompress_get_priority(codec_t compression, struct pixfmt_desc internal, codec_t ugc) {
+static int
+gpujpeg_to_dxt_decompress_get_priority(codec_t            compression,
+                                       struct pixfmt_desc /* internal */, codec_t ugc)
+{
         return compression == JPEG && (ugc == DXT1 || ugc == DXT5) ? 900 : -1;
 }
 
