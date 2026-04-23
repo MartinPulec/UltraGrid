@@ -326,21 +326,6 @@ static void on_process(void *state) {
         
 }
 
-static void on_drained(void*)
-{
-        LOG(LOG_LEVEL_VERBOSE) << MOD_NAME "pipewire: drained\n";
-}
-
-static void on_add_buffer(void * /*state*/, struct pw_buffer *)
-{
-        LOG(LOG_LEVEL_VERBOSE) << MOD_NAME "pipewire: add_buffer\n";
-}
-
-static void on_remove_buffer(void * /*state*/, struct pw_buffer *)
-{
-        LOG(LOG_LEVEL_VERBOSE) << MOD_NAME "pipewire: remove_buffer\n";
-}
-
 static const struct pw_stream_events stream_events = {
                 .version = PW_VERSION_STREAM_EVENTS,
                 .destroy = nullptr,
@@ -348,10 +333,10 @@ static const struct pw_stream_events stream_events = {
                 .control_info = nullptr,
                 .io_changed = nullptr,
                 .param_changed = on_stream_param_changed,
-                .add_buffer = on_add_buffer,
-                .remove_buffer = on_remove_buffer,
+                .add_buffer = nullptr,
+                .remove_buffer = nullptr,
                 .process = on_process,
-                .drained = on_drained,
+                .drained = nullptr,
 #if PW_MAJOR > 0 || PW_MINOR > 3 || (PW_MINOR == 3 && PW_MICRO > 39)
                 .command = nullptr,
                 .trigger_done = nullptr,
