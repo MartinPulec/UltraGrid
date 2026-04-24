@@ -43,7 +43,7 @@
 #include <condition_variable>
 #include <cstdio>                  // for snprintf, perror
 #include <cstdlib>                 // for atoi, free, malloc, abort, strtoll
-#include <cstring>                 // for strlen, NULL, strncpy, strchr, strcmp
+#include <cstring>                 // for NULL, str[n]casecmp, strlen...
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -62,7 +62,7 @@
 #include "debug.h"
 #include "compat/net.h"            // for net related
 #include "compat/platform_pipe.h"
-#include "compat/strings.h"        // for asprintf, strncasecmp, strcasecmp
+#include "compat/strings.h"        // for asprintf
 #include "compat/time.h"           // for timeval, gettimeofday
 #include "host.h"
 #include "messaging.h"

@@ -60,6 +60,8 @@ typedef SSIZE_T ssize_t;
 #include "utils/macros.h"    // for MIN
 #include "utils/string.h"
 
+#include "config_msvc.h"     // IWYU pragma: keep for strcasecmp replacement
+
 /**
  * @brief Replaces all occurencies of 'from' to 'to' in string 'in'
  *

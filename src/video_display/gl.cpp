@@ -56,6 +56,7 @@
 #include <climits>
 #include <cmath>
 #include <condition_variable>
+#include <cstring>              // for strcasecmp
 #include <cstdint>
 #include <fstream>
 #include <iostream>
@@ -68,7 +69,6 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"    // for HAVE_SPOUT, HAVE_SYPHON
 #endif
-#include "compat/strings.h"      // for strcasecmp
 #include "debug.h"
 #include "gl_context.h"
 #include "host.h"

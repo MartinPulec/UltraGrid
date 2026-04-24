@@ -45,7 +45,7 @@
 #include <chrono>                    // for steady_clock, duration_cast, ope...
 #include <cmath>                     // for log
 #include <cstdlib>                   // for strtoll, atof, free, realloc
-#include <cstring>                   // for memcpy, strchr, strlen, memset
+#include <cstring>                   // for memcpy, memset, strcasecmp...
 #include <iomanip>                   // for setprecision
 #include <iostream>                  // for basic_ostream, operator<<, clog
 #include <map>                       // for map
@@ -59,7 +59,6 @@
 #include "audio/types.h"             // for audio_frame2, audio_desc, AC_PCM
 #include "audio/utils.h"             // for channel_map, calculate_rms, mux_...
 #include "compat/net.h"              // for ntohl, sockaddr_storage
-#include "compat/strings.h"          // for strcasecmp
 #include "control_socket.h"
 #include "crypto/openssl_decrypt.h"  // for openssl_decrypt_info, OPENSSL_DE...
 #include "crypto/openssl_encrypt.h"  // for openssl_mode

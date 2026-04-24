@@ -40,9 +40,9 @@
 #include <stdbool.h>
 #include <stdio.h>            // for snprintf, printf, NULL
 #include <stdlib.h>           // for calloc
-#include <string.h>           // for strncpy, strstr
+#include <string.h>           // for strcasecmp, strncpy, strstr
 
-#include "compat/strings.h"   // for ug_strcasecmp
+#include "compat/strings.h"   // for ug_strcasestr
 #include "debug.h"
 #include "host.h"             // for uv_argv
 #include "portaudio_common.h"

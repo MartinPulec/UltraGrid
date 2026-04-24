@@ -69,7 +69,7 @@
 #include <cstdint>                      // for UINT16_MAX, uint32_t
 #include <cstdio>                       // for printf, perror, fprintf, stderr
 #include <cstdlib>
-#include <cstring>                      // for strcmp, strlen, strtok_r, strchr
+#include <cstring>                      // for strcasecmp, strcmp, strlen...
 #include <exception>                    // for exception
 #include <getopt.h>
 #include <initializer_list>             // for initializer_list
@@ -91,7 +91,6 @@
 #include "audio/types.h"                // for AC_NONE, AUDIO_FRAME_DISPOSE
 #include "compat/alarm.h"               // for alarm
 #include "compat/misc.h"                // for PTHREAD_NULL
-#include "compat/strings.h"             // for strcasecmp
 #include "control_socket.h"
 #include "cuda_wrapper.h"
 #include "debug.h"

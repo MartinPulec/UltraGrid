@@ -52,7 +52,7 @@
 #include <cstdint>                 // for uint32_t, int32_t, uint8_t, uint16_t
 #include <cstdio>                  // for snprintf, printf
 #include <cstdlib>                 // for free, calloc, malloc, strtol
-#include <cstring>                 // for strlen, strstr, strchr, strncmp
+#include <cstring>                 // for strlen, strstr, strcasecmp, strchr...
 #include <ctime>                   // for nanosleep
 #include <iostream>
 #include <memory>
@@ -61,7 +61,6 @@
 
 #include "audio/types.h"
 #include "audio/utils.h"
-#include "compat/strings.h"        // for strcasecmp, strncasecmp
 #include "debug.h"
 #include "lib_common.h"
 #include "ndi_common.h"
@@ -529,7 +528,9 @@ static struct video_frame *vidcap_ndi_grab(void *state, struct audio_frame **aud
                                 } else {
                                         array<char, sizeof(uint32_t) + 1> fcc_s{};
                                         memcpy(fcc_s.data(), &video_frame.FourCC, sizeof(uint32_t));
-                                        LOG(LOG_LEVEL_ERROR) << MOD_NAME << "Unsupported codec '" << fcc_s.data() << "', please report to " PACKAGE_BUGREPORT "!\n";
+                                        bug_msg(LOG_LEVEL_ERROR,
+                                                "%sUnsupported codec '%s', ",
+                                                MOD_NAME, fcc_s.data());
                                         return {};
                                 }
                 }

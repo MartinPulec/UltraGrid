@@ -42,7 +42,7 @@
 #include <cstdint>                       // for uint8_t, uint32_t
 #include <cstdio>                        // for printf
 #include <cstdlib>                       // for atoi, abort, free, EXIT_FAILURE
-#include <cstring>
+#include <cstring>                       // for strcasecmp
 #include <libgpujpeg/gpujpeg_common.h>
 #include <libgpujpeg/gpujpeg_encoder.h>
 #include <libgpujpeg/gpujpeg_type.h>     // for gpujpeg_color_space, gpujpeg...
@@ -57,7 +57,6 @@
 #include <utility>                       // for move
 #include <vector>
 
-#include "compat/strings.h"              // for strcasecmp
 #include "debug.h"
 #include "host.h"
 #include "lib_common.h"

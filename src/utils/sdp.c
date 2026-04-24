@@ -4,7 +4,7 @@
  *          Martin Pulec <pulec@cesnet.cz>
  *
  * Copyright (c) 2005-2010 Fundació i2CAT, Internet I Innovació Digital a Catalunya
- * Copyright (c) 2018-2024 CESNET, z. s. p. o.
+ * Copyright (c) 2018-2026 CESNET, zájmové sdružení právnických osob
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, is permitted provided that the following conditions
@@ -55,7 +55,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <string.h>              // for strcasecmp
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -66,7 +66,6 @@
 
 #include "audio/types.h"
 #include "compat/net.h"           // for htons, htonl
-#include "compat/strings.h"       // for strcasecmp
 #include "config.h"               // for SDP_HTTP
 #include "debug.h"
 #include "rtp/rtp_types.h"

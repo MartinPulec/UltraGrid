@@ -43,12 +43,11 @@
 #include <pthread.h>        // for pthread_mutex_init, pthread_mutex_destroy
 #include <stdio.h>          // for printf, fprintf, putchar, snprintf, stderr
 #include <stdlib.h>         // for free, atoi, calloc
-#include <string.h>         // for strlen, strchr, memcpy, strdup, strncat
+#include <string.h>         // for strlen, strchr, memcpy, strcasecmp, strdup..
 #include <time.h>           // for clock_gettime
 #include <unistd.h>         // for _POSIX_TIMEOUTS
 
 #include "compat/c23.h"     // for countof
-#include "compat/strings.h" // for strcasecmp
 #include "debug.h"
 #include "messaging.h"      // for check_message, free_message, ...
 #include "utils/list.h"

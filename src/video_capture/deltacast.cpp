@@ -44,13 +44,12 @@
 #include <cassert>                    // for assert
 #include <cstdio>                     // for printf, NULL, snprintf
 #include <cstdlib>                    // for free, atoi, calloc
-#include <cstring>                    // for strlen, strcmp, memset, strdup
+#include <cstring>                    // for memset, str[n]casecmp, strcmp..
 #include <ostream>                    // for char_traits, basic_ostream, ope...
 #include <sys/time.h>                 // for timeval, gettimeofday
 
 #include "audio/types.h"
 #include "audio/utils.h"
-#include "compat/strings.h"           // for strncasecmp, strcasecmp
 #include "debug.h"
 #include "deltacast_common.hpp"
 #include "host.h"

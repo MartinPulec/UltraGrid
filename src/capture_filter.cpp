@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2014-2025 CESNET
+ * Copyright (c) 2014-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,9 +40,8 @@
 #include <cassert>            // for assert
 #include <cstdio>             // for printf, fprintf, stderr
 #include <cstdlib>            // for free, NULL, atoi, calloc, malloc
-#include <cstring>            // for strchr, strcmp, strdup, strlen, strncmp
+#include <cstring>            // for strcasecmp, strchr, strcmp, strdup...
 
-#include "compat/strings.h"   // for strcasecmp
 #include "lib_common.h"       // for get_libraries_for_class, library_class
 #include "messaging.h"        // for msg_universal, new_response, RESPONSE_I...
 #include "module.h"           // for module, module_done, module_init_default

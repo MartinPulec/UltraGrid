@@ -3,7 +3,7 @@
  * @author Martin Pulec  <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2012-2025 CESNET
+ * Copyright (c) 2012-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,10 +37,10 @@
 
 #include <cstdio>                      // for printf, stderr
 #include <cstdlib>                    // for free, malloc
+#include <cstring>                    // for strcasecmp
 #include <memory>                     // for shared_ptr
 
 #include "../cuda_dxt/cuda_dxt.h"
-#include "compat/strings.h"            // for strcasecmp
 #include "cuda_wrapper.h"
 #include "debug.h"
 #include "host.h"

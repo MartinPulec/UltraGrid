@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2013-2025 CESNET
+ * Copyright (c) 2013-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,10 +40,9 @@
 #include <stdbool.h>         // for false, bool, true
 #include <stdio.h>           // for printf, fprintf, stderr
 #include <stdlib.h>          // for free, NULL, malloc, atoi, calloc
-#include <string.h>          // for strlen, strtok_r, strdup
+#include <string.h>          // for strcasecmp, strlen, strtok_r, strdup
 
 #include "capture_filter.h"
-#include "compat/strings.h"  // for strcasecmp
 #include "debug.h"
 #include "lib_common.h"
 #include "pixfmt_conv.h"     // for get_decoder_from_to, decoder_t, vc_copyl...

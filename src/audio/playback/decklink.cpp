@@ -5,7 +5,7 @@
  * audio-only DeckLink playback (see also `-r decklink:help`)
  */
 /*
- * Copyright (c) 2012-2023 CESNET, z. s. p. o.
+ * Copyright (c) 2012-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,14 +41,13 @@
 #include <cstdint>                 // for uint32_t
 #include <cstdio>                  // for printf, fprintf, stderr
 #include <cstdlib>                 // for NULL, free, atoi, calloc, malloc
-#include <cstring>                 // for memcpy, strlen, strcpy, strtok_r
+#include <cstring>                 // for memcpy, str[n]casecmp, strlen...
 #include <iostream>
 
 #include "audio/audio_playback.h"
 #include "audio/types.h"
 #include "audio/utils.h"
 #include "blackmagic_common.hpp"
-#include "compat/strings.h"        // for strcasecmp, strncasecmp
 #include "debug.h"
 #include "host.h"
 #include "lib_common.h"

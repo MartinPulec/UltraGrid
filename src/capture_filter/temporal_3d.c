@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2025 CESNET
+ * Copyright (c) 2025-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -39,10 +39,9 @@
 #include <stdint.h>           // for uint32_t
 #include <stdio.h>            // for printf, NULL
 #include <stdlib.h>           // for free, calloc, malloc
-#include <string.h>           // for memcpy, strlen
+#include <string.h>           // for memcpy, strcasecmp, strlen
 
 #include "capture_filter.h"   // for CAPTURE_FILTER_ABI_VERSION, capture_fil...
-#include "compat/strings.h"   // for strcasecmp
 #include "lib_common.h"       // for REGISTER_MODULE, library_class
 #include "types.h"            // for tile, video_frame, video_frame_callbacks
 #include "utils/color_out.h"  // for color_printf, TBOLD

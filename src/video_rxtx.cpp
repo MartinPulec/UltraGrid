@@ -39,7 +39,7 @@
 #include <atomic>
 #include <cassert>           // for assert
 #include <cstdio>            // for printf
-#include <cstring>           // for NULL, memset, strcmp
+#include <cstring>           // for NULL, memset, strcasecmp, strcmp
 #include <map>               // for map
 #include <memory>
 #include <pthread.h>         // for pthread_join, pthread_create, pthread_equal
@@ -48,7 +48,6 @@
 #include <utility>
 
 #define WANT_PTHREAD_NULL
-#include "compat/strings.h"  // for strcasecmp
 #include "compat/misc.h" // for PTHREAD_NULL
 #include "debug.h"
 #include "export.h"

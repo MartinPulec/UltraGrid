@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2011-2025 CESNET
+ * Copyright (c) 2011-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,14 +37,13 @@
 
 #include <cassert>                     // for assert
 #include <cstdio>                      // for printf, fprintf, stderr
-#include <cstring>                     // for strcmp
+#include <cstring>                     // for strcasecmp, strcmp
 #include <cstdlib>                     // for NULL, abort, calloc, EXIT_FAILURE
 #include <memory>                      // for shared_ptr
 
 #include "../dxt_compress/dxt_common.h"   // for dxt_format, dxt_type
 #include "../dxt_compress/dxt_encoder.h"
 #include "../dxt_compress/dxt_util.h"
-#include "compat/strings.h"            // for strcasecmp
 #include "debug.h"
 #include "gl_context.h"
 #include "host.h"

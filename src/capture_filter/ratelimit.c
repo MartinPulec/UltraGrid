@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2023-2025 CESNET
+ * Copyright (c) 2023-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,10 +37,9 @@
 
 #include <stdio.h>            // for NULL, printf
 #include <stdlib.h>           // for calloc, free, strtod
-#include <string.h>           // for strlen, memcpy
+#include <string.h>           // for memcpy, strcasecmp, strlen
 
 #include "capture_filter.h"
-#include "compat/strings.h"   // for strcasecmp
 #include "debug.h"
 #include "lib_common.h"
 #include "tv.h"

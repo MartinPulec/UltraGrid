@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2013-2023 CESNET, z. s. p. o.
+ * Copyright (c) 2013-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,12 +42,11 @@
 #include <climits>
 #include <cstdio>             // for printf
 #include <cstdlib>            // for NULL, calloc, free, realloc
-#include <cstring>            // for strchr, memset, strtok_r
+#include <cstring>            // for strcasecmp, strchr, memset, strtok_r
 #include <string>
 #include <unordered_map>
 
 #include "audio/utils.h"
-#include "compat/strings.h" // strdup, strcasecmp
 #include "debug.h"
 #include "lib_common.h"
 #include "utils/color_out.h"  // for col, SBOLD, SRED, TRED

@@ -54,7 +54,7 @@
 #include <stdint.h>                // for uint32_t
 #include <stdio.h>                 // for NULL, perror, snprintf, fprintf
 #include <stdlib.h>                // for free, malloc, abort, atof, atoi
-#include <string.h>                // for strlen, strncmp, strcmp, memcpy
+#include <string.h>                // for memcpy, str[n]casecmp, strlen, str[n]cmp
 #include <sys/stat.h>              // for stat, fstat
 #include <sys/time.h>              // for gettimeofday, timeval
 #include <sys/types.h>             // for ssize_t
@@ -70,7 +70,6 @@
 #include "audio/types.h"
 #include "audio/wav_reader.h"
 #include "compat/aligned_malloc.h" // for aligned_free, aligned_malloc
-#include "compat/strings.h"        // for strcasecmp, strncasecmp
 #include "debug.h"
 #include "host.h"
 #include "lib_common.h"

@@ -7,7 +7,7 @@
  * These function are neither video frame nor video codec related.
  */
 /*
- * Copyright (c) 2013-2025 CESNET
+ * Copyright (c) 2013-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,7 @@
 #include <cctype>             // for isalnum
 #include <cstdio>             // for printf, fprintf, sscanf, stderr
 #include <cstdlib>            // for atoi, strtol
-#include <cstring>            // for strncmp, strchr, strlen, strpbrk
+#include <cstring>            // for strcasecmp, strncmp, strchr, strlen, strpbrk
 #include <iomanip>            // for operator<<, setiosflags, setprecision
 #include <map>                // for allocator, map, _Rb_tree_const_iterator
 #include <sstream>            // for basic_ostringstream
@@ -53,7 +53,6 @@
 #include <utility>            // for pair
 
 #include "debug.h"
-#include "compat/strings.h"    // for strcasecmp
 #include "rtp/rtp_types.h" // FPS_MAX
 #include "utils/color_out.h"  // for color_printf, TBOLD
 #include "utils/macros.h"

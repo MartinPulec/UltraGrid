@@ -60,12 +60,11 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <string.h>              // for strcasecmp
 
 #include "color_space.h"
 #include "compat/endian.h"       // for be32toh
 #include "compat/qsort_s.h"
-#include "compat/strings.h"      // for strcasecmp
 #include "debug.h"
 #include "host.h"
 #include "hwaccel_vdpau.h"

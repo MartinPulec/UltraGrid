@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2013-2025 CESNET
+ * Copyright (c) 2013-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,13 +40,12 @@
 #include <stdint.h>              // for uint8_t
 #include <stdio.h>               // for printf, fprintf, stderr
 #include <stdlib.h>              // for free, atof, atoi, calloc, malloc
-#include <string.h>              // for memset, strtok_r, memcpy, strchr
+#include <string.h>              // for memcpy, memset, strcasecmp, strtok_r...
 #include "libavutil/pixfmt.h"    // for AVPixelFormat
 #include "types.h"               // for tile, video_frame, video_desc, BGR
 #include "video_frame.h"         // for video_desc_from_frame, video_desc_eq
 
 #include "capture_filter.h"
-#include "compat/strings.h"      // for strcasecmp
 #include "lib_common.h"
 #include "libavcodec/utils.h"
 #include "messaging.h"

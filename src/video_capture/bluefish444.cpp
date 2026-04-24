@@ -39,7 +39,7 @@
 #include <cstdint>                 // for uint32_t
 #include <cstdio>                  // for NULL, printf, snprintf
 #include <cstdlib>                 // for atoi, free, calloc
-#include <cstring>                 // for strlen, memset, strcmp, strdup
+#include <cstring>                 // for memset, strcasecmp, strlen, strcmp...
 #include <iomanip>
 #include <iostream>
 #include <pthread.h>               // for pthread_cond_signal, pthread_mutex...
@@ -49,7 +49,6 @@
 
 #include "audio/types.h"
 #include "audio/utils.h"
-#include "compat/strings.h"         // for strcasecmp, strncasecmp
 #include "debug.h"
 #include "host.h"
 #include "lib_common.h"
