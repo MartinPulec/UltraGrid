@@ -66,8 +66,7 @@
 #define MOD_NAME "[PW disp] "
 
 namespace{
-        struct frame_deleter{ void operator()(video_frame *f){ vf_free(f); } };
-        using unique_frame = std::unique_ptr<video_frame, frame_deleter>;
+        using unique_frame = std::unique_ptr<video_frame, deleter_from_fcn<vf_free>>;
 
         struct memfd_buffer{
                 memfd_buffer() = default;
@@ -83,7 +82,7 @@ namespace{
                 std::atomic<int> ref_count = 0;
 
                 int fd = -1;
-                int size = 0;
+                off_t size = 0;
                 void *ptr = nullptr;
 
                 /* Access to these pointers is synchronized by the pipewire
@@ -127,7 +126,7 @@ namespace{
                 }
 
                 buf->size = size;
-                if(ftruncate(buf->fd, size) < 0){
+                if(ftruncate(buf->fd, buf->size) < 0){
                         log_msg(LOG_LEVEL_ERROR, MOD_NAME "Failed to resize memfd\n");
                         return nullptr;
                 }
@@ -188,7 +187,7 @@ static void on_state_changed(void *state, enum pw_stream_state old, enum pw_stre
         pw_thread_loop_signal(s->pw.pipewire_loop.get(), false);
 }
 
-static void on_param_changed(void *state, uint32_t id, const struct spa_pod *param){
+static void on_param_changed(void *state, uint32_t id, const spa_pod *param){
         auto s = static_cast<display_pw_state *>(state);
 
         if(!param || id != SPA_PARAM_Format)
@@ -196,13 +195,13 @@ static void on_param_changed(void *state, uint32_t id, const struct spa_pod *par
 
         log_msg(LOG_LEVEL_VERBOSE, MOD_NAME "on param changed\n");
 
-        struct spa_video_info_raw format;
+        spa_video_info_raw format{};
         spa_format_video_raw_parse(param, &format);
 
-        const int MAX_BUFFERS = 16;
+        constexpr int MAX_BUFFERS = 16;
         int stride = vc_get_linesize(s->desc.width, s->desc.color_spec);
 
-        const struct spa_pod *params[1];
+        const spa_pod *params[1];
         std::byte buffer[1024];
         auto pod_builder = SPA_POD_BUILDER_INIT(buffer, sizeof(buffer));
 
@@ -217,13 +216,13 @@ static void on_param_changed(void *state, uint32_t id, const struct spa_pod *par
         pw_stream_update_params(s->stream.get(), params, 1);
 }
 
-static void on_add_buffer(void *data, struct pw_buffer *buffer){
+static void on_add_buffer(void *data, pw_buffer *buffer){
         auto s = static_cast<display_pw_state *>(data);
 
-        int stride = vc_get_linesize(s->desc.width, s->desc.color_spec);
-        int size = stride * s->desc.height;
+        const int stride = vc_get_linesize(s->desc.width, s->desc.color_spec);
+        size_t size = stride * s->desc.height;
 
-        struct spa_data *d = buffer->buffer->datas;
+        spa_data *d = buffer->buffer->datas;
         if ((d->type & (1<<SPA_DATA_MemFd)) == 0) {
                 log_msg(LOG_LEVEL_ERROR, MOD_NAME "Buffer doesn't support MemFd type\n");
                 return;
@@ -244,12 +243,12 @@ static void on_add_buffer(void *data, struct pw_buffer *buffer){
 
         ug_frame->callbacks.data_deleter = memfd_frame_data_deleter;
         ug_frame->callbacks.dispose_udata = memfd_buf_ref(buf);
-        ug_frame->tiles[0].data = (char *) buf->ptr;
+        ug_frame->tiles[0].data = static_cast<char *>(buf->ptr);
 
         log_msg(LOG_LEVEL_VERBOSE, "Buffer added\n");
 }
 
-static void on_remove_buffer(void * /*data*/, struct pw_buffer *buffer){
+static void on_remove_buffer(void * /*data*/, pw_buffer *buffer){
         auto buf = static_cast<memfd_buffer *>(buffer->user_data);
 
         if(buf->f)
@@ -261,22 +260,15 @@ static void on_remove_buffer(void * /*data*/, struct pw_buffer *buffer){
         log_msg(LOG_LEVEL_VERBOSE, "Buffer removed\n");
 }
 
-const static pw_stream_events stream_events = { 
-        .version = PW_VERSION_STREAM_EVENTS,
-        .destroy = nullptr,
-        .state_changed = on_state_changed,
-        .control_info = nullptr,
-        .io_changed = nullptr,
-        .param_changed = on_param_changed,
-        .add_buffer = on_add_buffer,
-        .remove_buffer = on_remove_buffer,
-        .process = nullptr,
-        .drained = nullptr,
-#if PW_MAJOR > 0 || PW_MINOR > 3 || (PW_MINOR == 3 && PW_MICRO > 39)
-        .command = nullptr,
-        .trigger_done = nullptr,
-#endif
-};
+constexpr pw_stream_events stream_events = []{
+        pw_stream_events events{};
+        events.version = PW_VERSION_STREAM_EVENTS;
+        events.state_changed = on_state_changed;
+        events.param_changed = on_param_changed;
+        events.add_buffer = on_add_buffer;
+        events.remove_buffer = on_remove_buffer;
+        return events;
+}();
 
 static void display_pw_help(){
         color_printf("Pipewire video output.\n");
@@ -288,7 +280,7 @@ static void display_pw_help(){
         print_devices("Stream/Input/Video");
 }
 
-static void *display_pw_init(struct module * /*parent*/, const char *cfg, unsigned int /*flags*/)
+static void *display_pw_init(module * /*parent*/, const char *cfg, unsigned int /*flags*/)
 {
         auto s = std::make_unique<display_pw_state>();
 
@@ -296,13 +288,15 @@ static void *display_pw_init(struct module * /*parent*/, const char *cfg, unsign
         while(!cfg_sv.empty()){
                 auto tok = tokenize(cfg_sv, ':', '"');
 
-                auto key = tokenize(tok, '=');
-                auto val = tokenize(tok, '=');
+                const auto key = tokenize(tok, '=');
+                const auto val = tokenize(tok, '=');
 
                 if(key == "help"){
                         display_pw_help();
                         return INIT_NOERR;
-                } else if(key == "target"){
+                }
+
+                if(key == "target"){
                         s->target = val;
                 }
         }
@@ -328,7 +322,7 @@ static void display_pw_done(void *state)
         pw_thread_loop_stop(s->pw.pipewire_loop.get());
 }
 
-static struct video_frame *display_pw_getf(void *state)
+static video_frame *display_pw_getf(void *state)
 {
         auto s = static_cast<display_pw_state *>(state);
 
@@ -347,7 +341,7 @@ static struct video_frame *display_pw_getf(void *state)
         if(stream_state != PW_STREAM_STATE_STREAMING)
                 return get_dummy(s);
 
-        struct pw_buffer *b = pw_stream_dequeue_buffer(s->stream.get());
+        pw_buffer *b = pw_stream_dequeue_buffer(s->stream.get());
         if (!b) {
                 log_msg(LOG_LEVEL_WARNING, "Out of buffers!\n");
                 return get_dummy(s);
@@ -364,7 +358,7 @@ static struct video_frame *display_pw_getf(void *state)
 }
 
 
-static bool display_pw_putf(void *state, struct video_frame *frame, long long flags)
+static bool display_pw_putf(void *state, video_frame *frame, long long flags)
 {
         auto s = static_cast<display_pw_state *>(state);
 
@@ -417,7 +411,7 @@ static bool display_pw_get_property(void *state, int property, void *val, size_t
         return true;
 }
 
-static bool display_pw_reconfigure(void *state, struct video_desc desc)
+static bool display_pw_reconfigure(void *state, video_desc desc)
 {
         auto s = static_cast<display_pw_state *>(state);
 
@@ -454,7 +448,7 @@ static bool display_pw_reconfigure(void *state, struct video_desc desc)
                         &stream_events,
                         s);
 
-        const struct spa_pod *params[1];
+        const spa_pod *params[1];
 
         auto framerate = SPA_FRACTION(
                         static_cast<unsigned>(get_framerate_n(desc.fps)),
@@ -484,13 +478,13 @@ static bool display_pw_reconfigure(void *state, struct video_desc desc)
         return true;
 }
 
-static void display_pw_probe(struct device_info **available_cards, int *count, void (**deleter)(void *)) {
+static void display_pw_probe(device_info **available_cards, int *count, void (**deleter)(void *)) {
         UNUSED(deleter);
         *available_cards = nullptr;
         *count = 0;
 }
 
-static const struct video_display_info display_pw_info = {
+constexpr video_display_info display_pw_info = {
         display_pw_probe,
         display_pw_init,
         nullptr, // _run
