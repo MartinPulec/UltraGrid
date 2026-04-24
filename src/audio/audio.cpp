@@ -578,6 +578,15 @@ struct audio_decoder {
         struct pbuf_audio_data pbuf_data;
 };
 
+#define GET_MUTED(muted_flag, act, color) \
+        if (muted_flag) { \
+                act   = "muted"; \
+                color = TERM_FG_RED; \
+        } else { \
+                act   = "unmuted"; \
+                color = TERM_FG_GREEN; \
+        }
+
 static struct response * audio_receiver_process_message(struct state_audio *s, struct msg_receiver *msg)
 {
         switch (msg->type) {
@@ -607,9 +616,12 @@ static struct response * audio_receiver_process_message(struct state_audio *s, s
                 double new_volume = s->muted_receiver ? 0.0 : s->volume;
                 double db         = 20.0 * log10(new_volume);
                 if (msg->type == RECEIVER_MSG_MUTE_TOGGLE) {
-                        LOG(LOG_LEVEL_NOTICE)
-                            << "Audio receiver "
-                            << (s->muted_receiver ? "" : "un") << "muted.\n";
+                        const char *act = nullptr;
+                        const char *color = nullptr;
+                        GET_MUTED(s->muted_receiver, act, color)
+                        color_printf("%sAudio " TBOLD("receiver")
+                                     " %s. " TERM_FG_RESET "\n",
+                                     color, act);
                 } else {
                         log_msg(LOG_LEVEL_INFO,
                                 "Playback volume: %.2f%% (%+.2f dB)\n",
@@ -922,13 +934,18 @@ static struct response *audio_sender_process_message(struct state_audio *s, stru
         }
         case SENDER_MSG_MUTE:
         case SENDER_MSG_UNMUTE:
-        case SENDER_MSG_MUTE_TOGGLE:
+        case SENDER_MSG_MUTE_TOGGLE: {
                 s->muted_sender = msg->type == SENDER_MSG_MUTE_TOGGLE
                                       ? !s->muted_sender
                                       : msg->type == SENDER_MSG_MUTE;
-                log_msg(LOG_LEVEL_NOTICE, "Audio sender %smuted.\n",
-                        s->muted_sender ? "" : "un");
+                const char *act = nullptr;
+                const char *color = nullptr;
+                GET_MUTED(s->muted_sender, act, color)
+                color_printf("%sAudio " TBOLD("sender")
+                             " %s. " TERM_FG_RESET "\n",
+                             color, act);
                 break;
+        }
         case SENDER_MSG_QUERY_VIDEO_MODE:
                 return new_response(RESPONSE_BAD_REQUEST, nullptr);
         }
@@ -965,7 +982,7 @@ static void *asend_compute_and_print_stats(void *arg) {
         }
 
         log_msg(LOG_LEVEL_INFO, "[Audio sender] Volume: %s dBFS RMS/peak%s\n",
-                volume, d->muted_sender ? TBOLD(TRED(" (muted)")) : "");
+                volume, d->muted_sender ? TBOLD(TRED(" (muted sender)")) : "");
 
         delete d;
 

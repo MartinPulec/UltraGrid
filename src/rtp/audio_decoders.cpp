@@ -5,7 +5,7 @@
  */
 /*
  * Copyright (c) 2014 Fundació i2CAT, Internet I Innovació Digital a Catalunya
- * Copyright (c) 2012-2025 CESNET
+ * Copyright (c) 2012-2026 CESNET. zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -400,7 +400,7 @@ static void *adec_compute_and_print_stats(void *arg) {
         }
 
         MSG(INFO, "Volume: %s dBFS RMS/peak%s\n", volume,
-            d->muted_receiver ? TBOLD(TRED(" (muted)")) : "");
+            d->muted_receiver ? TBOLD(TRED(" (muted receiver)")) : "");
 
         delete d;
 
