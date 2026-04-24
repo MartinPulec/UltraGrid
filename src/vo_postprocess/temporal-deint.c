@@ -3,12 +3,12 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  *
  * This file contains multiple temporal deinterlacers (doubling frame-rate):
- * 1. double-framerate
- * 2. bob
- * 2. linear
+ * 1. double_framerate - field interleaver, actual deinterlace as an option
+ * 2. bob - doubles field lines
+ * 3. linear - like bob but interpolates missing lines from adjacent
  */
 /*
- * Copyright (c) 2012-2023 CESNET, z. s. p. o.
+ * Copyright (c) 2012-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -79,16 +79,18 @@ static void print_common_opts() {
 
 static void df_usage()
 {
-        char desc[] = TBOLD("double-framerate") " is an interleaver that "
-                "creates creates a progressive stream by consecutive "
-                "interleaving fields, eg. f1f2f3f4f5f6 -> \"f1-- f1f2 f3f2 "
-                "f3f4 f5f4 f5f6 --f6\". So saw-like artifacts will still occur "
-                "and blending can be used.\n\n";
+        char desc[] = TBOLD("double_framerate")
+                      " is an interleaver that creates a progressive stream by "
+                      "consecutive interleaving fields, eg. f1f2f3f4f5f6 -> "
+                      "\"f1-- f1f2 f3f2 f3f4 f5f4 f5f6 --f6\".\n\n"
+                      "Saw-like interlacing artifacts will still occur "
+                      "- use " TBOLD(":d")
+                      " to deinterlace (blend).\n\n";
         color_printf("%s", wrap_paragraph(desc));
         color_printf("Usage:\n");
         color_printf("\t" TBOLD(TRED("-p double_framerate") "[:d][:nodelay]") "\n");
         color_printf("\nwhere:\n");
-        color_printf("\t" TBOLD("d      ") " - blend the output\n");
+        color_printf("\t" TBOLD("d      ") " - deintrlace the output (linear blend)\n");
         print_common_opts();
 }
 
@@ -111,6 +113,10 @@ static void * init_common(enum algo algo, const char *config) {
         struct state_df *s = calloc(1, sizeof *s);
         assert(s != NULL);
         s->algo = algo;
+        if (algo == DF || !deinterlace) {
+                MSG(WARNING, "double_framerate without deinterlacing - "
+                             "consider adding ':d' option\n");
+        }
 
         s->in = vf_alloc(1);
         s->buffers[0] = s->buffers[1] = NULL;
