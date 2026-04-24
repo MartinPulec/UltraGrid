@@ -4,7 +4,7 @@
  * MODIFIED: Ladan Gharai <ladan@isi.edu>
  *
  * Copyright (c) 2001-2003 University of Southern California
- * Copyright (c) 2005-2023 CESNET z.s.p.o.
+ * Copyright (c) 2005-2026 CESNET, zájmové sduržení právnických osob
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, is permitted provided that the following conditions
@@ -90,6 +90,7 @@ typedef long long time_ns_t;
 #define NS_IN_US (NS_IN_SEC/US_IN_SEC)
 #define NS_IN_US_DBL ((double) NS_IN_US)
 #define US_TO_MS(val_us) ((val_us) / 1000)
+#define US_TO_NS(val_us) ((val_us) * 1000)
 #define MS_TO_US(val_ms) ((val_ms) * 1000)
 #define NS_TO_MS(val_ns) ((val_ns) / 1000 / 1000)
 #define NS_TO_US(val_ns) ((val_ns) / 1000)

@@ -42,13 +42,13 @@
 #include <stdio.h>                // for NULL, fclose, size_t, FILE, fopen
 #include <stdlib.h>               // for free, getenv, malloc, calloc
 #include <string.h>               // for strdup, strlen, strncat, strcmp
+#include <time.h>                 // for nanosleep
 #include <unistd.h>               // for unlink
 
 #include "audio/audio_capture.h"  // for AUDIO_CAPTURE_ABI_VERSION, audio_ca...
 #include "audio/types.h"          // for audio_frame
 #include "audio/utils.h"          // for mux_channel
-#include "compat/c23.h"           // for countof
-#include "compat/usleep.h"        // for usleep
+#include "compat/c23.h"           // for countof, nullptr
 #include "debug.h"                // for LOG_LEVEL_ERROR, MSG, log_msg, LOG_...
 #include "host.h"                 // for audio_capture_sample_rate, INIT_NOERR
 #include "lib_common.h"           // for REGISTER_MODULE, library_class
@@ -327,7 +327,9 @@ audio_cap_fluidsynth_read(void *state)
                 MSG(WARNING, "Some data missed!\n");
                 t = s->next_frame_time;
         } else if (t < s->next_frame_time){
-                usleep((s->next_frame_time - t) / US_IN_NS);
+                nanosleep(
+                    &(struct timespec){ .tv_nsec = s->next_frame_time - t },
+                    nullptr);
         }
         s->next_frame_time += s->frame_interval;
 

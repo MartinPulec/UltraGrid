@@ -3,6 +3,7 @@
  * AUTHORS: Colin Perkins <csp@csperkins.org>
  *
  * Copyright (c) 2003-2004 University of Glasgow
+ * Copyright (c) 2023-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,10 +35,10 @@
  */
 
 #include <stdio.h>
+#include <unistd.h>
+
 #include "tv.h"
 #include "test_tv.h"
-
-#include "compat/usleep.h"
 
 int test_tv(void)
 {

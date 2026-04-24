@@ -38,6 +38,8 @@
  */
 
 #include <cassert>
+#include <ctime>               // for nanosleep
+
 #include "host.h"
 
 #include "debug.h"
@@ -51,7 +53,6 @@
 #include "audio/utils.h"
 #include "utils/ring_buffer.h"
 #include "video.h"
-#include "compat/usleep.h"
 
 #ifdef __APPLE__
 #include "utils/autorelease_pool.h"
@@ -642,7 +643,8 @@ static void sdl_audio_callback(void *userdata, Uint8 *stream, int len) {
         if (ring_buffer_read(s->audio_buffer, (char *) stream, len) != len)
         {
                 fprintf(stderr, "[SDL] audio buffer underflow!!!\n");
-                usleep(500);
+                struct timespec timeout = {0, 500'000};
+                nanosleep(&timeout, nullptr);
         }
 }
 

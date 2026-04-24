@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2014-2023 CESNET, z. s. p. o.
+ * Copyright (c) 2014-2026 CESNET, zájmové sduržení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,13 +48,13 @@
 #include <stdlib.h>               // for NULL, calloc, free, size_t, strtol
 #include <string.h>               // for strlen, memcpy, strchr, memset, strcmp
 #include <strings.h>              // for strncasecmp, strcasecmp
-#include <unistd.h>               // for usleep
+#include <time.h>                 // for nanosleep
 
 #include "audio/audio_capture.h"
 #include "audio/types.h"
 #include "audio/utils.h"
 #include "audio/wav_reader.h"
-#include "compat/usleep.h"
+#include "compat/c23.h"           // IWYU pragma: keep
 #include "debug.h"
 #include "host.h"
 #include "lib_common.h"
@@ -456,7 +456,9 @@ static struct audio_frame *audio_cap_testcard_read(void *state)
         time_ns_t curr_time = get_time_in_ns();
 
         if( s->next_audio_time > curr_time) {
-                usleep((s->next_audio_time - curr_time) / US_IN_NS);
+                nanosleep(&(struct timespec){ .tv_nsec = s->next_audio_time -
+                                                         curr_time },
+                          nullptr);
         } else {
                 // we missed more than 2 "frame times", in that case, just drop the packages
                 if ((curr_time - s->next_audio_time) > (long long int) (2 * NS_IN_SEC * s->chunk_size / s->audio.sample_rate)) {

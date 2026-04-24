@@ -7,7 +7,7 @@
  * mixer (`-r mixer`) as a passive (listen-only) participant.
  */
 /*
- * Copyright (c) 2024 CESNET
+ * Copyright (c) 2024-2026 CESNET, zájmové sduržení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,10 +43,11 @@
 #include <stdlib.h>               // for free, NULL, malloc
 #include <stdio.h>                // for printf
 #include <string.h>               // for strcmp
+#include <time.h>                 // for nanosleep
 
 #include "audio/audio_capture.h"  // for AUDIO_CAPTURE_ABI_VERSION, audio_ca...
 #include "audio/types.h"          // for audio_frame
-#include "compat/usleep.h"        // for usleep
+#include "compat/c23.h"           // IWYU pragma: keep
 #include "host.h"                 // for INIT_NOERR
 #include "lib_common.h"           // for REGISTER_MODULE, library_class
 #include "tv.h"                   // for get_time_in_ns, time_ns_t, NS_TO_US
@@ -102,7 +103,7 @@ audio_cap_passive_read(void *state)
         const time_ns_t            wait_ns =
             s->last_frame_time_ns + SEC_TO_NS(FRAME_SPAC_SEC) - get_time_in_ns();
         if (wait_ns > 0) {
-                usleep(NS_TO_US(wait_ns));
+                nanosleep(&(struct timespec){ .tv_nsec = wait_ns }, nullptr);
         }
         s->last_frame_time_ns = get_time_in_ns();
 

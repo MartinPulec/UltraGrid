@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2025 CESNET
+ * Copyright (c) 2025-2026 CESNET, zájmové sduržení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,8 +41,9 @@
 #include <stdio.h>   // for printf, NULL, size_t
 #include <stdlib.h>  // for free, malloc, calloc
 #include <string.h>  // for strcmp, strlen
+#include <time.h>    // for nanosleep
 
-#include "compat/usleep.h"   // for usleep
+#include "compat/c23.h"      // IWYU pragma: keep
 #include "debug.h"           // for MSG
 #include "lib_common.h"      // for REGISTER_MODULE, library_class
 #include "tv.h"              // for time_ns_t
@@ -177,10 +178,11 @@ temporal_3d_postprocess(void *state, struct video_frame *in,
                 time_ns_t t1 = get_time_in_ns();
                 long long since_first_tile_us =
                     NS_TO_US(t1 - s->first_tile_time);
-                long long sleep_us =
-                    (US_IN_SEC / s->in->fps) - (double) since_first_tile_us;
-                if (sleep_us > 0) {
-                        usleep(sleep_us);
+                long long sleep_ns =
+                    (NS_IN_SEC / s->in->fps) - (double) since_first_tile_us;
+                if (sleep_ns > 0) {
+                        nanosleep(&(struct timespec){ .tv_nsec = sleep_ns },
+                                  nullptr);
                 }
         }
 

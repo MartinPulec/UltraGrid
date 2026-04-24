@@ -54,7 +54,7 @@
 #include <stdio.h>                      // for NULL, fprintf, printf, stderr
 #include <stdlib.h>                     // for free, rand, malloc, calloc, atoi
 #include <string.h>                     // for strchr, strtok_r, strlen, memcpy
-#include <time.h>                       // for time
+#include <time.h>                       // for nanosleep, time
 
 #ifdef HAVE_LIBSDL_TTF
 #        ifdef HAVE_SDL3
@@ -70,9 +70,9 @@
 
 #define WANT_PTHREAD_NULL
 #include "audio/types.h"                // for audio_frame
+#include "compat/c23.h"                 // IWYU pragma: keep
 #include "compat/misc.h"                // for PTHREAD_NULL
 #include "compat/platform_semaphore.h"  // for platform_sem_post, platform_s...
-#include "compat/usleep.h"              // for usleep
 #include "debug.h"                      // for log_msg, LOG_LEVEL_ERROR, LOG...
 #include "host.h"                       // for exit_uv, audio_capture_channels
 #include "lib_common.h"                 // for REGISTER_MODULE, library_class
@@ -606,15 +606,18 @@ next_frame:
                 struct timeval curr_time;
                 gettimeofday(&curr_time, NULL);
                 if(tv_gt(next_frame_time, curr_time)) {
-                        int sleep_time = tv_diff_usec(next_frame_time, curr_time);
-                        usleep(sleep_time);
+                        long long sleep_us =
+                            tv_diff_usec(next_frame_time, curr_time);
+                        nanosleep(
+                            &(struct timespec){ .tv_nsec = US_TO_NS(sleep_us) },
+                            nullptr);
                 } else {
                         if((++s->count) % ((int) s->desc.fps * 5) == 0) {
                                 s->play_audio_frame = 1;
                         }
                         goto next_frame;
                 }
-                
+
                 if((++s->count) % ((int) s->desc.fps * 5) == 0) {
                         s->play_audio_frame = 1;
                 }

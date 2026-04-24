@@ -53,6 +53,7 @@
 #include <cstdio>                  // for snprintf, printf
 #include <cstdlib>                 // for free, calloc, malloc, strtol
 #include <cstring>                 // for strlen, strstr, strchr, strncmp
+#include <ctime>                   // for nanosleep
 #include <iostream>
 #include <memory>
 #include <string>
@@ -61,7 +62,6 @@
 #include "audio/types.h"
 #include "audio/utils.h"
 #include "compat/strings.h"        // for strcasecmp, strncasecmp
-#include "compat/usleep.h"
 #include "debug.h"
 #include "lib_common.h"
 #include "ndi_common.h"
@@ -161,7 +161,8 @@ static void show_help(struct vidcap_state_ndi *s) {
         uint32_t nr_sources = 0;
         const NDIlib_source_t* p_sources = nullptr;
         // Give sources some time to occur
-        usleep(500 * 1000);
+        struct timespec timeout = { .tv_sec = 0, .tv_nsec = MS_TO_NS(500) };
+        nanosleep(&timeout, nullptr);
         // we do not usea NDIlib_find_wait_for_sources() here because: 1) if there is
         // no source, it will still wait requested amount of time and 2) if there are
         // more sources, it will continue after first source found while there can be more
@@ -658,7 +659,8 @@ static void vidcap_ndi_probe(device_info **available_cards, int *count, void (**
         uint32_t nr_sources = 0;
         const NDIlib_source_t* p_sources = nullptr;
         // Give sources some time to occur
-        usleep(100 * 1000);
+        struct timespec timeout = { .tv_sec = 0, .tv_nsec = MS_TO_NS(100) };
+        nanosleep(&timeout, nullptr);
         // we do not usea NDIlib_find_wait_for_sources() here because: 1) if there is
         // no source, it will still wait requested amount of time and 2) if there are
         // more sources, it will continue after first source found while there can be more

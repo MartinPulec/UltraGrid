@@ -6,7 +6,7 @@
  * occur during regular use like jitter between frames.
  */
 /*
- * Copyright (c) 2021-2025 CESNET
+ * Copyright (c) 2021-2026 CESNET, zájmové sduržení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,10 +42,11 @@
 #include <stdio.h>            // for printf, NULL
 #include <stdlib.h>           // for free, atof, calloc
 #include <string.h>           // for strchr, strcmp, strlen, strstr
+#include <time.h>             // for nanosleep
 
 #include "capture_filter.h"
 
-#include "compat/usleep.h"
+#include "compat/c23.h"       // IWYU pragma: keep
 #include "debug.h"
 #include "lib_common.h"
 #include "utils/color_out.h"
@@ -109,7 +110,9 @@ static struct video_frame *filter(void *state, struct video_frame *in)
 {
         struct state_disrupt *s = state;
 
-        usleep(1000.0 * ug_drand() * s->jitter_ms);
+        nanosleep(&(struct timespec){ .tv_nsec =
+                                          MS_TO_US(ug_drand() * s->jitter_ms) },
+                  nullptr);
 
         return in;
 }
