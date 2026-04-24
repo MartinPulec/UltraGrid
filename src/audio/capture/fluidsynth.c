@@ -304,13 +304,14 @@ audio_cap_fluidsynth_read(void *state)
 
         if (fluid_player_get_status(s->player) == FLUID_PLAYER_DONE) {
                 MSG(VERBOSE, "Rewinding...\n");
+                fluid_player_seek(s->player, 0);
                 fluid_player_play(s->player);
         }
 
-        if (s->audio.ch_count == 1) {
+        if (s->audio.ch_count == 1) { // drop right channel, keep the left
                 fluid_synth_write_s16(s->synth, CHUNK_SIZE, s->audio.data, 0, 1,
                                       s->right, 0, 1);
-        } else { // drop right channel, keep the left
+        } else {
                 assert(s->audio.ch_count == 2);
                 fluid_synth_write_s16(s->synth, CHUNK_SIZE, s->left, 0, 1,
                                       s->right, 0, 1);
