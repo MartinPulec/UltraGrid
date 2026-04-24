@@ -1,5 +1,5 @@
 /**
- * @file   video_display/piewire.cpp
+ * @file   video_display/pipewire.cpp
  * @author Martin Piatka <piatka@cesnet.cz>
  */
 /*
