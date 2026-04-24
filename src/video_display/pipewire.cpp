@@ -372,7 +372,7 @@ static bool display_pw_putf(void *state, video_frame *frame, long long flags)
 
         if(!buf->b){
                 //Frame is invalid - buffer got removed
-                return true;
+                return false;
         }
 
         assert(frame == s->in_flight_frame.get());
