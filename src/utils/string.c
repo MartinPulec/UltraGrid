@@ -300,26 +300,6 @@ sprintf_append(char *str, const char *format, ...)
         return str;
 }
 
-#ifdef _WIN32
-int
-asprintf(char **strp, const char *fmt, ...)
-{
-        va_list ap;
-
-        va_start(ap, fmt);
-        // get number of required bytes
-        int size = vsnprintf(nullptr, 0, fmt, ap);
-        va_end(ap);
-
-        *strp = malloc(size + 1);
-        va_start(ap, fmt);
-        (void) vsnprintf(*strp, size + 1, fmt, ap);
-        va_end(ap);
-
-        return size;
-}
-#endif
-
 #if defined _WIN32 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 38)
 size_t
 strlcpy(char *dst, const char *src, size_t size)

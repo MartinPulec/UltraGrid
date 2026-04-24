@@ -37,6 +37,7 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <stdio.h>                 // for asprintf
 #include <stdlib.h>                // for calloc, free
 #include <strings.h>               // for strcasecmp
 

@@ -68,16 +68,6 @@ COMPAT_MISC_EXT_C int __xpg_strerror_r(int errcode, char *buffer, size_t length)
 COMPAT_MISC_EXT_C const char *ug_strcasestr(const char *haystack,
                                             const char *needle);
 
-#ifdef _WIN32
-COMPAT_MISC_EXT_C int asprintf(char **strp, const char *fmt, ...);
-#else
-        #ifdef __cplusplus
-                #include <cstdio>   // for asprintf
-        #else
-                #include <stdio.h>  // for asprintf
-        #endif
-#endif
-
 #if defined _WIN32 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 38)
 COMPAT_MISC_EXT_C size_t strlcpy(char *dst, const char *src, size_t size);
 #else

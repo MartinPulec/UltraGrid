@@ -188,6 +188,8 @@ if test $system = Windows; then
         if ! expr "x$COMMON_FLAGS" : '.*gcodeview' >/dev/null; then
                 UG_MSG_WARN([Windows stacktrace will not be available.])
         fi
+        # _GNU_SOURCE adds additional functions with MinGW-w64 like asprintf
+        COMMON_FLAGS="${COMMON_FLAGS:+$COMMON_FLAGS }-D_GNU_SOURCE"
 fi
 
 clang_ver_major=$($CC --version | sed -n \

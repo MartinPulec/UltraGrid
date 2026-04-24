@@ -41,7 +41,7 @@
 #include <cctype>                  // for isspace, isdigit
 #include <cerrno>                  // for errno, EAFNOSUPPORT
 #include <condition_variable>
-#include <cstdio>                  // for snprintf, perror
+#include <cstdio>                  // for asprintf, snprintf, perror
 #include <cstdlib>                 // for atoi, free, malloc, abort, strtoll
 #include <cstring>                 // for NULL, str[n]casecmp, strlen...
 #ifdef _WIN32
@@ -62,7 +62,6 @@
 #include "debug.h"
 #include "compat/net.h"            // for net related
 #include "compat/platform_pipe.h"
-#include "compat/strings.h"        // for asprintf
 #include "compat/time.h"           // for timeval, gettimeofday
 #include "host.h"
 #include "messaging.h"
