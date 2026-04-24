@@ -67,6 +67,7 @@
 #include "pipewire_common.hpp"
 #include "pixfmt_conv.h"
 #include "utils/misc.h"
+#include "utils/string_view_utils.hpp"
 
 #define MOD_NAME "[PW vcap] "
 
@@ -479,51 +480,44 @@ static void show_generic_help(){
 
 
 static int parse_params(const struct vidcap_params *params, vcap_pw_state *s) {
-        if(const char *fmt = vidcap_params_get_fmt(params)) {        
-                std::istringstream params_stream(fmt);
-                
-                std::string param;
-                while (std::getline(params_stream, param, ':')) {
-                        if (param == "help") {
-                                if(s->mode == vcap_pw_state::Mode::Screen_capture)
-                                        show_screen_help();
-                                else
-                                        show_generic_help();
-                                return VIDCAP_INIT_NOERR;
-                        }
+        std::string_view cfg;
+        if(auto fmt = vidcap_params_get_fmt(params)){
+                cfg = fmt;
+        }
 
-                        if (param == "cursor") {
-                                s->user_options.show_cursor = true;
-                        } else if (param == "nocrop") {
-                                s->user_options.crop = false;
-                        } else {
-                                auto split_index = param.find('=');
-                                if(split_index != std::string::npos && split_index != 0){
-                                        std::string name = param.substr(0, split_index);
-                                        std::string value = param.substr(split_index + 1);
+        while(!cfg.empty()){
+                auto tok = tokenize(cfg, ':', '"');
 
-                                        if (name == "fps" || name == "FPS"){
-                                                std::istringstream is(value);
-                                                is >> s->user_options.fps;
-                                                continue;
-                                        }
+                const auto key = tokenize(tok, '=');
+                const auto val = tokenize(tok, '=');
 
-                                        if(name == "restore"){
-                                                s->user_options.restore_file = std::move(value);
-                                                continue;
-                                        }
+                if (key == "help") {
+                        if(s->mode == vcap_pw_state::Mode::Screen_capture)
+                                show_screen_help();
+                        else
+                                show_generic_help();
+                        return VIDCAP_INIT_NOERR;
+                }
 
-                                        if(name =="target"){
-                                                s->user_options.target = std::move(value);
-                                                continue;
-                                        }
-                                }
-
-                                LOG(LOG_LEVEL_ERROR) << MOD_NAME "invalid option: \"" << param << "\"\n";
+                if (key == "cursor") {
+                        s->user_options.show_cursor = true;
+                } else if (key == "nocrop") {
+                        s->user_options.crop = false;
+                } else if (key == "fps" || key == "FPS"){
+                        if(!parse_num(val, s->user_options.fps)){
+                                log_msg(LOG_LEVEL_FATAL, MOD_NAME "Failed to parse fps\n");
                                 return VIDCAP_INIT_FAIL;
                         }
+                } else if(key == "restore"){
+                        s->user_options.restore_file = val;
+                } else if(key == "target"){
+                        s->user_options.target = val;
+                } else{
+                        log_msg(LOG_LEVEL_FATAL, MOD_NAME "Unknown parameter %s\n", std::string(key).c_str());
+                        return VIDCAP_INIT_FAIL;
                 }
         }
+
         return VIDCAP_INIT_OK;
 }
 
