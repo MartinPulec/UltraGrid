@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2011-2025 CESNET
+ * Copyright (c) 2011-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -128,6 +128,26 @@ void audio_frame2::append(audio_frame2 const &src)
 
         for (size_t i = 0; i < channels.size(); i++) {
                 append(i, src.get_data(i), src.get_data_len(i));
+        }
+}
+
+void
+audio_frame2::append(audio_frame const &src)
+{
+        if (desc.bps != src.bps || desc.sample_rate != src.sample_rate ||
+            channels.size() != (size_t) src.ch_count) {
+                throw std::logic_error(
+                    "Trying to append frame with different parameters!");
+        }
+
+        const size_t length = src.data_len / src.ch_count;
+        for (size_t i = 0; i < channels.size(); i++) {
+                // allocate twice as much as we need to avoid frequent
+                // reallocations when append is called repeatedly
+                reserve(i, 2 * (channels[i].len + length));
+                demux_channel(channels[i].data.get() + channels[i].len,
+                              src.data, src.bps, src.data_len, src.ch_count, i);
+                channels[i].len += length;
         }
 }
 
@@ -279,6 +299,14 @@ bool audio_frame2::has_same_prop_as(audio_frame2 const &frame) const
                 desc.sample_rate == frame.desc.sample_rate &&
                 desc.codec == frame.desc.codec &&
                 channels.size() == frame.channels.size();
+}
+
+bool
+audio_frame2::has_same_prop_as(audio_frame const &frame) const
+{
+        return desc.bps == frame.bps && desc.sample_rate == frame.sample_rate &&
+               desc.codec == AC_PCM &&
+               channels.size() == (size_t) frame.ch_count;
 }
 
 void audio_frame2::set_duration(double new_duration)

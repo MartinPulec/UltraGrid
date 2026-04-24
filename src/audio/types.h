@@ -5,7 +5,7 @@
  * @brief  This file contains definition of some common audio types.
  */
 /*
- * Copyright (c) 2011-2021 CESNET, z. s. p. o.
+ * Copyright (c) 2011-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -157,6 +157,7 @@ public:
         void init(int nr_channels, audio_codec_t codec, int bps, int sample_rate);
         void append(audio_frame2 const &frame);
         void append(int channel, const char *data, size_t length);
+        void append(audio_frame const &frame);
         void replace(int channel, size_t offset, const char *data, size_t length);
         void reserve(size_t len);
         void resize(int channel, size_t len);
@@ -176,6 +177,7 @@ public:
         [[nodiscard]] int get_sample_rate() const;
         [[nodiscard]] int64_t get_timestamp() const; // u32 TS, -1 if unavail
         [[nodiscard]] bool has_same_prop_as(audio_frame2 const &frame) const;
+        [[nodiscard]] bool has_same_prop_as(audio_frame const &frame) const;
         void set_duration(double duration);
         void set_fec_params(int channel, fec_desc const &);
         [[nodiscard]] static audio_frame2 copy_with_bps_change(audio_frame2 const &frame, int new_bps);

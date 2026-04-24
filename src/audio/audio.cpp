@@ -989,11 +989,11 @@ static void *asend_compute_and_print_stats(void *arg) {
         return NULL;
 }
 
-static void process_statistics(struct state_audio *s, audio_frame2 *buffer)
+static void process_statistics(struct state_audio *s, const audio_frame *buffer)
 {
         if (!s->captured.has_same_prop_as(*buffer)) {
-                s->captured.init(buffer->get_channel_count(), buffer->get_codec(),
-                                buffer->get_bps(), buffer->get_sample_rate());
+                s->captured.init(buffer->ch_count, AC_PCM,
+                                buffer->bps, buffer->sample_rate);
         }
         s->captured.append(*buffer);
 
@@ -1102,6 +1102,7 @@ static void *audio_sender_thread(void *arg)
                                         continue;
 #endif
                         }
+                        process_statistics(s, buffer);
                         if (s->muted_sender) {
                                 memset(buffer->data, 0, buffer->data_len);
                         }
@@ -1133,8 +1134,6 @@ static void *audio_sender_thread(void *arg)
 
                                 bf_n.resample(*resampler_state, resample_to);
                         }
-                        // COMPRESS
-                        process_statistics(s, &bf_n);
                         // SEND
                         if(s->sender == NET_NATIVE) {
                                 audio_frame2 *uncompressed = &bf_n;
