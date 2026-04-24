@@ -417,12 +417,7 @@ static bool display_pw_reconfigure(void *state, video_desc desc)
 
         s->desc = desc;
 
-        std::string node_name = "ultragrid_out_";
-        {
-                char buf[32];
-                snprintf(buf, sizeof(buf), "%ld", (long) getpid());
-                node_name += buf;
-        }
+        std::string node_name = "ultragrid_out_" + std::to_string(getpid());
 
         auto props = pw_properties_new(
                         PW_KEY_MEDIA_TYPE, "Video",
