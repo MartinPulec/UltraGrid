@@ -57,7 +57,7 @@
 #include "types.h"                // for device_info
 #include "utils/color_out.h"      // for color_printf, TBOLD, TRED
 #include "utils/fs.h"             // for get_install_root, get_temp_file
-#include "utils/macros.h"         // for IS_KEY_PREFIX
+#include "utils/macros.h"         // for IF_NOT_NULL_ELSE, IS_KEY_PREFIX
 
 struct module;
 
@@ -244,12 +244,15 @@ audio_cap_fluidsynth_init(struct module *parent, const char *cfg)
                 goto error;
         }
         if (audio_capture_channels > 2) {
-                MSG(ERROR, "Only 1 or 2 channels currently supported...\n");
-                goto error;
+                MSG(WARNING,
+                    "%u channels selected but fluidsynth produces just stereo "
+                    "- channels will be altered...\n",
+                    audio_capture_channels);
         }
 
         s->audio.bps         = FLUIDSYNTH_BPS;
-        s->audio.ch_count    = audio_capture_channels < 2 ? 1 : 2;
+        s->audio.ch_count    = IF_NOT_NULL_ELSE(audio_capture_channels,
+                                                DEFAULT_AUDIO_CAPTURE_CHANNELS);
         s->audio.sample_rate = audio_capture_sample_rate > 0
                                    ? audio_capture_sample_rate
                                    : DEFAULT_FLUIDSYNTH_SAMPLE_RATE;
@@ -312,15 +315,14 @@ audio_cap_fluidsynth_read(void *state)
                 fluid_synth_write_s16(s->synth, CHUNK_SIZE, s->audio.data, 0, 1,
                                       s->right, 0, 1);
         } else {
-                assert(s->audio.ch_count == 2);
                 fluid_synth_write_s16(s->synth, CHUNK_SIZE, s->left, 0, 1,
                                       s->right, 0, 1);
-                mux_channel(s->audio.data, (char *) s->left, s->audio.bps,
-                            s->audio.bps * CHUNK_SIZE, s->audio.ch_count, 0,
-                            1.);
-                mux_channel(s->audio.data, (char *) s->right, s->audio.bps,
-                            s->audio.bps * CHUNK_SIZE, s->audio.ch_count, 1,
-                            1.);
+                for (int i = 0; i < s->audio.ch_count; i++) {
+                        char *ch = (char *) (i % 2 == 0 ? s->left : s->right);
+                        mux_channel(s->audio.data, ch, s->audio.bps,
+                                    s->audio.bps * CHUNK_SIZE, s->audio.ch_count, i,
+                                    1.);
+                }
         }
 
         time_ns_t t = get_time_in_ns();
