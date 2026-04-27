@@ -69,8 +69,7 @@
 #include <cstdint>                      // for UINT16_MAX, uint32_t
 #include <cstdio>                       // for printf, perror, fprintf, stderr
 #include <cstdlib>
-#include <cstring>                      // for strcasecmp, strcmp, strlen...
-#include <exception>                    // for exception
+#include <cstring>                      // for strcmp, strlen, strtok_r, strchr
 #include <getopt.h>
 #include <initializer_list>             // for initializer_list
 #include <iostream>
@@ -79,6 +78,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>                  // for operator==, basic_string_view
+#include <strings.h>                    // for strcasecmp
 #include <unistd.h>                     // for optarg, optind, STDERR...
 #include <unordered_map>                // for unordered_map
 #include <utility>                      // for move
@@ -89,7 +89,7 @@
 #include "audio/audio_playback.h"       // for audio_playback_help
 #include "audio/codec.h"                // for audio_codec_params, get_name_...
 #include "audio/types.h"                // for AC_NONE, AUDIO_FRAME_DISPOSE
-#include "compat/alarm.h"               // for alarm
+#include "compat/alarm.h"               // IWYU pragma: keep for alarm
 #include "compat/misc.h"                // for PTHREAD_NULL
 #include "control_socket.h"
 #include "cuda_wrapper.h"
@@ -101,16 +101,12 @@
 #include "module.h"
 #include "playback.h"
 #include "rtp/rtp.h"
-#include "rtsp/rtsp_utils.h"
-#include "tv.h"
 #include "types.h"                      // for video_frame, video_frame_call...
-#include "ug_runtime_error.hpp"
 #include "utils/color_out.h"
 #include "utils/macros.h"               // for snprintf_ch, to_fourcc
 #include "utils/misc.h"
 #include "utils/nat.h"
 #include "utils/net.h"
-#include "utils/sdp.h"
 #include "utils/string.h"
 #include "utils/string_view_utils.hpp"
 #include "utils/thread.h"
@@ -121,6 +117,8 @@
 #include "video_capture_params.h"       // for vidcap_params_get_driver, vid...
 #include "video_display.h"
 #include "video_rxtx.h"
+
+struct video_rxtx;
 
 constexpr char MOD_NAME[] = "[main] ";
 

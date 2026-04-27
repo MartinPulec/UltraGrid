@@ -49,7 +49,7 @@
 EXTERN_C void alarm(unsigned int sec);
 
 #else
-#include <unistd.h>           // IWYU pragma: export
+#include <unistd.h>
 #endif /* _WIN32 */
 
 #endif // defined COMPAT_ALARM_H
