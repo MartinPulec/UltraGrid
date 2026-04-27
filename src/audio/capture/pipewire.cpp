@@ -59,7 +59,6 @@ struct state_pipewire_cap{
 
         std::string target;
 
-        audio_desc desc = {};
         ring_buffer_uniq ring_buf;
 
         audio_frame frame = {};
@@ -78,12 +77,12 @@ struct state_pipewire_cap{
 static void on_process(void *state){
         auto s = static_cast<state_pipewire_cap *>(state);
 
-        struct pw_buffer *b = pw_stream_dequeue_buffer(s->stream.get());
+        pw_buffer *b = pw_stream_dequeue_buffer(s->stream.get());
         if (!b) {
                 pw_log_warn("out of buffers: %m");
                 return;
         }
-        struct spa_buffer *buf = b->buffer;
+        spa_buffer *buf = b->buffer;
 
         char *src = static_cast<char *>(buf->datas[0].data);
         if (!src)
@@ -95,7 +94,7 @@ static void on_process(void *state){
         pw_stream_queue_buffer(s->stream.get(), b);
 }
 
-static void on_param_changed(void *state, uint32_t id, const struct spa_pod *param){
+static void on_param_changed(void *state, uint32_t id, const spa_pod *param){
         auto s = static_cast<state_pipewire_cap *>(state);
         spa_audio_info audio_params{};
 
@@ -154,7 +153,7 @@ static void on_param_changed(void *state, uint32_t id, const struct spa_pod *par
 
 }
 
-static void on_state_changed(void *state, enum pw_stream_state old, enum pw_stream_state new_state, const char *error)
+static void on_state_changed(void *state, pw_stream_state old, pw_stream_state new_state, const char *error)
 {
         auto s = static_cast<state_pipewire_cap *>(state);
         log_msg(LOG_LEVEL_NOTICE, MOD_NAME "Stream state change: %s -> %s\n",
@@ -168,23 +167,14 @@ static void on_state_changed(void *state, enum pw_stream_state old, enum pw_stre
         pw_thread_loop_signal(s->pw.pipewire_loop.get(), false);
 }
 
-
-const static pw_stream_events stream_events = { 
-        .version = PW_VERSION_STREAM_EVENTS,
-        .destroy = nullptr,
-        .state_changed = on_state_changed,
-        .control_info = nullptr,
-        .io_changed = nullptr,
-        .param_changed = on_param_changed,
-        .add_buffer = nullptr,
-        .remove_buffer = nullptr,
-        .process = on_process,
-        .drained = nullptr,
-#if PW_MAJOR > 0 || PW_MINOR > 3 || (PW_MINOR == 3 && PW_MICRO > 39)
-        .command = nullptr,
-        .trigger_done = nullptr,
-#endif
-};
+constexpr pw_stream_events stream_events = []{
+        pw_stream_events events{};
+        events.version = PW_VERSION_STREAM_EVENTS;
+        events.state_changed = on_state_changed;
+        events.param_changed = on_param_changed;
+        events.process = on_process;
+        return events;
+}();
 
 static void audio_cap_pw_help(){
         color_printf("Pipewire audio capture.\n");
@@ -196,7 +186,7 @@ static void audio_cap_pw_help(){
         print_devices("Audio/Source");
 }
 
-static void *audio_cap_pipewire_init(struct module *parent, const char *cfg){
+static void *audio_cap_pipewire_init(module *parent, const char *cfg){
         UNUSED(parent);
         auto s = std::make_unique<state_pipewire_cap>();
 
@@ -204,13 +194,15 @@ static void *audio_cap_pipewire_init(struct module *parent, const char *cfg){
         while(!cfg_sv.empty()){
                 auto tok = tokenize(cfg_sv, ':', '"');
 
-                auto key = tokenize(tok, '=');
-                auto val = tokenize(tok, '=');
+                const auto key = tokenize(tok, '=');
+                const auto val = tokenize(tok, '=');
 
                 if(key == "help"){
                         audio_cap_pw_help();
                         return INIT_NOERR;
-                } else if(key == "target"){
+                }
+
+                if(key == "target"){
                         s->target = val;
                 } else if(key == "channels"){
                         parse_num(val, s->ch_count);
@@ -297,7 +289,7 @@ static void *audio_cap_pipewire_init(struct module *parent, const char *cfg){
         return s.release();
 }
 
-static struct audio_frame *audio_cap_pipewire_read(void *state){
+static audio_frame *audio_cap_pipewire_read(void *state){
         auto s = static_cast<state_pipewire_cap *>(state);
 
         s->frame.data_len = ring_buffer_read(s->ring_buf.get(), s->frame.data, s->frame.max_size);
@@ -318,7 +310,7 @@ static void audio_cap_pipewire_done(void *state){
         delete s;
 }
 
-static void audio_cap_pipewire_probe(struct device_info **available_devices, int *count, void (**deleter)(void *))
+static void audio_cap_pipewire_probe(device_info **available_devices, int *count, void (**deleter)(void *))
 {
         *deleter = free;
         *available_devices = static_cast<device_info *>(calloc(1, sizeof(device_info)));
@@ -327,7 +319,7 @@ static void audio_cap_pipewire_probe(struct device_info **available_devices, int
         *count = 1;
 }
 
-static const struct audio_capture_info acap_pipewire_info = {
+constexpr audio_capture_info acap_pipewire_info = {
         audio_cap_pipewire_probe,
         audio_cap_pipewire_init,
         audio_cap_pipewire_read,
