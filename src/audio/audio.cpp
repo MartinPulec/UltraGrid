@@ -623,9 +623,12 @@ static struct response * audio_receiver_process_message(struct state_audio *s, s
                                      " %s. " TERM_FG_RESET "\n",
                                      color, act);
                 } else {
-                        log_msg(LOG_LEVEL_INFO,
-                                "Playback volume: %.2f%% (%+.2f dB)\n",
-                                new_volume * 100.0, db);
+                        log_msg(
+                            LOG_LEVEL_INFO,
+                            TERM_FG_MAGENTA
+                            "Playback volume: %.2f%% (%+.2f dB)" TERM_FG_RESET
+                            "\n",
+                            new_volume * 100.0, db);
                 }
                 pdb_iter_t    it{};
                 struct pdb_e *cp = pdb_iter_init(s->audio_participants, &it);
