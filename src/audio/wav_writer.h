@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2012-2021 CESNET z.s.p.o.
+ * Copyright (c) 2012-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -57,6 +57,10 @@ struct wav_writer_file;
 struct wav_writer_file *wav_writer_create(const char *filename, struct audio_desc fmt);
 
 /**
+ * @param sample_count number of samples per channel
+ * @param data         interleaved data, for 8-bit unsigned samples with shifted
+ *                     zero, signed otherwise (as specified by WAV - samples
+ *                     will be directly written)
  * @retval      0 on success
  * @retval -errno on failure
  */

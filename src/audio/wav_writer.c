@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2012-2021 CESNET, z. s. p. o.
+ * Copyright (c) 2012-2026 CESNET, zájmové sdružení právnických osbo
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -56,6 +56,13 @@
  * Resource [3] also suggests this use but strictly speaking this is documentation of system
  * API, not file format. flac(1) complains if the original format is used, FFmpeg RIFF writer
  * also follows the above rules.
+ *
+ * Files exceeding 2^32 bytes are stored with data and RIFF chunk
+ * size=0xFFFFFFFF. In this case, the actual sample count should be deduced from
+ * the file size. This is non-standard but eg. FFmpeg accepts that.
+ * @todo
+ * use RF64 format for correct > 4 GiB file store (perhaps use it also for
+ * smaller files)
  */
 
 #include <errno.h>        // for errno
@@ -131,7 +138,7 @@ static bool wav_write_header_data(FILE *wav, struct audio_desc fmt) {
 }
 
 struct wav_writer_file *wav_writer_create(const char *filename, struct audio_desc fmt) {
-        FILE *wav = fopen(filename, "wb+");
+        FILE *wav = fopen(filename, "wb");
         if (wav == NULL) {
                 perror("[WAV writer] Output file creating error\n");
                 return NULL;
