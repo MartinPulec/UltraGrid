@@ -200,23 +200,30 @@ static void signal_handler(int signum)
 static void
 print_help_item(const string &name, initializer_list<string> help)
 {
+        enum {
+                HELP_LEFT_OFF  = 40,
+                TAB_LEN        = 8,
+        };
         int help_lines = 0;
 
         col() << "\t" << TBOLD(<< name <<);
 
+        if (name.length() >= HELP_LEFT_OFF - TAB_LEN || help.size() == 0) {
+                cout << "\n";
+                help_lines = 1;
+        }
+
         for (auto const &line : help) {
-                int spaces = help_lines == 0 ? 31 - (int) name.length() : 39;
-                for (int i = 0; i < max(spaces, 0) + 1; ++i) {
+                unsigned spaces = HELP_LEFT_OFF;
+                if (help_lines == 0) {
+                        spaces -= name.length() + TAB_LEN;
+                }
+                for (unsigned i = 0; i < spaces; ++i) {
                         cout << " ";
                 }
                 cout << line << "\n";
                 help_lines += 1;
         }
-
-        if (help_lines == 0) {
-                cout << "\n";
-        }
-        cout << "\n";
 }
 
 static void
@@ -256,7 +263,7 @@ usage(bool full = false)
                         "\"none\", \"mult:<nr>\",", "\"ldgm:<max_expected_loss>%\" or", "\"ldgm:<k>:<m>:<c>\"",
                         "\"rs:<k>:<n>\""});
         if (full) {
-                print_help_item("-P <port> | <video_rx>:<video_tx>[:<audio_rx>:<audio_tx>]", { "",
+                print_help_item("-P <port> | <video_rx>:<video_tx>[:<audio_rx>:<audio_tx>]", {
                                 "<port> is base port number, also 3",
                                 "subsequent ports can be used for RTCP",
                                 "and audio streams. Default: " + to_string(PORT_BASE) + ".",
@@ -291,8 +298,10 @@ usage(bool full = false)
                 print_help_item("--conv-policy [cds]{3} | help", {"pixel format conversion policy"});
                 print_help_item("--video-codecs", {"list of video codecs"});
         }
+        printf("\n");
         print_help_item("address", {"destination address"});
         if (full) {
+                printf("\n");
                 color_printf("Environment variables: "
                              TBOLD("NDILIB_REDIST_FOLDER")
 #ifdef _WIN32
