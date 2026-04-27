@@ -279,6 +279,7 @@ audio_cap_fluidsynth_init(struct module *parent, const char *cfg)
                 MSG(ERROR, "Failed to add MIDI: %s\n", s->req_filename);
                 goto error;
         }
+        fluid_player_set_loop(s->player, -1);
         fluid_player_play(s->player);
 
         s->audio.max_size = s->audio.data_len =
@@ -304,12 +305,6 @@ static struct audio_frame *
 audio_cap_fluidsynth_read(void *state)
 {
         struct state_fluidsynth_capture *s = state;
-
-        if (fluid_player_get_status(s->player) == FLUID_PLAYER_DONE) {
-                MSG(VERBOSE, "Rewinding...\n");
-                fluid_player_seek(s->player, 0);
-                fluid_player_play(s->player);
-        }
 
         if (s->audio.ch_count == 1) { // drop right channel, keep the left
                 fluid_synth_write_s16(s->synth, CHUNK_SIZE, s->audio.data, 0, 1,
