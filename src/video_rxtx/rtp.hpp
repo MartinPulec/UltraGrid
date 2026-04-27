@@ -67,6 +67,5 @@ void                    rtp_rxtx_common_done(struct rtp_rxtx_common *state);
 void rtp_rxtx_sender_do_housekeeping(struct rtp_rxtx_common *s);
 void rtp_rxtx_set_pbuf_delay(struct rtp_rxtx_common *s, double delay);
 
-
 #endif // VIDEO_RXTX_RTP_H_
 

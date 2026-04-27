@@ -42,6 +42,7 @@
 
 uint32_t ultragrid_rtp_get_ssrc(void *state);
 int ultragrid_rtp_send_raw_rtp_data(void *state, char *buf, int count);
+void ultragrid_rtp_server_mode_help();
 
 #endif // VIDEO_RXTX_ULTRAGRID_RTP_H_
 

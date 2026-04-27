@@ -117,6 +117,7 @@
 #include "video_capture_params.h"       // for vidcap_params_get_driver, vid...
 #include "video_display.h"
 #include "video_rxtx.h"
+#include "video_rxtx/ultragrid_rtp.hpp" // for ultragrid_rtp_server_mode_help
 
 struct video_rxtx;
 
@@ -254,6 +255,7 @@ usage(bool full = false)
                 print_help_item("-M <video_mode>", {"received video mode (eg tiled-4K, 3D,",
                                 "dual-link)"});
                 print_help_item("-N, --nat-traverse"s, {"try to deploy NAT traversal techniques"s});
+                print_help_item("-C/-S"s, {"client/server mode - use '-S help'"s});
                 print_help_item("-p <postprocess> | help", {"postprocess module"});
                 print_help_item("-T, --ttl <num>", {"Use specified TTL for multicast/unicast (0..255, -1 for default)"});
         }
@@ -1142,7 +1144,7 @@ adjust_params_holepunch(struct ug_options *opt)
         Holepunch_config punch_c = {};
 
         if(!parse_holepunch_conf(opt->nat_traverse_config, &punch_c)){
-                return EXIT_FAILURE;
+                return -EXIT_FAILURE;
         }
 
         commandline_params["udp-disable-multi-socket"] = string();
@@ -1175,12 +1177,12 @@ adjust_params_holepunch(struct ug_options *opt)
 
         if(!punch_fcn){
                 log_msg(LOG_LEVEL_ERROR, "Failed to load holepunching module\n");
-                return EXIT_FAILURE;
+                return -EXIT_FAILURE;
         }
 
         if(!punch_fcn(&punch_c)){
                 log_msg(LOG_LEVEL_ERROR, "Hole punching failed.\n");
-                return EXIT_FAILURE;
+                return -EXIT_FAILURE;
         }
 
         log_msg(LOG_LEVEL_INFO, "[holepunch] remote: %s\n rx: %d\n tx: %d\n",
@@ -1190,13 +1192,22 @@ adjust_params_holepunch(struct ug_options *opt)
 #endif //HAVE_LIBJUICE
 }
 
-static int adjust_params(struct ug_options *opt) {
+
+
+/// @returns 0 - OK; 1 - also ok but exit (help printed); -RC - exit with RC
+static int
+adjust_params(struct ug_options *opt)
+{
         unsigned int audio_rxtx_mode = 0;
         if (opt->is_server) {
                 commandline_params["udp-disable-multi-socket"] = string();
                 if (opt->common.receiver != nullptr) {
+                        if (strcmp(opt->common.receiver, "help") == 0) {
+                                ultragrid_rtp_server_mode_help();
+                                return 1;
+                        }
                         LOG(LOG_LEVEL_ERROR) << "Receiver must not be given in server mode!\n";
-                        return EXIT_FAIL_USAGE;
+                        return -EXIT_FAIL_USAGE;
                 }
                 opt->common.receiver = IN6_BLACKHOLE_SERVER_MODE_STR;
                 if (strcmp(opt->requested_display, "none") == 0 && strcmp("none", vidcap_params_get_driver(opt->vidcap_params_head)) != 0) {
@@ -1210,7 +1221,7 @@ static int adjust_params(struct ug_options *opt) {
                 commandline_params["udp-disable-multi-socket"] = string();
                 if (opt->common.receiver == nullptr) {
                         LOG(LOG_LEVEL_ERROR) << "Server address required in client mode!\n";
-                        return EXIT_FAIL_USAGE;
+                        return -EXIT_FAIL_USAGE;
                 }
                 if (strcmp("none", vidcap_params_get_driver(opt->vidcap_params_head)) == 0 && strcmp(opt->requested_display, "none") != 0) {
                         vidcap_params_set_device(opt->vidcap_params_tail, "testcard:2:1:1:UYVY");
@@ -1337,6 +1348,7 @@ validate_params(struct ug_options *opt)
 
 
 #define EXIT(expr) { int rc = expr; common_cleanup(init); return rc; }
+#define RET_TO_RC(ret) (ret < 0 ? -ret : EXIT_SUCCESS)
 
 int main(int argc, char *argv[])
 {
@@ -1383,7 +1395,7 @@ int main(int argc, char *argv[])
                 validate_params(&opt);
         }
         if (int ret = adjust_params(&opt)) {
-                EXIT(ret);
+                EXIT(RET_TO_RC(ret));
         }
 
         const auto ac_params = parse_audio_codec_params(opt.audio.codec_cfg);

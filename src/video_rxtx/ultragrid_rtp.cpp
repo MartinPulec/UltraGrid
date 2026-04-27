@@ -77,6 +77,7 @@ typedef SSIZE_T ssize_t;
 #include "utils/lock_guard.h"    // for ultragrid::pthread_mutex_guard
 #include "utils/macros.h"      // for to_fourcc
 #include "utils/misc.h"          // for format_in_si_units
+#include "utils/text.h"          // for wrap_paragraph
 #include "utils/thread.h"
 #include "video_display.h"
 #include "video_rxtx.h"
@@ -525,6 +526,28 @@ static void usage() {
                      " doesn't take any options.\n\n");
         color_printf("Usage:\n\t" TBOLD("-x ultragrid_rtp")
                      "\n");
+}
+
+void
+ultragrid_rtp_server_mode_help()
+{
+        color_printf(TBOLD("server mode")
+                     " is one of " TBOLD("NAT traversal")
+                     " techniques in UG.\n\n");
+        char desc[] =
+            "It is useful in cases when at least one end is " TBOLD("outside")
+            " NAT. "
+            "This end will become the \"server\" while the one behind "
+            "NAT the client.\n\n";
+        color_printf("%s", wrap_paragraph(desc));
+        color_printf("Usage:\n");
+        color_printf("\t" TBOLD("uv [uv_args] -S")
+                     "\n\t\t the server\n");
+        color_printf("\t" TBOLD("uv [uv_args] -C <server_address>")
+                     "\n\t\t the client\n");
+        color_printf("\nSee "
+                     "also: <https://github.com/CESNET/UltraGrid/wiki/"
+                     "NAT-traversal#server-mode>\nfor more details.\n");
 }
 
 static void *
