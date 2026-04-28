@@ -35,14 +35,17 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "utils/audio_buffer.h"
 
 #include <stdlib.h>
 
 #include "audio/types.h"
 #include "debug.h"
-#include "utils/audio_buffer.h"
+#include "tv.h"
+#include "utils/misc.h"
 #include "utils/ring_buffer.h"
 
+#define MOD_NAME "[audio_buffer] "
 #define WINDOW 50
 
 #undef max
@@ -71,6 +74,9 @@ struct audio_buffer {
         int last_overrun; // last overrun n output frames ago
         int aggressivity;
         int last_aggressivity_change;
+
+        time_ns_t t0;
+        unsigned long long drop_cumul;
 };
 
 struct audio_buffer *audio_buffer_init(int sample_rate, int bps, int ch_count, int suggested_latency_ms)
@@ -89,6 +95,8 @@ struct audio_buffer *audio_buffer_init(int sample_rate, int bps, int ch_count, i
         buf->aggressivity = 1;
         buf->last_aggressivity_change = AGGRESSIVITY_STEP;
 
+        buf->t0 = get_time_in_ns();
+
         return buf;
 }
 
@@ -96,6 +104,12 @@ void audio_buffer_destroy(struct audio_buffer *buf)
 {
         if (!buf) {
                 return;
+        }
+        if (buf->drop_cumul > 0 || log_level >= LOG_LEVEL_VERBOSE) {
+                time_ns_t t = get_time_in_ns();
+                MSG(INFO, "dropped %s bytes in %.2f seconds\n",
+                    fmt_number_with_delim(buf->drop_cumul),
+                    NS_TO_MS(t - buf->t0) / MS_IN_SEC_DBL);
         }
         ring_buffer_destroy(buf->ring);
         free(buf);
@@ -154,13 +168,14 @@ int audio_buffer_read(struct audio_buffer *buf, char *out, int max_len)
                 int frame_size = buf->desc.bps * buf->desc.ch_count;
                 len_drop = len_drop / frame_size * frame_size;
 
-                char *tmp = alloca(len_drop);
+                char tmp[len_drop];
                 ring_buffer_read(buf->ring, tmp, len_drop);
                 buf->last_overrun = 0;
                 log_msg(LOG_LEVEL_VERBOSE,
                         "Dropped audio bytes: req latency %d remaining %d "
                         "dropped %d!\n",
                         requested_latency_bytes, remaining_bytes, len_drop);
+                buf->drop_cumul += len_drop;
         } else {
                 buf->last_overrun += 1;
         }
