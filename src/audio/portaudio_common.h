@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2018-2025 CESNET
+ * Copyright (c) 2018-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,8 @@
 #include <stdbool.h>    // for bool
 struct device_info;
 
+#include "types.h"      // IWYU pragma: keep for kHz48, kHz8
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -50,6 +52,8 @@ enum portaudio_device_direction {
         PORTAUDIO_IN,
         PORTAUDIO_OUT
 };
+
+#define PA_COMMON_SAMPLE_RATES kHz8, 16000, 24000, 32000, 44100, kHz48, 96000
 
 void portaudio_print_help(enum portaudio_device_direction, bool full);
 const char *portaudio_get_device_name(PaDeviceIndex device);

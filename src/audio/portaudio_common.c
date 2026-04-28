@@ -38,17 +38,17 @@
 #include <assert.h>           // for assert
 #include <portaudio.h>
 #include <stdbool.h>
-#include <stdio.h>            // for snprintf, printf, NULL
+#include <stdio.h>            // for printf, snprintf
 #include <stdlib.h>           // for calloc
 #include <string.h>           // for strcasecmp, strncpy, strstr
 
+#include "compat/c23.h"       // IWYU pragma: keep
 #include "compat/strings.h"   // for ug_strcasestr
 #include "debug.h"
 #include "host.h"             // for uv_argv
 #include "portaudio_common.h"
 #include "types.h"
 #include "utils/color_out.h"
-#include "utils/macros.h"     // for snprintf_ch
 
 #define MOD_NAME "[PortAudio] "
 
@@ -77,25 +77,76 @@ const char *portaudio_get_device_name(PaDeviceIndex device) {
 }
 
 static const char *
-portaudio_get_device_details(PaDeviceIndex                   device,
+portaudio_get_device_details(size_t buf_len, char *buffer, PaDeviceIndex device,
                              enum portaudio_device_direction kind, bool full)
 {
         assert(device >= 0 && device < Pa_GetDeviceCount());
         const PaDeviceInfo *device_info = Pa_GetDeviceInfo(device);
-        _Thread_local static char buffer[1024];
         if (full) {
-                snprintf_ch(buffer, "(%d/%d; %s)",
+                (void) snprintf(buffer, buf_len, "(%d/%d; %s)",
                          device_info->maxInputChannels,
                          device_info->maxOutputChannels,
                          portaudio_get_api_name(device));
         } else {
-                snprintf_ch(buffer, "(%d; %s)",
+                (void) snprintf(buffer, buf_len, "(%d; %s)",
                             kind == PORTAUDIO_IN
                                 ? device_info->maxInputChannels
                                 : device_info->maxOutputChannels,
                             portaudio_get_api_name(device));
         }
         return buffer;
+}
+
+static void
+print_supported_parameters(const PaDeviceInfo             *device_info,
+                           enum portaudio_device_direction kind, int device_idx)
+{
+        const int            sample_rates[]   = { PA_COMMON_SAMPLE_RATES };
+        #define FORMAT(x) { x, #x }
+        const struct {
+                PaSampleFormat fmt;
+                const char *name;
+
+        } sample_formats[] = { FORMAT(paInt8), FORMAT(paInt16), FORMAT(paInt24),
+                               FORMAT(paInt32) };
+        const int max_channels = kind == PORTAUDIO_IN
+                                     ? device_info->maxInputChannels
+                                     : device_info->maxOutputChannels;
+        if (max_channels == 0) {
+                return;
+        }
+        printf("\t\tSupported formats:\n");
+        for (unsigned sr = 0; sr < countof(sample_rates); sr++) {
+                bool sr_print = false;
+                printf("\t\t\t%u Hz: ", sample_rates[sr]);
+                for (unsigned sf = 0; sf < countof(sample_formats); sf++) {
+                        PaStreamParameters params = {
+                                .device       = device_idx,
+                                .channelCount = 1,
+                                .sampleFormat = sample_formats[sf].fmt,
+                        };
+                        // fprintf(stderr, "%u/%d %d\n", sample_rates[sr], ch,
+                        // max_channels);
+                        int err = kind == PORTAUDIO_IN
+                                      ? Pa_IsFormatSupported(&params, nullptr,
+                                                             sample_rates[sr])
+                                      : Pa_IsFormatSupported(nullptr, &params,
+                                                             sample_rates[sr]);
+                        if (err == paFormatIsSupported) {
+                                if (!sr_print) {
+                                        sr_print = true;
+                                } else {
+                                        printf(", ");
+                                }
+                                printf("%s", sample_formats[sf].name);
+                        }
+                }
+                if (!sr_print) {
+                        printf("(none)");
+                }
+                printf("\n");
+        }
+        printf("\n");
 }
 
 static bool
@@ -113,16 +164,15 @@ void
 portaudio_print_help(enum portaudio_device_direction kind, bool full)
 {
         if (full) {
-                printf("\nAvailable PortAudio %s devices (max in ch/max out "
+                printf("Available PortAudio %s devices (max in ch/max out "
                        "ch; API):\n",
                        kind == PORTAUDIO_OUT ? "playback" : "capture");
         } else {
-                printf("\nAvailable PortAudio %s devices (max channels; API):\n",
+                printf("Available PortAudio %s devices (max channels; API):\n",
                        kind == PORTAUDIO_OUT ? "playback" : "capture");
         }
 
         int numDevices;
-        int i;
 
         PaError error;
 
@@ -148,8 +198,7 @@ portaudio_print_help(enum portaudio_device_direction kind, bool full)
 
         color_printf("\t" TBOLD("portaudio") " - use default Portaudio device (marked with star)\n");
 
-        for(i = 0; i < numDevices; i++)
-        {
+        for (int i = 0; i < numDevices; i++) {
                 const char *highlight = TERM_BOLD;
                 const PaDeviceInfo *device_info = Pa_GetDeviceInfo(i);
                 // filter out (or differently highlight in verbose mode) unusable devices
@@ -167,11 +216,18 @@ portaudio_print_help(enum portaudio_device_direction kind, bool full)
                 color_printf(
                     "\t%sportaudio:%d" TERM_RESET " - %s%s" TERM_RESET " %s",
                     highlight, i, highlight, portaudio_get_device_name(i),
-                    portaudio_get_device_details(i, kind, full));
+                    portaudio_get_device_details(1024, (char[1024]){}, i, kind,
+                                                 full));
                 printf("\n");
+                if (full) {
+                        print_supported_parameters(device_info, kind, i);
+                }
         }
 
         if (full) {
+                color_printf("\n" TBOLD("Note:")
+                             " The listed sample rates above are the pre-defined "
+                             "values, the device may support more.\n");
                 printf ("\nSupported APIs:\n");
                 for (int i = 0; i < Pa_GetHostApiCount(); ++i) {
                         const PaHostApiInfo *info = Pa_GetHostApiInfo(i);

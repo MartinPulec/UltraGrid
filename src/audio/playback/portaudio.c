@@ -9,7 +9,7 @@
  *          Martin Pulec     <martin.pulec@cesnet.cz>
  *          Ian Wesley-Smith <iwsmith@cct.lsu.edu>
  *
- * Copyright (c) 2005-2025 CESNET
+ * Copyright (c) 2005-2026 CESNET, zájmové sdružení právnických osob
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, is permitted provided that the following conditions
@@ -284,7 +284,7 @@ static bool get_supported_format(int device_idx, int ch_count, int *sample_rate,
 
         assert(*bps >= 1 && *bps <= 4);
         int sample_rates[] = { *sample_rate, device_info->defaultSampleRate,
-                48000, 44100, 8000, 16000, 32000, 96000, 24000 };
+                               PA_COMMON_SAMPLE_RATES };
         qsort_s(sample_rates, sizeof sample_rates / sizeof sample_rates[0],
                 sizeof sample_rates[0], sample_rate_compare, sample_rate);
         for (int i = 0; i < (int)(sizeof sample_rates / sizeof sample_rates[0]); ++i) {
