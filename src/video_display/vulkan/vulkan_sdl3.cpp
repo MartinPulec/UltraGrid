@@ -103,7 +103,7 @@ class WindowCallback final : public vkd::WindowChangedCallback {
 public:
         explicit WindowCallback(SDL_Window* window):
                 window{window} { }
-        
+
         vkd::WindowParameters get_window_parameters() override {
                 assert(window);
                 int width = 0;
@@ -175,7 +175,7 @@ struct state_vulkan_sdl3 {
 
         int width = 0;
         int height = 0;
-        
+
         SDL_Window* window = nullptr;
 
         std::unique_ptr<vkd::VulkanDisplay> vulkan;
@@ -335,11 +335,11 @@ void process_events(state_vulkan_sdl3& s) {
                         }
                 } else if (sdl_event.type == SDL_EVENT_KEY_DOWN && sdl_event.key.repeat == 0) {
                         auto& keysym = sdl_event.key;
-                        log_msg(LOG_LEVEL_VERBOSE, 
+                        log_msg(LOG_LEVEL_VERBOSE,
                                 MOD_NAME "Pressed key %s (scancode: %d, sym: %d, mod: %d)!\n",
-                                SDL_GetKeyName(keysym.key), 
-                                keysym.scancode, 
-                                keysym.key, 
+                                SDL_GetKeyName(keysym.key),
+                                keysym.scancode,
+                                keysym.key,
                                 keysym.mod);
                         int64_t sym = translate_sdl_key_to_ug(keysym);
                         if (sym > 0) {
@@ -348,11 +348,11 @@ void process_events(state_vulkan_sdl3& s) {
                                         keycontrol_send_key(get_root_module(s.mod.get()), sym);
                                 }
                         } else if (sym == -1) {
-                                log_msg(LOG_LEVEL_WARNING, 
+                                log_msg(LOG_LEVEL_WARNING,
                                         MOD_NAME "Cannot translate key %s (scancode: %d, sym: %d, mod: %d)!\n",
-                                        SDL_GetKeyName(keysym.key), 
-                                        keysym.scancode, 
-                                        keysym.key, 
+                                        SDL_GetKeyName(keysym.key),
+                                        keysym.scancode,
+                                        keysym.key,
                                         keysym.mod);
                         }
 
@@ -387,7 +387,7 @@ void process_events(state_vulkan_sdl3& s) {
 void display_vulkan_run(void* state) {
         auto* s = static_cast<state_vulkan_sdl3*>(state);
         assert(s->magic == magic_vulkan_sdl3);
-        
+
         while (!s->should_exit) {
                 process_events(*s);
                 if(s->show_cursor == state_vulkan_sdl3::SC_AUTOHIDE
@@ -429,9 +429,9 @@ void print_gpus() {
         try {
                 instance.init(required_extensions, false);
                 instance.get_available_gpus(gpus);
-        } 
+        }
         catch (std::exception& e) { log_and_exit_uv(e); return; }
-        
+
         col() << "\n\tVulkan GPUs:\n";
         uint32_t counter = 0;
         for (const auto& gpu : gpus) {
@@ -450,7 +450,7 @@ void show_help() {
                 }
                 col() << '\n';
         };
-        
+
         col() << "VULKAN_SDL3 options:\n";
         col() << SBOLD(SRED("\t-d vulkan")
                         << "[:d|:fs|:keep-aspect|:[no]cursor|:nodecorate|:novsync|:tearing|:validation|:display=<d>|"
@@ -460,7 +460,7 @@ void show_help() {
 
         col() << SBOLD("\t               d") << " - deinterlace\n";
         col() << SBOLD("\t              fs") << " - fullscreen\n";
-        
+
         col() << SBOLD("\t     keep-aspect") << " - keep window aspect ratio respective to the video\n";
         col() << SBOLD("\t      [no]cursor") << " - force show/hide cursor (default is autohide when not moving)\n";
         col() << SBOLD("\t      nodecorate") << " - disable window border\n";
@@ -477,7 +477,7 @@ void show_help() {
         col() << SBOLD("\t    size=<W>x<H>") << " - set window size\n";
         col() << SBOLD("\twindow_flags=<f>") << " - flags to be passed to SDL_CreateWindow (use prefix 0x for hex)\n";
         col() << SBOLD("\thint=<key>=<val>") << " - set SDL hint (eg. SDL_VIDEO_WAYLAND_PREFER_LIBDECOR=0): hint can be used repeatedly\n";
-        
+
         print_gpus();
 
         col() << "\n\tKeyboard shortcuts:\n";
@@ -498,7 +498,7 @@ struct CodecToVulkanFormat{
 
 // Ultragrid to VulkanDisplay Format mapping
 const std::vector<CodecToVulkanFormat>& get_ug_to_vkd_format_mapping(state_vulkan_sdl3& s){
-        //the backup vkd::Format must follow the corresponding native vkd::Format 
+        //the backup vkd::Format must follow the corresponding native vkd::Format
         constexpr std::array<CodecToVulkanFormat, 10> format_mapping {{
                 {RGBA, vkd::Format::RGBA8},
                 {RGB,  vkd::Format::RGB8},
@@ -566,7 +566,7 @@ void draw_splashscreen(state_vulkan_sdl3& s) {
         vkd::TransferImage image;
         try {
                 image = s.vulkan->acquire_image({splash_width, splash_height, vkd::Format::RGBA8});
-        } 
+        }
         catch (std::exception& e) { log_and_exit_uv(e); return; }
         const char* source = splash_data;
         char* dest = reinterpret_cast<char*>(image.get_memory_ptr());
@@ -582,7 +582,7 @@ void draw_splashscreen(state_vulkan_sdl3& s) {
         try {
                 s.vulkan->queue_image(image, true);
                 s.vulkan->display_queued_image();
-        } 
+        }
         catch (std::exception& e) { log_and_exit_uv(e); }
 }
 
@@ -847,7 +847,7 @@ void* display_vulkan_init(module* parent, const char* fmt, unsigned int /*flags*
         const char *const *extensions = SDL_Vulkan_GetInstanceExtensions(&extension_count);
         std::vector<const char*> required_extensions(extensions, extensions + extension_count);
         assert(extension_count > 0);
-        
+
         std::string path_to_shaders = vkd::get_shader_path();
         LOG(LOG_LEVEL_INFO) << MOD_NAME "Path to shaders: " << path_to_shaders << '\n';
         try {
@@ -896,15 +896,15 @@ void display_vulkan_done(void* state) {
 video_frame* display_vulkan_getf(void* state) {
         auto* s = static_cast<state_vulkan_sdl3*>(state);
         assert(s->magic == magic_vulkan_sdl3);
-        
+
         const auto& desc = s->current_desc;
         vkd::TransferImage image;
         try {
                 image = s->vulkan->acquire_image(to_vkd_image_desc(desc, *s));
-        } 
+        }
         catch (std::exception& e) { log_and_exit_uv(e); return nullptr; }
         video_frame& frame = *s->frame_mappings.create_frame(image);
-        
+
         update_description(desc, frame);
         frame.tiles[0].data_len = image.get_row_pitch() * image.get_size().height;
         frame.tiles[0].data = reinterpret_cast<char*>(image.get_memory_ptr());
@@ -925,11 +925,11 @@ bool display_vulkan_putf(void* state, video_frame* frame, long long timeout_ns) 
         if (timeout_ns == PUTF_DISCARD) {
                 try {
                         s->vulkan->discard_image(image);
-                } 
+                }
                 catch (std::exception& e) { log_and_exit_uv(e); return false; }
                 return true;
         }
-        
+
         if (s->deinterlace) {
                 image.set_process_function([](vkd::TransferImage& image) {
                         vc_deinterlace(reinterpret_cast<unsigned char*>(image.get_memory_ptr()),
@@ -937,10 +937,10 @@ bool display_vulkan_putf(void* state, video_frame* frame, long long timeout_ns) 
                                 image.get_size().height);
                 });
         }
-        
+
         try {
                 return !s->vulkan->queue_image(image, timeout_ns != PUTF_BLOCKING);
-        } 
+        }
         catch (std::exception& e) { log_and_exit_uv(e); return 1; }
         return true;
 }
@@ -982,7 +982,7 @@ bool display_vulkan_get_property(void* state, int property, void* val, size_t* l
                                 auto value = static_cast<int>(image.get_row_pitch());
                                 memcpy(val, &value, sizeof(value));
                                 s->vulkan->discard_image(image);
-                        } 
+                        }
                         catch (std::exception& e) { log_and_exit_uv(e); return false; }
                         break;
                 }
