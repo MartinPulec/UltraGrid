@@ -417,7 +417,7 @@ void sdl3_print_displays() {
                 if (dname == nullptr) {
                         dname = SDL_GetError();
                 }
-                col() << SBOLD(i) << " - " << dname << " (ID: " << displays[i] << ")" ;
+                col() << SBOLD(i) << " - " << dname;
         }
         std::cout << "\n";
 }
@@ -468,7 +468,7 @@ void show_help() {
         col() << SBOLD("\t         tearing") << " - permits screen tearing\n";
         col() << SBOLD("\t      validation") << " - enable vulkan validation layers\n";
 
-        col() << SBOLD("\t     display=<d>") << " - display index or ID, available indices: ";
+        col() << SBOLD("\t     display=<d>") << " - display index, available indices: ";
         sdl3_print_displays();
         col() << SBOLD("\t    driver=<drv>") << " - available drivers: ";
         print_drivers();
@@ -710,12 +710,7 @@ get_display_id_from_idx(int idx)
         if (idx < count) {
                 return displays[idx];
         }
-        for (int i = 0; i < count; ++i) {
-                if (displays[i] == (unsigned) idx) {
-                        return idx;
-                }
-        }
-        MSG(ERROR, "Display index %d out of range or ID invalid!\n", idx);
+        MSG(ERROR, "Display index %d out of range!\n", idx);
         return 0;
 }
 
