@@ -587,7 +587,6 @@ void draw_splashscreen(state_vulkan_sdl3& s) {
 }
 
 struct command_line_arguments {
-        bool cursor = true;
         bool help = false;
         bool vsync = true;
         bool tearing_permitted = false;
