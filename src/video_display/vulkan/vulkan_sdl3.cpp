@@ -68,6 +68,7 @@
 #include "utils/color_out.h"
 #include "utils/macros.h"                                  // for IS_KEY_PREFIX
 #include "video_display/splashscreen.h"
+#include "utils/string_view_utils.hpp"
 
 #include "vulkan_display.hpp" // vulkan.h must be before GLFW/SDL
 
@@ -602,100 +603,89 @@ struct command_line_arguments {
         std::map<std::string, std::string> hints;
 };
 
-bool parse_command_line_arguments(command_line_arguments& args, state_vulkan_sdl3& s, char *fmt) {
-        constexpr std::string_view wrong_option_msg = MOD_NAME "Wrong option: ";
+bool parse_cfg(command_line_arguments& args, state_vulkan_sdl3& s, std::string_view cfg){
+#define CHECKED_PARSE(sv, ...) \
+        do { \
+                if(!parse_num(sv, __VA_ARGS__)) { \
+                        log_msg(LOG_LEVEL_FATAL, MOD_NAME "Failed to parse number: %s, while parsing param %s\n", std::string(sv).c_str(), std::string(key).c_str()); \
+                        return false; \
+                } \
+        } while(0)
 
-        char *token = nullptr;
-        char *saveptr = nullptr;
-        while ((token = strtok_r(fmt, ":", &saveptr))) try {
-                fmt = nullptr;
-                //cstoi = cstring to int (checked)
-                auto cstoi = [token](const char *cstr,
-                                     size_t      exp_size = 0) -> int {
-                        std::size_t endpos = 0;
-                        int result = std::stoi(cstr, &endpos, 0);
-                        if (exp_size == 0) {
-                                exp_size = strlen(cstr);
-                        }
-                        if (endpos != exp_size) {
-                                throw std::runtime_error{
-                                        std::string(token) +
-                                        " (error parsing number)"
-                                };
-                        }
-                        return result;
-                };
-                if (strcmp(token, "help") == 0) {
+        while(!cfg.empty()){
+                auto tok = tokenize(cfg, ':');
+
+                const auto key = tokenize(tok, '=');
+                auto val = tokenize(tok, '=');
+
+                if(key == "help"){
                         show_help();
                         args.help = true;
-                } else if (strcmp(token, "d") == 0) {
+                } else if(key == "d"){
                         s.deinterlace = true;
-                } else if (strcmp(token, "fs") == 0) {
+                } else if(key == "fs"){
                         s.fullscreen = true;
-                } else if (strcmp(token, "keep-aspect") == 0) {
+                } else if(key == "keep-aspect"){
                         s.keep_aspect = true;
-                } else if (strcmp(token, "cursor") == 0) {
+                } else if(key == "cursor"){
                         s.show_cursor = state_vulkan_sdl3::SC_TRUE;
-                } else if (strcmp(token, "nocursor") == 0) {
+                } else if(key == "nocursor"){
                         s.show_cursor = state_vulkan_sdl3::SC_FALSE;
-                } else if (strcmp(token, "nodecorate") == 0) {
+                } else if(key == "nodecorate"){
                         args.window_flags |= SDL_WINDOW_BORDERLESS;
-                } else if (strcmp(token, "novsync") == 0) {
+                } else if(key == "novsync"){
                         args.vsync = false;
-                } else if (strcmp(token, "tearing") == 0) {
+                } else if(key == "tearing"){
                         args.tearing_permitted = true;
-                } else if (strcmp(token, "validation") == 0) {
+                } else if(key == "validation"){
                         args.validation = true;
-                } else if (IS_KEY_PREFIX(token, "display")) {
-                        args.display_idx = cstoi(strchr(token, '=') + 1);
-                } else if (IS_KEY_PREFIX(token, "driver")) {
-                        args.driver = std::string{ strchr(token, '=') + 1};
-                } else if (IS_KEY_PREFIX(token, "gpu")) {
-                        char *val = strchr(token, '=') + 1;
-                        if (strcmp(val, "integrated") == 0) {
+                } else if(key == "display"){
+                        CHECKED_PARSE(val, args.display_idx);
+                } else if(key == "driver"){
+                        args.driver = val;
+                } else if(key == "gpu"){
+                        if(val == "integrated") {
                                 args.gpu_idx = vulkan_display::gpu_integrated;
-                        } else if (strcmp(val, "discrete") == 0) {
+                        } else if(val == "discrete") {
                                 args.gpu_idx = vulkan_display::gpu_discrete;
                         } else {
-                                args.gpu_idx = cstoi(val);
+                                CHECKED_PARSE(val, args.gpu_idx);
                         }
-                } else if (IS_KEY_PREFIX(token, "pos")) {
-                        if (strchr(token, ',') == nullptr) {
-                                LOG(LOG_LEVEL_ERROR) << MOD_NAME "Missing colon in option:" 
-                                        << token << '\n';
+                } else if(key == "pos"){
+                        const auto xpos = tokenize(val, ',');
+                        const auto ypos = tokenize(val, ',');
+                        if(ypos.empty()){
+                                log_msg(LOG_LEVEL_FATAL, MOD_NAME "Missing y position in pos param\n");
                                 return false;
                         }
-                        token = strchr(token, '=') + 1;
-                        args.x = cstoi(token, strchr(token, ',') - token);
-                        token = strchr(token, ',') + 1;
-                        args.y = cstoi(token);
-                } else if (IS_KEY_PREFIX(token, "size")) {
-                        if (strchr(token, 'x') == nullptr) {
-                                LOG(LOG_LEVEL_ERROR) << MOD_NAME "Missing deliminer 'x' in option:" 
-                                        << token << '\n';
+                        CHECKED_PARSE(xpos, args.x);
+                        CHECKED_PARSE(ypos, args.y);
+                } else if(key == "size"){
+                        const auto xsize = tokenize(val, 'x');
+                        const auto ysize = tokenize(val, 'x');
+                        if(ysize.empty()){
+                                log_msg(LOG_LEVEL_FATAL, MOD_NAME "Missing height in size param\n");
                                 return false;
                         }
-                        token = strchr(token, '=') + 1;
-                        s.width = cstoi(token, strchr(token, 'x') - token);
-                        token = strchr(token, 'x') + 1;
-                        s.height = cstoi(token);
-                } else if (IS_KEY_PREFIX(token, "window_flags")) {
-                        token = strchr(token, '=') + 1;
-                        args.window_flags |= cstoi(strchr(token, '=') + 1);
-                } else if (IS_KEY_PREFIX(token, "hint") && strchr(token, '=') != strrchr(token, '=')) {
-                        char *key = strchr(token, '=') + 1;
-                        char *val = strchr(key, '=');
-                        *val = '\0';
-                        val++;
-                        args.hints[key] = val;
-                } else {
-                        LOG(LOG_LEVEL_ERROR) << wrong_option_msg << token << '\n';
+                        CHECKED_PARSE(xsize, s.width);
+                        CHECKED_PARSE(ysize, s.height);
+                } else if(key == "window_flags"){
+                        int flag = 0;
+                        if(val.substr(0, 2) == "0x"){
+                                auto val_without_0x = val.substr(2);
+                                CHECKED_PARSE(val_without_0x, flag, 16);
+                        } else{
+                                CHECKED_PARSE(val, flag);
+                        }
+                        args.window_flags |= flag;
+                } else if(key == "hint") {
+                        const std::string hint_key(val);
+                        const auto hint_val = tokenize(tok, '=');
+                        args.hints[hint_key] = hint_val;
+                } else{
+                        log_msg(LOG_LEVEL_FATAL, MOD_NAME "Unrecognized option: %s\n", std::string(key).c_str());
                         return false;
                 }
-        }
-        catch (std::exception& e) {
-                LOG(LOG_LEVEL_ERROR) << wrong_option_msg << e.what() << '\n';
-                return false;
         }
         return true;
 }
@@ -778,8 +768,7 @@ void* display_vulkan_init(module* parent, const char* fmt, unsigned int /*flags*
 
         command_line_arguments args{};
         if (fmt) {
-                std::string cpy = fmt;
-                if (!parse_command_line_arguments(args, *s, cpy.data())) {
+                if (!parse_cfg(args, *s, fmt)) {
                         return nullptr;
                 }
                 if (args.help) {
