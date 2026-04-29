@@ -1563,6 +1563,9 @@ check_print_display_gl_version()
 static int
 display_gl_print_depth(GLFWmonitor *monitor)
 {
+        if (monitor == nullptr) {
+                return DEPTH8;
+        }
         int bits[3];
         glGetIntegerv(GL_RED_BITS, &bits[0]);
         glGetIntegerv(GL_GREEN_BITS, &bits[1]);
