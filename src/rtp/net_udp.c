@@ -6,8 +6,8 @@
  *           Gerard Castillo <gerard.castillo@i2cat.net>
  *           Martin Pulec    <pulec@cesnet.cz>
  * 
- * Copyright (c) 2005-2010 Fundació i2CAT, Internet I Innovació Digital a Catalunya
- * Copyright (c) 2005-2025 CESNET z.s.p.o.
+ * Copyright (c) 2005-2026 CESNET, zájmové sdružení právnických osob
+ * Copyright (c) 2013 Fundació i2CAT, Internet I Innovació Digital a Catalunya
  * Copyright (c) 1998-2000 University College London
  * All rights reserved.
  *
@@ -45,13 +45,14 @@
 
 #include "config.h"
 #include <assert.h>
+#include <errno.h>                 // for errno, EADDRINUSE, ECONNREFUSED
+#include <inttypes.h>              // for PRIu16
 #include <pthread.h>
 #include <stdalign.h>
-#include <stdbool.h>
 #include <stdarg.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <stdint.h>       // for uint16_t, uintmax_t
+#include <stdbool.h>               // for bool, false, true
+#include <stdint.h>                // for uint16_t, uintmax_t
+#include <stdlib.h>                // for NULL, free, abort, calloc, malloc
 
 #ifndef _WIN32
 #include <ifaddrs.h>
@@ -798,6 +799,28 @@ bool udp_addr_valid(const char *addr)
         return udp_addr_valid4(addr) || udp_addr_valid6(addr);
 }
 
+static socklen_t
+set_rx_sockaddr(struct sockaddr_storage *ss, uint16_t rx_port, bool ipv6)
+{
+        if (ipv6) {
+#ifdef HAVE_IPv6
+                struct sockaddr_in6 *s_in6 = (struct sockaddr_in6 *) ss;
+                s_in6->sin6_family         = AF_INET6;
+                s_in6->sin6_addr           = in6addr_any;
+                s_in6->sin6_port           = htons(rx_port);
+#ifdef HAVE_SIN6_LEN
+                s_in6->sin6_len = sizeof(struct sockaddr_in6);
+#endif
+                return sizeof(struct sockaddr_in6);
+#endif
+        }
+        struct sockaddr_in *s_in4 = (struct sockaddr_in *) ss;
+        s_in4->sin_family         = AF_INET;
+        s_in4->sin_addr.s_addr    = htonl(INADDR_ANY);
+        s_in4->sin_port           = htons(rx_port);
+        return sizeof(struct sockaddr_in);
+}
+
 /**
  * udp_init:
  * Creates a session for sending and receiving UDP datagrams over IP
@@ -863,24 +886,7 @@ static bool set_sock_opts_and_bind(fd_t fd, bool ipv6, uint16_t rx_port, int ttl
                 handle_error(EXIT_FAIL_NETWORK);
         }
 
-        if (!ipv6) {
-                struct sockaddr_in *s_in4 = (struct sockaddr_in *) &s_in;
-                s_in4->sin_family = AF_INET;
-                s_in4->sin_addr.s_addr = htonl(INADDR_ANY);
-                s_in4->sin_port = htons(rx_port);
-                sin_len = sizeof(struct sockaddr_in);
-        } else {
-#ifdef HAVE_IPv6
-                struct sockaddr_in6 *s_in6 = (struct sockaddr_in6 *) &s_in;
-                s_in6->sin6_family = AF_INET6;
-                s_in6->sin6_addr = in6addr_any;
-                s_in6->sin6_port = htons(rx_port);
-#ifdef HAVE_SIN6_LEN
-                s_in6->sin6_len = sizeof(struct sockaddr_in6);
-#endif
-                sin_len = sizeof(struct sockaddr_in6);
-#endif
-        }
+        sin_len = set_rx_sockaddr(&s_in, rx_port, ipv6);
         if (bind(fd, (struct sockaddr *)&s_in, sin_len) != 0) {
                 socket_error("bind");
 #ifdef _WIN32
@@ -961,6 +967,36 @@ get_ifindex(const char *iface)
         return (unsigned) -1;
 }
 
+/**
+ * This is just a diagnostic function to print a warning if socket is already
+ * bound (perhaps by a different UG process) - print diagnostic in this case
+ * because it is perhaps not intended - usually just the later bound socket (in
+ * this process) receives the data so the first UG stops receiving.
+ *
+ * not applicable for Win - if a socket is already bound with SO_REUSEADDR,
+ * second bind always succeeds (even using SO_EXCLUSIVEADDRUSE for the 2nd)
+ */
+static void
+check_already_bound_rx_socket(socket_udp *s, uint16_t rx_port)
+{
+#ifdef _WIN32
+        return;
+#endif
+        if (rx_port == 0) { // dynamic port num - skip the test
+                return;
+        }
+        fd_t sock = socket(s->sock.ss_family, SOCK_DGRAM, 0);
+        struct sockaddr_storage s_in;
+        socklen_t               sin_len =
+            set_rx_sockaddr(&s_in, rx_port, s->local->mode == IPv6);
+        if (bind(sock, (struct sockaddr *) &s_in, sin_len) != 0 &&
+            errno == EADDRINUSE) {
+                MSG(WARNING, "UDP port number %" PRIu16 " already bound!\n",
+                    rx_port);
+        }
+        CLOSESOCKET(sock);
+}
+
 ADD_TO_PARAM("udp-queue-len",
                 "* udp-queue-len=<l>\n"
                 "  Use different queue size than default DEFAULT_MAX_UDP_READER_QUEUE_LEN\n");
@@ -1029,6 +1065,9 @@ socket_udp *udp_init_if(const char *addr, const char *iface, uint16_t rx_port,
                 socket_error("Unable to initialize socket");
                 goto error;
         }
+
+        check_already_bound_rx_socket(s, rx_port);
+
         // Set properties and bind
         // The order here is important if using separate socket for RX and TX - in
         // MSW, first bound socket receives data, in Linux (with Wine) the
