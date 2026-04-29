@@ -460,10 +460,10 @@ static struct audio_frame *audio_cap_testcard_read(void *state)
                                                          curr_time },
                           nullptr);
         } else {
-                // we missed more than 2 "frame times", in that case, just drop the packages
+                // we missed more than 2 "frame times"
                 if ((curr_time - s->next_audio_time) > (long long int) (2 * NS_IN_SEC * s->chunk_size / s->audio.sample_rate)) {
                         s->next_audio_time = curr_time;
-                        log_msg(LOG_LEVEL_WARNING, MOD_NAME "Warning: skipping some samples (late grab call).\n");
+                        MSG(WARNING, "Warning: late grab call!\n");
                 }
         }
 

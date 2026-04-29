@@ -3,7 +3,7 @@
  * @author Martin Pulec     <martin.pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2013-2022 CESNET, z. s. p. o.
+ * Copyright (c) 2013-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -224,7 +224,8 @@ int read_wav_header(FILE *wav_file, struct wav_metadata *metadata)
                 log_msg(LOG_LEVEL_VERBOSE, MOD_NAME "Using %4.4s WAV file.\n", buffer);
                 rf64 = 1;
         } else if (strncmp(buffer, "RIFF", 4) != 0) {
-                log_msg(LOG_LEVEL_ERROR, MOD_NAME "Expected RIFF or RF64/BW64 chunk, %.4s given.\n", buffer);
+                MSG(ERROR, "Expected RIFF or RF64/BW64 chunk, '%.4s' given.\n",
+                    buffer);
                 return WAV_HDR_PARSE_WRONG_FORMAT;
         }
 
@@ -322,6 +323,11 @@ int wav_seek(FILE *wav_file, long offset, int whence, struct wav_metadata *metad
                 return fseek(wav_file, offset, whence);
         }
         assert(whence == SEEK_SET);
+        if (metadata->data_offset == -1) {
+                MSG(WARNING, "Input file has no data offset defined!\n");
+                errno = ESPIPE;
+                return -1;
+        }
         return fseek(wav_file, metadata->data_offset + offset, SEEK_SET);
 }
 
