@@ -3,7 +3,7 @@
  * @author Martin Pulec <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2023 CESNET, z. s. p. o.
+ * Copyright (c) 2023-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,17 +42,24 @@
 
 #include "audio/audio_filter.h"
 #include "audio/types.h"
+#include "audio/utils.h"         // for remux_channel
+#include "compat/c23.h"          // IWYU pragma: keep
+#include "debug.h"               // for LOG_LEVEL_WARNING, MSG
 #include "lib_common.h"
 #include "utils/color_out.h"
 
+struct module;
+
+#define MOD_NAME "[af/silence] "
+
 enum {
-        MAX_CHANNELS = 16,
+        MAX_CHANNELS = 128,
 };
 
 struct state_silence {
-        struct audio_desc desc;
-        size_t silence_channels[MAX_CHANNELS];
-        int silence_channels_count;
+        struct audio_frame frame;
+        bool silence_channels[MAX_CHANNELS];
+        bool silence_all;
 };
 
 static void
@@ -75,6 +82,7 @@ init(struct module *parent, const char *cfg, void **state)
                 return AF_HELP_SHOWN;
         }
         struct state_silence *s = calloc(1, sizeof *s);
+        s->silence_all = true;
 
         const size_t len = strlen(cfg) + 1;
         char         fmt[len];
@@ -83,9 +91,10 @@ init(struct module *parent, const char *cfg, void **state)
         char *item    = NULL;
         char *end_ptr = NULL;
         while ((item = strtok_r(tmp, ",", &end_ptr)) != NULL) {
-                assert(s->silence_channels_count < MAX_CHANNELS - 1);
-                s->silence_channels[s->silence_channels_count++] =
-                    strtol(item, NULL, 10);
+                long val = strtol(item, nullptr, 0);
+                assert(val < MAX_CHANNELS);
+                s->silence_channels[val] = true;
+                s->silence_all = false;
                 tmp = NULL;
         }
         *state = s;
@@ -97,9 +106,11 @@ configure(void *state, int in_bps, int in_ch_count, int in_sample_rate)
 {
         struct state_silence *s = state;
 
-        s->desc.bps         = in_bps;
-        s->desc.ch_count    = in_ch_count;
-        s->desc.sample_rate = in_sample_rate;
+        s->frame.bps         = in_bps;
+        s->frame.ch_count    = in_ch_count;
+        s->frame.sample_rate = in_sample_rate;
+        s->frame.max_size    = in_bps * in_ch_count * in_sample_rate;
+        s->frame.data        = calloc(1, s->frame.max_size);
         return AF_OK;
 }
 
@@ -114,9 +125,9 @@ get_configured_desc(void *state, int *bps, int *ch_count, int *sample_rate)
 {
         struct state_silence *s = state;
 
-        *bps         = s->desc.bps;
-        *ch_count    = s->desc.ch_count;
-        *sample_rate = s->desc.sample_rate;
+        *bps         = s->frame.bps;
+        *ch_count    = s->frame.ch_count;
+        *sample_rate = s->frame.sample_rate;
 }
 
 static enum af_result_code
@@ -124,23 +135,26 @@ filter(void *state, struct audio_frame **frame)
 {
         struct state_silence *s = state;
 
-        if (s->silence_channels_count == 0) {
-                memset((*frame)->data, 0, (*frame)->data_len);
+        s->frame.data_len = (*frame)->data_len;
+        if (s->frame.data_len > s->frame.max_size) {
+                MSG(WARNING, "Overflow!");
+                s->frame.data_len = s->frame.max_size;
+        }
+
+        if (s->silence_all) { // already done
+                *frame = &s->frame;
                 return AF_OK;
         }
 
-        const int frame_size = s->desc.bps * s->desc.ch_count;
-        for (int i = 0; i < s->silence_channels_count; ++i) {
-                if (s->silence_channels[i] >= (size_t) (*frame)->ch_count) {
+        for (int i = 0; i < (*frame)->ch_count; ++i) {
+                if (s->silence_channels[i]) {
                         continue;
                 }
-                char *ptr =
-                    (*frame)->data + s->silence_channels[i] * (*frame)->bps;
-                for (int j = 0; j < (*frame)->data_len; j += frame_size) {
-                        memset(ptr, 0, (*frame)->bps);
-                        ptr += frame_size;
-                }
+                remux_channel(s->frame.data, (*frame)->data, s->frame.bps,
+                              s->frame.data_len, s->frame.ch_count,
+                              s->frame.ch_count, i, i);
         }
+        *frame = &s->frame;
 
         return AF_OK;
 }
