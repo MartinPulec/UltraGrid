@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2015-2023 CESNET, z. s. p. o.
+ * Copyright (c) 2015-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -118,13 +118,13 @@ void audio_capture_done(struct state_audio_capture *s)
         }
 }
 
-struct audio_frame * audio_capture_read(struct state_audio_capture *s)
+const struct audio_frame *
+audio_capture_read(struct state_audio_capture *s)
 {
-        if(s) {
-                return s->funcs->read(s->state);
-        } else {
+        if (s == NULL) {
                 return NULL;
         }
+        return s->funcs->read(s->state);
 }
 
 /**
