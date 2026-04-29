@@ -75,11 +75,11 @@ struct state_fluidsynth_capture {
         unsigned char     *right;
 
         char       *req_filename;
+        int         req_iterations;
         const char *tmp_filename;
 
         time_ns_t next_frame_time;
         time_ns_t frame_interval;
-        ;
 
         fluid_settings_t *settings;
         fluid_synth_t    *synth;
@@ -104,19 +104,14 @@ audio_cap_fluidsynth_probe(struct device_info **available_devices, int *count,
 static void
 usage()
 {
-        color_printf(
-            TBOLD("fluidsynth") " is a capture device capable playing MIDI.\n\n"
-                                "The main functional difference to " TBOLD(
-                                    "file") " video capture (that is able to "
-                                            "play audio\n"
-                                            "files as well) is the support "
-                                            "for " TBOLD(
-                                                "MIDI") " (and also having one "
-                                                        "song bundled).\n\n");
+        color_printf(TBOLD("fluidsynth")
+                     " is a capture device capable playing a MIDI file.\n\n");
+        color_printf("If no input file is specified, a bundled song is used.\n\n");
         color_printf("Usage:\n");
-        color_printf(TBOLD(TRED("\t-s fluidsynth") "[:file=<filename>]") "\n");
+        color_printf(TBOLD(TRED("\t-s fluidsynth") "[:file=<filename>][:loop=<iter>]") "\n");
         color_printf("where\n");
         color_printf(TBOLD("\t<filename>") " - name of file to be used\n");
+        color_printf(TBOLD("\t<iter>") "     - nr of iterations, -1 means infinite (default)\n");
         color_printf("\n");
         color_printf(TBOLD(
             "FLUIDSYNTH_SF") "        - environment variable with path to "
@@ -138,8 +133,11 @@ parse_opts(struct state_fluidsynth_capture *s, char *cfg)
                         usage();
                         return 1;
                 }
+                const char *val = strchr(item, '=') + 1;
                 if (IS_KEY_PREFIX(item, "file")) {
-                        s->req_filename = strdup(strchr(item, '=') + 1);
+                        s->req_filename = strdup(val);
+                } else if (IS_KEY_PREFIX(item, "loop")) {
+                        s->req_iterations = atoi(val);
                 } else {
                         log_msg(LOG_LEVEL_ERROR, MOD_NAME "Wrong option: %s!\n",
                                 item);
@@ -223,9 +221,11 @@ static void *
 audio_cap_fluidsynth_init(struct module *parent, const char *cfg)
 {
         (void) parent;
-        struct state_fluidsynth_capture *s    = calloc(1, sizeof *s);
-        char                            *ccfg = strdup(cfg);
-        int                              ret  = parse_opts(s, ccfg);
+        struct state_fluidsynth_capture *s = calloc(1, sizeof *s);
+        s->req_iterations                  = -1;
+
+        char *ccfg = strdup(cfg);
+        int   ret  = parse_opts(s, ccfg);
         free(ccfg);
         if (ret != 0) {
                 audio_cap_fluidsynth_done(s);
@@ -279,7 +279,7 @@ audio_cap_fluidsynth_init(struct module *parent, const char *cfg)
                 MSG(ERROR, "Failed to add MIDI: %s\n", s->req_filename);
                 goto error;
         }
-        fluid_player_set_loop(s->player, -1);
+        fluid_player_set_loop(s->player, s->req_iterations);
         fluid_player_play(s->player);
 
         s->audio.max_size = s->audio.data_len =
