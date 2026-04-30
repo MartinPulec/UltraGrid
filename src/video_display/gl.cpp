@@ -578,7 +578,9 @@ gl_print_current_platform()
 /**
  * Show help
  */
-static void gl_show_help(bool full, bool last) {
+static void
+gl_show_help(bool full)
+{
         col() << "usage:\n";
         col() << SBOLD(SRED("\t-d gl[:<options>]")
                        << (full ? " [--param " GL_DISABLE_10B_OPT_PARAM_NAME "]"
@@ -669,10 +671,6 @@ static void gl_show_help(bool full, bool last) {
               << FEATURE_PRESENT(SPOUT) << ", Syphon - "
               << FEATURE_PRESENT(SYPHON) << ", VDPAU - "
               << FEATURE_PRESENT(HWACC_VDPAU) << "\n";
-
-        if (!last) {
-                MSG(WARNING, "(full)help should be the last option!\n");
-        }
 }
 
 static void gl_load_splashscreen(struct state_gl *s)
@@ -827,7 +825,11 @@ display_gl_parse_fmt(struct state_gl *s, char *ptr)
 
         while((tok = strtok_r(ptr, ":", &save_ptr)) != NULL) {
                 if (strcmp(tok, "help") == 0 || strcmp(tok, "fullhelp") == 0) {
-                        gl_show_help(strcmp(tok, "fullhelp") == 0, *save_ptr == '\0');
+                        gl_show_help(strcmp(tok, "fullhelp") == 0);
+                        if (strtok_r(nullptr, ":", &save_ptr) != nullptr) {
+                                MSG(WARNING,
+                                    "(full)help should be the last option!\n");
+                        }
                         return false;
                 }
                 if (!strcmp(tok, "d") || !strcmp(tok, "dforce")) {
