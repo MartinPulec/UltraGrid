@@ -133,6 +133,9 @@ install_omt() (
                 printf "MACOS_BUNDLE_EXTRA_LIBS=%s /usr/local/lib/libvmx.dylib\n"\
                         "${MACOS_BUNDLE_EXTRA_LIBS-}" >> "$GITHUB_ENV"
         else
+                if is_arm; then
+                        return # do not build for ARM
+                fi
                 sudo apt install dotnet8
                 build=buildlinuxx64.sh
                 omtdir=linux-x64
