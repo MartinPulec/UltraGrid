@@ -8111,11 +8111,12 @@ WARNINGS=
 
 { printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking GIT presence" >&5
 printf %s "checking GIT presence... " >&6; }
-if which git
+srcdir=$(dirname "$0")
+if command -v git >/dev/null && test -d "${srcdir?}/.git"
 then
-        { printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking checking GIT branch " >&5
-printf %s "checking checking GIT branch ... " >&6; }
-        git_branch=$(srcdir=$(dirname "$0"); cd "$srcdir"; git name-rev --name-only HEAD)
+        { printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking GIT branch" >&5
+printf %s "checking GIT branch... " >&6; }
+        git_branch=$(cd "${srcdir?}"; git name-rev --name-only HEAD)
         if test "$git_branch"; then
 
 printf '%s\n' "#define GIT_BRANCH \"$git_branch\"" >>confdefs.h
@@ -8126,9 +8127,9 @@ printf '%s\n' "$git_branch" >&6; };
                 { printf '%s\n' "$as_me:${as_lineno-$LINENO}: result: no" >&5
 printf '%s\n' "no" >&6; };
         fi
-        { printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking checking GIT revision " >&5
-printf %s "checking checking GIT revision ... " >&6; }
-        git_rev=$(srcdir=$(dirname "$0"); cd "$srcdir"; git rev-parse --short HEAD)
+        { printf '%s\n' "$as_me:${as_lineno-$LINENO}: checking GIT revision" >&5
+printf %s "checking GIT revision... " >&6; }
+        git_rev=$(cd "${srcdir?}"; git rev-parse --short HEAD)
         if test "$git_rev"; then
 
 printf '%s\n' "#define GIT_REV \"$git_rev\"" >>confdefs.h
