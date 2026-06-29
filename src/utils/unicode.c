@@ -3,11 +3,7 @@
 
 /**
  * @file
- * @note
- * char32_t implementation with c32rtomb() could be more compatible since it
- * should be supported since C11/C++11 but its implementation is unfortuntately
- * missing from macOS (up to including 26) and the pass-through workaround won't
- * work with UTF-32 data.
+ * 
  */
 
 #include "utils/unicode.h"
@@ -49,56 +45,39 @@ u8_out_init(bool is_win_utf8_terminal)
 }
 
 /**
- * Tries to convert utf-8 string to locale-specific multibyte string. If
- * c8rtomb not present and UTF-8 terminal detected, copies the UTF-8 string.
- * Otherwise, out_fallback is kept untouched (should contain fallback text).
+ * Tries to convert wide string to locale-specific multibyte string. If
+ * conversion fails out_fallback is returned untouched (should contain fallback
+ * text).
  *
  * @param buflen  out_fallback buffer length long enough to hold the converted
-                  string with some headroom (MB_LEN_MAX-1)
+                  string
  * @param[in,out] out_fallback NUL-terminated fallback string. If conversion
  *                succeeds, it is rewritten by the u8_str converted to MBS
- * @returns out_fallback with converted data if we have c8rtomb
- * @returns u8_str if it is safe to pass-through
- * @returns out_fallback unchanged if u8_str not convertible and terminal not in
- UTF-8
+ * @returns out_fallback with converted data if conversion suceeds
+ * @returns out_fallback unchanged if wstr not convertible
  *
- * u8_to_mb_init() must be called otherwise fallback is always ret
+ * u8_out_init() must be called otherwise fallback is always ret
  */
 const char *
-u8s_to_mbs_buf(const unsigned char *u8_str, size_t buflen, char *out_fallback)
+wcs_to_mbs_buf(const wchar_t *wstr, size_t buflen, char *out_fallback)
 {
-#if defined HAVE_C8RTOMB && !defined _WIN32
-        mbstate_t      ps     = { 0 };
-        const char8_t *in_ptr = u8_str;
-        // check convertibility first
-        do {
-                char   discard[MB_LEN_MAX];
-                size_t ret = c8rtomb(discard, *in_ptr, &ps);
-                if (ret == (size_t) -1) { // not convertible
-                        return out_fallback;
-                }
-        } while (*in_ptr++ != '\0');
-        // actual conversion
-        in_ptr        = u8_str;
-        char *out_ptr = out_fallback;
-        do {
-                if (buflen < MB_LEN_MAX || buflen == 1) {
-                        MSG(WARNING, "utf-8 string truncated.\n");
-                        assert(buflen >= 1);
-                        *out_ptr = '\0';
-                        break;
-                }
-                size_t ret = c8rtomb(out_ptr, *in_ptr, &ps);
-                assert(ret != (size_t) -1);
-                out_ptr += ret;
-                buflen -= ret;
-        } while (*in_ptr++ != '\0');
-        return out_fallback;
-#else
-        (void) buflen;
+#ifdef _WIN32
         if (!utf8_terminal) {
                 return out_fallback;
         }
-        return (const char *) u8_str;
 #endif
+
+        mbstate_t ps = { 0 };
+
+        // check convertibility first
+        size_t ret = wcsrtombs(nullptr, &wstr, 0, &ps);
+        if (ret == (size_t) -1) { // not convertible
+                return out_fallback;
+        }
+        // actual conversion
+        wcsrtombs(out_fallback, &wstr, buflen, &ps);
+        if (*wstr != L'\0') {
+                MSG(WARNING, "wide string truncated.\n");
+        }
+        return out_fallback;
 }
