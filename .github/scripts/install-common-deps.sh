@@ -179,6 +179,20 @@ install_omt() (
         sudo cp libomt/bin/Release/net8.0/$omtdir/publish/libomt.$libext /usr/local/lib/
 )
 
+install_openapv() (
+        git clone --depth 1 https://github.com/AcademySoftwareFoundation/openapv.git
+        # "Unix Makefiles" used for MSW to install .pc file (MSVC doesn't)
+        cmake -B openapv/build -S openapv \
+                -G"Unix Makefiles" \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX=/usr/local
+        cmake --build openapv/build --parallel "$(nproc)"
+        sudo cmake --install openapv/build
+        if is_win; then
+                mv /usr/local/lib/oapv/import/liboapv.dll.a /usr/local/lib
+        fi
+)
+
 install_pcp() {
         git clone https://github.com/libpcpnatpmp/libpcpnatpmp.git
         (
@@ -200,7 +214,7 @@ install_zfec() (
         sudo mv zfec/zfec /usr/local/src
 )
 
-install_items="aja ews juice live555 pcp zfec"
+install_items="aja ews juice live555 openapv pcp zfec"
 if ! is_arm && ! is_win; then
         install_items="$install_items cineform"
 fi
