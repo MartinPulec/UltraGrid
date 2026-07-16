@@ -1,7 +1,89 @@
 UltraGrid - A High Definition Collaboratory
 ===========================================
 
-   Copyright (c) 2005-2023 CESNET z.s.p.o.
+Files:
+  src/audio/audio.cpp
+  src/audio/audio.h
+  src/audio/capture/portaudio.c
+  src/audio/playback/portaudio.c
+  src/capture_filter/resize.c
+  src/capture_filter/resize_utils.cpp
+  src/capture_filter/resize_utils.h
+  src/compat/platform_semaphore.c
+  src/compat/platform_semaphore.h
+  src/compat/vsnprintf.c
+  src/compat/vsnprintf.h
+  src/debug.cpp
+  src/debug.h
+  src/host.h
+  src/hwaccel_libav_common.c
+  src/hwaccel_libav_common.h
+  src/hwaccel_vaapi.cpp
+  src/hwaccel_vaapi.h
+  src/hwaccel_vdpau.cpp
+  src/hwaccel_vdpau.h
+  src/ihdtv/ihdtv.c
+  src/ihdtv/ihdtv.h
+  src/main.cpp
+  src/pdb.c
+  src/pdb.h
+  src/pixfmt_conv.c
+  src/pixfmt_conv.h
+  src/rtp/net_udp.c
+  src/rtp/net_udp.h
+  src/rtp/pbuf.c
+  src/rtp/pbuf.h
+  src/rtp/rtp.c
+  src/rtp/rtp_callback.c
+  src/rtp/rtp_callback.h
+  src/rtp/rtpdec_h264.c
+  src/rtp/rtpdec_h264.h
+  src/rtp/rtpdec_state.h
+  src/rtp/rtpenc_h264.c
+  src/rtp/rtpenc_h264.h
+  src/rtp/rtp.h
+  src/rtp/rtp_types.h
+  src/rtp/video_decoders.cpp
+  src/rtp/video_decoders.h
+  src/rtsp/BasicRTSPOnlyServer.cpp
+  src/rtsp/BasicRTSPOnlyServer.hh
+  src/rtsp/BasicRTSPOnlySubsession.cpp
+  src/rtsp/BasicRTSPOnlySubsession.hh
+  src/rxtx/ihdtv.cpp
+  src/rxtx/rtp_common.c
+  src/rxtx/ultragrid_rtp.c
+  src/tfrc.c
+  src/tfrc.h
+  src/transmit.c
+  src/transmit.h
+  src/tv.c
+  src/tv.h
+  src/utils/sdp.c
+  src/utils/sdp.h
+  src/video_capture.c
+  src/video_capture/decklink.cpp
+  src/video_capture/dvs.c
+  src/video_capture.h
+  src/video_capture/null.c
+  src/video_capture/rtsp.c
+  src/video_capture/testcard.c
+  src/video_codec.c
+  src/video_codec.h
+  src/video_compress/cineform.cpp
+  src/video_display.c
+  src/video_display/drm.cpp
+  src/video_display/dvs.c
+  src/video_display/dvs.h
+  src/video_display/gl_vdpau.cpp
+  src/video_display/gl_vdpau.hpp
+  src/video_display.h
+  src/video_display/null.c
+  src/video_display/pipewire.cpp
+  src/video_display/sage.cpp
+  src/video_frame.c
+  src/video_frame.h
+
+   Copyright (c) 2005-2026 CESNET, zájmové sdružení právnických osob
    Copyright (c) 2013-2014 Fundació i2CAT, Internet I Innovació Digital a Catalunya
    Copyright (c) 2001-2004 University of Southern California 
    Copyright (c) 2003-2004 University of Glasgow
@@ -51,6 +133,39 @@ UltraGrid - A High Definition Collaboratory
    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
    THE POSSIBILITY OF SUCH DAMAGE.
 
+Other files except the above and mentioned in THIRD-PARTY-LICENSES:
+
+   Copyright (c) 2011-2026 CESNET, zájmové sdružení právnických osob
+   All rights reserved.
+
+   Redistribution and use in source and binary forms, with or without
+   modification, is permitted provided that the following conditions
+   are met:
+
+   1. Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+
+   2. Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+
+   3. Neither the name of CESNET nor the names of its contributors may be
+      used to endorse or promote products derived from this software without
+      specific prior written permission.
+
+   THIS SOFTWARE IS PROVIDED BY THE AUTHORS AND CONTRIBUTORS
+   "AS IS" AND ANY EXPRESSED OR IMPLIED WARRANTIES, INCLUDING,
+   BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+   AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+   EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+   INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+   (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+   SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+   HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+   OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+   EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
    This product includes software developed by the Computer Science Department
    at University College London and by the Computer Systems Engineering Group 
    at Lawrence Berkeley Laboratory. 
@@ -60,70 +175,4 @@ UltraGrid - A High Definition Collaboratory
      for use in the OpenSSL Toolkit. (http://www.openssl.org/)
    This product includes EmbeddableWebServer created by Forrest Heller.
 
-External libraries
-------------------
-
-### SpeexDSP
-
-Copyright 2002-2008 	Xiph.org Foundation
-Copyright 2002-2008 	Jean-Marc Valin
-Copyright 2005-2007	Analog Devices Inc.
-Copyright 2005-2008	Commonwealth Scientific and Industrial Research 
-                        Organisation (CSIRO)
-Copyright 1993, 2002, 2006 David Rowe
-Copyright 2003 		EpicGames
-Copyright 1992-1994	Jutta Degener, Carsten Bormann
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions
-are met:
-
-- Redistributions of source code must retain the above copyright
-notice, this list of conditions and the following disclaimer.
-
-- Redistributions in binary form must reproduce the above copyright
-notice, this list of conditions and the following disclaimer in the
-documentation and/or other materials provided with the distribution.
-
-- Neither the name of the Xiph.org Foundation nor the names of its
-contributors may be used to endorse or promote products derived from
-this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR
-CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
-LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
-NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-### zfec
-
-This package implements an “erasure code”, or “forward error correction code”.
-
-You may use this package under the GNU General Public License, version 2 or, at
-your option, any later version. You may use this package under the Transitive
-Grace Period Public Licence, version 1.0 or, at your option, any later version.
-(You may choose to use this package under the terms of either licence, at your
- option.) See the file COPYING.GPL for the terms of the GNU General Public
-License, version 2. See the file COPYING.TGPPL.rst for the terms of the
-Transitive Grace Period Public Licence, version 1.0.
-
-The most widely known example of an erasure code is the RAID-5 algorithm which
-makes it so that in the event of the loss of any one hard drive, the stored data
-can be completely recovered. The algorithm in the zfec package has a similar
-effect, but instead of recovering from the loss of only a single element, it can
-be parameterized to choose in advance the number of elements whose loss it can
-tolerate.
-
-This package is largely based on the old “fec” library by Luigi Rizzo et al.,
-which is a mature and optimized implementation of erasure coding. The zfec
-package makes several changes from the original “fec” package, including
-addition of the Python API, refactoring of the C API to support zero-copy
-operation, a few clean-ups and optimizations of the core code itself, and
-the addition of a command-line tool named “zfec”.
 
