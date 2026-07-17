@@ -39,7 +39,6 @@
 
 #include <pthread.h> // for pthread_mutex_lock, pthread_mutex_unlock
 #include <stdlib.h>  // for calloc, free
-#include <string.h>  // for memcpy
 
 #include "audio/types.h"   // for audio_frame2_copy, audio_frame2_get_all_d...
 #include "compat/c23.h"    // IWYU pragma: keep
@@ -49,10 +48,6 @@
 #include "rxtx.h"          // for rxtx_medium_params, rxtx_params, rx_audio...
 #include "utils/list.h"    // for simple_linked_list_size, simple_linked_li...
 #include "utils/pthread.h" // for CHK_PTHR, ug_pthread_cond_init, ug_pthrea...
-#include "utils/thread.h"  // for set_thread_name
-#include "video_codec.h"   // for get_codec_name
-#include "video_display.h" // for PUTF_BLOCKING, display_put_frame, display...
-#include "video_frame.h"   // for video_desc_eq, video_desc_from_frame
 
 #define MOD_NAME "[rxtx/loopback] "
 
@@ -72,9 +67,8 @@ struct loopback_rxtx {
         } audio;
 
         struct loopback_rxtx_video {
+                bool                       callback_reg;
                 bool                       discard_in_frames;
-                struct display            *display_device;
-                struct video_desc          configured_desc;
                 struct simple_linked_list *frames;
                 pthread_cond_t             frame_ready;
                 pthread_mutex_t            lock;
@@ -83,6 +77,7 @@ struct loopback_rxtx {
 
 // prototypes
 static void should_exit_audio(void *arg);
+static void should_exit_video_recv(void *arg);
 
 static void*
 init(struct rxtx_params *params)
@@ -91,7 +86,6 @@ init(struct rxtx_params *params)
         s->parent               = params->parent;
         s->audio.frames         = simple_linked_list_init();
         s->video.frames         = simple_linked_list_init();
-        s->video.display_device = params->display_device;
         ug_pthread_mutex_init(&s->audio.lock);
         ug_pthread_mutex_init(&s->video.lock);
         pthread_cond_init(&s->audio.frame_ready, nullptr);
@@ -106,6 +100,11 @@ init(struct rxtx_params *params)
                 MSG(WARNING,
                     "Running a video receiver only - will not receive "
                     "anything...\n");
+        }
+        if (params->medium[TX_MEDIA_VIDEO].rxtx_mode & MODE_RECEIVER) {
+                register_should_exit_callback(s->parent,
+                                              should_exit_video_recv, s);
+                s->video.callback_reg = true;
         }
 
         if (params->medium[TX_MEDIA_AUDIO].rxtx_mode != 0) {
@@ -178,7 +177,7 @@ should_exit_audio(void *arg)
 }
 
 static void
-should_exit_video_recv_thr(void *arg)
+should_exit_video_recv(void *arg)
 {
         struct loopback_rxtx       *s     = arg;
         struct loopback_rxtx_video *video = &s->video;
@@ -192,95 +191,28 @@ should_exit_video_recv_thr(void *arg)
         CHK_PTHR(pthread_cond_signal(&video->frame_ready));
 }
 
-static bool
-check_display_supports_codec(struct loopback_rxtx_video *video, codec_t codec)
+static struct video_frame *
+recv_video_frame_rxtx_loopback(void *state,
+                               struct video_frame * /* display_buffer */,
+                               size_t /* display_pitch */)
 {
-        codec_t display_codecs[VIDEO_CODEC_COUNT];
-        size_t  len = sizeof display_codecs;
-        if (!display_ctl_property(video->display_device,
-                                  DISPLAY_PROPERTY_CODECS, display_codecs,
-                                  &len)) {
-                MSG(ERROR, "Failed to query codecs from video display.\n");
-                return false;
-        }
-        for (unsigned i = 0; i < len / sizeof(codec_t); ++i) {
-                if (display_codecs[i] == codec) {
-                        return true;
-                }
-        }
-
-        char  buf[STR_LEN] = "";
-        char *codec_list   = buf;
-        for (unsigned i = 0; i < len / sizeof(codec_t); ++i) {
-                codec_list += snprintf(
-                    codec_list, buf + sizeof buf - codec_list, "%s%s",
-                    i != 0 ? ", " : "", get_codec_name(display_codecs[i]));
-        }
-        MSG(ERROR,
-            "Display doesn't support video codec %s! Supported codecs: %s\n",
-            get_codec_name(codec), buf);
-        return false;
-}
-
-static bool
-loopback_reconfigure_display(struct loopback_rxtx_video *video,
-                             struct video_desc           desc)
-{
-        if (!check_display_supports_codec(video, desc.color_spec)) {
-                return false;
-        }
-
-        if (!display_reconfigure(video->display_device, desc)) {
-                MSG(ERROR, "Unable to reconfigure display!\n");
-                return false;
-        }
-        video->configured_desc = desc;
-        return true;
-}
-
-static void *
-video_receiver_thread(void *arg)
-{
-        set_thread_name(__func__);
-
-        struct loopback_rxtx       *s     = arg;
+        struct loopback_rxtx       *s     = state;
         struct loopback_rxtx_video *video = &s->video;
 
-        register_should_exit_callback(s->parent, should_exit_video_recv_thr, s);
-
-        while (true) {
-                struct video_frame *frame = nullptr;
-                CHK_PTHR(pthread_mutex_lock(&video->lock));
-                {
-                        while (simple_linked_list_size(video->frames) == 0) {
-                                pthread_cond_wait(&video->frame_ready,
-                                                  &video->lock);
-                        }
+        struct video_frame *frame = nullptr;
+        CHK_PTHR(pthread_mutex_lock(&video->lock));
+        {
+                while (simple_linked_list_size(video->frames) == 0 &&
+                       !video->discard_in_frames) {
+                        pthread_cond_wait(&video->frame_ready, &video->lock);
+                }
+                if (!video->discard_in_frames) {
                         frame = simple_linked_list_pop(video->frames);
                 }
-                CHK_PTHR(pthread_mutex_unlock(&video->lock));
-
-                if (frame == nullptr) { // poison pill
-			break;
-                }
-
-                struct video_desc new_desc = video_desc_from_frame(frame);
-                if (!video_desc_eq(video->configured_desc, new_desc)) {
-                        if (!loopback_reconfigure_display(video, new_desc)) {
-                                frame->callbacks.dispose(frame);
-                                continue;
-                        }
-                }
-                struct video_frame *display_f =
-                    display_get_frame(video->display_device);
-                memcpy(display_f->tiles[0].data, frame->tiles[0].data, frame->tiles[0].data_len);
-                display_put_frame(video->display_device, display_f, PUTF_BLOCKING);
-                frame->callbacks.dispose(frame);
         }
-        display_put_frame(video->display_device, nullptr, PUTF_BLOCKING);
-        unregister_should_exit_callback(s->parent, should_exit_video_recv_thr, s);
+        CHK_PTHR(pthread_mutex_unlock(&video->lock));
 
-        return nullptr;
+        return frame;
 }
 
 static void
@@ -355,6 +287,10 @@ done(void *state)
                 unregister_should_exit_callback(s->parent, should_exit_audio,
                                                 s);
         }
+        if (s->video.callback_reg) {
+                unregister_should_exit_callback(s->parent,
+                                                should_exit_video_recv, s);
+        }
 
         simple_linked_list_destroy(s->audio.frames);
         simple_linked_list_destroy(s->video.frames);
@@ -376,7 +312,7 @@ static const struct rxtx_info loopback_rxtx_info = {
 
         .send_video_frame   = nullptr,
         .send_video_frame_c = send_video_frame,
-        .video_recv_routine = video_receiver_thread,
+        .recv_video_frame   = recv_video_frame_rxtx_loopback,
         .join_video_sender  = nullptr,
 };
 

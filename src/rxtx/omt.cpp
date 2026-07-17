@@ -212,6 +212,7 @@ constexpr rxtx_info omt_video_rxtx_info = {
         .send_video_frame   = omt_rxtx_send_frame,
         .send_video_frame_c = nullptr,
         .video_recv_routine = omt_rxtx_recv_worker,
+        .recv_video_frame   = nullptr,
         .join_video_sender  = nullptr,
 };
 
