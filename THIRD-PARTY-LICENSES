@@ -1319,10 +1319,29 @@ Copyright:
  2006, John Maddock
 License: BSL or LGPL-2.1+
 
+### SDL
+
+Copyright:
+  1997-2026 Sam Lantinga <slouken@libsdl.org>
+License: BSD-3-Clause
+
+### SDL_mixer
+
+Copyright:
+  1997-2026 Sam Lantinga <slouken@libsdl.org>
+License: BSD-3-Clause
+
+### SDL_ttf
+
+Copyright:
+  1997-2012 Sam Lantinga <slouken@libsdl.org>
+License: BSD-3-Clause
+Comment:
+  A companion library to SDL for working with TrueType (tm) fonts
+
 ### SpeexDSP
 
 Copyright:
-
   2002-2008 	Xiph.org Foundation
   2002-2008 	Jean-Marc Valin
   2005-2007	Analog Devices Inc.

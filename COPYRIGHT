@@ -174,5 +174,8 @@ Other files except the above and mentioned in THIRD-PARTY-LICENSES:
    This product includes software developed by the OpenSSL Project
      for use in the OpenSSL Toolkit. (http://www.openssl.org/)
    This product includes EmbeddableWebServer created by Forrest Heller.
+   This application uses NDI® available from https://ndi.video"
+     NDI® %s is a registered trademark of Vizrt NDI AB.
+
 
 
