@@ -114,6 +114,7 @@
 #include "utils/udp_holepunch.h"
 #include "utils/video.h"
 #include "utils/wait_obj.h"             // for wait_obj_done, wait_obj_init
+#include "video.h"
 #include "video_capture.h"
 #include "video_capture_params.h"       // for vidcap_params_get_driver, vid...
 #include "video_display.h"
@@ -152,6 +153,7 @@ struct state_uv {
         struct display *display_device{};
 
         struct state_audio *audio{};
+        struct state_video *video{};
 
         struct module root_module;
 
@@ -1410,6 +1412,8 @@ int main(int argc, char *argv[])
         }
 
         audio_start(uv.audio);
+        uv.video = video_start(uv.state_rxtx, &opt.rxtx, &uv.root_module,
+                               uv.display_device);
 
         control_start(control);
         kc.start();
@@ -1423,6 +1427,7 @@ cleanup:
 
         /* also wait for audio threads */
         audio_join(uv.audio);
+        video_join(uv.video);
         if (uv.state_rxtx) {
                 rxtx_join(uv.state_rxtx);
         }
@@ -1439,6 +1444,7 @@ cleanup:
 
         rxtx_destroy(uv.state_rxtx);
         audio_done(uv.audio);
+        video_done(uv.video);
 
         if (uv.capture_device)
                 vidcap_done(uv.capture_device);

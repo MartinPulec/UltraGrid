@@ -326,7 +326,8 @@ rxtx::create(string const              &proto,
                 return nullptr;
         }
         if ((params_video->rxtx_mode & MODE_RECEIVER) &&
-            vri->video_recv_routine == nullptr) {
+            (vri->video_recv_routine == nullptr &&
+             vri->recv_video_frame == nullptr)) {
                 MSG(ERROR, "Selected RX/TX module doesn't support video receiving.\n");
                 return nullptr;
         }
@@ -376,7 +377,8 @@ rxtx::create(string const              &proto,
                 ret->rxtx_mode[i] = params->medium[i].rxtx_mode;
         }
 
-        if ((params_video->rxtx_mode & MODE_RECEIVER) != 0U) {
+        if ((params_video->rxtx_mode & MODE_RECEIVER) &&
+            ret->m_impl_funcs->video_recv_routine) {
                 int rc = pthread_create(&ret->m_video_receiver_thread_id, nullptr,
                                         ret->m_impl_funcs->video_recv_routine,
                                         ret->m_impl_state);
@@ -516,4 +518,16 @@ rxtx_get_mode(struct rxtx *s, enum tx_media_type t)
         return s->rxtx_mode[t];
 }
 
+struct video_frame *
+rxtx_recv_video_frame(struct rxtx *s, struct video_frame *buffer,
+                      size_t display_pitch)
+{
+        return s->m_impl_funcs->recv_video_frame(s->m_impl_state, buffer,
+                                                 display_pitch);
+}
 
+bool
+rxtx_have_receive_video_frame(struct rxtx *s)
+{
+        return s->m_impl_funcs->recv_video_frame != nullptr;
+}

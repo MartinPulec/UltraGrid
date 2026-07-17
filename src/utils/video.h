@@ -37,8 +37,8 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef VIDEO_H_
-#define VIDEO_H_
+#ifndef UTILS_VIDEO_H_6A285AF4_7CBE_4803_88C5_42F0C1EBA793
+#define UTILS_VIDEO_H_6A285AF4_7CBE_4803_88C5_42F0C1EBA793
 
 #include "types.h"
 
@@ -91,5 +91,5 @@ struct video_desc get_video_desc_from_mode(const char *);
 #endif // __cplusplus
 
 
-#endif // VIDEO_H_
+#endif // !defined UTILS_VIDEO_H_6A285AF4_7CBE_4803_88C5_42F0C1EBA793
 

@@ -182,7 +182,9 @@ COMMON_OBJS     = \
 		src/vo_postprocess.o \
 
 ULTRAGRID_LIBS = @ULTRAGRID_LIBS@
-ULTRAGRID_OBJS = $(COMMON_OBJS) @ULTRAGRID_OBJS@ src/main.o \
+ULTRAGRID_OBJS = $(COMMON_OBJS) @ULTRAGRID_OBJS@ \
+                src/video.o \
+                src/main.o \
 
 REFLECTOR_OBJS = @REFLECTOR_OBJS@ $(COMMON_OBJS) \
 		src/hd-rum-translator/hd-rum-decompress.o \
