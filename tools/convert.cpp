@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2021-2026 CESNET, zájmové sdružení právických osob
+
 #include <cassert>
 #include <chrono>
 #include <cstring>

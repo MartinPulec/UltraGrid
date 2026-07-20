@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2025-2026 CESNET, zájmové sdružení právických osob
+
 /**
  * Simple Duck IVF mixer for VP8/VP9/AV1.
  *

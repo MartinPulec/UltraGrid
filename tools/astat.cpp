@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2018-2026 CESNET, zájmové sdružení právických osob
+ 
 #include "compat/platform_pipe.h"
 
 #include <cstring>
