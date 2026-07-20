@@ -598,7 +598,7 @@ $(BUNDLE): $(TARGET) $(REFLECTOR_TARGET) @MANPAGES@ hd-rum-multi/hd-rum
 	$(MKDIR_P) $(BUNDLE)/Contents/MacOS $(BUNDLE)/Contents/Resources \
 		$(BUNDLE)/Contents/libs
 	$(CP) $(REFLECTOR_TARGET) $(TARGET) $(BUNDLE)/Contents/MacOS/
-	$(CP) $(srcdir)/COPYRIGHT $(srcdir)/THIRD-PARTY-LICENSES\
+	$(CP) $(srcdir)/COPYRIGHT $(srcdir)/THIRD-PARTY-LICENSES.md\
 		$(BUNDLE)/Contents/Resources/
 	$(CP) -r bin/*.dSYM $(BUNDLE)/Contents/MacOS/
 	$(CP) -r data/template/macOS-bundle/* $(BUNDLE)/
@@ -694,7 +694,7 @@ install: all
 	$(CP) $(DOCS) $(DESTDIR)$(docdir)
 	$(INSTALL) -m 644 $(srcdir)/CONTRIBUTING.md $(srcdir)/COPYRIGHT \
 		$(srcdir)/INSTALL $(srcdir)/NEWS $(srcdir)/README.md \
-		$(srcdir)/THIRD-PARTY-LICENSES $(DESTDIR)$(docdir)
+		$(srcdir)/THIRD-PARTY-LICENSES.md $(DESTDIR)$(docdir)
 	$(INSTALL) -d -m 755 $(DESTDIR)$(man1dir)
 	if [ -n '@MANPAGES@' ]; then $(INSTALL) -m 644 @MANPAGES@ $(DESTDIR)$(man1dir); fi
 	if [ -n '@DLL_LIBS@' ]; then  $(INSTALL) -m 644 @DLL_LIBS@ $(DESTDIR)$(bindir); fi
