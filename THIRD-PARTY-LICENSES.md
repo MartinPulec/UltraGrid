@@ -4,6 +4,31 @@ Third party sources and external libraries
 UltraGrid
 --------
 
+### DXT
+
+Files:
+- dxt_compress/*glsl except yuv422_to_yuv444.glsl
+
+Copyright:
+-  NVIDIA Corporation
+
+Real-time DXT1 & YCoCg-DXT5 compression (Cg 2.0)
+
+Written by: Ignacio Castano 
+
+Thanks to JMP van Waveren, Simon Green, Eric Werness, Simon Brown
+
+License: MIT
+
+Files:
+- dxt_compress/* except the above
+
+Copyright:
+- 2011, Martin Srom
+
+License: BSD-2-Clause
+
+
 ### MD5
 
 Files:
@@ -35,6 +60,80 @@ These notices must be retained in any copies of any part of this
 documentation and/or software.
 ````
 
+### RAT
+
+Files:
+- src/bitstream.c
+- src/bitstream.h
+- src/ntp.c
+- src/ntp.h
+
+License (<https://github.com/amacfarlane/rat/blob/master/COPYRIGHT>):
+````
+Copyright (C) 1995-2007 University College London
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, is permitted provided that the following conditions
+are met:
+
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+
+3. All advertising materials mentioning features or use of this software
+   must display the following acknowledgement:
+
+     This product includes software developed by the Computer Science
+     Department at University College London.
+
+4. Neither the name of the University nor of the Department may be used
+   to endorse or promote products derived from this software without
+   specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHORS AND CONTRIBUTORS
+``AS IS'' AND ANY EXPRESSED OR IMPLIED WARRANTIES, INCLUDING,
+BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+This software is derived, in part, from publically available
+and contributed source code with the following copyright:
+
+Copyright (C) 1991-1993,1996 Regents of the University of California
+Copyright (C) 1992 Stichting Mathematisch Centrum, Amsterdam
+Copyright (C) 1991-1992 RSA Data Security, Inc
+Copyright (C) 1992 Jutta Degener and Carsten Bormann, TU Berlin
+Copyright (C) 1994 Paul Stewart
+Copyright (C) 2000 Nortel Networks
+Copyright (C) 2000 Argonne National Laboratory
+Copyright (C) 1991 Bell Communications Research, Inc. (Bellcore)
+Copyright (C) 1996 Internet Software Consortium.
+Copyright (C) 1995-1999 WIDE Project
+
+This product includes software developed by the Computer
+Systems Engineering Group and by the Network Research Group
+at Lawrence Berkeley Laboratory.
+
+The WB-ADPCM algorithm was developed by British Telecommunications
+plc.  Permission has been granted to use it for non-commercial
+research and development projects.  BT retain the intellectual
+property rights to this algorithm.
+
+Encryption features of this software use the RSA Data
+Security, Inc. MD5 Message-Digest Algorithm.
+````
+
 ## Random
 
 Files:
@@ -46,30 +145,6 @@ Copyright:
 - Computer Systems Engineering Group at Lawrence Berkeley Laboratory
 
 License: BSD-4-Clause
-
-### DXT
-
-Files:
-- dxt_compress/*glsl except yuv422_to_yuv444.glsl
-
-Copyright:
--  NVIDIA Corporation
-
-Real-time DXT1 & YCoCg-DXT5 compression (Cg 2.0)
-
-Written by: Ignacio Castano 
-
-Thanks to JMP van Waveren, Simon Green, Eric Werness, Simon Brown
-
-License: MIT
-
-Files:
-- dxt_compress/* except the above
-
-Copyright:
-- 2011, Martin Srom
-
-License: BSD-2-Clause
 
 External libraries
 ------------------
