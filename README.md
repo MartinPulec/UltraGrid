@@ -81,6 +81,7 @@ About UltraGrid
        Makefile.in           "       "
        CONTRIBUTING.md       Various information for contributors
        COPYRIGHT             Full license terms and conditions
+       THIRD-PARTY-LICENSES.md license for 3rd party libraries that UG links to
        Doxyfile              Doxygen configuration
        INSTALL               Installation instructions
        NEWS                  Change log and modification history
