@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2013-2026 CESNET, zájmové sdružení právických osob
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>

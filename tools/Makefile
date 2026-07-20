@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2014-2026 CESNET, zájmové sdružení právických osob
 FLAGS ?= -O3 -g
 SRCDIR ?= ..
 LAVC_CFLAGS = $(shell pkg-config -cflags libavcodec 2>/dev/null)

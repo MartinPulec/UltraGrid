@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// Copyright (c) 2018-2026 CESNET, zájmové sdružení právických osob
+
 #ifndef ASTAT_H_64f15ac8bc64
 
 #define CH_COUNT 2
