@@ -1,6 +1,9 @@
 Third party sources and external libraries
 ==========================================
 
+This file contains licenses for 3rd party libraries that UG links to (needs
+to be contained in binary builds) + 3rd party sources not covered by COPYRIGHT.
+
 UltraGrid
 --------
 

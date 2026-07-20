@@ -2,6 +2,10 @@ UltraGrid - A High Definition Collaboratory
 ===========================================
 
 Files:
+  INSTALL
+  Makefile.in
+  README.md
+  configure.ac
   src/audio/audio.cpp
   src/audio/audio.h
   src/audio/capture/portaudio.c
