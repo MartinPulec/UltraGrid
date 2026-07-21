@@ -22,6 +22,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@main
-    - name: Run
+    - name: Test continuous
       shell: bash
       run: .github/scripts/run_scheduled_tests.sh
+    - name: Test release
+      shell: bash
+      run: .github/scripts/run_scheduled_tests.sh release
