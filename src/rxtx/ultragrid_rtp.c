@@ -104,7 +104,6 @@ struct ultragrid_rtp_rxtx {
 
         struct rtp_rxtx_common *rtp_common;
 
-        enum video_mode  decoder_mode;
         struct display  *display_device;
 
         struct display  **display_copies; ///< some displays can be "forked"
@@ -133,9 +132,6 @@ struct ultragrid_rtp_rxtx {
 
 // protoypes
 static void usage();
-static struct vcodec_state *
-new_video_decoder(struct ultragrid_rtp_rxtx *s, struct display *d);
-static void destroy_video_decoder(void *state);
 
 static void done(void *state)
 {
@@ -161,7 +157,6 @@ init(struct rxtx_params *params)
         struct ultragrid_rtp_rxtx *s = calloc(1, sizeof *s);
 
         s->magic          = MAGIC;
-        s->decoder_mode   = params->decoder_mode;
         s->display_device = params->display_device;
         s->parent         = params->parent;
         s->start_time     = params->start_time;
@@ -174,12 +169,11 @@ init(struct rxtx_params *params)
                 return rc < 0 ? nullptr : INIT_NOERR;
         }
 
-        const char *dec_use_codec = get_commandline_param("decoder-use-codec");
-        if (dec_use_codec != nullptr && strcmp(dec_use_codec, "help") == 0) {
-                destroy_video_decoder(new_video_decoder(s, params->display_device));
-                done(s);
-                return INIT_NOERR;
-        }
+        // @todo needs to be moved after implementing recv_video_frame
+        size_t len = sizeof s->rtp_common->display_supp_for_mult_sources;
+        display_ctl_property(
+            s->display_device, DISPLAY_PROPERTY_SUPPORTS_MULTI_SOURCES,
+            &s->rtp_common->display_supp_for_mult_sources, &len);
 
         if (strlen(params->video_compression) == 0) {
                 snprintf_ch(params->video_compression, "none");
@@ -254,129 +248,9 @@ static void *send_video_frame_async_callback(void *arg) {
 }
 
 static void
-receiver_process_messages(struct ultragrid_rtp_rxtx *s)
-{
-        struct msg_receiver *msg = nullptr;
-        while ((msg = (struct msg_receiver *) check_message(s->receiver_mod))) {
-                switch (msg->type) {
-                case RECEIVER_MSG_VIDEO_PROP_CHANGED:
-                        rtp_rxtx_set_pbuf_delay(
-                            &s->rtp_common->medium[TX_MEDIA_VIDEO],
-                            1.0 / msg->new_desc.fps);
-                        free_message((struct message *) msg,
-                                     new_response(RESPONSE_OK, nullptr));
-                        break;
-                default:
-                        assert(0 && "Wrong message passed to "
-                                    "ultragrid_rtp_rxtx::receiver_"
-                                    "process_messages()");
-                }
-        }
-}
-
-/**
- * Removes display from decoders and effectively kills them. They cannot be used
- * until new display assigned.
- */
-static void
-remove_display_from_decoders(struct ultragrid_rtp_rxtx *s)
-{
-        struct rtp_rxtx_medium *video = &s->rtp_common->medium[TX_MEDIA_VIDEO];
-        if (video->participants != nullptr) {
-                pdb_iter_t it;
-                struct pdb_e *cp = pdb_iter_init(video->participants, &it);
-                while (cp != NULL) {
-                        if (cp->decoder_state) {
-                                video_decoder_deactivate(
-                                    ((struct vcodec_state *) cp->decoder_state)
-                                        ->decoder);
-                        }
-                        cp = pdb_iter_next(&it);
-                }
-                pdb_iter_done(&it);
-        }
-}
-
-static void
-destroy_video_decoder(void *state)
-{
-        struct vcodec_state *video_decoder_state =
-            (struct vcodec_state *) state;
-
-        if(!video_decoder_state) {
-                return;
-        }
-
-        video_decoder_destroy(video_decoder_state->decoder);
-
-        free(video_decoder_state);
-}
-
-static struct vcodec_state *
-new_video_decoder(struct ultragrid_rtp_rxtx *s, struct display *d)
-{
-        struct vcodec_state *state = (struct vcodec_state *) calloc(1, sizeof(struct vcodec_state));
-
-        if(state) {
-                state->decoder = video_decoder_init(s->receiver_mod, s->decoder_mode,
-                                d, s->rtp_common->encryption);
-
-                if(!state->decoder) {
-                        fprintf(stderr, "Error initializing decoder (incorrect '-M' or '-p' option?).\n");
-                        free(state);
-                        exit_uv(1);
-                        return NULL;
-                } else {
-                        //decoder_register_display(state->decoder, uv->display_device);
-                }
-        }
-
-        return state;
-}
-
-static void
 should_exit(void *state) {
         struct ultragrid_rtp_rxtx *s = state;
         s->should_exit = true;
-}
-
-static void
-display_buf_increase_warning(int size)
-{
-        log_msg(LOG_LEVEL_INFO, "\n***\nUnable to set buffer size to %sB.\n",
-                format_in_si_units(size));
-
-#if defined _WIN32
-        log_msg(LOG_LEVEL_INFO, "See "
-                                "https://github.com/CESNET/UltraGrid/wiki/"
-                                "Extending-Network-Buffers-%%28Windows%%29 "
-                                "for details.\n");
-        return;
-#endif /* defined _WIN32 */
-
-#ifdef __APPLE__
-#define SYSCTL_ENTRY "net.inet.udp.recvspace"
-#else
-#define SYSCTL_ENTRY "net.core.rmem_max"
-#endif
-        log_msg(
-            LOG_LEVEL_INFO,
-            "Please set " SYSCTL_ENTRY " value to %d or greater (see also\n"
-            "https://github.com/CESNET/UltraGrid/wiki/OS-Setup-UltraGrid):\n"
-#ifdef __APPLE__
-            "\tsysctl -w kern.ipc.maxsockbuf=%d\n"
-#endif
-            "\tsysctl -w " SYSCTL_ENTRY "=%d\n"
-            "To make this persistent, add these options (key=value) to "
-            "/etc/sysctl.d/60-ultragrid.conf\n"
-            "\n***\n\n",
-            size,
-#ifdef __APPLE__
-            size * 4,
-#endif /* __APPLE__ */
-            size
-        );
-#undef SYSCTL_ENTRY
 }
 
 static void *
@@ -384,131 +258,16 @@ receiver_thread(void *arg)
 {
         struct ultragrid_rtp_rxtx *s = arg;
         set_thread_name(__func__);
-        struct rtp_rxtx_medium *video = &s->rtp_common->medium[TX_MEDIA_VIDEO];
-        struct pdb_e *cp;
-        int fr;
-        int last_buf_size = rtp_get_recv_buf(video->network_device);
-
-        fr = 1;
-
-        time_ns_t last_not_timeout = 0;
 
         register_should_exit_callback(s->parent, should_exit, s);
-
         while (!s->should_exit) {
-                struct timeval timeout;
-                /* Housekeeping and RTCP... */
-                time_ns_t curr_time = get_time_in_ns();
-                uint32_t ts = (s->start_time - curr_time) / (100 * 1000 * 9); // at 90000 Hz
-
-                rtp_update(video->network_device, curr_time);
-                rtp_send_ctrl(video->network_device, ts, nullptr, curr_time);
-
-                /* Receive packets from the network... The timeout is adjusted */
-                /* to match the video capture rate, so the transmitter works.  */
-                if (fr) {
-                        curr_time = get_time_in_ns();
-                        receiver_process_messages(s);
-                        fr = 0;
-                }
-
-                timeout.tv_sec = 0;
-                //timeout.tv_usec = 999999 / 59.94;
-                // use longer timeout when we are not receivng any data
-                if ((curr_time - last_not_timeout) > NS_IN_SEC) {
-                        timeout.tv_usec = 100000;
-                } else {
-                        timeout.tv_usec = 1000;
-                }
-                const bool ret = rtp_recv_r(video->network_device, &timeout, ts);
-
-                // timeout
-                if (!ret) {
-                        // processing is needed here in case we are not receiving any data
-                        receiver_process_messages(s);
-                        //printf("Failed to receive data\n");
-                } else {
-                        last_not_timeout = curr_time;
-                }
-
-                /* Decode and render for each participant in the conference... */
-                pdb_iter_t it;
-                cp = pdb_iter_init(video->participants, &it);
-                while (cp != NULL) {
-                        if (tfrc_feedback_is_due(cp->tfrc_state, curr_time)) {
-                                debug_msg("tfrc rate %f\n",
-                                          tfrc_feedback_txrate(cp->tfrc_state,
-                                                               curr_time));
-                        }
-
-                        if(cp->decoder_state == NULL &&
-                                        !pbuf_is_empty(cp->playout_buffer)) { // the second check is needed because we want to assign display to participant that really sends data
-                                // we are assigning our display so we make sure it is removed from other display
-
-                                struct multi_sources_supp_info supp_for_mult_sources;
-                                size_t len = sizeof(struct multi_sources_supp_info);
-                                int ret = display_ctl_property(s->display_device,
-                                                DISPLAY_PROPERTY_SUPPORTS_MULTI_SOURCES, &supp_for_mult_sources, &len);
-                                if (!ret) {
-                                        supp_for_mult_sources.val = false;
-                                }
-
-                                struct display *d;
-                                if (supp_for_mult_sources.val == false) {
-                                        remove_display_from_decoders(s); // must be called before creating new decoder state
-                                        d = s->display_device;
-                                } else {
-                                        d = supp_for_mult_sources.fork_display(supp_for_mult_sources.state);
-                                        assert(d != NULL);
-                                        s->display_copies = realloc(
-                                            s->display_copies,
-                                            (s->display_copies_count + 1) *
-                                                sizeof *s->display_copies);
-                                        s->display_copies[s->display_copies_count++] = d;
-                                }
-
-                                cp->decoder_state = new_video_decoder(s, d);
-                                cp->decoder_state_deleter = destroy_video_decoder;
-
-                                if (cp->decoder_state == NULL) {
-                                        log_msg(LOG_LEVEL_FATAL, "Fatal: unable to create decoder state for "
-                                                        "participant %u.\n", cp->ssrc);
-                                        exit_uv(1);
-                                        break;
-                                }
-                        }
-
-                        struct vcodec_state *vdecoder_state = (struct vcodec_state *) cp->decoder_state;
-
-                        /* Decode and render video... */
-                        if (pbuf_decode
-                            (cp->playout_buffer, curr_time, decode_video_frame, vdecoder_state)) {
-                                fr = 1;
-                        }
-
-                        if(vdecoder_state && vdecoder_state->decoded % 100 == 99) {
-                                int new_size = vdecoder_state->max_frame_size * 110ull / 100;
-                                if(new_size > last_buf_size) {
-                                        if (rtp_set_recv_buf(video->network_device, new_size)) {
-                                                debug_msg("Recv buffer adjusted to %d\n", new_size);
-                                        } else {
-                                                display_buf_increase_warning(new_size);
-                                        }
-                                        last_buf_size = new_size;
-                                }
-                        }
-
-                        pbuf_remove(cp->playout_buffer, curr_time);
-                        cp = pdb_iter_next(&it);
-                }
-                pdb_iter_done(&it);
+                rtp_recv_video_frame(s->rtp_common, decode_video_frame);
         }
-
         unregister_should_exit_callback(s->parent, should_exit, s);
 
         /* Because decoders work asynchronously we need to make sure
          * that display won't be called */
-        remove_display_from_decoders(s);
+        remove_display_from_decoders(s->rtp_common);
 
         // pass poisoned pill to display
         display_put_frame(s->display_device, nullptr, PUTF_BLOCKING);
@@ -580,10 +339,16 @@ ctl_property(void *state, enum rxtx_property p,
                 memcpy(val, (void *) &s->rtp_common, *len);
                 return true;
         }
-        case SET_ULTRAGRID_RTP_MUTLI_OUT: {
+        case SET_ULTRAGRID_RTP_MUTLI_OUT_AUDIO: {
                 assert(*len >= sizeof(bool));
                 memcpy(&s->rtp_common->aplayback_supports_multiple_streams, val,
                        sizeof(bool));
+                return true;
+        }
+        case SET_ULTRAGRID_RTP_MUTLI_OUT_VIDEO: {
+                assert(*len >= sizeof(struct multi_sources_supp_info));
+                memcpy(&s->rtp_common->display_supp_for_mult_sources, val,
+                       sizeof(struct multi_sources_supp_info));
                 return true;
         }
         case SET_RTP_AUD_FRM_SZ: {

@@ -101,7 +101,7 @@ fec *fec::create_from_config(const char *c_str, bool is_audio) noexcept
                 if (strncmp(c_str, "RS cfg ", strlen("RS cfg ")) == 0) {
                         return new rs(c_str + strlen("rs cfg "), is_audio);
                 }
-                MSG(ERROR, "Unrecognized FEC configuration!\n");
+                MSG(ERROR, "Unrecognized FEC configuration: %s\n", c_str);
         } catch (string const &s) {
                 LOG(LOG_LEVEL_ERROR) << s << "\n";
         } catch (exception const &e) {

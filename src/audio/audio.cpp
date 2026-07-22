@@ -416,8 +416,6 @@ static struct response * audio_receiver_process_message(struct state_audio *s, s
                 }
                 break;
         }
-        case RECEIVER_MSG_VIDEO_PROP_CHANGED:
-                abort();
         }
 
         return new_response(RESPONSE_OK, nullptr);
@@ -487,7 +485,7 @@ static void *audio_receiver_thread(void *arg)
         audio_playback_ctl(s->audio_playback_device, AUDIO_PLAYBACK_CTL_MULTIPLE_STREAMS,
                         &playback_supports_multiple_streams, &len);
         len = sizeof playback_supports_multiple_streams;
-        rxtx_ctl_property(s->rxtx, SET_ULTRAGRID_RTP_MUTLI_OUT,
+        rxtx_ctl_property(s->rxtx, SET_ULTRAGRID_RTP_MUTLI_OUT_AUDIO,
                           &playback_supports_multiple_streams, &len);
 
         printf("Audio receiving started.\n");

@@ -88,6 +88,7 @@ enum msg_sender_type {
         SENDER_MSG_CHANGE_PORT,
         SENDER_MSG_CHANGE_FEC,
         SENDER_MSG_QUERY_VIDEO_MODE,
+        RECEIVER_MSG_VIDEO_PROP_CHANGED,
 };
 
 struct msg_sender {
@@ -100,6 +101,7 @@ struct msg_sender {
                 };
                 char receiver[128];
                 char fec_cfg[1024];
+                struct video_desc new_desc;
         };
 };
 
@@ -115,7 +117,6 @@ struct msg_audio_sender {
         enum msg_audio_sender_type type;
 };
 enum msg_receiver_type {
-        RECEIVER_MSG_VIDEO_PROP_CHANGED,
         RECEIVER_MSG_GET_AUDIO_STATUS,
         RECEIVER_MSG_INCREASE_VOLUME,
         RECEIVER_MSG_DECREASE_VOLUME,
@@ -128,7 +129,6 @@ struct msg_receiver {
         enum msg_receiver_type type;
         union {
                 uint16_t new_rx_port;
-                struct video_desc new_desc;
                 char postprocess_cfg[1024];
         };
 };
