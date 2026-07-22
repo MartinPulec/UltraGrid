@@ -47,6 +47,7 @@
 
 #include "types.h"
 #include "utils/macros.h"    // for to_fourcc
+#include "video_display.h"    // for multi_sources_supp_info
 
 #ifdef __cplusplus
 extern "C" {
@@ -87,6 +88,7 @@ struct rtp_rxtx_common {
         // sources will be returned (normally all sources are dismissed except
         // of the latest one)
         bool aplayback_supports_multiple_streams;
+        struct multi_sources_supp_info display_supp_for_mult_sources;
 };
 
 struct rxtx_params;
@@ -97,15 +99,19 @@ void rtp_rxtx_common_done(struct rtp_rxtx_common *state);
 
 void rtp_rxtx_sender_do_housekeeping(struct rtp_rxtx_common *pub,
                                      enum tx_media_type      t);
-void rtp_rxtx_set_pbuf_delay(struct rtp_rxtx_medium *s, double delay);
 bool rtp_rxtx_common_is_ipv6(struct rtp_rxtx_common *s);
 
 struct coded_data;
 struct pbuf_stats;
-typedef int decode_audio_frame_fn(struct coded_data *cdata, void *pbuf_data,
-                                  struct pbuf_stats *);
+typedef int decode_frame_fn(struct coded_data *cdata, void *pbuf_data,
+                            struct pbuf_stats *);
 struct rx_audio_frames *rtp_recv_audio_frame(struct rtp_rxtx_common *s,
-                                             decode_audio_frame_fn   decode);
+                                             decode_frame_fn decode);
+struct video_frame     *rtp_recv_video_frame(struct rtp_rxtx_common *s,
+                                             decode_frame_fn         decode);
+
+// temporary...
+void remove_display_from_decoders(struct rtp_rxtx_common *s);
 
 #ifdef __cplusplus
 }
