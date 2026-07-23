@@ -55,6 +55,8 @@ enum {
         RXTX_ABI_VERSION = 6,
 };
 
+extern struct video_frame *const rxtx_retry;
+
 struct audio_desc;
 struct audio_frame2;
 

@@ -47,7 +47,6 @@
 
 #include "types.h"
 #include "utils/macros.h"    // for to_fourcc
-#include "video_display.h"    // for multi_sources_supp_info
 
 #ifdef __cplusplus
 extern "C" {
@@ -88,7 +87,8 @@ struct rtp_rxtx_common {
         // sources will be returned (normally all sources are dismissed except
         // of the latest one)
         bool aplayback_supports_multiple_streams;
-        struct multi_sources_supp_info display_supp_for_mult_sources;
+        /// @todo set
+        bool vplayback_supports_multiple_streams;
 };
 
 struct rxtx_params;
@@ -109,9 +109,6 @@ struct rx_audio_frames *rtp_recv_audio_frame(struct rtp_rxtx_common *s,
                                              decode_frame_fn decode);
 struct video_frame     *rtp_recv_video_frame(struct rtp_rxtx_common *s,
                                              decode_frame_fn         decode);
-
-// temporary...
-void remove_display_from_decoders(struct rtp_rxtx_common *s);
 
 #ifdef __cplusplus
 }

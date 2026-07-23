@@ -142,14 +142,11 @@
 #include "video_display.h" // for display_prop_vid_mode, display...
 #include "video_frame.h"   // for vf_get_tile, vf_free, il_lower...
 
-#if __has_include(<libavcodec/avcodec.h>)
-#include <libavcodec/avcodec.h> // AV_INPUT_BUFFER_PADDING_SIZE
-constexpr int PADDING = std::max<int>(MAX_PADDING, AV_INPUT_BUFFER_PADDING_SIZE);
-#else
-constexpr int PADDING = MAX_PADDING;
-#endif
-
 #define MOD_NAME "[video dec.] "
+
+enum {
+        MAX_SUBSTREAMS = 256,
+};
 
 #define FRAMEBUFFER_NOT_READY(decoder) (decoder->frame == NULL && decoder->out_codec != VIDEO_CODEC_END)
 
@@ -367,9 +364,8 @@ struct state_video_decoder
         size_t            disp_supported_il_cnt = 0; ///< count of @ref disp_supported_il
         /// @}
 
-        unsigned int      max_substreams = 0; ///< maximal number of expected substreams
         change_il_t       change_il = NULL;      ///< function to change interlacing, if needed. Otherwise NULL.
-        vector<void *>    change_il_state;
+        void             *change_il_state[MAX_SUBSTREAMS]{};
 
         mutex lock;
 
@@ -520,7 +516,7 @@ static void *fec_thread(void *args) {
                                         int divisor;
 
                                         if (!decoder->merged_fb) {
-                                                divisor = decoder->max_substreams;
+                                                divisor = data->recv_frame->tile_count;
                                         } else {
                                                 divisor = 1;
                                         }
@@ -545,7 +541,7 @@ static void *fec_thread(void *args) {
                                 }
                         }
                 } else { /* PT_VIDEO */
-                        for(int i = 0; i < (int) decoder->max_substreams; ++i) {
+                        for(int i = 0; i < (int) data->nofec_frame->tile_count; ++i) {
                                 data->nofec_frame->tiles[i].data_len = data->recv_frame->tiles[i].data_len;
                                 data->nofec_frame->tiles[i].data = data->recv_frame->tiles[i].data;
 
@@ -652,7 +648,7 @@ static void *decompress_thread(void *args) {
                 unique_ptr<char[]> tmp;
 
                 if (decoder->out_codec == VIDEO_CODEC_END) {
-                        tmp = unique_ptr<char[]>(new char[tile_height * (tile_width * MAX_BPS + PADDING)]);
+                        tmp = unique_ptr<char[]>(new char[tile_height * (tile_width * MAX_BPS + MAX_PADDING)]);
                 }
 
                 if(decoder->decoder_type == EXTERNAL_DECODER) {
@@ -749,8 +745,6 @@ skip_frame:
 static void decoder_set_video_mode(struct state_video_decoder *decoder, enum video_mode video_mode)
 {
         decoder->video_mode = video_mode;
-        decoder->max_substreams = get_video_mode_tiles_x(decoder->video_mode)
-                        * get_video_mode_tiles_y(decoder->video_mode);
 }
 
 /**
@@ -766,7 +760,7 @@ static void decoder_set_video_mode(struct state_video_decoder *decoder, enum vid
  */
 struct state_video_decoder *video_decoder_init(struct module *parent,
                 enum video_mode video_mode,
-                struct display *display, const char *encryption)
+                const char *encryption)
 {
         struct state_video_decoder *s;
 
@@ -789,10 +783,12 @@ struct state_video_decoder *video_decoder_init(struct module *parent,
 
         decoder_set_video_mode(s, video_mode);
 
+#if 0
         if(!video_decoder_register_display(s, display)) {
                 delete s;
                 return NULL;
         }
+#endif
 
         return s;
 }
@@ -952,15 +948,6 @@ video_decoder_register_display(struct state_video_decoder *decoder,
 void
 video_decoder_deactivate(struct state_video_decoder *decoder)
 {
-        if (decoder->display) {
-                video_decoder_stop_threads(decoder);
-                if (decoder->frame) {
-                        display_put_frame(decoder->display, decoder->frame, PUTF_DISCARD);
-                        decoder->frame = NULL;
-                }
-                decoder->display = NULL;
-                memset(&decoder->display_desc, 0, sizeof(decoder->display_desc));
-        }
         if (decoder->mod.cls) {
                 module_done(&decoder->mod);
                 decoder->mod.cls = MODULE_CLASS_NONE;
@@ -979,8 +966,8 @@ static void cleanup(struct state_video_decoder *decoder)
 
         for (auto && item : decoder->change_il_state) {
                 free(item);
+                item = nullptr;
         }
-        decoder->change_il_state.resize(0);
 }
 
 /**
@@ -1124,11 +1111,14 @@ after_linedecoder_lookup:
 
         /* we didn't find line decoder. So try now regular (aka DXT) decoder */
         if(*decode_line == NULL) {
+                int nr_substreams =
+                    get_video_mode_tiles_x(decoder->video_mode) *
+                    get_video_mode_tiles_y(decoder->video_mode);
                 // try to probe video format
                 if (comp_int_prop.depth == 0 && decoder->out_codec != VIDEO_CODEC_END) {
                         decoder->decompress_state = decompress_init(
                             desc.color_spec, pixfmt_desc{}, VIDEO_CODEC_NONE,
-                            decoder->max_substreams);
+                            nr_substreams);
                         if (decoder->decompress_state) { // supports autodetection
                                 decoder->decoder_type = EXTERNAL_DECODER;
                                 return VIDEO_CODEC_END;
@@ -1142,7 +1132,7 @@ after_linedecoder_lookup:
                         out_codec = codec;
                         decoder->decompress_state =
                             decompress_init(desc.color_spec, pixfmt, codec,
-                                            decoder->max_substreams);
+                                            nr_substreams);
                         if (decoder->decompress_state) {
                                 decoder->decoder_type = EXTERNAL_DECODER;
                                 goto after_decoder_lookup;
@@ -1266,7 +1256,6 @@ static bool reconfigure_decoder(struct state_video_decoder *decoder,
 
         decoder->change_il = select_il_func(desc.interlacing, decoder->disp_supported_il,
                         decoder->disp_supported_il_cnt, &display_il);
-        decoder->change_il_state.resize(decoder->max_substreams);
         display_desc.interlacing = display_il;
         display_desc.color_spec  = out_codec;
         if (out_codec != VIDEO_CODEC_END && !video_desc_eq(decoder->display_desc, display_desc)) {
@@ -1502,7 +1491,6 @@ static void check_for_mode_change(struct state_video_decoder *decoder,
         reconfigure_helper(decoder, network_desc, {});
 }
 
-#define ERROR_GOTO_CLEANUP ret = false; goto cleanup;
 #define max(a, b)       (((a) > (b))? (a): (b))
 
 /**
@@ -1521,9 +1509,10 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
 
         bool ret = true;
         int prints=0;
-        int max_substreams = decoder->max_substreams;
 
-        vector<uint32_t> buffer_num(max_substreams);
+        uint32_t buffer_num[MAX_SUBSTREAMS];
+        int buffer_number = 0;
+#if 0
         // the following is just FEC related optimalization - normally we fill up
         // allocated buffers when we have compressed data. But in case of FEC, there
         // is just the FEC buffer present, so we point to it instead to copying
@@ -1531,14 +1520,7 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
         frame->data_deleter       = vf_data_deleter;
         unique_ptr<map<int, int>[]> pckt_list(new map<int, int>[max_substreams]);
 
-        int buffer_number = 0;
         bool buffer_swapped = false;
-
-        // We have no framebuffer assigned, exiting
-        if(!decoder->display) {
-                vf_free(frame);
-                return false;
-        }
 
         main_msg_reconfigure *msg_reconf;
         while ((msg_reconf = decoder->msg_queue.pop(true /* nonblock */))) {
@@ -1556,11 +1538,18 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                 }
                 delete msg_reconf;
         }
+#endif
 
-        frame->ssrc = cdata->data->ssrc;
-        frame->timestamp = cdata->data->ts;
+        pbuf_data->decoded_frame = nullptr;
+
+        uint32_t ssrc = cdata->data->ssrc;
+        // frame->ssrc = cdata->data->ssrc;
+        uint64_t timestamp = cdata->data->ts;
+        // frame->timestamp = cdata->data->ts;
         int pt = cdata->data->pt;
         if (PT_VIDEO_HAS_FEC(pt)) {
+                /// @todo
+#if 0
                 const uint32_t *hdr = (uint32_t *)(void *)cdata->data->data;
                 const uint32_t tmp = ntohl(hdr[3]);
                 const unsigned k = tmp >> 19;
@@ -1573,9 +1562,10 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                                               .c    = c,
                                               .seed = seed,
                                               .symbol_size = 0 };
+#endif
         }
 
-        while (cdata != NULL) {
+        for ( ; cdata != NULL; cdata = cdata->nxt) {
                 int len;
                 const char *data;
                 rtp_packet *pckt = cdata->data;
@@ -1589,15 +1579,26 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                 buffer_number = tmp & 0x3fffff;
                 const int buffer_length = ntohl(hdr[2]);
 
+                if (!pbuf_data->decoded_frame) {
+                        struct video_desc desc = {};
+                        if (PT_VIDEO_HAS_FEC(pt)) {
+                                pbuf_data->decoded_frame = vf_alloc(substream + 1);
+                                pbuf_data->decoded_frame->callbacks.data_deleter = vf_data_deleter;
+                        } else {
+                                parse_video_hdr(hdr, &desc);
+                                pbuf_data->decoded_frame = vf_alloc_desc_data(desc);
+                        }
+                }
+
                 if (PT_VIDEO_IS_ENCRYPTED(pt)) {
                         if(!decoder->decrypt) {
                                 log_msg(LOG_LEVEL_ERROR, ENCRYPTED_ERR);
-                                ERROR_GOTO_CLEANUP
+                                return false;
                         }
                 } else {
                         if(decoder->decrypt) {
                                 log_msg(LOG_LEVEL_ERROR, NOT_ENCRYPTED_ERR);
-                                ERROR_GOTO_CLEANUP
+                                return false;
                         }
                 }
 
@@ -1622,8 +1623,7 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                                 crypto_mode = (enum openssl_mode) (crypto_hdr >> 24);
 				if (crypto_mode == MODE_AES128_NONE || crypto_mode > MODE_AES128_MAX) {
 					log_msg(LOG_LEVEL_WARNING, "Unknown cipher mode: %d\n", (int) crypto_mode);
-					ret = false;
-					goto cleanup;
+					return false;
 				}
                         }
                         break;
@@ -1637,6 +1637,7 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                         goto cleanup;
                 }
 
+#if 0
                 if ((int) substream >= max_substreams) {
                         log_msg(LOG_LEVEL_WARNING, "[decoder] received substream ID %d. Expecting at most %d substreams. Did you set -M option?\n",
                                         substream, max_substreams);
@@ -1658,6 +1659,7 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                         ret = false;
                         goto cleanup;
                 }
+#endif
 
                 char plaintext[RTP_MAX_PACKET_LEN]; // will be actually shorter
                 if (PT_VIDEO_IS_ENCRYPTED(pt)) {
@@ -1668,12 +1670,13 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                                         (const char *) hdr, pt == PT_ENCRYPT_VIDEO ?
                                         sizeof(video_payload_hdr_t) : sizeof(fec_payload_hdr_t),
                                         plaintext, crypto_mode)) == 0) {
-                                goto next_packet;
+                                continue;
                         }
                         data = (char *) plaintext;
                         len = data_len;
                 }
 
+#if 0
                 if (!PT_VIDEO_HAS_FEC(pt))
                 {
                         /* Critical section
@@ -1688,11 +1691,16 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                                 return false;
                         }
                 }
+#endif
 
                 buffer_num[substream] = buffer_number;
+                struct video_frame *frame = pbuf_data->decoded_frame;
                 frame->tiles[substream].data_len = buffer_length;
+#if 0
                 pckt_list[substream][data_pos] = len;
+#endif
 
+#if 0
                 if ((pt == PT_VIDEO || pt == PT_ENCRYPT_VIDEO) && decoder->decoder_type == LINE_DECODER) {
                         struct tile *tile = NULL;
                         if(!buffer_swapped) {
@@ -1784,8 +1792,9 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                                 y += line_decoder->dst_pitch;  /* next line */
                         }
                 } else { /* PT_VIDEO_LDGM or external decoder */
+#endif
                         if(!frame->tiles[substream].data) {
-                                frame->tiles[substream].data = (char *) malloc(buffer_length + PADDING);
+                                frame->tiles[substream].data = (char *) malloc(buffer_length + MAX_PADDING);
                         }
 
                         if (data_pos + len > (unsigned) buffer_length) {
@@ -1798,12 +1807,12 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                         }
                         memcpy(frame->tiles[substream].data + data_pos,
                                (const unsigned char *)data, len);
-                }
+                // }
 
-next_packet:
-                cdata = cdata->nxt;
+//next_packet:
         }
 
+#if 0
         if (FRAMEBUFFER_NOT_READY(decoder) && (pt == PT_VIDEO || pt == PT_ENCRYPT_VIDEO)) {
                 ret = false;
                 goto cleanup;
@@ -1856,11 +1865,12 @@ next_packet:
                 }
 
         }
-cleanup:
         ;
         if (!ret) {
                 vf_free(frame);
         }
+#endif
+cleanup:
         pbuf_data->decoded++;
 
         decoder->stats.update(buffer_number);
@@ -1895,4 +1905,3 @@ static void decoder_process_message(struct module *m)
 
         }
 }
-

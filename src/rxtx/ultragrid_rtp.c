@@ -169,12 +169,6 @@ init(struct rxtx_params *params)
                 return rc < 0 ? nullptr : INIT_NOERR;
         }
 
-        // @todo needs to be moved after implementing recv_video_frame
-        size_t len = sizeof s->rtp_common->display_supp_for_mult_sources;
-        display_ctl_property(
-            s->display_device, DISPLAY_PROPERTY_SUPPORTS_MULTI_SOURCES,
-            &s->rtp_common->display_supp_for_mult_sources, &len);
-
         if (strlen(params->video_compression) == 0) {
                 snprintf_ch(params->video_compression, "none");
         }
@@ -247,32 +241,16 @@ static void *send_video_frame_async_callback(void *arg) {
         return nullptr;
 }
 
-static void
-should_exit(void *state) {
-        struct ultragrid_rtp_rxtx *s = state;
-        s->should_exit = true;
-}
-
-static void *
-receiver_thread(void *arg)
+/**
+ * @todo implement decoding to video buffer
+ */
+static struct video_frame *
+recv_vid_frame(void *arg,
+                             struct video_frame * /* display_buffer */,
+                             size_t /* display_pitch */)
 {
         struct ultragrid_rtp_rxtx *s = arg;
-        set_thread_name(__func__);
-
-        register_should_exit_callback(s->parent, should_exit, s);
-        while (!s->should_exit) {
-                rtp_recv_video_frame(s->rtp_common, decode_video_frame);
-        }
-        unregister_should_exit_callback(s->parent, should_exit, s);
-
-        /* Because decoders work asynchronously we need to make sure
-         * that display won't be called */
-        remove_display_from_decoders(s->rtp_common);
-
-        // pass poisoned pill to display
-        display_put_frame(s->display_device, nullptr, PUTF_BLOCKING);
-
-        return nullptr;
+        return rtp_recv_video_frame(s->rtp_common, decode_video_frame);
 }
 
 static void usage() {
@@ -339,16 +317,14 @@ ctl_property(void *state, enum rxtx_property p,
                 memcpy(val, (void *) &s->rtp_common, *len);
                 return true;
         }
-        case SET_ULTRAGRID_RTP_MUTLI_OUT_AUDIO: {
-                assert(*len >= sizeof(bool));
-                memcpy(&s->rtp_common->aplayback_supports_multiple_streams, val,
-                       sizeof(bool));
-                return true;
-        }
+        case SET_ULTRAGRID_RTP_MUTLI_OUT_AUDIO:
         case SET_ULTRAGRID_RTP_MUTLI_OUT_VIDEO: {
-                assert(*len >= sizeof(struct multi_sources_supp_info));
-                memcpy(&s->rtp_common->display_supp_for_mult_sources, val,
-                       sizeof(struct multi_sources_supp_info));
+                bool *var =
+                    SET_ULTRAGRID_RTP_MUTLI_OUT_AUDIO
+                        ? &s->rtp_common->aplayback_supports_multiple_streams
+                        : &s->rtp_common->vplayback_supports_multiple_streams;
+                assert(*len >= sizeof *var);
+                memcpy(var, val, sizeof *var);
                 return true;
         }
         case SET_RTP_AUD_FRM_SZ: {
@@ -380,9 +356,8 @@ static const struct rxtx_info ultragrid_rtp_rxtx_info = {
         .send_audio_frame = send_audio_frame,
         .recv_audio_frame = recv_audio_frame,
 
-        .send_video_frame   = nullptr,
         .send_video_frame_c = send_video_frame,
-        .video_recv_routine = receiver_thread,
+        .recv_video_frame   = recv_vid_frame,
         .join_video_sender  = join,
 };
 

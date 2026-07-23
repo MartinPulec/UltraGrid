@@ -322,7 +322,8 @@ h264_sdp_ctl_property(void *state, enum rxtx_property p,
                     s->rtp_common->medium[TX_MEDIA_AUDIO].network_device, sz);
                 return true;
         }
-        case SET_ULTRAGRID_RTP_MUTLI_OUT:
+        case SET_ULTRAGRID_RTP_MUTLI_OUT_AUDIO:
+        case SET_ULTRAGRID_RTP_MUTLI_OUT_VIDEO:
                 abort();
         }
         MSG(WARNING, "Unexpected property %d queiried!\n", (int) p);

@@ -103,6 +103,7 @@ struct vcodec_state {
         unsigned int max_frame_size; // maximal frame size
                                      // to be returned to caller by a decoder to allow him adjust buffers accordingly
         unsigned int decoded;
+        struct video_frame *decoded_frame;
 };
 
 struct acodec_state {
