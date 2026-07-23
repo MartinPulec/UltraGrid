@@ -73,6 +73,9 @@ using std::shared_ptr;
 using std::ostringstream;
 using std::string;
 
+struct video_frame        rxtx_retry_frame = {};
+struct video_frame *const rxtx_retry       = &rxtx_retry_frame;
+
 struct rxtx {
 public:
         const uint32_t magic = MAGIC;

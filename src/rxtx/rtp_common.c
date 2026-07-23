@@ -58,6 +58,7 @@
 #include "rxtx/rtp_common.h"
 
 #include <assert.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>            // for strdup, strcmp, strlen, strstr
 #include <sys/time.h>            // for timeval
@@ -85,6 +86,7 @@
 #include "utils/net.h"       // for is_host_loopback
 #include "utils/pthread.h"   // for CHK_PTHR
 #include "utils/string.h"    // for strprintf
+#include "video_frame.h"
 
 #define MAGIC to_fourcc('R', 'T', 'r', 't')
 #define MOD_NAME "[rxtx/rtp] "
@@ -140,16 +142,11 @@ struct rtp_rxtx_common_priv_state {
         // audio
         time_ns_t a_last_not_timeout;
         // video
-        struct display *display_device;
-        struct display  **display_copies; ///< some displays can be "forked"
-                                         ///< and used simultaneously from
-                                         ///< multiple decoders, here are
-                                         ///< saved forked states
-        unsigned display_copies_count;
         enum video_mode  decoder_mode;
-        int fr;
         time_ns_t last_not_timeout;
         int last_buf_size;
+
+        atomic_bool should_exit;
 };
 
  // protoypes
@@ -160,10 +157,15 @@ static struct rtp *initialize_network(const char *addr, int recv_port,
                                       enum tx_media_type medium);
 static void        destroy_rtp_device(struct rtp *network_device);
 static int         parse_bitrate(char *optarg, long long int *bitrate);
-static struct vcodec_state *new_video_decoder(struct rtp_rxtx_common *s,
-                                              struct display         *d);
+static struct vcodec_state *new_video_decoder(struct rtp_rxtx_common *s);
 static void                 destroy_video_decoder(void *state);
 static void rtp_rxtx_set_pbuf_delay(struct rtp_rxtx_medium *s, double delay);
+
+static void
+should_exit_rtp_common(void *state) {
+        struct rtp_rxtx_common_priv_state *s = state;
+        s->should_exit = true;
+}
 
 static struct response *
 rtp_process_sender_message(struct rtp_rxtx_common_priv_state *s,
@@ -518,9 +520,9 @@ rtp_rxtx_common_init(struct rtp_rxtx_common **out, struct rxtx_params *params)
         s->mcast_if           = strdup(params->mcast_if);
         s->ttl                = params->ttl;
         s->start_time         = params->start_time;
-        s->display_device     = params->display_device;
         s->decoder_mode       = params->decoder_mode;
-        s->fr                 = 1;
+
+        register_should_exit_callback(s->parent, should_exit_rtp_common, s);
 
         for (unsigned i = 0; i < NUM_TX_MEDIA; ++i) {
                 bool rc = init_medium_state(s, params, i);
@@ -531,12 +533,10 @@ rtp_rxtx_common_init(struct rtp_rxtx_common **out, struct rxtx_params *params)
         }
         const char *dec_use_codec = get_commandline_param("decoder-use-codec");
         if (dec_use_codec != nullptr && strcmp(dec_use_codec, "help") == 0) {
-                destroy_video_decoder(
-                    new_video_decoder(pub, params->display_device));
+                destroy_video_decoder(new_video_decoder(pub));
                 rtp_rxtx_common_done(pub);
                 return 1;
         }
-
 
         *out = pub;
         return 0;
@@ -578,6 +578,8 @@ rtp_rxtx_common_done(struct rtp_rxtx_common *pub)
 
         free(pub->priv->mcast_if);
         free(pub->encryption);
+
+        unregister_should_exit_callback(s->parent, should_exit_rtp_common, s);
 
         free(s);
 }
@@ -863,14 +865,14 @@ destroy_video_decoder(void *state)
 }
 
 static struct vcodec_state *
-new_video_decoder(struct rtp_rxtx_common *s, struct display *d)
+new_video_decoder(struct rtp_rxtx_common *s)
 {
         struct vcodec_state *state = (struct vcodec_state *) calloc(1, sizeof(struct vcodec_state));
 
         if(state) {
                 state->decoder = video_decoder_init(
                     &s->priv->medium[TX_MEDIA_VIDEO].sender_mod,
-                    s->priv->decoder_mode, d, s->encryption);
+                    s->priv->decoder_mode, s->encryption);
 
                 if(!state->decoder) {
                         fprintf(stderr, "Error initializing decoder (incorrect '-M' or '-p' option?).\n");
@@ -889,34 +891,40 @@ new_video_decoder(struct rtp_rxtx_common *s, struct display *d)
  * Removes display from decoders and effectively kills them. They cannot be used
  * until new display assigned.
  */
-void
-remove_display_from_decoders(struct rtp_rxtx_common *s)
+static void
+deactivate_all_video_decoders(struct rtp_rxtx_common *s)
 {
         struct rtp_rxtx_medium *video = &s->medium[TX_MEDIA_VIDEO];
         if (video->participants != nullptr) {
                 pdb_iter_t it;
                 struct pdb_e *cp = pdb_iter_init(video->participants, &it);
                 while (cp != NULL) {
-                        if (cp->decoder_state) {
-                                video_decoder_deactivate(
-                                    ((struct vcodec_state *) cp->decoder_state)
-                                        ->decoder);
-                        }
+                        destroy_video_decoder(cp->decoder_state);
+                        cp->decoder_state = nullptr;
                         cp = pdb_iter_next(&it);
                 }
                 pdb_iter_done(&it);
         }
 }
 
+/**
+ * @retval nullptr    poison pill
+ * @retval rxtx_retry no frame received (retry)
+ * @returns           otherwise, decoded video frame pointer
+ */
 struct video_frame *
 rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode)
 {
         struct rtp_rxtx_common_priv_state *priv  = s->priv;
         struct rtp_rxtx_medium            *video = &s->medium[TX_MEDIA_VIDEO];
-
+        struct video_frame *out = nullptr;
         struct pdb_e *cp;
-
         struct timeval timeout;
+
+        if (priv->should_exit) {
+                return nullptr;
+        }
+
         /* Housekeeping and RTCP... */
         time_ns_t curr_time = get_time_in_ns();
         uint32_t  ts =
@@ -927,11 +935,6 @@ rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode)
 
         /* Receive packets from the network... The timeout is adjusted */
         /* to match the video capture rate, so the transmitter works.  */
-        if (priv->fr) {
-                curr_time = get_time_in_ns();
-                priv->fr  = 0;
-        }
-
         timeout.tv_sec = 0;
         // timeout.tv_usec = 999999 / 59.94;
         //  use longer timeout when we are not receivng any data
@@ -970,27 +973,13 @@ rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode)
                         // we are assigning our display so we make sure it is
                         // removed from other display
 
-                        struct display *d;
-                        if (!s->display_supp_for_mult_sources.val) {
-                                remove_display_from_decoders(
-                                    s); // must be called before creating new
-                                        // decoder state
-                                d = s->priv->display_device;
-                        } else {
-                                d = s->display_supp_for_mult_sources
-                                        .fork_display(
-                                            s->display_supp_for_mult_sources
-                                                .state);
-                                assert(d != NULL);
-                                s->priv->display_copies = realloc(
-                                    s->priv->display_copies,
-                                    (s->priv->display_copies_count + 1) *
-                                        sizeof *s->priv->display_copies);
-                                s->priv->display_copies
-                                    [s->priv->display_copies_count++] = d;
+                        if (!s->vplayback_supports_multiple_streams) {
+                                // must be called before creating new decoder
+                                // state
+                                deactivate_all_video_decoders(s);
                         }
 
-                        cp->decoder_state         = new_video_decoder(s, d);
+                        cp->decoder_state         = new_video_decoder(s);
                         cp->decoder_state_deleter = destroy_video_decoder;
 
                         if (cp->decoder_state == NULL) {
@@ -1004,16 +993,23 @@ rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode)
                         }
                 }
 
-                struct vcodec_state *vdecoder_state =
-                    (struct vcodec_state *) cp->decoder_state;
+                struct vcodec_state *vdecoder_state = cp->decoder_state;
+                if (!vdecoder_state) { // disabled
+                        goto next;
+                }
 
                 /* Decode and render video... */
                 if (pbuf_decode(cp->playout_buffer, curr_time, decode,
                                 vdecoder_state)) {
-                        priv->fr = 1;
+                        /// @todo multi-out
+                        assert(!out);
+                        out = vdecoder_state->decoded_frame;
+                } else {
+                        vf_free(vdecoder_state->decoded_frame);
                 }
+                vdecoder_state->decoded_frame = nullptr;
 
-                if (vdecoder_state && vdecoder_state->decoded % 100 == 99) {
+                if (vdecoder_state->decoded % 100 == 99) {
                         int new_size =
                             vdecoder_state->max_frame_size * 110ull / 100;
                         if (new_size > priv->last_buf_size) {
@@ -1029,12 +1025,17 @@ rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode)
                         }
                 }
 
+next:
                 pbuf_remove(cp->playout_buffer, curr_time);
                 cp = pdb_iter_next(&it);
         }
         pdb_iter_done(&it);
 
-        return nullptr;
+        if (out) {
+                out->callbacks.dispose = vf_free;
+                return out;
+        }
+        return rxtx_retry;
 }
 
 static int

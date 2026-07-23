@@ -72,6 +72,9 @@
 
 #define MOD_NAME "[lavd] "
 
+static_assert(MAX_PADDING >= AV_INPUT_BUFFER_PADDING_SIZE,
+              "Adjust MAX_PADDING to be at least AV_INPUT_BUFFER_PADDING_SIZE");
+
 struct state_libavcodec_decompress {
         AVCodecContext *codec_ctx;
         AVFrame        *frame;

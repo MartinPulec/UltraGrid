@@ -111,14 +111,25 @@ video_receiver_thread(void *arg)
                 if (!ret) {
                         break;
                 }
+                if (ret == rxtx_retry) {
+                        continue;
+                }
                 if (ret != f) {
-                        if (f) {
-                                display_put_frame(s->display, f, PUTF_DISCARD);
-                        }
-                        f = recv_reconfigure(s, video_desc_from_frame(ret));
-                        if (f == nullptr) {
-                                VIDEO_FRAME_DISPOSE(ret);
-                                continue;
+                        if (!f || !video_desc_eq(video_desc_from_frame(f),
+                                                video_desc_from_frame(ret))) {
+                                if (f) {
+                                        display_put_frame(s->display, f,
+                                                          PUTF_DISCARD);
+                                }
+                                f = recv_reconfigure(
+                                    s, video_desc_from_frame(ret));
+                                if (f == nullptr) {
+                                        VIDEO_FRAME_DISPOSE(ret);
+                                        continue;
+                                }
+                                assert(
+                                    video_desc_eq(video_desc_from_frame(f),
+                                                  video_desc_from_frame(ret)));
                         }
 
                         vf_copy_metadata(f, ret);
@@ -154,6 +165,15 @@ video_start(struct rxtx *rxtx, const struct rxtx_params *params,
             rxtx_have_receive_video_frame(rxtx)) {
                 pthread_create(&s->receiver_thread, nullptr, video_receiver_thread, s);
         }
+
+#if 0
+        /// @todo set
+        size_t len = sizeof s->rtp_common->display_supp_for_mult_sources;
+        display_ctl_property(
+            s->display_device, DISPLAY_PROPERTY_SUPPORTS_MULTI_SOURCES,
+            &s->rtp_common->display_supp_for_mult_sources, &len);
+#endif
+
 
         return s;
 }
