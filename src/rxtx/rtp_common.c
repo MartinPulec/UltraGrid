@@ -145,6 +145,7 @@ struct rtp_rxtx_common_priv_state {
         enum video_mode  decoder_mode;
         time_ns_t last_not_timeout;
         int last_buf_size;
+        struct display_params display_params;
 
         atomic_bool should_exit;
 };
@@ -521,6 +522,7 @@ rtp_rxtx_common_init(struct rtp_rxtx_common **out, struct rxtx_params *params)
         s->ttl                = params->ttl;
         s->start_time         = params->start_time;
         s->decoder_mode       = params->decoder_mode;
+        s->display_params     = params->display_params;
 
         register_should_exit_callback(s->parent, should_exit_rtp_common, s);
 
@@ -530,12 +532,6 @@ rtp_rxtx_common_init(struct rtp_rxtx_common **out, struct rxtx_params *params)
                         rtp_rxtx_common_done(pub);
                         return -1;
                 }
-        }
-        const char *dec_use_codec = get_commandline_param("decoder-use-codec");
-        if (dec_use_codec != nullptr && strcmp(dec_use_codec, "help") == 0) {
-                destroy_video_decoder(new_video_decoder(pub));
-                rtp_rxtx_common_done(pub);
-                return 1;
         }
 
         *out = pub;
@@ -872,7 +868,8 @@ new_video_decoder(struct rtp_rxtx_common *s)
         if(state) {
                 state->decoder = video_decoder_init(
                     &s->priv->medium[TX_MEDIA_VIDEO].sender_mod,
-                    s->priv->decoder_mode, s->encryption);
+                    s->priv->decoder_mode, s->encryption,
+                    &s->priv->display_params);
 
                 if(!state->decoder) {
                         fprintf(stderr, "Error initializing decoder (incorrect '-M' or '-p' option?).\n");

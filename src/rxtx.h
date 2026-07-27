@@ -50,6 +50,7 @@
 #include "tv.h"           // for time_ns_t
 #include "types.h"        // for codec_t, video_desc, video_frame (ptr only)
 #include "utils/macros.h" // for STR_LEN
+#include "video_display.h"
 
 enum {
         RXTX_ABI_VERSION = 6,
@@ -59,6 +60,13 @@ extern struct video_frame *const rxtx_retry;
 
 struct audio_desc;
 struct audio_frame2;
+
+struct display_params {
+        enum display_prop_vid_mode display_mode;
+        /// VC_NONE-terminated
+        codec_t native_codecs[VC_COUNT + 1];
+        int     rgb_shift[3];
+};
 
 struct rxtx_medium_params  {
         enum rxtx_mode  rxtx_mode;      ///< sender, receiver or both
@@ -93,6 +101,8 @@ struct rxtx_params {
         char            protocol_opts[STR_LEN];
         struct module  *sender_mod;   ///< set by rxtx::create
         struct module  *receiver_mod; ///< @copydoc sender_mod
+
+        struct display_params display_params;
 };
 
 #define RXTX_INIT                                                              \
@@ -102,7 +112,7 @@ struct rxtx_params {
                                              .rx_port   = -1,                  \
                                              .tx_port   = -1,                  \
                                              .fec       = "none",              \
-                                         }, {                                  \
+                                         }, {                                     \
                                              .rxtx_mode = RXTX_MODE_NONE,      \
                                              .rx_port   = -1,                  \
                                              .tx_port   = -1,                  \
@@ -127,6 +137,7 @@ struct rxtx_params {
                 .protocol_opts       = "",                                     \
                 .sender_mod          = nullptr,                                \
                 .receiver_mod        = nullptr,                                \
+                .display_params      = {},                                     \
 }
 
 #define SENDS_MEDIUM(params, medium_type)                                      \

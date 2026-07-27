@@ -128,7 +128,9 @@
 #include "rtp/pbuf.h"
 #include "rtp/rtp.h"
 #include "rtp/rtp_types.h" // for video_payload_hdr_t, PT_ENCRYP...
+#include "rxtx.h"
 #include "tv.h"            // for NS_IN_SEC
+#include "types.h"
 #include "utils/color_out.h"
 #include "utils/macros.h"
 #include "utils/misc.h"
@@ -180,14 +182,18 @@ using change_il_t = void (*)(char *dst, char *src, int linesize, int height, voi
 // prototypes
 static bool reconfigure_decoder(struct state_video_decoder *decoder,
                 struct video_desc desc, struct pixfmt_desc comp_int_desc);
+#if 0
 static void check_for_mode_change(struct state_video_decoder *decoder, const uint32_t *hdr);
 static void wait_for_framebuffer_swap(struct state_video_decoder *decoder);
 static void *fec_thread(void *args);
 static void *decompress_thread(void *args);
+#endif
 static void cleanup(struct state_video_decoder *decoder);
 static void decoder_process_message(struct module *);
+#if 0
 static bool  video_decoder_register_display(struct state_video_decoder *decoder,
                                             struct display             *display);
+#endif
 
 static int sum_map(const map<int, int>& m) {
         int ret = 0;
@@ -355,14 +361,18 @@ struct state_video_decoder
         struct pixfmt_desc received_int_desc = {}; ///< compression int desc
         struct video_desc display_desc = {};      ///< description of the mode that display is currently configured to
 
-        struct video_frame *frame = NULL; ///< @todo rewrite this more reasonably
+        // struct video_frame *frame = NULL; ///< @todo rewrite this more reasonably
 
+#if 0
         struct display   *display = NULL; ///< assigned display device
         /// @{
         vector<codec_t>   native_codecs; ///< list of display native codecs
         enum interlacing *disp_supported_il = NULL; ///< display supported interlacing mode
         size_t            disp_supported_il_cnt = 0; ///< count of @ref disp_supported_il
         /// @}
+#else
+        struct display_params display_params;
+#endif
 
         change_il_t       change_il = NULL;      ///< function to change interlacing, if needed. Otherwise NULL.
         void             *change_il_state[MAX_SUBSTREAMS]{};
@@ -398,6 +408,7 @@ struct state_video_decoder
         struct reported_statistics_cumul stats = {}; ///< stats to be reported through control socket
 };
 
+#if 0
 /**
  * This function blocks until video frame is displayed and decoder::frame
  * can be filled with new data. Until this point, the video frame is not considered
@@ -407,12 +418,14 @@ static void wait_for_framebuffer_swap(struct state_video_decoder *decoder) {
         unique_lock<mutex> lk(decoder->lock);
         decoder->buffer_swapped_cv.wait(lk, [decoder]{return decoder->buffer_swapped;});
 }
+#endif
 
 #define ENCRYPTED_ERR "Receiving encrypted video data but " \
         "no decryption key entered!\n"
 #define NOT_ENCRYPTED_ERR "Receiving unencrypted video data " \
         "while expecting encrypted.\n"
 
+#if 0
 static void *fec_thread(void *args) {
         set_thread_name(__func__);
         struct state_video_decoder *decoder =
@@ -568,7 +581,9 @@ cleanup:
 
         return NULL;
 }
+#endif
 
+#if 0
 static bool blacklist_current_out_codec(struct state_video_decoder *decoder){
         if(decoder->out_codec == VIDEO_CODEC_NONE)
                 return false;
@@ -582,7 +597,9 @@ static bool blacklist_current_out_codec(struct state_video_decoder *decoder){
 
         return true;
 }
+#endif
 
+#if 0
 struct decompress_data {
         struct state_video_decoder *decoder;
         int pos;
@@ -717,6 +734,7 @@ static void *decompress_thread(void *args) {
                 }
 
                 {
+#if 0
                         long long putf_timeout = force_putf_timeout != -1 ? force_putf_timeout : PUTF_NONBLOCK; // originally was BLOCKING when !is_codec_interframe(decoder->received_vid_desc.color_spec)
 
                         decoder->frame->ssrc = msg->nofec_frame->ssrc;
@@ -725,6 +743,7 @@ static void *decompress_thread(void *args) {
                             decoder->display, decoder->frame, putf_timeout);
                         msg->is_displayed = ret;
                         decoder->frame = display_get_frame(decoder->display);
+#endif
                         assert(decoder->frame != nullptr);
                 }
 
@@ -741,6 +760,7 @@ skip_frame:
 
         return NULL;
 }
+#endif
 
 static void decoder_set_video_mode(struct state_video_decoder *decoder, enum video_mode video_mode)
 {
@@ -758,13 +778,15 @@ static void decoder_set_video_mode(struct state_video_decoder *decoder, enum vid
  *                    used. This may change eventually.
  * @return Newly created decoder state. If an error occurred, returns NULL.
  */
-struct state_video_decoder *video_decoder_init(struct module *parent,
-                enum video_mode video_mode,
-                const char *encryption)
+struct state_video_decoder *
+video_decoder_init(struct module *parent, enum video_mode video_mode,
+                   const char            *encryption,
+                   const struct display_params *display_params)
 {
         struct state_video_decoder *s;
 
         s = new state_video_decoder(parent);
+        s->display_params = *display_params;
 
         if (strlen(encryption) > 0) {
                 s->dec_funcs = static_cast<const struct openssl_decrypt_info *>(load_library("openssl_decrypt",
@@ -793,6 +815,7 @@ struct state_video_decoder *video_decoder_init(struct module *parent,
         return s;
 }
 
+#if 0
 /**
  * @brief starts decompress and ldmg threads
  *
@@ -809,7 +832,9 @@ static void video_decoder_start_threads(struct state_video_decoder *decoder)
         decoder->decompress_thread_id = thread(decompress_thread, decoder);
         decoder->fec_thread_id = thread(fec_thread, decoder);
 }
+#endif
 
+#if 0
 /**
  * @brief This function stops running threads.
  *
@@ -826,27 +851,9 @@ static void video_decoder_stop_threads(struct state_video_decoder *decoder)
         decoder->fec_thread_id.join();
         decoder->decompress_thread_id.join();
 }
+#endif
 
-static auto codec_list_to_str(vector<codec_t> const &codecs) {
-        if (codecs.empty()) {
-                return "(none)"s;
-        }
-        ostringstream oss;
-        auto it = codecs.begin();
-        oss << get_codec_name(*it++);
-        for ( ; it != codecs.end(); ++it) {
-                oss << (it + 1 == codecs.end() ? " and " : ", ") << get_codec_name(*it);
-        }
-        return oss.str();
-}
-
-ADD_TO_PARAM("decoder-use-codec",
-                "* decoder-use-codec=<codec>\n"
-                "  Use specified pixel format for decoding (eg. v210). This overrides automatic\n"
-                "  choice. The pixel format must be supported by the video display. Use 'help' to see\n"
-                "  available options for a display (eg.: 'uv -d gl --param decoder-use-codec=help').\n"
-                "* decoder-use-codec=!<codec>\n"
-                "  Blacklist specified pixel format ('!<codec' may need to be quoted).\n");
+#if 0
 /**
  * @brief Registers video display to be used for displaying decoded video frames.
  *
@@ -880,41 +887,6 @@ video_decoder_register_display(struct state_video_decoder *decoder,
                         decoder->native_codecs.push_back(native_codecs[i]);
                 }
         }
-        if (get_commandline_param("decoder-use-codec")) {
-                const char *codec_str = get_commandline_param("decoder-use-codec");
-                bool blacklist_codec = false;
-                if (codec_str[0] == '!') {
-                        blacklist_codec = true;
-                        codec_str += 1;
-                }
-                codec_t req_codec = get_codec_from_name(codec_str);
-                if ("help"s == codec_str) {
-                        LOG(LOG_LEVEL_NOTICE) << MOD_NAME << "Supported codecs for current display are: " << codec_list_to_str(decoder->native_codecs) << "\n";
-                        return false;
-                }
-                if (req_codec == VIDEO_CODEC_NONE) {
-                        log_msg(LOG_LEVEL_ERROR, MOD_NAME "Wrong decoder codec spec: %s.\n", codec_str);
-                        LOG(LOG_LEVEL_INFO) << MOD_NAME << "Supported codecs for current display are: " << codec_list_to_str(decoder->native_codecs) << "\n";
-                        return false;
-                }
-                if (blacklist_codec) {
-                        auto to_erase = find(decoder->native_codecs.begin(),
-                                             decoder->native_codecs.end(),
-                                             req_codec);
-                        if (to_erase != decoder->native_codecs.end()) {
-                                decoder->native_codecs.erase(to_erase);
-                        }
-                } else if (find(decoder->native_codecs.begin(),
-                                decoder->native_codecs.end(),
-                                req_codec) != end(decoder->native_codecs)) {
-                        decoder->native_codecs.clear();
-                        decoder->native_codecs.push_back(req_codec);
-                } else {
-                        log_msg(LOG_LEVEL_ERROR, MOD_NAME "Display doesn't support requested codec: %s.\n", codec_str);
-                        LOG(LOG_LEVEL_INFO) << MOD_NAME << "Supported codecs for current display are: " << codec_list_to_str(decoder->native_codecs) << "\n";
-                        return false;
-                }
-        }
 
         free(decoder->disp_supported_il);
         decoder->disp_supported_il_cnt = 20 * sizeof(enum interlacing);
@@ -933,6 +905,7 @@ video_decoder_register_display(struct state_video_decoder *decoder,
 
         return true;
 }
+#endif
 
 /**
  * This removes display from current decoder and uninitializes module so that it
@@ -987,11 +960,14 @@ void video_decoder_destroy(struct state_video_decoder *decoder)
 
         cleanup(decoder);
 
+#if 0
         free(decoder->disp_supported_il);
+#endif
 
         delete decoder;
 }
 
+#if 0
 /**
  * Reorders display codecs to match compression internal format.
  *
@@ -1061,6 +1037,7 @@ static vector<pair<struct pixfmt_desc, codec_t>> video_decoder_order_output_code
 
         return ret;
 }
+#endif
 
 /**
  * This function selects, according to given video description, appropriate
@@ -1077,7 +1054,9 @@ static codec_t choose_codec_and_decoder(struct state_video_decoder *decoder, str
         codec_t out_codec = VIDEO_CODEC_NONE;
 
         /* first check if the codec is natively supported */
-        for (auto &codec : decoder->native_codecs) {
+        codec_t *it = decoder->display_params.native_codecs;
+        while (*it) {
+                codec_t codec = *it++;
                 if (desc.color_spec == codec) {
                         if ((desc.color_spec == DXT1 || desc.color_spec == DXT1_YUV ||
                                         desc.color_spec == DXT5)
@@ -1098,9 +1077,13 @@ static codec_t choose_codec_and_decoder(struct state_video_decoder *decoder, str
         }
         /* otherwise if we have line decoder (incl. slow codecs) */
         {
+                codec_t native_codecs_copy[VC_COUNT + 1];
+                memcpy(native_codecs_copy, decoder->display_params.native_codecs, sizeof native_codecs_copy);
+#if 0
                 vector<codec_t> native_codecs_copy = decoder->native_codecs;
                 native_codecs_copy.push_back(VIDEO_CODEC_NONE); // this needs to be NULL-terminated
-                *decode_line = get_best_decoder_from(desc.color_spec, native_codecs_copy.data(), &out_codec);
+#endif
+                *decode_line = get_best_decoder_from(desc.color_spec, native_codecs_copy, &out_codec);
                 if (*decode_line) {
                         decoder->decoder_type = LINE_DECODER;
                         goto after_linedecoder_lookup;
@@ -1109,6 +1092,7 @@ static codec_t choose_codec_and_decoder(struct state_video_decoder *decoder, str
 
 after_linedecoder_lookup:
 
+#if 0
         /* we didn't find line decoder. So try now regular (aka DXT) decoder */
         if(*decode_line == NULL) {
                 int nr_substreams =
@@ -1140,16 +1124,32 @@ after_linedecoder_lookup:
                 }
         }
 after_decoder_lookup:
+#endif
 
-        if(decoder->decoder_type == UNSET) {
+        /// @todo we should perhaps fail but copy the input as is now..... let
+        /// video runtime handle the situation...
+        if (decoder->decoder_type == UNSET) {
                 log_msg(LOG_LEVEL_ERROR, "Unable to find decoder for input codec \"%s\"!!!\n", get_codec_name(desc.color_spec));
-                LOG(LOG_LEVEL_INFO) << "Compression internal codec is \"" << get_pixdesc_desc(comp_int_prop) << "\". Native codecs are: " << codec_list_to_str(decoder->native_codecs) << "\n";
+                char buf[1024];
+                MSG(INFO,
+                    "Compression internal codec is \"%s\". Native codecs are: "
+                    "%s\n",
+                    get_pixdesc_desc(comp_int_prop),
+                    codec_list_to_str(decoder->display_params.native_codecs,
+                                      sizeof buf, buf));
+                MSG(ERROR,
+                    "Could not find neither line conversion nor decompress "
+                    "from %s to display supported formats (%s).\n",
+                    get_codec_name(desc.color_spec),
+                    codec_list_to_str(decoder->display_params.native_codecs,
+                                      sizeof buf, buf));
                 return VIDEO_CODEC_NONE;
         }
 
         return out_codec;
 }
 
+#if 0
 /**
  * This function finds interlacing mode changing function.
  *
@@ -1193,6 +1193,7 @@ static change_il_t select_il_func(enum interlacing in_il, enum interlacing *supp
                         "interlacing modes!\n");
         return NULL;
 }
+#endif
 
 /**
  * Reconfigures decoder if network received video data format has changed.
@@ -1209,17 +1210,24 @@ static bool reconfigure_decoder(struct state_video_decoder *decoder,
 {
         codec_t out_codec;
         decoder_t decode_line;
+#if 0
         enum interlacing display_il = PROGRESSIVE;
+#endif
         //struct video_frame *frame;
+        /// @todo we get it as a param to decode func
         int display_requested_pitch = PITCH_DEFAULT;
         int display_requested_rgb_shift[] = DEFAULT_RGB_SHIFT_INIT;
+        memcpy(display_requested_rgb_shift, decoder->display_params.rgb_shift,
+               sizeof display_requested_rgb_shift);
 
+#if 0
         // this code forces flushing the pipelined data
         video_decoder_stop_threads(decoder);
         if (decoder->frame)
                 display_put_frame(decoder->display, decoder->frame, PUTF_DISCARD);
         decoder->frame = NULL;
         video_decoder_start_threads(decoder);
+#endif
 
         cleanup(decoder);
 
@@ -1228,20 +1236,20 @@ static bool reconfigure_decoder(struct state_video_decoder *decoder,
 
         out_codec = choose_codec_and_decoder(decoder, desc, &decode_line, comp_int_prop);
         if (out_codec == VIDEO_CODEC_NONE) {
-                LOG(LOG_LEVEL_ERROR) << "Could not find neither line conversion nor decompress from " <<
-                        get_codec_name(desc.color_spec) << " to display supported formats (" << codec_list_to_str(decoder->native_codecs) << ").\n";
                 return false;
         }
         decoder->out_codec = out_codec;
         struct video_desc display_desc = desc;
 
-        int display_mode = DISPLAY_PROPERTY_VIDEO_MERGED; // default
+        int display_mode = decoder->display_params.display_mode; // default
+#if 0
         size_t len = sizeof(int);
 
         if (!display_ctl_property(decoder->display, DISPLAY_PROPERTY_VIDEO_MODE,
                         &display_mode, &len)) {
                 debug_msg("Failed to get video display mode.\n");
         }
+#endif
 
         if (display_mode == DISPLAY_PROPERTY_VIDEO_SEPARATE_3D) {
                 display_mode = display_desc.tile_count == 2 ? DISPLAY_PROPERTY_VIDEO_SEPARATE_TILES :
@@ -1254,10 +1262,11 @@ static bool reconfigure_decoder(struct state_video_decoder *decoder,
                 display_desc.tile_count = 1;
         }
 
-        decoder->change_il = select_il_func(desc.interlacing, decoder->disp_supported_il,
-                        decoder->disp_supported_il_cnt, &display_il);
-        display_desc.interlacing = display_il;
         display_desc.color_spec  = out_codec;
+        decoder->display_desc = display_desc;
+#if 0
+        decoder->change_il = select_il_func(desc.interlacing, decoder->display_params.supported_il, &display_il);
+        display_desc.interlacing = display_il;
         if (out_codec != VIDEO_CODEC_END && !video_desc_eq(decoder->display_desc, display_desc)) {
                 /* reconfigure VO and give it opportunity to pass us pitch */
                 bool ret = display_reconfigure(decoder->display, display_desc);
@@ -1282,6 +1291,7 @@ static bool reconfigure_decoder(struct state_video_decoder *decoder,
                         display_requested_pitch = PITCH_DEFAULT;
                 }
         }
+#endif
 
         int linewidth;
         if (display_mode == DISPLAY_PROPERTY_VIDEO_SEPARATE_TILES) {
@@ -1393,10 +1403,12 @@ static bool reconfigure_decoder(struct state_video_decoder *decoder,
             get_parent_module(&decoder->mod), (struct message *) msg);
         free_response(resp);
 
+#if 0
         if (out_codec != VIDEO_CODEC_END) {
                 decoder->frame = display_get_frame(decoder->display);
                 assert(decoder->frame != nullptr);
         }
+#endif
 
         return true;
 }
@@ -1435,35 +1447,55 @@ bool parse_video_hdr(const uint32_t *hdr, struct video_desc *desc)
         return true;
 }
 
-static void reconfigure_helper(struct state_video_decoder *decoder,
+static bool reconfigure_helper(struct state_video_decoder *decoder,
                 struct video_desc network_desc,
                 struct pixfmt_desc comp_int_desc)
 {
+        bool ret = reconfigure_decoder(decoder, network_desc, comp_int_desc);
+        if (!ret) {
+                log_msg(LOG_LEVEL_ERROR, "[video dec.] Reconfiguration failed!!!\n");
+                // decoder->frame = NULL;
+                decoder->out_codec = VIDEO_CODEC_NONE;
+                return false;
+        }
+
         decoder->received_vid_desc = network_desc;
         decoder->received_int_desc = comp_int_desc;
 
-        bool ret = reconfigure_decoder(decoder, decoder->received_vid_desc, comp_int_desc);
-        if (!ret) {
-                log_msg(LOG_LEVEL_ERROR, "[video dec.] Reconfiguration failed!!!\n");
-                decoder->frame = NULL;
-                decoder->out_codec = VIDEO_CODEC_NONE;
-        }
+        return ret;
 }
 
-static void reconfigure_if_needed(struct state_video_decoder *decoder,
+static bool reconfigure_if_needed(struct state_video_decoder *decoder,
                 struct video_desc network_desc,
                 struct pixfmt_desc comp_int_desc)
 {
+        /// @todo why excl_param?
         const bool desc_eq = video_desc_eq_excl_param(
             decoder->received_vid_desc, network_desc, PARAM_TILE_COUNT);
+        if (desc_eq) {
+                return true;
+        }
+
+        char desc[STR_LEN];
+        MSG(NOTICE, "New incoming video format detected: %s\n",
+            video_desc_to_string(network_desc, sizeof desc, desc));
+
+        char report[STR_LEN];
+        snprintf_ch(report, "new incoming video fmt: %s", desc);
+        control_report_stats(decoder->control, report);
+
+        return reconfigure_helper(decoder, network_desc, comp_int_desc);
+        /// @todo this will be removed
+#if 0
         const bool comp_int_eq =
             pixdesc_equals(decoder->received_int_desc, comp_int_desc);
         if (desc_eq && comp_int_eq) {
                 return;
         }
-        reconfigure_helper(decoder, network_desc, comp_int_desc);
+#endif
 }
 
+#if 0
 /**
  * Checks if network format has changed.
  *
@@ -1490,6 +1522,7 @@ static void check_for_mode_change(struct state_video_decoder *decoder,
 
         reconfigure_helper(decoder, network_desc, {});
 }
+#endif
 
 #define max(a, b)       (((a) > (b))? (a): (b))
 
@@ -1586,7 +1619,11 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                                 pbuf_data->decoded_frame->callbacks.data_deleter = vf_data_deleter;
                         } else {
                                 parse_video_hdr(hdr, &desc);
-                                pbuf_data->decoded_frame = vf_alloc_desc_data(desc);
+                                if (!reconfigure_if_needed(decoder, desc, {})) {
+                                        return false;
+                                }
+                                pbuf_data->decoded_frame =
+                                    vf_alloc_desc_data(decoder->display_desc);
                         }
                 }
 
@@ -1633,8 +1670,7 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                         } else {
                                 LOG(LOG_LEVEL_WARNING) << MOD_NAME "Unknown packet type: " << pckt->pt << ".\n";
                         }
-                        ret = false;
-                        goto cleanup;
+                        return false;
                 }
 
 #if 0
@@ -1695,25 +1731,25 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
 
                 buffer_num[substream] = buffer_number;
                 struct video_frame *frame = pbuf_data->decoded_frame;
-                frame->tiles[substream].data_len = buffer_length;
 #if 0
                 pckt_list[substream][data_pos] = len;
 #endif
 
-#if 0
                 if ((pt == PT_VIDEO || pt == PT_ENCRYPT_VIDEO) && decoder->decoder_type == LINE_DECODER) {
                         struct tile *tile = NULL;
+#if 0
                         if(!buffer_swapped) {
                                 wait_for_framebuffer_swap(decoder);
                                 buffer_swapped = true;
                                 unique_lock<mutex> lk(decoder->lock);
                                 decoder->buffer_swapped = false;
                         }
+#endif
 
                         if (!decoder->merged_fb) {
-                                tile = vf_get_tile(decoder->frame, substream);
+                                tile = vf_get_tile(frame, substream);
                         } else {
-                                tile = vf_get_tile(decoder->frame, 0);
+                                tile = vf_get_tile(frame, 0);
                         }
 
                         struct line_decoder *line_decoder =
@@ -1761,7 +1797,8 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                                 const uint32_t offset = y + d_x;
 
                                 /* watch the SEGV */
-                                if (l + line_decoder->base_offset + offset <= tile->data_len) {
+                                unsigned end = l + line_decoder->base_offset + offset;
+                                if (end <= tile->data_len) {
                                         /*decode frame:
                                          * we have offset for destination
                                          * we update source contiguously
@@ -1782,6 +1819,7 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                                         if((prints % 100) == 0) {
                                                 log_msg(LOG_LEVEL_ERROR, "WARNING!! Discarding input data as frame buffer is too small.\n"
                                                                 "Well this should not happened. Expect troubles pretty soon.\n");
+                                                MSG(VERBOSE, "Need %u B, have %u B!\n", end, tile->data_len);
                                         }
                                         prints++;
                                         len = 0;
@@ -1792,9 +1830,9 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                                 y += line_decoder->dst_pitch;  /* next line */
                         }
                 } else { /* PT_VIDEO_LDGM or external decoder */
-#endif
                         if(!frame->tiles[substream].data) {
                                 frame->tiles[substream].data = (char *) malloc(buffer_length + MAX_PADDING);
+                                frame->tiles[substream].data_len = buffer_length;
                         }
 
                         if (data_pos + len > (unsigned) buffer_length) {
@@ -1807,7 +1845,7 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                         }
                         memcpy(frame->tiles[substream].data + data_pos,
                                (const unsigned char *)data, len);
-                // }
+                }
 
 //next_packet:
         }
@@ -1869,8 +1907,8 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
         if (!ret) {
                 vf_free(frame);
         }
-#endif
 cleanup:
+#endif
         pbuf_data->decoded++;
 
         decoder->stats.update(buffer_number);

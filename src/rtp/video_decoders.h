@@ -54,6 +54,7 @@
 #include "types.h"
 
 struct coded_data;
+struct display_params;
 struct module;
 struct pbuf_stats;
 struct state_video_decoder;
@@ -68,9 +69,10 @@ extern "C" {
 
 int decode_video_frame(struct coded_data *received_data, void *decoder_data, struct pbuf_stats *stats);
 
-struct state_video_decoder *video_decoder_init(struct module *parent,
-                                               enum video_mode,
-                                               const char *encryption);
+struct state_video_decoder *
+video_decoder_init(struct module               *parent, enum video_mode,
+                   const char                  *encryption,
+                   const struct display_params *display_params);
 void video_decoder_destroy(struct state_video_decoder *decoder);
 void video_decoder_deactivate(struct state_video_decoder *decoder);
 bool parse_video_hdr(const uint32_t *hdr, struct video_desc *desc);
