@@ -905,7 +905,8 @@ deactivate_all_decoders(struct rtp_rxtx_common *s)
 }
 
 struct video_frame *
-rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode)
+rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode,
+                     struct video_frame *display_buffer, unsigned display_pitch)
 {
         struct rtp_rxtx_common_priv_state *priv  = s->priv;
         struct rtp_rxtx_medium            *video = &s->medium[TX_MEDIA_VIDEO];
@@ -985,14 +986,19 @@ rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode)
                         goto next;
                 }
 
+                vdecoder_state->decoded_frame = display_buffer;
+                vdecoder_state->display_pitch = display_pitch;
                 /* Decode and render video... */
                 if (pbuf_decode(cp->playout_buffer, curr_time, decode,
                                 vdecoder_state)) {
                         /// @todo multi-out
                         assert(!out);
                         out = vdecoder_state->decoded_frame;
+                        assert(display_buffer == 0 || vdecoder_state->decoded_frame == display_buffer);
                 } else {
-                        vf_free(vdecoder_state->decoded_frame);
+                        if (vdecoder_state->decoded_frame != display_buffer) {
+                                vf_free(vdecoder_state->decoded_frame);
+                        }
                 }
                 vdecoder_state->decoded_frame = nullptr;
 

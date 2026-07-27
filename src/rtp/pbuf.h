@@ -103,7 +103,16 @@ struct vcodec_state {
         unsigned int max_frame_size; // maximal frame size
                                      // to be returned to caller by a decoder to allow him adjust buffers accordingly
         unsigned int decoded;
+        /**
+         * <dl>
+         * <dt>[in]<dd>suggested framebuffer to decode to, may be NUL
+         * <dt>[out]<dd>received frame, may be in the IN buffer or a different,
+         * in the letter case, .dispose is called
+         * </dl>
+         */
         struct video_frame *decoded_frame;
+        /// [in] framebuffer pitch (needed only if decoded_frame != 0)
+        unsigned display_pitch;
 };
 
 struct acodec_state {
