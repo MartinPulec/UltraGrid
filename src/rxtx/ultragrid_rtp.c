@@ -227,17 +227,13 @@ static void *send_video_frame_async_callback(void *arg) {
         return nullptr;
 }
 
-/**
- * @todo implement decoding to video buffer
- */
 static struct video_frame *
-recv_vid_frame(void *arg,
-                             struct video_frame * /* display_buffer */,
-                             size_t /* display_pitch */)
+recv_vid_frame(void *arg, struct video_frame *display_buffer,
+               size_t display_pitch)
 {
         struct ultragrid_rtp_rxtx *s = arg;
-        struct video_frame        *frame =
-            rtp_recv_video_frame(s->rtp_common, decode_video_frame);
+        struct video_frame        *frame = rtp_recv_video_frame(
+            s->rtp_common, decode_video_frame, display_buffer, display_pitch);
         if (!frame || frame == rxtx_retry) {
                 return frame;
         }

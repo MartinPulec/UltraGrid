@@ -1573,7 +1573,7 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
         }
 #endif
 
-        pbuf_data->decoded_frame = nullptr;
+        struct video_frame *frame = nullptr;
 
         uint32_t ssrc = cdata->data->ssrc;
         // frame->ssrc = cdata->data->ssrc;
@@ -1612,19 +1612,29 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                 buffer_number = tmp & 0x3fffff;
                 const int buffer_length = ntohl(hdr[2]);
 
-                if (!pbuf_data->decoded_frame) {
-                        struct video_desc desc = {};
+                if (!frame) {
                         if (PT_VIDEO_HAS_FEC(pt)) {
-                                pbuf_data->decoded_frame = vf_alloc(substream + 1);
-                                pbuf_data->decoded_frame->callbacks.data_deleter = vf_data_deleter;
+                                pbuf_data->decoded_frame =
+                                    vf_alloc(substream + 1);
+                                pbuf_data->decoded_frame->callbacks
+                                    .data_deleter = vf_data_deleter;
                         } else {
+                                struct video_desc desc = {};
                                 parse_video_hdr(hdr, &desc);
                                 if (!reconfigure_if_needed(decoder, desc, {})) {
                                         return false;
                                 }
-                                pbuf_data->decoded_frame =
-                                    vf_alloc_desc_data(decoder->display_desc);
+                                if (!pbuf_data->decoded_frame ||
+                                    !video_desc_eq(
+                                        video_desc_from_frame(
+                                            pbuf_data->decoded_frame),
+                                        decoder->display_desc)) {
+                                        pbuf_data->decoded_frame =
+                                            vf_alloc_desc_data(
+                                                decoder->display_desc);
+                                }
                         }
+                        frame = pbuf_data->decoded_frame;
                 }
 
                 if (PT_VIDEO_IS_ENCRYPTED(pt)) {
@@ -1730,7 +1740,6 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
 #endif
 
                 buffer_num[substream] = buffer_number;
-                struct video_frame *frame = pbuf_data->decoded_frame;
 #if 0
                 pckt_list[substream][data_pos] = len;
 #endif
