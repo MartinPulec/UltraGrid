@@ -14,6 +14,7 @@
 #include "debug.h"          // for LOG_LEVEL_ERROR, MSG, debug_msg
 #include "host.h"           // for register_should_exit_callback, unregister...
 #include "rxtx.h"           // for rxtx_medium_params, rxtx_have_receive_vid...
+#include "tv.h"
 #include "types.h"          // for rxtx_mode, tx_media_type, video_desc
 #include "utils/macros.h"   // for to_fourcc
 #include "utils/pthread.h"  // for PTHREAD_NULL
@@ -33,6 +34,7 @@ struct state_video {
 
         struct display *display;
         size_t          display_pitch;
+        long long       putf_timeout;
 };
 
 static bool
@@ -136,7 +138,7 @@ video_receiver_thread(void *arg)
                         vf_copy_data_pitch(f, s->display_pitch, ret);
                         VIDEO_FRAME_DISPOSE(ret);
                 }
-                display_put_frame(s->display, f, PUTF_NONBLOCK);
+                display_put_frame(s->display, f, s->putf_timeout);
                 f = display_get_frame(s->display);
         }
 
@@ -148,6 +150,27 @@ video_receiver_thread(void *arg)
         display_put_frame(s->display, nullptr, PUTF_BLOCKING);
 
         return nullptr;
+}
+
+ADD_TO_PARAM("decoder-drop-policy",
+                "* decoder-drop-policy=blocking|nonblock|<sec>\n"
+                "  Force specified blocking policy (default nonblock).\n"
+                "  <sec> - specifies frame timeout in seconds (can have suffixes, eg. \"20ms\")\n");
+static void
+recv_config(struct state_video *s)
+{
+        const char *drop_policy = get_commandline_param("decoder-drop-policy");
+        if (drop_policy == nullptr) {
+                drop_policy = "nonblock";
+        }
+        if (strcmp(drop_policy, "nonblock") == 0) {
+                s->putf_timeout = PUTF_NONBLOCK;
+        } else if (strcmp(drop_policy, "blocking") == 0) {
+                s->putf_timeout = PUTF_BLOCKING;
+        } else {
+                s->putf_timeout =
+                    SEC_TO_NS(unit_evaluate_dbl(drop_policy, true, nullptr));
+        }
 }
 
 struct state_video *
@@ -163,6 +186,7 @@ video_start(struct rxtx *rxtx, const struct rxtx_params *params,
 
         if (params->medium[TX_MEDIA_VIDEO].rxtx_mode & MODE_RECEIVER &&
             rxtx_have_receive_video_frame(rxtx)) {
+                recv_config(s);
                 pthread_create(&s->receiver_thread, nullptr, video_receiver_thread, s);
         }
 
