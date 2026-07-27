@@ -122,6 +122,8 @@ void i422_8_to_uyvy(int width, int height, const unsigned char *in,
                     unsigned char *out);
 void i444_8_to_uyvy(int width, int height, const unsigned char *in,
                     unsigned char *out);
+const char *codec_list_to_str(codec_t *codecs, size_t buf_len, char *buf_start);
+bool        codec_list_erase(codec_t *codecs, codec_t codec);
 
 #ifdef __cplusplus
 }

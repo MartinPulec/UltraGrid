@@ -55,6 +55,7 @@
 #include "lib_common.h"
 #include "messaging.h"
 #include "module.h"
+#include "pixfmt_conv.h"     // for DEFAULT_RGB_SHIFT_INIT
 #include "utils/macros.h"    // for snprintf_ch, to_fourcc
 #include "utils/pthread.h"   // for CHK_PTHR, PTHREAD_NULL
 #include "utils/thread.h"
@@ -290,6 +291,91 @@ void *rxtx::video_sender_loop() {
         return NULL;
 }
 
+ADD_TO_PARAM("decoder-use-codec",
+                "* decoder-use-codec=<codec>\n"
+                "  Use specified pixel format for decoding (eg. v210). This overrides automatic\n"
+                "  choice. The pixel format must be supported by the video display. Use 'help' to see\n"
+                "  available options for a display (eg.: 'uv -d gl --param decoder-use-codec=help').\n"
+                "* decoder-use-codec=!<codec>\n"
+                "  Blacklist specified pixel format ('!<codec' may need to be quoted).\n");
+static bool
+restrict_codecs(codec_t *codecs)
+{
+        const char *codec_str = get_commandline_param("decoder-use-codec");
+        bool        blacklist_codec = false;
+        char        buf[1024];
+        if (codec_str[0] == '!') {
+                blacklist_codec = true;
+                codec_str += 1;
+        }
+        codec_t req_codec = get_codec_from_name(codec_str);
+        if (!strcmp(codec_str, "help")) {
+                MSG(NOTICE, "Supported codecs for current display are: %s\n",
+                    codec_list_to_str(codecs, sizeof buf, buf));
+                return false;
+        }
+        if (req_codec == VIDEO_CODEC_NONE) {
+                MSG(ERROR, "Wrong decoder codec spec: %s.\n", codec_str);
+                MSG(INFO, "Supported codecs for current display are: %s\n",
+                    codec_list_to_str(codecs, sizeof buf, buf));
+                return false;
+        }
+        if (blacklist_codec) {
+                codec_list_erase(codecs, req_codec);
+                return true;
+        }
+
+        codec_t *it = codecs;
+        while (*it) {
+                if (*it == req_codec) {
+                        codecs[0] = req_codec;
+                        codecs[1] = VC_NONE;
+                        return true;
+                }
+                it++;
+        }
+
+        MSG(ERROR, "Display doesn't support requested codec: %s.\n", codec_str);
+        MSG(INFO, "Supported codecs for current display are: %s\n",
+            codec_list_to_str(codecs, sizeof buf, buf));
+        return false;
+}
+
+static bool
+set_display_params(struct rxtx_params *params)
+{
+        size_t len = sizeof params->display_params.native_codecs;
+        bool   ret = display_ctl_property(
+            params->display_device, DISPLAY_PROPERTY_CODECS,
+            &params->display_params.native_codecs, &len);
+        if (!ret) {
+                MSG(ERROR, "Failed to query codecs from video display.\n");
+                return false;
+        }
+        len = sizeof params->display_params.display_mode;
+        if (!display_ctl_property(params->display_device,
+                                  DISPLAY_PROPERTY_VIDEO_MODE,
+                                  &params->display_params.display_mode, &len)) {
+                debug_msg("Failed to get video display mode.\n");
+                params->display_params.display_mode =
+                    DISPLAY_PROPERTY_VIDEO_MERGED;
+        }
+        len = sizeof params->display_params.rgb_shift;
+        ret = display_ctl_property(params->display_device, DISPLAY_PROPERTY_RGB_SHIFT,
+                                   &params->display_params.rgb_shift, &len);
+        if (!ret) {
+                debug_msg(
+                    "Failed to get r,g,b shift property from video driver.\n");
+                int rgb_shift[] = DEFAULT_RGB_SHIFT_INIT;
+                memcpy(&params->display_params.rgb_shift, rgb_shift,
+                       sizeof rgb_shift);
+        }
+        if (get_commandline_param("decoder-use-codec")) {
+                return restrict_codecs(params->display_params.native_codecs);
+        }
+        return true;
+}
+
 /**
  * @returns the rxtx state (not nullptr)
  * @throws 1 help shown
@@ -339,6 +425,12 @@ rxtx::create(string const              &proto,
              vri->send_video_frame_c == nullptr)) {
                 MSG(ERROR, "Selected RX/TX module doesn't support video sending.\n");
                 return nullptr;
+        }
+
+        if (params_video->rxtx_mode & MODE_RECEIVER) {
+                if (!set_display_params(params)) {
+                        return nullptr;
+                }
         }
 
         rxtx *ret = new rxtx(params);

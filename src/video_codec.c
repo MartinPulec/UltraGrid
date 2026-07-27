@@ -1231,4 +1231,41 @@ bool pixdesc_equals(struct pixfmt_desc desc_a, struct pixfmt_desc desc_b) {
                 desc_a.rgb == desc_b.rgb;
 }
 
+/// @param codecs VC_NONE-terminated list of codecs
+const char *
+codec_list_to_str(codec_t *codecs, size_t buf_len, char *buf_start)
+{
+        char *buf_end = buf_start + buf_len;
+        if (!codecs[0]) {
+                return "(none)";
+        }
+        char *buf = buf_start;
+        buf += snprintf(buf, buf_end - buf, "%s", get_codec_name(*codecs++));
+        while (*codecs && buf < buf_end) {
+                buf += snprintf(buf, buf_end - buf, "%s%s",
+                                !codecs[1] ? " and " : ", ",
+                                get_codec_name(*codecs));
+                codecs++;
+        }
+        return buf_start;
+}
+
+/// @param codecs VC_NONE-terminated list of codecs
+bool
+codec_list_erase(codec_t *codecs, codec_t codec)
+{
+        while (*codecs) {
+                if (*codecs == codec) {
+                        codec_t *after = codecs + 1;
+                        while (*after) {
+                                *codecs++ = *after++;
+                        }
+                        *codecs = VC_NONE; // terminate
+                        return true;
+                }
+                codecs++;
+        }
+        return false;
+}
+
 /* vim: set expandtab sw=8: */
