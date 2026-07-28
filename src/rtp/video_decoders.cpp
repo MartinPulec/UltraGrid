@@ -151,6 +151,8 @@ enum {
 };
 
 #define FRAMEBUFFER_NOT_READY(decoder) (decoder->frame == NULL && decoder->out_codec != VIDEO_CODEC_END)
+#define NR_SUBSTREAMS_FROM_VIDEO_MODE(video_mode)                             \
+        get_video_mode_tiles_x(video_mode) * get_video_mode_tiles_y(video_mode)
 
 using namespace std::string_literals;
 using std::chrono::duration_cast;
@@ -1096,9 +1098,7 @@ after_linedecoder_lookup:
 #if 0
         /* we didn't find line decoder. So try now regular (aka DXT) decoder */
         if(*decode_line == NULL) {
-                int nr_substreams =
-                    get_video_mode_tiles_x(decoder->video_mode) *
-                    get_video_mode_tiles_y(decoder->video_mode);
+                int nr_substreams = NR_SUBSTREAMS_FROM_VIDEO_MODE(decoder->video_mode);
                 // try to probe video format
                 if (comp_int_prop.depth == 0 && decoder->out_codec != VIDEO_CODEC_END) {
                         decoder->decompress_state = decompress_init(
@@ -1413,26 +1413,42 @@ static bool reconfigure_helper(struct state_video_decoder *decoder,
         return ret;
 }
 
-static bool reconfigure_if_needed(struct state_video_decoder *decoder,
-                struct video_desc network_desc,
-                struct pixfmt_desc comp_int_desc)
+static bool
+reconfigure_if_needed(struct state_video_decoder *decoder,
+                      struct video_desc network_desc, bool m_bit_present,
+                      int nr_substreams)
 {
-        /// @todo why excl_param?
+        unsigned excluded_param = m_bit_present ? 0 : PARAM_TILE_COUNT;
         const bool desc_eq = video_desc_eq_excl_param(
-            decoder->received_vid_desc, network_desc, PARAM_TILE_COUNT);
+            decoder->received_vid_desc, network_desc, excluded_param);
         if (desc_eq) {
-                return true;
+                if (NR_SUBSTREAMS_FROM_VIDEO_MODE(decoder->video_mode) >=
+                    nr_substreams) {
+                        return true;
+                }
+                MSG(WARNING,
+                    "Receiving %d streams which doesn't match "
+                    "currently configured video mode!\n",
+                    nr_substreams);
+                return false;
         }
 
         char desc[STR_LEN];
+        video_desc_to_string(network_desc, sizeof desc, desc);
+        if (!m_bit_present) {
+                MSG(WARNING,
+                    "Received %s but M-bit missing... Waiting for complete "
+                    "frame.\n", desc);
+                return false;
+        }
         MSG(NOTICE, "New incoming video format detected: %s\n",
-            video_desc_to_string(network_desc, sizeof desc, desc));
+            desc);
 
         char report[STR_LEN];
         snprintf_ch(report, "new incoming video fmt: %s", desc);
         control_report_stats(decoder->control, report);
 
-        return reconfigure_helper(decoder, network_desc, comp_int_desc);
+        return reconfigure_helper(decoder, network_desc, {});
         /// @todo this will be removed
 #if 0
         const bool comp_int_eq =
@@ -1476,8 +1492,9 @@ static void check_for_mode_change(struct state_video_decoder *decoder,
 
 static struct video_frame *
 configure_decoder(struct vcodec_state *pbuf_data, int pt, int nr_substreams,
-                  const uint32_t *hdr)
+                  const rtp_packet *pckt)
 {
+        const auto *hdr = (const uint32_t *) (const void *) pckt->data;
         struct state_video_decoder *decoder = pbuf_data->decoder;
 
         if (PT_VIDEO_HAS_FEC(pt)) {
@@ -1488,7 +1505,7 @@ configure_decoder(struct vcodec_state *pbuf_data, int pt, int nr_substreams,
 
         struct video_desc desc = {};
         parse_video_hdr(hdr, &desc);
-        if (!reconfigure_if_needed(decoder, desc, {})) {
+        if (!reconfigure_if_needed(decoder, desc, pckt->m, nr_substreams)) {
                 return nullptr;
         }
         unsigned pitch = pbuf_data->display_pitch;
@@ -1662,7 +1679,7 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                 const int buffer_length = ntohl(hdr[2]);
 
                 if (!frame) {
-                        frame = configure_decoder(pbuf_data, pt, substream + 1, hdr);
+                        frame = configure_decoder(pbuf_data, pt, substream + 1, pckt);
                         if (!frame) {
                                 return false;
                         }
