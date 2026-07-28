@@ -142,7 +142,6 @@ struct rtp_rxtx_common_priv_state {
         // audio
         time_ns_t a_last_not_timeout;
         // video
-        enum video_mode  decoder_mode;
         time_ns_t last_not_timeout;
         int last_buf_size;
         struct display_params display_params;
@@ -521,7 +520,6 @@ rtp_rxtx_common_init(struct rtp_rxtx_common **out, struct rxtx_params *params)
         s->mcast_if           = strdup(params->mcast_if);
         s->ttl                = params->ttl;
         s->start_time         = params->start_time;
-        s->decoder_mode       = params->decoder_mode;
         s->display_params     = params->display_params;
 
         for (unsigned i = 0; i < NUM_TX_MEDIA; ++i) {
@@ -867,8 +865,7 @@ new_video_decoder(struct rtp_rxtx_common *s)
 
         if(state) {
                 state->decoder = video_decoder_init(
-                    &s->priv->medium[TX_MEDIA_VIDEO].sender_mod,
-                    s->priv->decoder_mode, s->encryption,
+                    &s->priv->medium[TX_MEDIA_VIDEO].sender_mod, s->encryption,
                     &s->priv->display_params);
 
                 if(!state->decoder) {
