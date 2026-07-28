@@ -772,7 +772,6 @@ static void decoder_set_video_mode(struct state_video_decoder *decoder, enum vid
 
 /**
  * @brief Initializes video decompress state.
- * @param video_mode  video_mode expected to be received from network
  * @param display     Video display that is supposed to be controlled from decoder.
  *                    display_get_frame(), display_put_frame(), display_get_propert()
  *                    and display_reconfigure() functions may be used. If set to NULL,
@@ -782,8 +781,7 @@ static void decoder_set_video_mode(struct state_video_decoder *decoder, enum vid
  * @return Newly created decoder state. If an error occurred, returns NULL.
  */
 struct state_video_decoder *
-video_decoder_init(struct module *parent, enum video_mode video_mode,
-                   const char            *encryption,
+video_decoder_init(struct module *parent, const char *encryption,
                    const struct display_params *display_params)
 {
         struct state_video_decoder *s;

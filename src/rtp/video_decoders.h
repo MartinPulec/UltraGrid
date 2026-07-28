@@ -70,7 +70,7 @@ extern "C" {
 int decode_video_frame(struct coded_data *received_data, void *decoder_data, struct pbuf_stats *stats);
 
 struct state_video_decoder *
-video_decoder_init(struct module               *parent, enum video_mode,
+video_decoder_init(struct module               *parent,
                    const char                  *encryption,
                    const struct display_params *display_params);
 void video_decoder_destroy(struct state_video_decoder *decoder);

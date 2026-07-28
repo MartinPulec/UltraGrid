@@ -221,7 +221,6 @@ void *hd_rum_decompress_init(struct module *parent, struct hd_rum_output_conf co
         // params["video_delay"].vptr = nullptr;
 
         // UltraGrid RTP
-        params.decoder_mode = VIDEO_NORMAL;
         params.display_device = s->display;
 
         ret = rxtx_init("ultragrid_rtp", &params, &s->rxtx);

@@ -778,12 +778,6 @@ parse_options_internal(int argc, char *argv[], struct ug_options *opt)
                                 return -EXIT_FAIL_USAGE;
                         }
                         break;
-                case 'M':
-                        opt->rxtx.decoder_mode = get_video_mode_from_str(optarg);
-                        if (opt->rxtx.decoder_mode == VIDEO_UNKNOWN) {
-                                return strcasecmp(optarg, "help") == 0 ? 1 : -EXIT_FAIL_USAGE;
-                        }
-                        break;
                 case 'p':
                         opt->postprocess = optarg;
                         break;

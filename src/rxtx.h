@@ -97,7 +97,6 @@ struct rxtx_params {
         struct vidcap  *capture_device;    ///< iHDTV only
         /// typically a number but can be also keyword like "auto"
         char            video_bitrate_limit[STR_LEN];
-        enum video_mode decoder_mode;
         char            protocol_opts[STR_LEN];
         struct module  *sender_mod;   ///< set by rxtx::create
         struct module  *receiver_mod; ///< @copydoc sender_mod
@@ -133,7 +132,6 @@ struct rxtx_params {
                 .display_device      = nullptr,                                \
                 .capture_device      = nullptr,                                \
                 .video_bitrate_limit = "",                                     \
-                .decoder_mode        = VIDEO_NORMAL,                           \
                 .protocol_opts       = "",                                     \
                 .sender_mod          = nullptr,                                \
                 .receiver_mod        = nullptr,                                \
