@@ -111,7 +111,7 @@ struct audio_frame2;
 #define GET_DELTA delta = (stop.tv_sec - start.tv_sec) * 1000000000l + stop.tv_nsec - start.tv_nsec
 
 static void tx_update(struct tx *tx, struct video_frame *frame, int substream);
-static uint32_t format_interl_fps_hdr_row(enum interlacing_t interlacing, double input_fps);
+static uint32_t format_interl_fps_hdr_row(enum interlacing interlacing, double input_fps);
 
 static void
 tx_send_base(struct tx *tx, struct video_frame *frame, struct rtp *rtp_session,
@@ -513,7 +513,7 @@ void format_audio_header(const struct audio_frame2 *frame, int channel, int buff
         audio_hdr[4] = htonl(get_audio_tag(audio_frame2_get_codec(frame)));
 }
 
-static uint32_t format_interl_fps_hdr_row(enum interlacing_t interlacing, double input_fps)
+static uint32_t format_interl_fps_hdr_row(enum interlacing interlacing, double input_fps)
 {
         unsigned int fpsd, fd, fps, fi;
         uint32_t tmp;

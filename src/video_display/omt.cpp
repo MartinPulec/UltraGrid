@@ -251,7 +251,7 @@ bool display_omt_reconfigure(void *state, video_desc desc){
 
 bool display_omt_get_property(void */*state*/, int property, void *val, size_t *len){
         codec_t codecs[] = {UYVY};
-        interlacing_t supported_il_modes[] = {PROGRESSIVE};
+        enum interlacing supported_il_modes[] = { PROGRESSIVE };
         int rgb_shift[] = {0, 8, 16};
 
         switch (property) {

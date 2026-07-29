@@ -58,7 +58,7 @@ enum {
 
 static struct {
         enum v4l2_field v4l_f;
-        enum interlacing_t ug_f;
+        enum interlacing ug_f;
 } v4l2_field_map [] = {
         { V4L2_FIELD_NONE, PROGRESSIVE },
         { V4L2_FIELD_SEQ_TB, UPPER_FIELD_FIRST },

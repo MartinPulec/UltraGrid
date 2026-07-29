@@ -678,7 +678,7 @@ static void seek_start(struct vidcap_state_lavf_decoder *s) {
                  {});
 }
 
-static enum interlacing_t get_field_order(enum AVFieldOrder av_fo) {
+static enum interlacing get_field_order(enum AVFieldOrder av_fo) {
         switch (av_fo) {
         case AV_FIELD_UNKNOWN:
                 log_msg(LOG_LEVEL_WARNING,

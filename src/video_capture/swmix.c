@@ -917,7 +917,7 @@ static bool get_device_config_from_file(FILE* config_file, char *slave_name,
 #define PARSE_FILE 2
 static int parse_config_string(const char *fmt, unsigned int *width,
                 unsigned int *height, double *fps,
-        codec_t *color_spec, interpolation_t *interpolation, char **bicubic_algo, enum interlacing_t *interl, int *grid_x, int *grid_y, char **filepath)
+        codec_t *color_spec, interpolation_t *interpolation, char **bicubic_algo, enum interlacing *interl, int *grid_x, int *grid_y, char **filepath)
 {
         char *save_ptr = NULL;
         char *item;

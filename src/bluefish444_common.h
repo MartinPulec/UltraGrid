@@ -59,7 +59,7 @@ struct bluefish_frame_mode_t {
         unsigned int       width;
         unsigned int       height;
         double             fps;
-        enum interlacing_t interlacing;
+        enum interlacing   interlacing;
 };
 
 static const struct bluefish_frame_mode_t bluefish_frame_modes[] = {
@@ -107,7 +107,7 @@ static const struct bluefish_frame_mode_t bluefish_frame_modes[] = {
         { VID_FMT_2048_1080P_5000, 2048, 1080, 50, PROGRESSIVE }, 
         { VID_FMT_2048_1080P_5994, 2048, 1080, 59.97, PROGRESSIVE },
         { VID_FMT_2048_1080P_6000, 2048, 1080, 60, PROGRESSIVE },
-        { VID_FMT_INVALID, 0, 0, 0, (interlacing_t) 0 }
+        { VID_FMT_INVALID, 0, 0, 0, (enum interlacing) 0 }
 };
 
 static const int bluefish_frame_modes_count = sizeof(bluefish_frame_modes) /

@@ -251,7 +251,9 @@ get_codecs(struct state_pipe *s, void *val, size_t *len)
 static bool display_pipe_get_property(void *state, int property, void *val, size_t *len)
 {
         struct state_pipe *s = state;
-        enum interlacing_t supported_il_modes[] = {PROGRESSIVE, INTERLACED_MERGED, SEGMENTED_FRAME};
+        enum interlacing supported_il_modes[] = { PROGRESSIVE,
+                                                  INTERLACED_MERGED,
+                                                  SEGMENTED_FRAME };
         int rgb_shift[] = {0, 8, 16};
 
         switch (property) {

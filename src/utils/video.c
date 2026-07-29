@@ -50,7 +50,7 @@
 #include "compat/c23.h"      // IWYU pragma: keep for countof
 #include "debug.h"           // for LOG_LEVEL_ERROR, MSG, LOG_LEVEL_WARNING
 #include "rtp/rtp_types.h"   // for FPS_MAX
-#include "types.h"           // for interlacing_t, UYVY, video_desc, video_...
+#include "types.h"           // for interlacing, UYVY, video_desc, video_...
 #include "utils/color_out.h" // for TBOLD, color_printf
 #include "utils/macros.h"    // for STARTS_WITH
 #include "video_codec.h"     // for get_codec_from_name, get_codec_name
@@ -200,7 +200,7 @@ get_video_desc_from_string(const char *str)
  * @retval <0.0 wrong FPS specification
  */
 static double
-parse_fps_int(const char *string, enum interlacing_t *interlacing)
+parse_fps_int(const char *string, enum interlacing *interlacing)
 {
         const char *fps_str = strpbrk(string, "DKdikp@");
         if (fps_str == nullptr) {

@@ -363,7 +363,7 @@ struct state_video_decoder
         struct display   *display = NULL; ///< assigned display device
         /// @{
         vector<codec_t>   native_codecs; ///< list of display native codecs
-        enum interlacing_t *disp_supported_il = NULL; ///< display supported interlacing mode
+        enum interlacing *disp_supported_il = NULL; ///< display supported interlacing mode
         size_t            disp_supported_il_cnt = 0; ///< count of @ref disp_supported_il
         /// @}
 
@@ -921,16 +921,16 @@ video_decoder_register_display(struct state_video_decoder *decoder,
         }
 
         free(decoder->disp_supported_il);
-        decoder->disp_supported_il_cnt = 20 * sizeof(enum interlacing_t);
-        decoder->disp_supported_il = (enum interlacing_t*) calloc(decoder->disp_supported_il_cnt,
-                        sizeof(enum interlacing_t));
+        decoder->disp_supported_il_cnt = 20 * sizeof(enum interlacing);
+        decoder->disp_supported_il = (enum interlacing*) calloc(decoder->disp_supported_il_cnt,
+                        sizeof(enum interlacing));
         ret = display_ctl_property(decoder->display, DISPLAY_PROPERTY_SUPPORTED_IL_MODES, decoder->disp_supported_il, &decoder->disp_supported_il_cnt);
         if(ret) {
-                decoder->disp_supported_il_cnt /= sizeof(enum interlacing_t);
+                decoder->disp_supported_il_cnt /= sizeof(enum interlacing);
         } else {
-                enum interlacing_t tmp[] = { PROGRESSIVE, INTERLACED_MERGED, SEGMENTED_FRAME}; /* default if not said otherwise */
+                enum interlacing tmp[] = { PROGRESSIVE, INTERLACED_MERGED, SEGMENTED_FRAME}; /* default if not said otherwise */
                 memcpy(decoder->disp_supported_il, tmp, sizeof(tmp));
-                decoder->disp_supported_il_cnt = sizeof(tmp) / sizeof(enum interlacing_t);
+                decoder->disp_supported_il_cnt = sizeof(tmp) / sizeof(enum interlacing);
         }
 
         video_decoder_start_threads(decoder);
@@ -1174,10 +1174,10 @@ after_decoder_lookup:
  * @param[out] out_il      selected output interlacing
  * @return                 selected interlacing changing function, NULL if not needed or not found
  */
-static change_il_t select_il_func(enum interlacing_t in_il, enum interlacing_t *supported,
-                int il_out_cnt, /*out*/ enum interlacing_t *out_il)
+static change_il_t select_il_func(enum interlacing in_il, enum interlacing *supported,
+                int il_out_cnt, /*out*/ enum interlacing *out_il)
 {
-        struct transcode_t { enum interlacing_t in; enum interlacing_t out; change_il_t func; };
+        struct transcode_t { enum interlacing in; enum interlacing out; change_il_t func; };
 
         struct transcode_t transcode[] = {
                 {LOWER_FIELD_FIRST, INTERLACED_MERGED, il_lower_to_merged},
@@ -1224,7 +1224,7 @@ static bool reconfigure_decoder(struct state_video_decoder *decoder,
 {
         codec_t out_codec;
         decoder_t decode_line;
-        enum interlacing_t display_il = PROGRESSIVE;
+        enum interlacing display_il = PROGRESSIVE;
         //struct video_frame *frame;
         int display_requested_pitch = PITCH_DEFAULT;
         int display_requested_rgb_shift[] = DEFAULT_RGB_SHIFT_INIT;
@@ -1438,7 +1438,7 @@ bool parse_video_hdr(const uint32_t *hdr, struct video_desc *desc)
         }
 
         tmp = ntohl(hdr[5]);
-        desc->interlacing = (enum interlacing_t) (tmp >> 29);
+        desc->interlacing = (enum interlacing) (tmp >> 29);
         fps_pt = (tmp >> 19) & 0x3ff;
         fpsd = (tmp >> 15) & 0xf;
         fd = (tmp >> 14) & 0x1;

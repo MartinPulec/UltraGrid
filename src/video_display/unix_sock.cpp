@@ -260,7 +260,9 @@ bool display_unix_sock_putf(void *state, video_frame *frame, long long flags){
 bool display_unix_sock_get_property(void *state, int property, void *val, size_t *len){
         UNUSED(state);
         codec_t codecs[] = {UYVY, RGBA, RGB};
-        interlacing_t supported_il_modes[] = {PROGRESSIVE, INTERLACED_MERGED, SEGMENTED_FRAME};
+        enum interlacing supported_il_modes[] = { PROGRESSIVE,
+                                                  INTERLACED_MERGED,
+                                                  SEGMENTED_FRAME };
         int rgb_shift[] = {0, 8, 16};
 
         switch(property){
