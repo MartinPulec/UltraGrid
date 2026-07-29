@@ -28,18 +28,15 @@ using std::to_string;
 using std::vector;
 
 struct compress_state;
-struct state_decompress;
 
 static bool no_gpu = false;
 static compress_state *compress{nullptr};
-static state_decompress *decompress{nullptr};
+static video_decompress *decompress{nullptr};
 
 static void gpujpeg_test_teardown()
 {
         compress_done(compress);
-        if (decompress != nullptr) {
-                decompress_done(decompress);
-        }
+        decompress_done(decompress);
 }
 
 static pthread_once_t set_up = PTHREAD_ONCE_INIT;
@@ -84,12 +81,11 @@ int gpujpeg_test_simple()
         vector<unsigned char> decompressed(in->tiles[0].data_len);
         auto comp_desc = desc;
         comp_desc.color_spec = JPEG;
-        if (bool ret = decompress_init_multi(JPEG, pixfmt_desc{}, RGB, &decompress, 1)) {
-                ASSERT_MESSAGE("Decompression init failed", ret);
-        }
+        decompress = decompress_init(JPEG, pixfmt_desc{}, RGB, 1);
+        ASSERT_MESSAGE("Decompression init failed", decompress);
         auto ret = decompress_reconfigure(decompress, comp_desc, 0, 8, 16, vc_get_linesize(desc.width, desc.color_spec), desc.color_spec);
         ASSERT_MESSAGE("Decompression reconfiguration failed", ret == true);
-        auto status = decompress_frame(decompress,
+        auto status = decompress_frame(decompress->state[0],
                 decompressed.data(),
                 reinterpret_cast<unsigned char *>(compressed->tiles[0].data),
                 compressed->tiles[0].data_len,

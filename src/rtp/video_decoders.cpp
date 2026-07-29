@@ -376,7 +376,7 @@ struct state_video_decoder
         enum decoder_type_t decoder_type = {};  ///< how will the video data be decoded
         struct line_decoder *line_decoder = NULL; ///< if the video is uncompressed and only pixelformat change
                                            ///< is needed, use this structure
-        vector<struct state_decompress *> decompress_state; ///< state of the decompress (for every substream)
+        video_decompress *decompress_state{}; ///< state of the decompress (for every substream)
         bool accepts_corrupted_frame = false;     ///< whether we should pass corrupted frame to decompress
         bool buffer_swapped = true; /**< variable indicating that display buffer
                               * has been processed and we can write to a new one */
@@ -603,7 +603,7 @@ static void *decompress_worker(void *data)
 
         if (!d->compressed->tiles[d->pos].data)
                 return NULL;
-        d->ret = decompress_frame(decoder->decompress_state.at(d->pos),
+        d->ret = decompress_frame(decoder->decompress_state->state[d->pos],
                         (unsigned char *) d->out,
                         (unsigned char *) d->compressed->tiles[d->pos].data,
                         d->compressed->tiles[d->pos].data_len,
@@ -970,10 +970,8 @@ video_decoder_deactivate(struct state_video_decoder *decoder)
 static void cleanup(struct state_video_decoder *decoder)
 {
         decoder->decoder_type = UNSET;
-        for (auto &d : decoder->decompress_state) {
-                decompress_done(d);
-        }
-        decoder->decompress_state.clear();
+        decompress_done(decoder->decompress_state);
+        decoder->decompress_state = 0;
         if(decoder->line_decoder) {
                 free(decoder->line_decoder);
                 decoder->line_decoder = NULL;
@@ -1126,14 +1124,12 @@ after_linedecoder_lookup:
 
         /* we didn't find line decoder. So try now regular (aka DXT) decoder */
         if(*decode_line == NULL) {
-                decoder->decompress_state.resize(decoder->max_substreams);
-
                 // try to probe video format
                 if (comp_int_prop.depth == 0 && decoder->out_codec != VIDEO_CODEC_END) {
-                        bool supports_autodetection = decompress_init_multi(desc.color_spec,
-                                        pixfmt_desc{}, VIDEO_CODEC_NONE, decoder->decompress_state.data(),
-                                        decoder->decompress_state.size());
-                        if (supports_autodetection) {
+                        decoder->decompress_state = decompress_init(
+                            desc.color_spec, pixfmt_desc{}, VIDEO_CODEC_NONE,
+                            decoder->max_substreams);
+                        if (decoder->decompress_state) { // supports autodetection
                                 decoder->decoder_type = EXTERNAL_DECODER;
                                 return VIDEO_CODEC_END;
                         }
@@ -1144,15 +1140,14 @@ after_linedecoder_lookup:
 
                 for (auto& [pixfmt, codec] : formats_to_try) {
                         out_codec = codec;
-                        if (decompress_init_multi(desc.color_spec, pixfmt,
-                                                codec,
-                                                decoder->decompress_state.data(),
-                                                decoder->decompress_state.size())) {
+                        decoder->decompress_state =
+                            decompress_init(desc.color_spec, pixfmt, codec,
+                                            decoder->max_substreams);
+                        if (decoder->decompress_state) {
                                 decoder->decoder_type = EXTERNAL_DECODER;
                                 goto after_decoder_lookup;
                         }
                 }
-                decoder->decompress_state.clear();
         }
 after_decoder_lookup:
 
@@ -1379,23 +1374,20 @@ static bool reconfigure_decoder(struct state_video_decoder *decoder,
                         decoder->merged_fb = false;
                 }
         } else if (decoder->decoder_type == EXTERNAL_DECODER) {
-                int buf_size;
-
-                for(unsigned int i = 0; i < decoder->decompress_state.size(); ++i) {
-                        buf_size = decompress_reconfigure(decoder->decompress_state.at(i), desc,
-                                        display_requested_rgb_shift[0],
-                                        display_requested_rgb_shift[1],
-                                        display_requested_rgb_shift[2],
-                                        decoder->pitch,
-                                        out_codec == VIDEO_CODEC_END ? VIDEO_CODEC_NONE : out_codec);
-                        if(!buf_size) {
-                                return false;
-                        }
+                int buf_size = decompress_reconfigure(
+                    decoder->decompress_state, desc,
+                    display_requested_rgb_shift[0],
+                    display_requested_rgb_shift[1],
+                    display_requested_rgb_shift[2], decoder->pitch,
+                    out_codec == VIDEO_CODEC_END ? VIDEO_CODEC_NONE
+                                                 : out_codec);
+                if (!buf_size) {
+                        return false;
                 }
                 decoder->merged_fb = display_mode != DISPLAY_PROPERTY_VIDEO_SEPARATE_TILES;
                 int res = 0, ret;
                 size_t size = sizeof(res);
-                ret = decompress_get_property(decoder->decompress_state.at(0),
+                ret = decompress_get_property(decoder->decompress_state,
                                 DECOMPRESS_PROPERTY_ACCEPTS_CORRUPTED_FRAME,
                                 &res, &size);
                 decoder->accepts_corrupted_frame = ret && res;

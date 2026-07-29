@@ -50,8 +50,10 @@
 
 #ifdef __cplusplus
 #include <cstddef>   // for size_t
+#include <cstdint>   // for uint32_t
 #else
 #include <stddef.h>  // for size_t
+#include <stdint.h>  // for uint32_t
 #endif
 
 #include "types.h"
@@ -61,6 +63,12 @@ extern "C" {
 #endif
 
 struct state_decompress;
+
+typedef struct {
+        uint32_t                  magic;
+        unsigned                  state_count;
+        struct state_decompress **state;
+} video_decompress;
 
 /**
  * This property tells that even broken frame (with missing data)
@@ -170,14 +178,12 @@ struct video_decompress_info {
         decompress_get_priority_t get_decompress_priority;
 };
 
-bool decompress_init_multi(codec_t compression,
-                struct pixfmt_desc internal,
-                codec_t to,
-                struct state_decompress **out,
-                int count);
+video_decompress *decompress_init(codec_t            compression,
+                                  struct pixfmt_desc internal, codec_t to,
+                                  int count);
 
 /// @sa decompress_reconfigure_t
-int decompress_reconfigure(struct state_decompress *,
+int decompress_reconfigure(video_decompress *,
                 struct video_desc,
                 int rshift,
                 int gshift,
@@ -198,12 +204,12 @@ decompress_status decompress_frame(struct state_decompress *,
                 struct video_frame_callbacks *callbacks,
                 struct pixfmt_desc *internal_prop);
 
-int decompress_get_property(struct state_decompress *state,
+int decompress_get_property(video_decompress *state,
                 int property,
                 void *val,
                 size_t *len);
 
-void decompress_done(struct state_decompress *);
+void decompress_done(video_decompress *);
 
 #ifdef __cplusplus
 }
