@@ -32,9 +32,10 @@ struct state_video {
         struct rxtx    *rxtx;
         struct module  *parent;
 
-        struct display *display;
-        size_t          display_pitch;
-        long long       putf_timeout;
+        struct display   *display;
+        size_t            display_pitch;
+        long long         putf_timeout;
+        struct video_desc saved_desc;
 };
 
 static bool
@@ -96,6 +97,7 @@ recv_reconfigure(struct state_video *s, struct video_desc desc)
         }
         struct video_frame *f = display_get_frame(s->display);
         assert(f);
+        s->saved_desc = desc;
         return f;
 }
 
@@ -105,45 +107,46 @@ video_receiver_thread(void *arg)
         set_thread_name(__func__);
         struct state_video *s = arg;
 
-        struct video_frame *f = nullptr;
+        struct video_frame *display_frame = nullptr;
 
         while (true) {
                 struct video_frame *ret =
-                    rxtx_recv_video_frame(s->rxtx, f, s->display_pitch);
+                    rxtx_recv_video_frame(s->rxtx, display_frame, s->display_pitch);
                 if (!ret) {
                         break;
                 }
                 if (ret == rxtx_retry) {
                         continue;
                 }
-                if (ret != f) {
-                        if (!f || !video_desc_eq(video_desc_from_frame(f),
-                                                video_desc_from_frame(ret))) {
-                                if (f) {
-                                        display_put_frame(s->display, f,
-                                                          PUTF_DISCARD);
-                                }
-                                f = recv_reconfigure(
-                                    s, video_desc_from_frame(ret));
-                                if (f == nullptr) {
-                                        VIDEO_FRAME_DISPOSE(ret);
-                                        continue;
-                                }
-                                assert(
-                                    video_desc_eq(video_desc_from_frame(f),
-                                                  video_desc_from_frame(ret)));
+                if (!video_desc_eq(video_desc_from_frame(ret),
+                                   s->saved_desc)) {
+                        if (display_frame) {
+                                display_put_frame(s->display, display_frame,
+                                                  PUTF_DISCARD);
+                                display_frame = nullptr;
                         }
+                        display_frame =
+                            recv_reconfigure(s, video_desc_from_frame(ret));
+                        if (display_frame == nullptr) {
+                                VIDEO_FRAME_DISPOSE(ret);
+                                continue;
+                        }
+                        assert(
+                            video_desc_eq(video_desc_from_frame(display_frame),
+                                          video_desc_from_frame(ret)));
+                }
 
-                        vf_copy_metadata(f, ret);
-                        vf_copy_data_pitch(f, s->display_pitch, ret);
+                if (ret != display_frame) {
+                        vf_copy_metadata(display_frame, ret);
+                        vf_copy_data_pitch(display_frame, s->display_pitch, ret);
                         VIDEO_FRAME_DISPOSE(ret);
                 }
-                display_put_frame(s->display, f, s->putf_timeout);
-                f = display_get_frame(s->display);
+                display_put_frame(s->display, display_frame, s->putf_timeout);
+                display_frame = display_get_frame(s->display);
         }
 
-        if (f) {
-                display_put_frame(s->display, f, PUTF_DISCARD);
+        if (display_frame) {
+                display_put_frame(s->display, display_frame, PUTF_DISCARD);
         }
 
         // pass poisoned pill to display
