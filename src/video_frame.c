@@ -227,7 +227,7 @@ video_desc_from_frame(const struct video_frame *frame)
         return desc;
 }
 
-const char *get_interlacing_description(enum interlacing_t interlacing)
+const char *get_interlacing_description(enum interlacing interlacing)
 {
         switch (interlacing) {
                 case PROGRESSIVE:
@@ -247,7 +247,7 @@ const char *get_interlacing_description(enum interlacing_t interlacing)
         return NULL;
 }
 
-static const char *interlacing_suffixes[] = {
+static const char *const interlacing_suffixes[] = {
                 [PROGRESSIVE] = "p",
                 [UPPER_FIELD_FIRST] = "tff",
                 [LOWER_FIELD_FIRST] = "bff",
@@ -255,7 +255,8 @@ static const char *interlacing_suffixes[] = {
                 [SEGMENTED_FRAME] = "psf",
 };
 
-const char *get_interlacing_suffix(enum interlacing_t interlacing)
+const char *
+get_interlacing_suffix(enum interlacing interlacing)
 {
         if (interlacing < sizeof interlacing_suffixes / sizeof interlacing_suffixes[0])
                 return interlacing_suffixes[interlacing];
@@ -263,10 +264,11 @@ const char *get_interlacing_suffix(enum interlacing_t interlacing)
 }
 
 /**
- * @returns interlacing_t member
+ * @returns interlacing member
  * @retval INTERLACING_COUNT on error
  */
-enum interlacing_t get_interlacing_from_suffix(const char *suffix)
+enum interlacing
+get_interlacing_from_suffix(const char *suffix)
 {
         for (size_t i = 0; i < sizeof interlacing_suffixes / sizeof interlacing_suffixes[0]; ++i) {
                 if (interlacing_suffixes[i] && strcmp(suffix, interlacing_suffixes[i]) == 0) {

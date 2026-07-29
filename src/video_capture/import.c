@@ -324,7 +324,7 @@ static struct video_desc parse_video_desc_info(FILE *info, long *video_frame_cou
                         if (val == LONG_MIN) {
                                 return (struct video_desc){ 0 };
                         }
-                        desc.interlacing = (enum interlacing_t) val;
+                        desc.interlacing = (enum interlacing) val;
                         items_found |= 1U<<5U;
                 } else if(strncmp(line, "count ", strlen("count ")) == 0) {
                         if ((val = strtol_checked(line, "count ", 0, LONG_MAX)) == LONG_MIN) {

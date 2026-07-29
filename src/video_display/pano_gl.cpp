@@ -307,7 +307,7 @@ static bool display_panogl_reconfigure(void *state, struct video_desc desc) {
 
 static bool display_panogl_get_property(void *state, int property, void *val, size_t *len) {
         auto *s = static_cast<state_vr *>(state);
-        interlacing_t supported_il_modes[] = {PROGRESSIVE};
+        enum interlacing supported_il_modes[] = { PROGRESSIVE };
         int rgb_shift[] = {0, 8, 16};
 
         switch (property) {

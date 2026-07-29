@@ -155,17 +155,17 @@ enum {
 };
 
 /**
- * @enum interlacing_t
+ * @enum interlacing
  * Specifies interlacing mode of the frame
  * @see video_frame::interlacing
  */
 /**
- * @var interlacing_t::SEGMENTED_FRAME
+ * @var interlacing::SEGMENTED_FRAME
  * @note
  * This is included to allow describing video mode, not content
  * of a frame.
  */
-enum interlacing_t {
+enum interlacing {
         PROGRESSIVE       = 0, ///< progressive frame
         UPPER_FIELD_FIRST = 1, ///< First stored field is top, followed by bottom
         LOWER_FIELD_FIRST = 2, ///< First stored field is bottom, followed by top
@@ -186,14 +186,8 @@ struct video_desc {
 
         codec_t              color_spec;
         double               fps;
-        enum interlacing_t   interlacing;
+        enum interlacing     interlacing;
         unsigned int         tile_count;
-#ifdef __cplusplus
-        bool operator==(video_desc const &) const;
-        bool operator!=(video_desc const &) const;
-        bool operator!() const;
-        operator std::string() const;
-#endif
 };
 
 typedef enum frame_type {
@@ -302,7 +296,7 @@ enum mem_location_t {
  */
 struct video_frame {
         codec_t              color_spec;
-        enum interlacing_t   interlacing;
+        enum interlacing     interlacing;
         double               fps;
         frame_type_t         frame_type;
         enum mem_location_t  mem_location;

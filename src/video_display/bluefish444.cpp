@@ -946,9 +946,11 @@ static bool display_bluefish444_get_property(void *state, int property, void *va
 {
         UNUSED(state);
         codec_t codecs[] = { UYVY };
-        interlacing_t supported_il_modes[] = {PROGRESSIVE, INTERLACED_MERGED, SEGMENTED_FRAME};
+        enum interlacing supported_il_modes[] = { PROGRESSIVE,
+                                                  INTERLACED_MERGED,
+                                                  SEGMENTED_FRAME };
         int rgb_shift[] = {0, 8, 16};
-        
+
         switch (property) {
                 case DISPLAY_PROPERTY_CODECS:
                         if(sizeof(codecs) <= *len) {

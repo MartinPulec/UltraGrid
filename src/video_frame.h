@@ -162,13 +162,13 @@ struct video_desc video_desc_from_frame(const struct video_frame *frame);
  * @brief Returns description of interlacing
  * Eg. "progressive"
  */
-const char *get_interlacing_description(enum interlacing_t interlacing);
+const char *get_interlacing_description(enum interlacing interlacing);
 /**
  * @brief Returns suffix describing interlacing
  * Eg. p, i or psf
  */
-const char *get_interlacing_suffix(enum interlacing_t interlacing);
-enum interlacing_t get_interlacing_from_suffix(const char *suffix);
+const char *get_interlacing_suffix(enum interlacing interlacing);
+enum interlacing get_interlacing_from_suffix(const char *suffix);
 
 void il_lower_to_merged(char *dst, char *src, int linesize, int height, void **stored_state);
 /* these functions transcode one interlacing format to another */

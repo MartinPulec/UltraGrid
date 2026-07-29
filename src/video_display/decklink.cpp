@@ -1643,7 +1643,9 @@ static bool display_decklink_get_property(void *state, int property, void *val, 
         struct state_decklink_vdisp *s = (struct state_decklink_vdisp *)state;
         vector<codec_t> codecs(uv_to_bmd_codec_map.size());
         int rgb_shift[] = {16, 8, 0};
-        interlacing_t supported_il_modes[] = {PROGRESSIVE, INTERLACED_MERGED, SEGMENTED_FRAME};
+        enum interlacing supported_il_modes[] = { PROGRESSIVE,
+                                                  INTERLACED_MERGED,
+                                                  SEGMENTED_FRAME };
         int count = 0;
         for (auto & c : uv_to_bmd_codec_map) {
                 if (decklink_supports_codec(s->deckLinkOutput, c.second)) {

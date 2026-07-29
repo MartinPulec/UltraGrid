@@ -239,7 +239,8 @@ static bool display_v4l2_putf(void *state, struct video_frame *frame, long long 
 static bool display_v4l2_get_property(void *state, int property, void *val, size_t *len)
 {
         UNUSED(state);
-        enum interlacing_t supported_il_modes[sizeof v4l2_field_map / sizeof v4l2_field_map[0]];
+        enum interlacing supported_il_modes[sizeof v4l2_field_map /
+                                            sizeof v4l2_field_map[0]];
         for (unsigned int i = 0; i < sizeof v4l2_field_map / sizeof v4l2_field_map[0]; ++i) {
                 supported_il_modes[i] = v4l2_field_map[i].ug_f;
         }

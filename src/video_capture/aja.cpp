@@ -749,7 +749,9 @@ void vidcap_state_aja::SetupHostBuffers (void)
         mVideoBufferSize = GetVideoWriteSize (mVideoFormat, mPixelFormat, mVancMode);
         mAudioBufferSize = NTV2_AUDIOSIZE_MAX;
 
-        interlacing_t interlacing = NTV2_VIDEO_FORMAT_HAS_PROGRESSIVE_PICTURE(mVideoFormat) ? PROGRESSIVE : INTERLACED_MERGED;
+        enum interlacing interlacing =
+                NTV2_VIDEO_FORMAT_HAS_PROGRESSIVE_PICTURE(mVideoFormat)
+                ? PROGRESSIVE : INTERLACED_MERGED;
         video_desc desc{GetDisplayWidth(mVideoFormat), GetDisplayHeight(mVideoFormat),
                 get_ug_from_ntv2_pixfmt(mPixelFormat),
                 GetFramesPerSecond(GetNTV2FrameRateFromVideoFormat(mVideoFormat)),

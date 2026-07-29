@@ -469,7 +469,9 @@ display_deltacast_get_property(void *state, int property, void *val,
 {
         UNUSED(state);
         codec_t codecs[] = {v210, UYVY, RAW};
-        interlacing_t supported_il_modes[] = {PROGRESSIVE, UPPER_FIELD_FIRST, SEGMENTED_FRAME};
+        enum interlacing supported_il_modes[] = { PROGRESSIVE,
+                                                  UPPER_FIELD_FIRST,
+                                                  SEGMENTED_FRAME };
         int rgb_shift[] = {0, 8, 16};
         
         switch (property) {

@@ -723,7 +723,7 @@ struct deltacast_mode_info {
         unsigned int       width;
         unsigned int       height;
         int                fps;
-        enum interlacing_t interlacing;
+        enum interlacing   interlacing;
 };
 static struct deltacast_mode_info
 deltacast_get_frame_mode(unsigned mode)

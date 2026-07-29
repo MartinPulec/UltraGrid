@@ -375,7 +375,8 @@ static bool display_ndi_get_property(void *state, int property, void *val, size_
         UNUSED(state);
         codec_t codecs[sizeof codec_mapping / sizeof codec_mapping[0]];
         int rgb_shift[] = {0, 8, 16};
-        enum interlacing_t supported_il_modes[] = {PROGRESSIVE, INTERLACED_MERGED};
+        enum interlacing supported_il_modes[] = { PROGRESSIVE,
+                                                  INTERLACED_MERGED };
 
         for (size_t i = 0; i < sizeof codec_mapping / sizeof codec_mapping[0]; ++i) {
                 codecs[i] = codec_mapping[i].ug_codec;
