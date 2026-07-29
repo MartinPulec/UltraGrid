@@ -51,6 +51,7 @@
 #include "video_codec.h"  // for get_codec_from_name
 
 #define DECOMPRESS_MAGIC to_fourcc('v', 'd', 'c', 'm')
+#define DECOMPRESS_STATE_MAGIC to_fourcc('v', 'd', 's', 't')
 #define MOD_NAME         "[vdecompress] "
 
 /**
@@ -137,12 +138,12 @@ find_best_decompress(codec_t compression, struct pixfmt_desc internal_prop,
  * @retval not-NULL state of new decompressor
  */
 static struct state_decompress *
-decompress_init(const struct video_decompress_info *vdi)
+decompress_init_single(const struct video_decompress_info *vdi)
 {
         struct state_decompress *s;
 
         s = (struct state_decompress *) calloc(1, sizeof(struct state_decompress));
-        s->magic = DECOMPRESS_MAGIC;
+        s->magic = DECOMPRESS_STATE_MAGIC;
         s->functions = vdi;
         s->state = s->functions->init();
         if (s->state == NULL) {
@@ -160,26 +161,24 @@ decompress_init(const struct video_decompress_info *vdi)
  * @param[in]  substreams number of decoders to be created
  * @return     true if initialization succeeded
  */
-static bool
+static video_decompress *
 try_initialize_decompress(const struct video_decompress_info *vdi,
-                          struct state_decompress           **decompress_state,
                           int                                 substreams)
 {
-        for(int i = 0; i < substreams; ++i) {
-                decompress_state[i] = decompress_init(vdi);
+        video_decompress *s = calloc(1, sizeof *s);
+        s->magic            = DECOMPRESS_MAGIC;
+        s->state_count      = substreams;
+        s->state = calloc(substreams, sizeof(struct state_decompress *));
 
-                if (!decompress_state[i]) {
-                        for(int j = 0; j < i; ++j) {
-                                if (decompress_state[j] != nullptr) {
-                                        decompress_done(decompress_state[j]);
-                                }
-                                decompress_state[j] = nullptr;
-                        }
-                        return false;
+        for(int i = 0; i < substreams; ++i) {
+                s->state[i] = decompress_init_single(vdi);
+                if (!s->state[i]) {
+                        decompress_done(s);
+                        return nullptr;
                 }
         }
 
-        return true;
+        return s;
 }
 
 /**
@@ -196,7 +195,9 @@ try_initialize_decompress(const struct video_decompress_info *vdi,
  * @retval true           if state_count members of state is filled with valid decompressor
  * @retval false          if initialization failed
  */
-bool decompress_init_multi(codec_t compression, struct pixfmt_desc internal_prop, codec_t out_codec, struct state_decompress **out, int count)
+video_decompress *
+decompress_init(codec_t compression, struct pixfmt_desc internal_prop,
+                      codec_t out_codec, int count)
 {
         int prio_max = 1000;
         int prio_min = 0;
@@ -208,35 +209,46 @@ bool decompress_init_multi(codec_t compression, struct pixfmt_desc internal_prop
                 prio_cur = find_best_decompress(compression, internal_prop,
                                                 out_codec, prio_min, prio_max,
                                                 &vdi, sizeof name, name);
-                // if found, init decoder
-                if(prio_cur != -1) {
-                        if (try_initialize_decompress(vdi, out, count)) {
-                                MSG(VERBOSE,
-                                    "Decompressor \"%s\" initialized "
-                                    "successfully.\n",
-                                    name);
-                                return true;
-                        } else {
-                                // failed, try to find another one
-                                MSG(VERBOSE,
-                                    "Cannot initialize decompressor \"%s\"!\n",
-                                    name);
-                                prio_min = prio_cur + 1;
-                                continue;
-                        }
-                } else {
+                if(prio_cur == -1) {
                         break;
                 }
+                // if found, init decoder
+                video_decompress *ret = try_initialize_decompress(vdi, count);
+                if (ret) {
+                        MSG(VERBOSE,
+                            "Decompressor \"%s\" initialized "
+                            "successfully.\n",
+                            name);
+                        return ret;
+                }
+                // failed, try to find another one
+                MSG(VERBOSE, "Cannot initialize decompressor \"%s\"!\n",
+                    name);
+                prio_min = prio_cur + 1;
         }
-        return false;
+        return nullptr;
 }
 
 /** @copydoc decompress_reconfigure_t */
-int decompress_reconfigure(struct state_decompress *s, struct video_desc desc, int rshift, int gshift, int bshift, int pitch, codec_t out_codec)
+int
+decompress_reconfigure(video_decompress *s, struct video_desc desc, int rshift,
+                       int gshift, int bshift, int pitch, codec_t out_codec)
 {
         assert(s->magic == DECOMPRESS_MAGIC);
-
-        return s->functions->reconfigure(s->state, desc, rshift, gshift, bshift, pitch, out_codec);
+        int buf_size = 0;
+        for (unsigned i = 0; i < s->state_count; ++i) {
+                struct state_decompress *state = s->state[i];
+                assert(state->magic == DECOMPRESS_STATE_MAGIC);
+                int ret = state->functions->reconfigure(
+                    state->state, desc, rshift, gshift, bshift, pitch,
+                    out_codec);
+                if (ret == 0) {
+                        return 0; // failed
+                }
+                assert(i == 0 || ret == buf_size);
+                buf_size = ret;
+        }
+        return buf_size;
 }
 
 /** @copydoc decompress_decompress_t */
@@ -249,7 +261,7 @@ decompress_status decompress_frame(
                 struct video_frame_callbacks *callbacks,
                 struct pixfmt_desc *internal_prop)
 {
-        assert(s->magic == DECOMPRESS_MAGIC);
+        assert(s->magic == DECOMPRESS_STATE_MAGIC);
 
         return s->functions->decompress(s->state,
                         dst,
@@ -261,17 +273,30 @@ decompress_status decompress_frame(
 }
 
 /** @copydoc decompress_get_property_t */
-int decompress_get_property(struct state_decompress *s, int property, void *val, size_t *len)
+int decompress_get_property(video_decompress *s, int property, void *val, size_t *len)
 {
-        return s->functions->get_property(s->state, property, val, len);
+        assert(s->magic == DECOMPRESS_MAGIC);
+        struct state_decompress *first = s->state[0];
+        assert(first->magic == DECOMPRESS_STATE_MAGIC);
+        return first->functions->get_property(first->state, property, val, len);
 }
 
 /** @copydoc decompress_done_t */
-void decompress_done(struct state_decompress *s)
+void decompress_done(video_decompress *s)
 {
+        if (!s) {
+                return;
+        }
         assert(s->magic == DECOMPRESS_MAGIC);
 
-        s->functions->done(s->state);
+        for(unsigned i = 0; i < s->state_count; ++i) {
+                struct state_decompress *state = s->state[i];
+                if (state) {
+                        assert(state->magic == DECOMPRESS_STATE_MAGIC);
+                        state->functions->done(state->state);
+                }
+        }
+        free(s->state);
         free(s);
 }
 

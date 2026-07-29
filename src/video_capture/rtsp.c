@@ -223,7 +223,7 @@ struct video_rtsp_state {
     //struct std_frame_received *rx_data;
     bool decompress;
 
-    struct state_decompress *sd;
+    video_decompress *sd;
     struct video_desc decompress_desc;
 
     int port;
@@ -514,7 +514,8 @@ vidcap_rtsp_grab(void *state, struct audio_frame **audio) {
                 out_desc.color_spec = UYVY;
                 struct video_frame *decompressed = vf_alloc_desc_data(out_desc);
 
-                decompress_frame(s->vrtsp_state.sd, (unsigned char *) decompressed->tiles[0].data,
+                decompress_frame(s->vrtsp_state.sd->state[0],
+                    (unsigned char *) decompressed->tiles[0].data,
                     (unsigned char *) frame->tiles[0].data,
                     frame->tiles[0].data_len, 0, NULL, NULL);
                 vf_free(frame);
@@ -1063,12 +1064,14 @@ setup_codecs_and_controls_from_sdp(FILE *sdp_file, struct rtsp_state *rtspState)
  */
 static int
 init_decompressor(struct video_rtsp_state *sr, struct video_desc desc) {
-    if (decompress_init_multi(H264, (struct pixfmt_desc) { 0 }, UYVY, &sr->sd, 1)) {
+        sr->sd =
+            decompress_init(H264, (struct pixfmt_desc){ 0 }, UYVY, 1);
+        if (!sr->sd) {
+                return 0;
+        }
         decompress_reconfigure(sr->sd, desc, 16, 8, 0,
-            vc_get_linesize(desc.width, UYVY), UYVY);
-    } else
-        return 0;
-    return 1;
+                               vc_get_linesize(desc.width, UYVY), UYVY);
+        return 1;
 }
 
 /**
