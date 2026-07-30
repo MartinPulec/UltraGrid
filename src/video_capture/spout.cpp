@@ -259,7 +259,7 @@ static struct video_frame *vidcap_spout_grab(void *state, struct audio_frame **a
 
         gl_context_make_current(&s->glc);
         struct video_frame *out = vf_alloc_desc_data(s->desc);
-        out->callbacks.dispose = vf_free;
+        out->dispose            = vf_free;
 
         bool ret = s->spout_state->ReceiveImage((unsigned char *) out->tiles[0].data, s->gl_format);
         if (!ret) {

@@ -624,9 +624,9 @@ static std::shared_ptr<video_frame> j2k_compress_pop(void *state)
         out->tiles[0].data = (char *) malloc(size);
         memcpy(out->tiles[0].data, ptr, size);
         CHECK_OK(cmpto_j2k_enc_img_destroy(img), "Destroy image", NOOP);
-        out->callbacks.dispose = j2k_compressed_frame_dispose;
+        out->dispose = j2k_compressed_frame_dispose;
         out->compress_end = get_time_in_ns();
-        return shared_ptr<video_frame>(out, out->callbacks.dispose);
+        return shared_ptr<video_frame>(out, out->dispose);
 }
 
 struct {

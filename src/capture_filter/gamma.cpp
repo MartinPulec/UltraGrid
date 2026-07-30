@@ -214,9 +214,9 @@ static auto filter(void *state, struct video_frame *in) -> video_frame *
                 out->tiles[0].data = (char *) s->vo_pp_out_buffer;
         } else {
                 out->tiles[0].data = (char *) malloc(out->tiles[0].data_len);
-                out->callbacks.data_deleter = vf_data_deleter;
+                out->data_deleter  = vf_data_deleter;
         }
-        out->callbacks.dispose = vf_free;
+        out->dispose = vf_free;
 
         try {
                 s->apply_gamma(get_bits_per_component(in->color_spec), get_bits_per_component(out_desc.color_spec), in->tiles[0].data_len, in->tiles[0].data, out->tiles[0].data);

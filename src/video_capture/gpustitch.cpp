@@ -601,7 +601,7 @@ static bool allocate_result_frame(vidcap_gpustitch_state *s, unsigned width, uns
         s->frame->tiles[0].data_len = vc_get_linesize(desc.width,
                         desc.color_spec) * desc.height;
 
-        s->frame->callbacks.data_deleter = nullptr;
+        s->frame->data_deleter      = nullptr;
         s->frame->callbacks.recycle = nullptr;
 
         if(!s->output_cuda_buf){
@@ -609,7 +609,7 @@ static bool allocate_result_frame(vidcap_gpustitch_state *s, unsigned width, uns
                         std::cerr << log_str << "Failed to allocate result frame" << std::endl;
                         return false;
                 }
-                s->frame->callbacks.data_deleter = result_data_delete;
+                s->frame->data_deleter = result_data_delete;
         }
 
         if(s->conv_func){

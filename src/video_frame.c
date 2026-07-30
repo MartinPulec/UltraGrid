@@ -150,7 +150,7 @@ struct video_frame * vf_alloc_desc_data(struct video_desc desc)
 #endif
         }
 
-        buf->callbacks.data_deleter = vf_aligned_data_deleter;
+        buf->data_deleter = vf_aligned_data_deleter;
         buf->callbacks.recycle = NULL;
 
         return buf;
@@ -163,8 +163,8 @@ void vf_free(struct video_frame *buf)
 
         vf_recycle(buf);
 
-        if (buf->callbacks.data_deleter) {
-                buf->callbacks.data_deleter(buf);
+        if (buf->data_deleter) {
+                buf->data_deleter(buf);
         }
         free(buf);
 }
@@ -427,7 +427,7 @@ struct video_frame *vf_get_copy(struct video_frame *original_frame) {
                 frame_copy->callbacks.copy(frame_copy);
         }
 
-        frame_copy->callbacks.data_deleter = vf_data_deleter;
+        frame_copy->data_deleter = vf_data_deleter;
 
         return frame_copy;
 }

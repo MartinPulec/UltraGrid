@@ -504,7 +504,7 @@ static void map_new_buffer(struct video_frame *f){
 }
 
 static void recycle_frame(video_frame *f){
-        GlBuffer *pbo = static_cast<GlBuffer *>(f->callbacks.dispose_udata);
+        GlBuffer *pbo = static_cast<GlBuffer *>(f->dispose_udata);
         if(!pbo){
                 return;
         }
@@ -516,7 +516,7 @@ static void recycle_frame(video_frame *f){
 }
 
 static void delete_frame(video_frame *f){
-        GlBuffer *pbo = static_cast<GlBuffer *>(f->callbacks.dispose_udata);
+        GlBuffer *pbo = static_cast<GlBuffer *>(f->dispose_udata);
         vf_free(f);
 
         if(!pbo){
@@ -534,7 +534,7 @@ static void delete_frame(video_frame *f){
 static video_frame *allocate_frame(state_xrgl *s){
         video_frame *buffer = vf_alloc_desc(s->current_desc);
         GlBuffer *pbo = new GlBuffer();
-        buffer->callbacks.dispose_udata = pbo;
+        buffer->dispose_udata = pbo;
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo->get());
 
         map_new_buffer(buffer);
@@ -549,7 +549,7 @@ static void worker(state_xrgl *s){
         for(size_t i = 0; i < MAX_BUFFER_SIZE; i++){
                 video_frame *buf = vf_alloc(1);
                 GlBuffer *pbo = new GlBuffer();
-                buf->callbacks.dispose_udata = pbo;
+                buf->dispose_udata = pbo;
                 s->free_frame_pool.push_back(buf);
         }
         lk.unlock();
@@ -592,7 +592,7 @@ static void worker(state_xrgl *s){
                                 running = false;
                         } else {
                                 s->frame_consumed_cv.notify_one();
-                                s->scene.put_frame(frame, frame->callbacks.dispose_udata != nullptr);
+                                s->scene.put_frame(frame, frame->dispose_udata != nullptr);
 
                                 lk.lock();
                                 s->dispose_frame_pool.push_back(frame);

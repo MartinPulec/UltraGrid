@@ -521,7 +521,7 @@ vidcap_rtsp_grab(void *state, struct audio_frame **audio) {
                 vf_free(frame);
                 frame = decompressed;
             }
-            frame->callbacks.dispose = vf_free;
+            frame->dispose = vf_free;
             return frame;
         }
     } else {

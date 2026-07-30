@@ -435,9 +435,9 @@ ldgm::encode_video_frame(const struct video_frame *tx_frame)
         //. is joined
         auto *coding_session =  new std::shared_ptr<LDGM_session>(this->m_coding_session);
         video_frame *out = vf_alloc_desc(video_desc_from_frame(tx_frame));
-        out->callbacks.dispose_udata = coding_session;
-        out->callbacks.dispose       = [](struct video_frame *frame) {
-                auto *coding_session = (std::shared_ptr<LDGM_session> *) frame->callbacks.dispose_udata;
+        out->dispose_udata = coding_session;
+        out->dispose       = [](struct video_frame *frame) {
+                auto *coding_session = (std::shared_ptr<LDGM_session> *) frame->dispose_udata;
                 for (unsigned int i = 0; i < frame->tile_count; ++i) {
                         (*coding_session)->free_out_buf(frame->tiles[i].data);
                 }

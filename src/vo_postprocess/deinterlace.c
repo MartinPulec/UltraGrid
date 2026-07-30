@@ -184,7 +184,7 @@ static struct video_frame *cf_deinterlace_filter(void *state, struct video_frame
 
         struct video_frame *out = vf_alloc_desc_data(video_desc_from_frame(f));
         out->interlacing = PROGRESSIVE;
-        out->callbacks.dispose = vf_free;
+        out->dispose = vf_free;
         if (!deinterlace_postprocess(state, f, out, vc_get_linesize(f->tiles[0].width, f->color_spec))) {
                 VIDEO_FRAME_DISPOSE(f);
                 vf_free(out);

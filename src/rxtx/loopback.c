@@ -154,7 +154,7 @@ unlock:
         CHK_PTHR(pthread_mutex_unlock(&video->lock));
 
         if (discard_frame) {
-                f->callbacks.dispose(f);
+                f->dispose(f);
                 return;
         }
 
@@ -267,7 +267,7 @@ video_receiver_thread(void *arg)
                 struct video_desc new_desc = video_desc_from_frame(frame);
                 if (!video_desc_eq(video->configured_desc, new_desc)) {
                         if (!loopback_reconfigure_display(video, new_desc)) {
-                                frame->callbacks.dispose(frame);
+                                frame->dispose(frame);
                                 continue;
                         }
                 }
@@ -275,7 +275,7 @@ video_receiver_thread(void *arg)
                     display_get_frame(video->display_device);
                 memcpy(display_f->tiles[0].data, frame->tiles[0].data, frame->tiles[0].data_len);
                 display_put_frame(video->display_device, display_f, PUTF_BLOCKING);
-                frame->callbacks.dispose(frame);
+                frame->dispose(frame);
         }
         display_put_frame(video->display_device, nullptr, PUTF_BLOCKING);
         unregister_should_exit_callback(s->parent, should_exit_video_recv_thr, s);

@@ -129,7 +129,7 @@ static void done(void *state)
 }
 
 static void dispose_frame(struct video_frame *f) {
-        VIDEO_FRAME_DISPOSE((struct video_frame *) f->callbacks.dispose_udata);
+        VIDEO_FRAME_DISPOSE((struct video_frame *) f->dispose_udata);
         vf_free(f);
 }
 
@@ -162,8 +162,8 @@ static struct video_frame *filter(void *state, struct video_frame *in)
                 memcpy(frame->tiles, in->tiles, in->tile_count * sizeof(struct tile));
                 frame->fps /= (double) s->num / s->denom;
 
-                frame->callbacks.dispose = dispose_frame;
-                frame->callbacks.dispose_udata = in;
+                frame->dispose = dispose_frame;
+                frame->dispose_udata = in;
         }
 
         return frame;

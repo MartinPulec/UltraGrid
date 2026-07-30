@@ -88,7 +88,7 @@ static struct video_frame *filter(void *state, struct video_frame *in)
         if (s->vo_pp_out_buffer) {
                 out = vf_alloc_desc(desc);
                 out->tiles[0].data = s->vo_pp_out_buffer;
-                out->callbacks.dispose = vf_free;
+                out->dispose = vf_free;
                 memcpy(out->tiles[0].data, in->tiles[0].data, in->tiles[0].data_len);
         } else {
                 out = in;

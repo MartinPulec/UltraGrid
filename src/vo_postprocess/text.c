@@ -473,7 +473,7 @@ static struct video_frame *cf_text_filter(void *state, struct video_frame *f)
         }
 
         struct video_frame *out = vf_alloc_desc_data(s->saved_desc);
-        out->callbacks.dispose = vf_free;
+        out->dispose = vf_free;
         if (text_postprocess(state, f, out, vc_get_linesize(f->tiles[0].width, f->color_spec))) {
                 VIDEO_FRAME_DISPOSE(f);
                 return out;

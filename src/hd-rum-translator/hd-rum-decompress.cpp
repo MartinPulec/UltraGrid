@@ -115,8 +115,8 @@ void state_transcoder_decompress::frame_arrived(void *state, struct video_frame 
         if (f == nullptr) {
                 return;
         }
-        if (f->callbacks.dispose != nullptr) {
-                deleter = f->callbacks.dispose;
+        if (f->dispose != nullptr) {
+                deleter = f->dispose;
         }
 
         unique_lock<mutex> l(s->lock);

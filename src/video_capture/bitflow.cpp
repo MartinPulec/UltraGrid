@@ -349,7 +349,7 @@ static struct video_frame *vidcap_bitflow_grab(void *state, struct audio_frame *
 
         video_frame *out = vf_alloc_desc_data(s->desc);
         debayer((char *) out->tiles[0].data, (char *) frameP, s->desc.width, s->desc.height);
-        out->callbacks.dispose = vf_free;
+        out->dispose = vf_free;
 
         *audio = NULL;
         return out;

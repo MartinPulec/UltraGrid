@@ -559,7 +559,7 @@ static struct video_frame *vidcap_ndi_grab(void *state, struct audio_frame **aud
                                 convert(out, video_frame.p_data, stride, 0, 1);
                         }
                         s->NDIlib->recv_free_video_v2(s->pNDI_recv, &video_frame);
-                        out->callbacks.dispose = vf_free;
+                        out->dispose = vf_free;
                 } else {
                         out = vf_alloc_desc(out_desc);
                         out->tiles[0].data = reinterpret_cast<char*>(video_frame.p_data);
@@ -571,13 +571,13 @@ static struct video_frame *vidcap_ndi_grab(void *state, struct audio_frame **aud
                                 NDIlib_recv_instance_t pNDI_recv;
                                 void(*recv_free_video_v2)(NDIlib_recv_instance_t p_instance, const NDIlib_video_frame_v2_t* p_video_data);
                         };
-                        out->callbacks.dispose_udata = new dispose_udata_t{video_frame, s->pNDI_recv, s->NDIlib->recv_free_video_v2};
-                        static auto dispose = [](struct video_frame *f) { auto du = static_cast<dispose_udata_t *>(f->callbacks.dispose_udata);
+                        out->dispose_udata = new dispose_udata_t{video_frame, s->pNDI_recv, s->NDIlib->recv_free_video_v2};
+                        static auto dispose = [](struct video_frame *f) { auto du = static_cast<dispose_udata_t *>(f->dispose_udata);
                                 du->recv_free_video_v2(du->pNDI_recv, &du->video_frame);
                                 delete du;
                                 free(f);
                         };
-                        out->callbacks.dispose = dispose;
+                        out->dispose = dispose;
                 }
                 return out;
                 break;

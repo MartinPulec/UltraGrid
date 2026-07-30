@@ -218,33 +218,6 @@ struct video_frame;
  * @brief Struct containing callbacks of a @ref video_frame
  */
 struct video_frame_callbacks {
-        /** @note
-         * Can be changed only by frame originator.
-         * @deprecated
-         * This is currently used only by video_capture and capture_filter modules
-         * and should not be used elsewhere!
-         * @{
-         */
-        /**
-         * This function (if defined) is called when frame is no longer needed
-         * by processing queue.
-         * @note
-         * Currently, this is only used in sending workflow, not the receiving one!
-         * Can be called from arbitrary thread.
-         */
-        void               (*dispose)(struct video_frame *);
-        /**
-         * Additional data needed to dispose the frame
-         */
-        void                *dispose_udata;
-        /// @}
-
-        /**
-         * This function (if defined) is called by vf_free() to destruct video data
-         * (@ref tile::data members).
-         */
-        void               (*data_deleter)(struct video_frame *);
-
         /**
          * This function is used to free extra data held by the frame and should
          * be called before returning the frame to frame pool. 
@@ -310,6 +283,33 @@ struct video_frame {
         /// @}
 
         unsigned int         decoder_overrides_data_len:1;
+
+        /** @note
+         * Can be changed only by frame originator.
+         * @deprecated
+         * This is currently used only by video_capture and capture_filter modules
+         * and should not be used elsewhere!
+         * @{
+         */
+        /**
+         * This function (if defined) is called when frame is no longer needed
+         * by processing queue.
+         * @note
+         * Currently, this is only used in sending workflow, not the receiving one!
+         * Can be called from arbitrary thread.
+         */
+        void               (*dispose)(struct video_frame *);
+        /**
+         * Additional data needed to dispose the frame
+         */
+        void                *dispose_udata;
+        /// @}
+
+        /**
+         * This function (if defined) is called by vf_free() to destruct video data
+         * (@ref tile::data members).
+         */
+        void               (*data_deleter)(struct video_frame *);
 
         struct video_frame_callbacks callbacks;
 

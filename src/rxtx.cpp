@@ -238,9 +238,9 @@ struct shared_ptr_udata {
 static void
 shared_ptr_dispose(struct video_frame *f)
 {
-        auto *d = (struct shared_ptr_udata *) f->callbacks.dispose_udata;
-        f->callbacks.dispose       = d->orig_dispose;
-        f->callbacks.dispose_udata = d->orig_dispose_udata;
+        auto *d = (struct shared_ptr_udata *) f->dispose_udata;
+        f->dispose       = d->orig_dispose;
+        f->dispose_udata = d->orig_dispose_udata;
         delete d;
 }
 
@@ -249,11 +249,11 @@ shared_vf_to_plain(shared_ptr<video_frame> &&frame)
 {
         struct video_frame *f = frame.get();
         auto *d = new shared_ptr_udata{ .frame        = std::move(frame),
-                                        .orig_dispose = f->callbacks.dispose,
+                                        .orig_dispose = f->dispose,
                                         .orig_dispose_udata =
-                                            f->callbacks.dispose_udata };
-        f->callbacks.dispose       = shared_ptr_dispose;
-        f->callbacks.dispose_udata = d;
+                                            f->dispose_udata };
+        f->dispose       = shared_ptr_dispose;
+        f->dispose_udata = d;
         return f;
 }
 
@@ -450,7 +450,7 @@ void
 rxtx_send_video(struct rxtx *state, struct video_frame *tx_frame)
 {
         state->send_vframe(
-            shared_ptr<video_frame>(tx_frame, tx_frame->callbacks.dispose));
+            shared_ptr<video_frame>(tx_frame, tx_frame->dispose));
 }
 
 /// @sa rxtx_send_vide for plain pointer variant

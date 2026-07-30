@@ -749,7 +749,7 @@ struct vidcap_deltacast_dispose_udata {
 
 static void vidcap_deltacast_dvi_dispose(struct video_frame *f)
 {
-        auto data = (struct vidcap_deltacast_dispose_udata *) f->callbacks.dispose_udata;
+        auto data = (struct vidcap_deltacast_dispose_udata *) f->dispose_udata;
         data->s->lock.lock();
         data->s->frames_to_free.push(data->SlotHandle);
         data->s->lock.unlock();
@@ -809,13 +809,13 @@ vidcap_deltacast_dvi_grab(void *state, struct audio_frame **audio)
                  out = vf_alloc_desc_data(s->desc);
                  vc_copylineRGBA(reinterpret_cast<unsigned char *>(out->tiles[0].data), pBuffer, out->tiles[0].data_len, 16, 8, 0);
                  VHD_UnlockSlotHandle(SlotHandle);
-                 out->callbacks.dispose = vf_free;
+                 out->dispose = vf_free;
          } else {
                  out = vf_alloc_desc(s->desc);
                  out->tiles[0].data = (char*) pBuffer;
                  out->tiles[0].data_len = BufferSize;
-                 out->callbacks.dispose_udata = new vidcap_deltacast_dispose_udata{s, SlotHandle};
-                 out->callbacks.dispose = vidcap_deltacast_dvi_dispose;
+                 out->dispose_udata = new vidcap_deltacast_dispose_udata{s, SlotHandle};
+                 out->dispose = vidcap_deltacast_dvi_dispose;
          }
 
          /* Print some statistics */

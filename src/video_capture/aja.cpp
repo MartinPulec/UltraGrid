@@ -886,17 +886,15 @@ void vidcap_state_aja::CaptureFrames (void)
 
                 struct video_frame *disposable =
                     video_frame_pool_get_disposable_frame(mPool);
-                shared_ptr<video_frame> out{ disposable,
-                                             disposable->callbacks.dispose };
+                shared_ptr<video_frame> out{ disposable, disposable->dispose };
                 //      DMA the new frame to system memory...
                 CHECK(mDevice.DMAReadFrame (currentInFrame, reinterpret_cast<uint32_t *>(out->tiles[0].data), mVideoBufferSize));
                 if (out->color_spec == R12L) {
                         struct video_frame *converted =
                             video_frame_pool_get_disposable_frame(mPool);
                         vc_copylineR12AtoR12L((unsigned char *) converted->tiles[0].data, (unsigned char *) out->tiles[0].data, out->tiles[0].data_len, 0, 0, 0);
-                        out = shared_ptr<video_frame>{
-                                disposable, disposable->callbacks.dispose
-                        };
+                        out = shared_ptr<video_frame>{ disposable,
+                                                       disposable->dispose };
                 }
 
                 if (log_level >= LOG_LEVEL_DEBUG) {
@@ -950,9 +948,9 @@ struct video_frame *vidcap_state_aja::grab(struct audio_frame **audio)
         }
 
         ret = mOutputFrame.get();
-        ret->callbacks.dispose_udata = new shared_ptr<video_frame>(mOutputFrame);
-        static auto dispose = [](video_frame *f) { delete static_cast<shared_ptr<video_frame> *>(f->callbacks.dispose_udata); };
-        ret->callbacks.dispose = dispose;
+        ret->dispose_udata = new shared_ptr<video_frame>(mOutputFrame);
+        static auto dispose = [](video_frame *f) { delete static_cast<shared_ptr<video_frame> *>(f->dispose_udata); };
+        ret->dispose = dispose;
 
         mOutputFrame = NULL;
 

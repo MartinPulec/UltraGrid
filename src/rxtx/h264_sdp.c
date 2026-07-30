@@ -256,7 +256,7 @@ static void
 send_frame(void *state, struct video_frame *tx_frame) {
         struct sdp_rxtx *s = state;
         send_frame_impl(s, tx_frame);
-        tx_frame->callbacks.dispose(tx_frame);
+        tx_frame->dispose(tx_frame);
 }
 
 static void done(void *state) {

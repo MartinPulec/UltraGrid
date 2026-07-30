@@ -255,9 +255,9 @@ filter(void *state, struct video_frame *in)
                 out->tiles[0].data = s->vo_pp_out_buffer;
         } else {
                 out->tiles[0].data = malloc(out->tiles[0].data_len);
-                out->callbacks.data_deleter = vf_data_deleter;
+                out->data_deleter  = vf_data_deleter;
         }
-        out->callbacks.dispose = vf_free;
+        out->dispose = vf_free;
 
         if (in->color_spec == UYVY) {
                 apply_to_uyvy(s, in, out);

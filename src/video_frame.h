@@ -74,8 +74,8 @@ extern "C" {
  *
  * @see video_frame::dispose
  */
-#define VIDEO_FRAME_DISPOSE(frame) if ((frame) && (frame)->callbacks.dispose) \
-        (frame)->callbacks.dispose(frame)
+#define VIDEO_FRAME_DISPOSE(frame) if ((frame) && (frame)->dispose) \
+        (frame)->dispose(frame)
 
 /**
  * @brief Allocates blank video frame

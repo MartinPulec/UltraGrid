@@ -723,7 +723,7 @@ display_decklink_getf(void *state)
         static auto dispose = [](struct video_frame *frame) {
                 vf_free(frame);
         };
-        out->callbacks.dispose = dispose;
+        out->dispose = dispose;
 
         const int linesize = vc_get_linesize(s->vid_desc.width, s->vid_desc.color_spec);
         DeckLinkFrame *deckLinkFrame = nullptr;
@@ -749,7 +749,7 @@ display_decklink_getf(void *state)
         if (!deckLinkFrame) {
                 deckLinkFrame = allocate_new_decklink_frame(s);
         }
-        out->callbacks.dispose_udata = (void *) deckLinkFrame;
+        out->dispose_udata = (void *) deckLinkFrame;
 
         deckLinkFrame->GetBytes((void **)&out->tiles[0].data);
 
@@ -823,7 +823,7 @@ static bool display_decklink_putf(void *state, struct video_frame *frame,
                 }
         }
 
-        auto *deckLinkFrame = (DeckLinkFrame *) frame->callbacks.dispose_udata;
+        auto *deckLinkFrame = (DeckLinkFrame *) frame->dispose_udata;
         if (s->emit_timecode) {
                 deckLinkFrame->SetTimecode(bmdTimecodeRP188Any, s->timecode);
         }
@@ -839,7 +839,7 @@ static bool display_decklink_putf(void *state, struct video_frame *frame,
                 update_timecode(s->timecode, s->vid_desc.fps);
         }
 
-        frame->callbacks.dispose(frame);
+        frame->dispose(frame);
 
         s->delegate.PrintStats();
 

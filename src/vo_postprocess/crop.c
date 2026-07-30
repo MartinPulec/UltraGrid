@@ -223,7 +223,7 @@ static struct video_frame *cf_crop_filter(void *state, struct video_frame *f)
         }
 
         struct video_frame *out = vf_alloc_desc_data(s->out_desc);
-        out->callbacks.dispose = vf_free;
+        out->dispose = vf_free;
         if (!crop_postprocess(state, f, out, vc_get_linesize(s->out_desc.width, f->color_spec))) {
                 VIDEO_FRAME_DISPOSE(f);
                 vf_free(out);

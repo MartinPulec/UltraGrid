@@ -246,7 +246,7 @@ static struct video_frame *filter(void *state, struct video_frame *in)
         out_frame->tiles[0].data = s->vo_pp_out_buffer;
     } else {
         out_frame->tiles[0].data = (char *) malloc(out_frame->tiles[0].data_len);
-        out_frame->callbacks.data_deleter = vf_data_deleter;
+        out_frame->data_deleter  = vf_data_deleter;
     }
 
     for (unsigned int i = 0; i < out_frame->tile_count; i++) {
@@ -268,7 +268,7 @@ static struct video_frame *filter(void *state, struct video_frame *in)
 
     VIDEO_FRAME_DISPOSE(in);
 
-    out_frame->callbacks.dispose = vf_free;
+    out_frame->dispose = vf_free;
 
     return out_frame;
 }

@@ -334,7 +334,7 @@ print_fps(const char *prefix, steady_clock::time_point *t0, int *frames,
 static void
 frame_wait_obj_notify(struct video_frame *f)
 {
-        auto *wait_obj = (struct wait_obj *) f->callbacks.dispose_udata;
+        auto *wait_obj = (struct wait_obj *) f->dispose_udata;
         wait_obj_notify(wait_obj);
 }
 
@@ -372,11 +372,11 @@ static void *capture_thread(void *arg)
                 print_fps(print_fps_prefix, &t0, &frames, tx_frame->fps);
                 // tx_frame = vf_get_copy(tx_frame);
                 bool                    wait_for_cur_uncompressed_frame = false;
-                if (tx_frame->callbacks.dispose == nullptr) {
+                if (tx_frame->dispose == nullptr) {
                         wait_obj_reset(wait_obj);
                         wait_for_cur_uncompressed_frame = true;
-                        tx_frame->callbacks.dispose = frame_wait_obj_notify;
-                        tx_frame->callbacks.dispose_udata = wait_obj;
+                        tx_frame->dispose               = frame_wait_obj_notify;
+                        tx_frame->dispose_udata         = wait_obj;
                 }
 
                 rxtx_send_video(uv->state_rxtx, tx_frame);
@@ -386,8 +386,8 @@ static void *capture_thread(void *arg)
                 // frame (if not defined dispose function).
                 if (wait_for_cur_uncompressed_frame) {
                         wait_obj_wait(wait_obj);
-                        tx_frame->callbacks.dispose       = nullptr;
-                        tx_frame->callbacks.dispose_udata = nullptr;
+                        tx_frame->dispose       = nullptr;
+                        tx_frame->dispose_udata = nullptr;
                 }
         }
 

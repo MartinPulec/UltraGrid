@@ -173,7 +173,7 @@ typedef void  rxtx_send_shr_ptr_video_frame_fn(void *state,
 typedef void *rxtx_send_shr_ptr_video_frame_fn;
 #endif // defined __cplusplus
 /**
- * @param f  f->callbacks.dispose(f) must be called
+ * @param f  f->dispose(f) must be called
  */
 typedef void  rxtx_send_video_frame_fn(void *state, struct video_frame *f);
 typedef void *rxtx_vrecv_routine_fn(void *state);

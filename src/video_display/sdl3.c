@@ -228,8 +228,7 @@ display_frame(struct state_sdl3 *s, struct video_frame *frame)
                 return;
         }
 
-        struct video_frame_sdl3_data *frame_data =
-            frame->callbacks.dispose_udata;
+        struct video_frame_sdl3_data *frame_data = frame->dispose_udata;
         if (s->deinterlace == DEINT_FORCE ||
             (s->deinterlace == DEINT_ON &&
              frame->interlacing == INTERLACED_MERGED)) {
@@ -718,7 +717,7 @@ static void
 vf_sdl_texture_data_deleter(struct video_frame *buf)
 {
         struct video_frame_sdl3_data *frame_data =
-            buf->callbacks.dispose_udata;
+            buf->dispose_udata;
         SDL_DestroyTexture(frame_data->texture);
         free(frame_data->preconv_data);
         free(frame_data);
@@ -770,8 +769,8 @@ recreate_textures(struct state_sdl3 *s, struct video_desc desc)
                 struct video_frame_sdl3_data *frame_data =
                     calloc(1, sizeof *frame_data);
                 frame_data->texture = texture;
-                f->callbacks.dispose_udata = frame_data;
-                f->callbacks.data_deleter = vf_sdl_texture_data_deleter;
+                f->dispose_udata = frame_data;
+                f->data_deleter = vf_sdl_texture_data_deleter;
                 if (s->cs_data->convert != NULL) {
                         frame_data->preconv_data = f->tiles[0].data =
                             malloc(f->tiles[0].data_len);

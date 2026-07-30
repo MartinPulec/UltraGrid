@@ -528,7 +528,7 @@ static struct video_frame *vidcap_syphon_grab(void *state, struct audio_frame **
         struct video_frame *ret = simple_linked_list_pop(s->q);
         pthread_mutex_unlock(&s->lock);
         if (ret != NULL) {
-                ret->callbacks.dispose = vf_free;
+                ret->dispose = vf_free;
         }
 
         *audio = NULL;

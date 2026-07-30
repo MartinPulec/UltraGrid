@@ -377,7 +377,7 @@ send_video_frame(void *state, struct video_frame *f)
         CHK_PTHR(pthread_mutex_lock(&s->lock));
         send_video_frame_impl(s, f);
         CHK_PTHR(pthread_mutex_unlock(&s->lock));
-        f->callbacks.dispose(f);
+        f->dispose(f);
 }
 
 // <https://wiki.multimedia.cx/index.php/ADTS>

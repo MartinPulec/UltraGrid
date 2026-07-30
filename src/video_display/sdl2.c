@@ -171,7 +171,7 @@ static void display_frame(struct state_sdl2 *s, struct video_frame *frame)
                 return;
         }
 
-        SDL_Texture *texture = (SDL_Texture *) frame->callbacks.dispose_udata;
+        SDL_Texture *texture = (SDL_Texture *) frame->dispose_udata;
         if (s->deinterlace == DEINT_FORCE || (s->deinterlace == DEINT_ON && frame->interlacing == INTERLACED_MERGED)) {
                 size_t pitch = vc_get_linesize(frame->tiles[0].width, frame->color_spec);
                 if (!vc_deinterlace_ex(frame->color_spec, (unsigned char *) frame->tiles[0].data, pitch, (unsigned char *) frame->tiles[0].data, pitch, frame->tiles[0].height)) {
@@ -475,7 +475,7 @@ static void cleanup_frames(struct state_sdl2 *s) {
 }
 
 static void vf_sdl_texture_data_deleter(struct video_frame *buf) {
-        SDL_Texture *texture = (SDL_Texture *) buf->callbacks.dispose_udata;
+        SDL_Texture *texture = (SDL_Texture *) buf->dispose_udata;
         SDL_DestroyTexture(texture);
 }
 
@@ -489,7 +489,7 @@ static bool recreate_textures(struct state_sdl2 *s, struct video_desc desc) {
                         return false;
                 }
                 struct video_frame *f = vf_alloc_desc(desc);
-                f->callbacks.dispose_udata = (void *) texture;
+                f->dispose_udata = (void *) texture;
                 SDL_CHECK(SDL_LockTexture(texture, NULL,
                                           (void **) &f->tiles[0].data,
                                           &s->texture_pitch),
@@ -498,7 +498,7 @@ static bool recreate_textures(struct state_sdl2 *s, struct video_desc desc) {
                 if (!codec_is_planar(desc.color_spec)) {
                         f->tiles[0].data_len = desc.height * s->texture_pitch;
                 }
-                f->callbacks.data_deleter = vf_sdl_texture_data_deleter;
+                f->data_deleter = vf_sdl_texture_data_deleter;
                 simple_linked_list_append(s->free_frame_queue, f);
         }
 

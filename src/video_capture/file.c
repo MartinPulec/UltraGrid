@@ -407,8 +407,8 @@ static struct video_frame *process_video_pkt(struct vidcap_state_lavf_decoder *s
         s->last_vid_pts = pkt->pts == AV_NOPTS_VALUE ? pkt->dts : pkt->pts;
         if (s->no_decode) {
                 struct video_frame *out = vf_alloc_desc(s->video_desc);
-                out->callbacks.data_deleter = vf_data_deleter;
-                out->callbacks.dispose = vf_free;
+                out->data_deleter = vf_data_deleter;
+                out->dispose      = vf_free;
                 out->tiles[0].data_len = pkt->size;
                 out->tiles[0].data = malloc(pkt->size);
                 memcpy(out->tiles[0].data, pkt->data, pkt->size);
@@ -454,7 +454,7 @@ static struct video_frame *process_video_pkt(struct vidcap_state_lavf_decoder *s
 #else
         out->duration = frame->pkt_duration;
 #endif
-        out->callbacks.dispose = vf_free;
+        out->dispose = vf_free;
         return out;
 }
 

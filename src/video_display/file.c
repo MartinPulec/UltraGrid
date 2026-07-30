@@ -248,7 +248,7 @@ display_file_init(struct module *parent, const char *fmt, unsigned int flags)
 static void
 delete_frame(struct video_frame *frame)
 {
-        AVFrame *avfrm = frame->callbacks.dispose_udata;
+        AVFrame *avfrm = frame->dispose_udata;
         av_frame_free(&avfrm);
 }
 
@@ -292,8 +292,8 @@ display_file_getf(void *state)
         }
         struct video_frame *out      = vf_alloc_desc(s->video_desc);
         out->tiles[0].data           = (char *) frame->data[0];
-        out->callbacks.dispose_udata = frame;
-        out->callbacks.data_deleter  = delete_frame;
+        out->dispose_udata = frame;
+        out->data_deleter  = delete_frame;
         return out;
 }
 
@@ -764,7 +764,7 @@ write_video_frame(struct state_file *s, struct video_frame *vid_frm,
             (long long) (NS_IN_SEC / s->video_desc.fps);
         AVFrame *frame =
             s->video_conv == NULL
-                ? vid_frm->callbacks.dispose_udata
+                ? vid_frm->dispose_udata
                 : to_lavc_vid_conv(s->video_conv, vid_frm->tiles[0].data);
         bool dup = false;
 

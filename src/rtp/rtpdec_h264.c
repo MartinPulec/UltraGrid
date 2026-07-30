@@ -3,7 +3,8 @@
  *           Ignacio Contreras <ignacio.contreras@i2cat.net>,
  *           Gerard Castillo <gerard.castillo@i2cat.net>
  *
- * Copyright (c) 2005-2010 Fundació i2CAT, Internet I Innovació Digital a Catalunya
+ * Copyright (c) 2013-2014 Fundació i2CAT, Internet I Innovació Digital a Catalunya
+ * Copyright (c) 2015-2026 CESNET, zájmové sdružení právnických osob
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, is permitted provided that the following conditions
@@ -422,7 +423,7 @@ get_sps_pps_frame(const struct video_desc *desc,
         }
         struct video_frame *frame = vf_alloc_desc_data(*desc);
         frame->tiles[0].data_len  = decode_data->offset_len;
-        frame->callbacks.dispose  = vf_free;
+        frame->dispose            = vf_free;
         write_sps_pps(frame, decode_data);
         return frame;
 }
@@ -451,7 +452,7 @@ int decode_frame_h2645(struct coded_data *cdata, void *decode_data) {
             frame->tiles[0].data_len = total_length;
             assert(frame->tiles[0].data == NULL);
             frame->tiles[0].data = malloc(total_length);
-            frame->callbacks.data_deleter = vf_data_deleter;
+            frame->data_deleter  = vf_data_deleter;
             dst = (unsigned char *) frame->tiles[0].data + total_length;
         }
 

@@ -4,7 +4,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2010-2025 CESNET, z. s. p. o.
+ * Copyright (c) 2010-2026 CESNET, z. s. p. o.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -268,7 +268,7 @@ void Texture::load_frame(int w, int h,
         glBindTexture(GL_TEXTURE_2D, tex_id);
 
         if(pbo_frame){
-                GlBuffer *pbo = static_cast<GlBuffer *>(f->callbacks.dispose_udata);
+                GlBuffer *pbo = static_cast<GlBuffer *>(f->dispose_udata);
 
                 glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo->get());
                 glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);

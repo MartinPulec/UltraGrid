@@ -86,7 +86,7 @@ static int init(struct module *parent, const char *cfg, void **state)
 }
 
 static void dispose_frame(struct video_frame *f) {
-        VIDEO_FRAME_DISPOSE((struct video_frame *) f->callbacks.dispose_udata);
+        VIDEO_FRAME_DISPOSE((struct video_frame *) f->dispose_udata);
         free(f->tiles[0].data); // f->data_delter is not set so vf_free doesn't
                                 // delete...
         vf_free(f);
@@ -125,8 +125,8 @@ static struct video_frame *filter(void *state, struct video_frame *in)
 
         struct video_frame *f      = s->f;
         s->f->tiles[1].data = in->tiles[0].data;
-        f->callbacks.dispose_udata = in;
-        f->callbacks.dispose       = dispose_frame;
+        f->dispose_udata           = in;
+        f->dispose                 = dispose_frame;
         s->f                       = NULL;
 
         return f;

@@ -1528,7 +1528,7 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
         // allocated buffers when we have compressed data. But in case of FEC, there
         // is just the FEC buffer present, so we point to it instead to copying
         struct video_frame *frame = vf_alloc(max_substreams);
-        frame->callbacks.data_deleter = vf_data_deleter;
+        frame->data_deleter       = vf_data_deleter;
         unique_ptr<map<int, int>[]> pckt_list(new map<int, int>[max_substreams]);
 
         int buffer_number = 0;

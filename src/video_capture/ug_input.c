@@ -269,7 +269,7 @@ static struct video_frame *vidcap_ug_input_grab(void *state, struct audio_frame 
         struct video_frame *frame = item->vframe;
         *audio                    = item->aframe;
         free(item);
-        frame->callbacks.dispose = vf_free;
+        frame->dispose = vf_free;
         pthread_mutex_unlock(&s->lock);
 
         return frame;

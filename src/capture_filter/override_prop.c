@@ -135,7 +135,7 @@ static void done(void *state)
 }
 
 static void dispose_frame(struct video_frame *f) {
-        VIDEO_FRAME_DISPOSE((struct video_frame *) f->callbacks.dispose_udata);
+        VIDEO_FRAME_DISPOSE((struct video_frame *) f->dispose_udata);
         vf_free(f);
 }
 
@@ -158,8 +158,8 @@ static struct video_frame *filter(void *state, struct video_frame *in)
         out->fps = s->new_desc.fps;
         out->interlacing = s->new_desc.interlacing;
 
-        out->callbacks.dispose = dispose_frame;
-        out->callbacks.dispose_udata = in;
+        out->dispose       = dispose_frame;
+        out->dispose_udata = in;
 
         return out;
 }

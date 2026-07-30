@@ -129,7 +129,7 @@ init(struct module * /* parent */, const char *cfg, void **state)
 static void
 dispose_frame(struct video_frame *f)
 {
-        VIDEO_FRAME_DISPOSE((struct video_frame *) f->callbacks.dispose_udata);
+        VIDEO_FRAME_DISPOSE((struct video_frame *) f->dispose_udata);
         vf_free(f);
 }
 
@@ -142,8 +142,8 @@ wrap_with_fps_adj(struct state_add_frame *s, struct video_frame *in)
         struct video_frame *out = vf_alloc_desc(video_desc_from_frame(in));
         out->fps = out->fps / s->add_frame_cnt * (s->add_frame_cnt + 1);
         memcpy(out->tiles, in->tiles, in->tile_count * sizeof(struct tile));
-        out->callbacks.dispose       = dispose_frame;
-        out->callbacks.dispose_udata = in;
+        out->dispose       = dispose_frame;
+        out->dispose_udata = in;
 
         return out;
 }
@@ -165,8 +165,8 @@ filter(void *state, struct video_frame *in)
                 if (s->cached != nullptr) {
                         vf_free(s->cached);
                 }
-                s->cached                    = vf_get_copy(in);
-                s->cached->callbacks.dispose = vf_free;
+                s->cached          = vf_get_copy(in);
+                s->cached->dispose = vf_free;
 
                 s->curr_idx = 1;
                 s->t0       = get_time_in_ns();

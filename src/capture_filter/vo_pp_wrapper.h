@@ -68,7 +68,7 @@ struct capture_filter_vo_pp_wrapper {
                         }                                                      \
                 }                                                              \
                 struct video_frame *f = vf_alloc_desc_data(s->out_desc);       \
-                f->callbacks.dispose  = vf_free;                               \
+                f->dispose            = vf_free;                               \
                 size_t out_pitch =                                             \
                     vc_get_linesize(f->tiles[0].width, f->color_spec);         \
                 bool ret = postprocess(s->state, in, f, out_pitch);            \

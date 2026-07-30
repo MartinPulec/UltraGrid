@@ -162,7 +162,7 @@ rs::encode_video_frame(const struct video_frame *in)
         const size_t hdr_len = sizeof(hdr);
 
         struct video_frame *out = vf_alloc_desc(video_desc_from_frame(in));
-        out->callbacks.dispose = vf_free;
+        out->dispose            = vf_free;
 
         for (unsigned i = 0; i < in->tile_count; ++i) {
                 size_t len = in->tiles[i].data_len;

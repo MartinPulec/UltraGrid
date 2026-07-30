@@ -4,7 +4,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2024 CESNET
+ * Copyright (c) 2024-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -181,7 +181,7 @@ create_jpeg_frame(struct video_frame *frame, unsigned char **pckt_data,
                              type_spec);
         }
 
-        frame->callbacks.data_deleter = vf_data_deleter;
+        frame->data_deleter = vf_data_deleter;
         frame->tiles[0].data =
             calloc(1, 1000 + 3 * info.width * info.height * 2);
 

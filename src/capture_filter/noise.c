@@ -145,7 +145,7 @@ filter(void *state, struct video_frame *in)
         struct state_noise *s = state;
 
         struct video_frame *out = vf_alloc_desc_data(video_desc_from_frame(in));
-        out->callbacks.dispose  = vf_free;
+        out->dispose            = vf_free;
 
         unsigned char *out_data = (unsigned char *) out->tiles[0].data;
 

@@ -214,7 +214,7 @@ send_video_frame(void *state, struct video_frame *tx_frame)
         if (video->fec_state != nullptr) {
                 struct video_frame *f = fec_encode_video_frame(
                     video->fec_state, tx_frame);
-                tx_frame->callbacks.dispose(tx_frame);
+                tx_frame->dispose(tx_frame);
                 tx_frame = f;
         }
 
@@ -243,7 +243,7 @@ static void *send_video_frame_async_callback(void *arg) {
         tx_send(video->tx, tx_frame, video->network_device);
         CHK_PTHR(pthread_mutex_unlock(&video->lock));
 
-        tx_frame->callbacks.dispose(tx_frame);
+        tx_frame->dispose(tx_frame);
 
         CHK_PTHR(pthread_mutex_lock(&s->async_sending_lock));
         s->async_sending = false;

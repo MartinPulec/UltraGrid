@@ -113,7 +113,7 @@ static struct video_frame *filter(void *state, struct video_frame *in)
         desc.height /= s->y;
         struct video_frame *out = vf_alloc_desc_data(desc);
         vf_split(out, in, s->x, s->y, 0);
-        out->callbacks.dispose = vf_free;
+        out->dispose = vf_free;
 
         VIDEO_FRAME_DISPOSE(in);
         return out;

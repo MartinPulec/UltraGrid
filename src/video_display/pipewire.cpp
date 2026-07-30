@@ -152,7 +152,7 @@ namespace{
         }
 
         void memfd_frame_data_deleter(video_frame *f){
-                auto buf = static_cast<memfd_buffer *>(f->callbacks.dispose_udata);
+                auto buf = static_cast<memfd_buffer *>(f->dispose_udata);
 
                 if(buf)
                         memfd_buf_unref(&buf);
@@ -241,8 +241,8 @@ static void on_add_buffer(void *data, pw_buffer *buffer){
         buf->f = ug_frame;
         buf->b = buffer;
 
-        ug_frame->callbacks.data_deleter = memfd_frame_data_deleter;
-        ug_frame->callbacks.dispose_udata = memfd_buf_ref(buf);
+        ug_frame->data_deleter = memfd_frame_data_deleter;
+        ug_frame->dispose_udata = memfd_buf_ref(buf);
         ug_frame->tiles[0].data = static_cast<char *>(buf->ptr);
 
         log_msg(LOG_LEVEL_VERBOSE, "Buffer added\n");
@@ -368,7 +368,7 @@ static bool display_pw_putf(void *state, video_frame *frame, long long flags)
 
         pipewire_thread_loop_lock_guard lock(s->pw.pipewire_loop.get());
 
-        auto buf = static_cast<memfd_buffer *>(frame->callbacks.dispose_udata);
+        auto buf = static_cast<memfd_buffer *>(frame->dispose_udata);
 
         if(!buf->b){
                 //Frame is invalid - buffer got removed

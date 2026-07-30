@@ -3,7 +3,7 @@
  * @author Martin Piatka <piatka@cesnet.cz>
  *
  */
-/* Copyright (c) 2019-2025 CESNET
+/* Copyright (c) 2019-2026 CESNET
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, is permitted provided that the following conditions
@@ -477,7 +477,7 @@ static std::shared_ptr<video_frame> cineform_compress_pop(void *state)
         }
 
         static auto dispose = [](struct video_frame *frame) {
-                auto t = static_cast<std::tuple<CFHD_EncoderPoolRef, CFHD_SampleBufferRef> *>(frame->callbacks.dispose_udata);
+                auto t = static_cast<std::tuple<CFHD_EncoderPoolRef, CFHD_SampleBufferRef> *>(frame->dispose_udata);
                 if(t)
                         CFHD_ReleaseSampleBuffer(std::get<0>(*t), std::get<1>(*t));
                 vf_free(frame);
@@ -493,7 +493,7 @@ static std::shared_ptr<video_frame> cineform_compress_pop(void *state)
                 log_msg(LOG_LEVEL_ERROR, MOD_NAME "Failed to get sample data\n");
                 return {};
         }
-        out->callbacks.dispose_udata = new std::tuple<CFHD_EncoderPoolRef, CFHD_SampleBufferRef>(s->encoderPoolRef, buf);
+        out->dispose_udata = new std::tuple<CFHD_EncoderPoolRef, CFHD_SampleBufferRef>(s->encoderPoolRef, buf);
         out->seq = frame_num;
 
         lock.lock();

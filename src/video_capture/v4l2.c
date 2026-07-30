@@ -793,7 +793,7 @@ static void vidcap_v4l2_done(void *state)
 
 static void vidcap_v4l2_dispose_video_frame(struct video_frame *frame) {
         struct v4l2_dispose_deq_buffer_data *data =
-                (struct v4l2_dispose_deq_buffer_data *) frame->callbacks.dispose_udata;
+                (struct v4l2_dispose_deq_buffer_data *) frame->dispose_udata;
 
         if (data) {
                 pthread_mutex_lock(&data->s->lock);
@@ -835,11 +835,11 @@ static struct video_frame * vidcap_v4l2_grab(void *state, struct audio_frame **a
         s->dequeued_buffers += 1;
 
         out = vf_alloc_desc(s->desc);
-        out->callbacks.dispose = vidcap_v4l2_dispose_video_frame;
+        out->dispose = vidcap_v4l2_dispose_video_frame;
 
 #ifdef HAVE_LIBV4LCONVERT
         if (s->convert) {
-                out->callbacks.dispose_udata = NULL;
+                out->dispose_udata = NULL;
                 out->tiles[0].data = (char *) malloc(out->tiles[0].data_len);
                 int ret = v4lconvert_convert(s->convert,
                                 &s->src_fmt,  /*  in */
@@ -873,7 +873,7 @@ static struct video_frame * vidcap_v4l2_grab(void *state, struct audio_frame **a
                 memcpy(&frame_data->buf, &buf, sizeof(buf));
                 out->tiles[0].data = s->buffers[frame_data->buf.index].start;
                 out->tiles[0].data_len = frame_data->buf.bytesused;
-                out->callbacks.dispose_udata = frame_data;
+                out->dispose_udata = frame_data;
         }
 
         return out;

@@ -212,10 +212,9 @@ std::shared_ptr<video_frame> video_frame_pool::impl::get_frame() {
 struct video_frame *video_frame_pool::impl::get_disposable_frame() {
         auto && frame = get_frame();
         struct video_frame *out = frame.get();
-        out->callbacks.dispose_udata =
-            new std::shared_ptr<video_frame>(std::move(frame));
-        static auto dispose = [](video_frame *f) { delete static_cast<std::shared_ptr<video_frame> *>(f->callbacks.dispose_udata); };
-        out->callbacks.dispose = dispose;
+        out->dispose_udata = new std::shared_ptr<video_frame>(std::move(frame));
+        static auto dispose = [](video_frame *f) { delete static_cast<std::shared_ptr<video_frame> *>(f->dispose_udata); };
+        out->dispose = dispose;
         return out;
 }
 
@@ -225,10 +224,9 @@ struct video_frame *video_frame_pool::impl::get_pod_frame() {
         for (unsigned int i = 0; i < frame->tile_count; ++i) {
                 out->tiles[i].data = frame->tiles[i].data;
         }
-        out->callbacks.dispose_udata =
-            new std::shared_ptr<video_frame>(std::move(frame));
-        static auto deleter = [](video_frame *f) { delete static_cast<std::shared_ptr<video_frame> *>(f->callbacks.dispose_udata); };
-        out->callbacks.data_deleter = deleter;
+        out->dispose_udata = new std::shared_ptr<video_frame>(std::move(frame));
+        static auto deleter = [](video_frame *f) { delete static_cast<std::shared_ptr<video_frame> *>(f->dispose_udata); };
+        out->data_deleter = deleter;
         return out;
 }
 

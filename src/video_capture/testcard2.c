@@ -721,8 +721,8 @@ static struct video_frame *vidcap_testcard2_grab(void *arg, struct audio_frame *
         assert(s->data != NULL);
 
         struct video_frame *frame = vf_alloc_desc(s->desc);
-        frame->callbacks.data_deleter = vf_data_deleter;
-        frame->callbacks.dispose = vf_free;
+        frame->data_deleter       = vf_data_deleter;
+        frame->dispose            = vf_free;
 
         pthread_mutex_lock(&s->lock);
         frame->tiles[0].data = s->data;
