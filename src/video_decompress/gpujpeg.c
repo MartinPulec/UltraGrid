@@ -69,11 +69,12 @@ struct state_decompress_gpujpeg {
         codec_t out_codec;
 };
 
-static int configure_with(struct state_decompress_gpujpeg *s, struct video_desc desc);
-
-static int configure_with(struct state_decompress_gpujpeg *s, struct video_desc desc)
+static int
+configure_with(struct state_decompress_gpujpeg *s, struct video_desc desc,
+               int pitch)
 {
         s->desc = desc;
+        s->pitch = pitch;
 
 #if GPUJPEG_VERSION_INT >= GPUJPEG_MK_VERSION_INT(0, 25, 5)
         struct gpujpeg_decoder_init_parameters param =
@@ -110,9 +111,21 @@ static int configure_with(struct state_decompress_gpujpeg *s, struct video_desc 
         param_image.color_space = GPUJPEG_YCBCR_BT709; // assume now BT.709 as default - this is mainly applicable for FFmpeg-encoded
                                                        // JPEGs that doesn't indicate explicitly color spec (no JFIF marker, only CS=ITU601
                                                        // for BT.601 limited range - not enabled by UG encoder because FFmpeg emits it also for 709)
+        if (pitch != linesize) {
+#if GPUJPEG_VERSION_INT < GPUJPEG_MK_VERSION_INT(0, 27, 8)
+                MSG(ERROR, "Requested pitch %d but linesize is %d B - please upgrade GPUJPEG!\n");
+                return false;
+#else
+                param_image.width_padding = pitch - linesize;
+#endif
+        }
+
         int rc = gpujpeg_decoder_init(s->decoder, &param, &param_image);
         assert(rc == 0);
 #endif
+
+        bool rgba_default_shifts = s->out_codec == RGBA && s->rshift == 0 &&
+                                   s->gshift == 8 && s->bshift == 16;
 
         switch (s->out_codec) {
         case I420:
@@ -121,7 +134,7 @@ static int configure_with(struct state_decompress_gpujpeg *s, struct video_desc 
                 break;
         case RGBA:
                 gpujpeg_decoder_set_output_format(s->decoder, GPUJPEG_RGB,
-                                s->out_codec == RGBA && s->rshift == 0 && s->gshift == 8 && s->bshift == 16 && vc_get_linesize(desc.width, RGBA) == s->pitch ?
+                                rgba_default_shifts ?
 #ifdef NEW_PARAM_IMG_NO_COMP_COUNT
                                 GPUJPEG_4444_U8_P0123 : GPUJPEG_444_U8_P012);
 #else
@@ -188,14 +201,13 @@ static int gpujpeg_decompress_reconfigure(void *state, struct video_desc desc,
                 return true;
         } else {
                 s->out_codec = out_codec;
-                s->pitch = pitch;
                 s->rshift = rshift;
                 s->gshift = gshift;
                 s->bshift = bshift;
                 if(s->decoder) {
                         gpujpeg_decoder_destroy(s->decoder);
                 }
-                return configure_with(s, desc);
+                return configure_with(s, desc, pitch);
         }
 }
 
@@ -283,9 +295,9 @@ static decompress_status gpujpeg_decompress(void *state, unsigned char *dst, uns
         
         gpujpeg_set_device(cuda_devices[0]);
 
-        if (s->pitch == linesize && (s->out_codec == UYVY || s->out_codec == RGB
-                                || (s->out_codec == RGBA && s->rshift == 0 && s->gshift == 8 && s->bshift == 16)
-                        )) {
+        if (s->out_codec == UYVY || s->out_codec == RGB ||
+            (s->out_codec == RGBA && s->rshift == 0 && s->gshift == 8 &&
+             s->bshift == 16)) {
                 gpujpeg_decoder_output_set_custom(&decoder_output, dst);
                 //int data_decompressed_size = decoder_output.data_size;
                     
