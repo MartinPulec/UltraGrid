@@ -10,7 +10,7 @@
  * module template.
  */
 /*
- * Copyright (c) 2024 CESNET z.s.p.o.
+ * Copyright (c) 2024-2026 CESNET, zájmové sdružení právnickch osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -63,12 +63,11 @@ i420_decompress_init(void)
 
 static int
 i420_decompress_reconfigure(void *state, struct video_desc desc, int rshift,
-                            int gshift, int bshift, int pitch,
+                            int gshift, int bshift,
                             codec_t out_codec)
 {
         (void) rshift, (void) gshift, (void) bshift;
         assert(out_codec == UYVY);
-        assert(pitch == (int) desc.width * 2); // implement other ir needed
         struct i420_decompress_state *s = state;
         s->desc                         = desc;
         return true;
@@ -78,11 +77,13 @@ static decompress_status
 i420_decompress(void *state, unsigned char *dst, unsigned char *buffer,
                 unsigned int src_len, int frame_seq,
                 struct video_frame_callbacks *callbacks,
-                struct pixfmt_desc           *internal_prop)
+                struct pixfmt_desc           *internal_prop,
+                unsigned pitch)
 {
         (void) src_len, (void) frame_seq, (void) callbacks,
             (void) internal_prop;
         struct i420_decompress_state *s = state;
+        assert(pitch == s->desc.width * 2); // implement other ir needed
         i420_8_to_uyvy((int) s->desc.width, (int) s->desc.height, buffer, dst);
         return DECODER_GOT_FRAME;
 }

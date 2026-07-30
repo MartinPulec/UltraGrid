@@ -39,7 +39,9 @@
  *
  */
 
-#define VIDEO_DECOMPRESS_ABI_VERSION 6
+enum {
+        VIDEO_DECOMPRESS_ABI_VERSION = 7,
+};
 
 /**
  * @defgroup video_decompress Video Decompress
@@ -86,14 +88,13 @@ typedef  void *(*decompress_init_t)();
  * @param[in] rshift    requested output red shift (if output is RGB(A))
  * @param[in] gshift    requested output green shift
  * @param[in] bshift    requested output blue shift
- * @param[in] pitch     requested output pitch
  * @param[in] out_codec requested output pixelformat (VIDEO_CODEC_NONE to
  *                      discover internal representation)
  * @retval FALSE        if reconfiguration failed
  * @retval TRUE         if reconfiguration succeeded
  */
 typedef  int (*decompress_reconfigure_t)(void * state, struct video_desc desc, 
-                int rshift, int gshift, int bshift, int pitch, codec_t out_codec);
+                int rshift, int gshift, int bshift, codec_t out_codec);
 
 typedef enum {
         DECODER_NO_FRAME = 0, ///< Frame not decoded (yet?)
@@ -114,10 +115,12 @@ typedef enum {
  * @param[in] frame_seq      sequential number of frame. Subsequent frames
  *                           has sequential number +1. The point is to signalize
  *                           decompressor when one or more frames got lost (interframe compress).
- * @param callbacks          used only by libavcodec
+ * @param[out] callbacks     callbacks to dispose decompress resources;
+ *                           used only by libavcodec
  * @param[out] internal_codec internal codec pixel format that was probed (@see DECODER_GOT_CODEC).
  *                           May be ignored if decoder doesn't announce codec probing (see @ref
  *                           decode_from_to)
+ * @param[in] pitch          requested output pitch
  * @note
  * Frame_seq used perhaps only for VP8, H.264 uses Periodic Intra Refresh.
  */
@@ -128,7 +131,8 @@ typedef decompress_status (*decompress_decompress_t)(
                 unsigned int src_len,
                 int frame_seq,
                 struct video_frame_callbacks *callbacks,
-                struct pixfmt_desc *internal_prop);
+                struct pixfmt_desc *internal_prop,
+                unsigned pitch);
 
 /**
  * @param state decoder state
@@ -188,7 +192,6 @@ int decompress_reconfigure(video_decompress *,
                 int rshift,
                 int gshift,
                 int bshift,
-                int pitch,
                 codec_t out_codec);
 
 /**
@@ -202,7 +205,8 @@ decompress_status decompress_frame(struct state_decompress *,
                 unsigned int src_len,
                 int frame_seq,
                 struct video_frame_callbacks *callbacks,
-                struct pixfmt_desc *internal_prop);
+                struct pixfmt_desc *internal_prop,
+                unsigned pitch);
 
 int decompress_get_property(video_decompress *state,
                 int property,

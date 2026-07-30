@@ -609,7 +609,7 @@ static void *decompress_worker(void *data)
                         d->compressed->tiles[d->pos].data_len,
                         d->buffer_num,
                         decoder->frame ? &decoder->frame->callbacks : nullptr,
-                        &d->internal_prop);
+                        &d->internal_prop, decoder->pitch);
         return d;
 }
 
@@ -1378,7 +1378,7 @@ static bool reconfigure_decoder(struct state_video_decoder *decoder,
                     decoder->decompress_state, desc,
                     display_requested_rgb_shift[0],
                     display_requested_rgb_shift[1],
-                    display_requested_rgb_shift[2], decoder->pitch,
+                    display_requested_rgb_shift[2],
                     out_codec == VIDEO_CODEC_END ? VIDEO_CODEC_NONE
                                                  : out_codec);
                 if (!buf_size) {

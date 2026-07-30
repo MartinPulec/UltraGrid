@@ -224,7 +224,7 @@ static void flush(struct state_decompresss_gpujpeg_to_dxt *s)
  *         otherwise maximal buffer size which ins needed for image of given codec, width, and height
  */
 static int gpujpeg_to_dxt_decompress_reconfigure(void *state, struct video_desc desc,
-                int rshift, int gshift, int bshift, int pitch, codec_t out_codec)
+                int rshift, int gshift, int bshift, codec_t out_codec)
 {
         struct state_decompresss_gpujpeg_to_dxt *s = (struct state_decompresss_gpujpeg_to_dxt *) state;
 
@@ -238,7 +238,6 @@ static int gpujpeg_to_dxt_decompress_reconfigure(void *state, struct video_desc 
                 s->ppb = 1;
         }
         s->desc = desc;
-        assert(pitch == (int) desc.width / s->ppb); // default for DXT1
 
         flush(s);
 
@@ -300,10 +299,15 @@ static int reconfigure_thread(struct thread_data *s, struct video_desc desc, int
         return true;
 }
 
-static decompress_status gpujpeg_to_dxt_decompress(void *state, unsigned char *dst, unsigned char *buffer,
-                unsigned int src_len, int frame_seq, video_frame_callbacks * /* callbacks */, pixfmt_desc * /* internal_codec */)
+static decompress_status
+gpujpeg_to_dxt_decompress(void *state, unsigned char *dst,
+                          unsigned char *buffer, unsigned int src_len,
+                          int frame_seq,
+                          video_frame_callbacks * /* callbacks */,
+                          pixfmt_desc * /* internal_codec */, unsigned pitch)
 {
         struct state_decompresss_gpujpeg_to_dxt *s = (struct state_decompresss_gpujpeg_to_dxt *) state;
+        assert(pitch == s->desc.width / s->ppb); // default for DXT1
         UNUSED(frame_seq);
 
         msg_frame *message = new msg_frame(src_len);

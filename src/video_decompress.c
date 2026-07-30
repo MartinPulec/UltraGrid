@@ -232,7 +232,7 @@ decompress_init(codec_t compression, struct pixfmt_desc internal_prop,
 /** @copydoc decompress_reconfigure_t */
 int
 decompress_reconfigure(video_decompress *s, struct video_desc desc, int rshift,
-                       int gshift, int bshift, int pitch, codec_t out_codec)
+                       int gshift, int bshift, codec_t out_codec)
 {
         assert(s->magic == DECOMPRESS_MAGIC);
         int buf_size = 0;
@@ -240,7 +240,7 @@ decompress_reconfigure(video_decompress *s, struct video_desc desc, int rshift,
                 struct state_decompress *state = s->state[i];
                 assert(state->magic == DECOMPRESS_STATE_MAGIC);
                 int ret = state->functions->reconfigure(
-                    state->state, desc, rshift, gshift, bshift, pitch,
+                    state->state, desc, rshift, gshift, bshift,
                     out_codec);
                 if (ret == 0) {
                         return 0; // failed
@@ -252,14 +252,11 @@ decompress_reconfigure(video_decompress *s, struct video_desc desc, int rshift,
 }
 
 /** @copydoc decompress_decompress_t */
-decompress_status decompress_frame(
-                struct state_decompress *s,
-                unsigned char *dst,
-                unsigned char *compressed,
-                unsigned int compressed_len,
-                int frame_seq,
-                struct video_frame_callbacks *callbacks,
-                struct pixfmt_desc *internal_prop)
+decompress_status
+decompress_frame(struct state_decompress *s, unsigned char *dst,
+                 unsigned char *compressed, unsigned int compressed_len,
+                 int frame_seq, struct video_frame_callbacks *callbacks,
+                 struct pixfmt_desc *internal_prop, unsigned pitch)
 {
         assert(s->magic == DECOMPRESS_STATE_MAGIC);
 
@@ -269,7 +266,8 @@ decompress_status decompress_frame(
                         compressed_len,
                         frame_seq,
                         callbacks,
-                        internal_prop);
+                        internal_prop,
+                        pitch);
 }
 
 /** @copydoc decompress_get_property_t */

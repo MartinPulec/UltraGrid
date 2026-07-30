@@ -79,7 +79,6 @@ struct state_libavcodec_decompress {
         AVPacket       *pkt;
 
         struct video_desc desc;
-        int              pitch;
         int              rgb_shift[3];
         int              max_compressed_len;
         codec_t          out_codec;
@@ -464,12 +463,11 @@ static void * libavcodec_decompress_init(void)
 }
 
 static int libavcodec_decompress_reconfigure(void *state, struct video_desc desc,
-                int rshift, int gshift, int bshift, int pitch, codec_t out_codec)
+                int rshift, int gshift, int bshift, codec_t out_codec)
 {
         struct state_libavcodec_decompress *s =
                 (struct state_libavcodec_decompress *) state;
 
-        s->pitch = pitch;
         s->rgb_shift[R_SHIFT_IDX] = rshift;
         s->rgb_shift[G_SHIFT_IDX] = gshift;
         s->rgb_shift[B_SHIFT_IDX] = bshift;
@@ -1053,8 +1051,11 @@ decode_frame(struct state_libavcodec_decompress *s, unsigned char *src,
         return frame_decoded;
 }
 
-static decompress_status libavcodec_decompress(void *state, unsigned char *dst, unsigned char *src,
-                unsigned int src_len, int frame_seq, struct video_frame_callbacks *callbacks, struct pixfmt_desc *internal_props)
+static decompress_status
+libavcodec_decompress(void *state, unsigned char *dst, unsigned char *src,
+                      unsigned int src_len, int frame_seq,
+                      struct video_frame_callbacks *callbacks,
+                      struct pixfmt_desc *internal_props, unsigned pitch)
 {
         UNUSED(frame_seq);
         struct state_libavcodec_decompress *s = (struct state_libavcodec_decompress *) state;
@@ -1108,8 +1109,7 @@ static decompress_status libavcodec_decompress(void *state, unsigned char *dst, 
                         AVCOL_RANGE_MPEG) {
                         s->frame->colorspace = AVCOL_SPC_BT709;
                 }
-                change_pixfmt(s->frame, dst, s->convert, s->out_codec,
-                              s->pitch,
+                change_pixfmt(s->frame, dst, s->convert, s->out_codec, pitch,
                               s->rgb_shift, &s->sws);
         }
         time_ns_t t2 = get_time_in_ns();

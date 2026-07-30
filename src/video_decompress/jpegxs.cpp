@@ -80,7 +80,6 @@ struct state_decompress_jpegxs {
 
         video_desc desc{};
         int rshift{}, gshift{}, bshift{};
-        int pitch{};
         codec_t out_codec{};
 };
 
@@ -124,8 +123,10 @@ get_jpegxs_to_uv_conversion(codec_t codec, enum subsampling ug_ss)
         return nullptr;
 }
 
-static void jpegxs_to_uv_convert(const state_decompress_jpegxs *s,
-        const svt_jpeg_xs_image_buffer_t *src, int width, int height, uint8_t *dst)
+static void
+jpegxs_to_uv_convert(struct state_decompress_jpegxs *s,
+                     const svt_jpeg_xs_image_buffer_t *src, int width,
+                     int height, uint8_t *dst, unsigned pitch)
 {
         const jpegxs_to_uv_conversion *conv = s->convert_from_planar;
         const int in_bpp = s->image_config.bit_depth > 8 ? 2 : 1;
@@ -133,7 +134,7 @@ static void jpegxs_to_uv_convert(const state_decompress_jpegxs *s,
         d.width          = width;
         d.height         = height;
         d.out_data       = dst;
-        d.out_pitch      = s->pitch;
+        d.out_pitch      = pitch;
         d.in_data[0]     = static_cast<const unsigned char *>(src->data_yuv[0]);
         d.in_data[1]     = static_cast<const unsigned char *>(src->data_yuv[1]);
         d.in_data[2]     = static_cast<const unsigned char *>(src->data_yuv[2]);
@@ -189,12 +190,11 @@ static bool configure_with(state_decompress_jpegxs *s, unsigned char *bitstream_
 }
 
 static int jpegxs_decompress_reconfigure(void *state, struct video_desc desc,
-        int rshift, int gshift, int bshift, int pitch, codec_t out_codec)
+        int rshift, int gshift, int bshift, codec_t out_codec)
 {
         auto s = static_cast<struct state_decompress_jpegxs *>(state);
 
         if(s->out_codec == out_codec &&
-                s->pitch == pitch &&
                 s->rshift == rshift &&
                 s->gshift == gshift &&
                 s->bshift == bshift &&
@@ -204,7 +204,6 @@ static int jpegxs_decompress_reconfigure(void *state, struct video_desc desc,
         }
 
         s->out_codec = out_codec;
-        s->pitch = pitch;
         s->rshift = rshift;
         s->gshift = gshift;
         s->bshift = bshift;
@@ -257,8 +256,11 @@ static decompress_status jpegxs_probe_internal_codec(state_decompress_jpegxs *s,
         return DECODER_GOT_CODEC;
 }
 
-static decompress_status jpegxs_decompress(void *state, unsigned char *dst, unsigned char *buffer, 
-        unsigned int src_len, int /*frame_seq*/, video_frame_callbacks * /*callbacks*/, struct pixfmt_desc *internal_prop)
+static decompress_status
+jpegxs_decompress(void *state, unsigned char *dst, unsigned char *buffer,
+                  unsigned int src_len, int /* frame_seq */,
+                  struct video_frame_callbacks * /* callbacks */,
+                  struct pixfmt_desc *internal_prop, unsigned pitch)
 {
         auto *s = static_cast<struct state_decompress_jpegxs *>(state);
 
@@ -302,7 +304,8 @@ static decompress_status jpegxs_decompress(void *state, unsigned char *dst, unsi
         DEBUG_TIMER_STOP(jpegxs_decompress);
 
         DEBUG_TIMER_START(jpegxs_dconvert);
-        jpegxs_to_uv_convert(s, &dec_output.image, s->image_config.width, s->image_config.height, dst);
+        jpegxs_to_uv_convert(s, &dec_output.image, s->image_config.width,
+                             s->image_config.height, dst, pitch);
         DEBUG_TIMER_STOP(jpegxs_dconvert);
         svt_jpeg_xs_frame_pool_release(s->frame_pool, &dec_output);
         return DECODER_GOT_FRAME;

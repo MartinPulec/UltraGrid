@@ -83,7 +83,7 @@ int gpujpeg_test_simple()
         comp_desc.color_spec = JPEG;
         decompress = decompress_init(JPEG, pixfmt_desc{}, RGB, 1);
         ASSERT_MESSAGE("Decompression init failed", decompress);
-        auto ret = decompress_reconfigure(decompress, comp_desc, 0, 8, 16, vc_get_linesize(desc.width, desc.color_spec), desc.color_spec);
+        auto ret = decompress_reconfigure(decompress, comp_desc, 0, 8, 16, desc.color_spec);
         ASSERT_MESSAGE("Decompression reconfiguration failed", ret == true);
         auto status = decompress_frame(decompress->state[0],
                 decompressed.data(),
@@ -91,7 +91,8 @@ int gpujpeg_test_simple()
                 compressed->tiles[0].data_len,
                 0,
                 nullptr,
-                nullptr);
+                nullptr,
+                vc_get_linesize(desc.width, desc.color_spec));
         ASSERT_MESSAGE("Decompression failed", status == DECODER_GOT_FRAME);
 
         int i = 0;
