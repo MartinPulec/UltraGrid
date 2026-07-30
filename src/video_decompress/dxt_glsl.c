@@ -3,7 +3,7 @@
  * @author Martin Pulec     <pulec@cesnet.cz>
  */
 /*
- * Copyright (c) 2011-2024 CESNET
+ * Copyright (c) 2011-2026 CESNET, zájmové sdružení právnických osob
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -59,7 +59,6 @@ struct state_decompress_rtdxt {
 
         struct video_desc desc;
         int rshift, gshift, bshift;
-        int pitch;
         codec_t out_codec;
         unsigned int configured:1;
         
@@ -115,12 +114,11 @@ static void * dxt_glsl_decompress_init(void)
 }
 
 static int dxt_glsl_decompress_reconfigure(void *state, struct video_desc desc,
-                int rshift, int gshift, int bshift, int pitch, codec_t out_codec)
+                int rshift, int gshift, int bshift, codec_t out_codec)
 {
         struct state_decompress_rtdxt *s = (struct state_decompress_rtdxt *) state;
         int ret = true;
         
-        s->pitch = pitch;
         s->rshift = rshift;
         s->gshift = gshift;
         s->bshift = bshift;
@@ -139,8 +137,11 @@ static int dxt_glsl_decompress_reconfigure(void *state, struct video_desc desc,
         return ret;
 }
 
-static decompress_status dxt_glsl_decompress(void *state, unsigned char *dst, unsigned char *buffer,
-                unsigned int src_len, int frame_seq, struct video_frame_callbacks *callbacks, struct pixfmt_desc *internal_prop)
+static decompress_status
+dxt_glsl_decompress(void *state, unsigned char *dst, unsigned char *buffer,
+                    unsigned int src_len, int frame_seq,
+                    struct video_frame_callbacks *callbacks,
+                    struct pixfmt_desc *internal_prop, unsigned pitch)
 {
         struct state_decompress_rtdxt *s = (struct state_decompress_rtdxt *) state;
         UNUSED(src_len);
@@ -154,8 +155,8 @@ static decompress_status dxt_glsl_decompress(void *state, unsigned char *dst, un
         }
 
         gl_context_make_current(&s->context);
-        
-        if(s->pitch == vc_get_linesize(s->desc.width, s->out_codec)) {
+
+        if ((int) pitch == vc_get_linesize(s->desc.width, s->out_codec)) {
                 dxt_decoder_decompress(s->decoder, buffer, dst);
         } else {
                 int i;
@@ -180,7 +181,7 @@ static decompress_status dxt_glsl_decompress(void *state, unsigned char *dst, un
                         } else { /* UYVY */
                                 memcpy(line_dst, line_src, linesize);
                         }
-                        line_dst += s->pitch;
+                        line_dst += pitch;
                         line_src += linesize;
                         
                 }

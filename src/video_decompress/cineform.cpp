@@ -54,7 +54,6 @@
 #define MOD_NAME "[cineform] "
 
 struct state_cineform_decompress {
-        int pitch = 0;
         int rshift = 0;
         int gshift = 0;
         int bshift = 0;
@@ -165,11 +164,10 @@ static const struct {
 };
 
 static int cineform_decompress_reconfigure(void *state, struct video_desc desc,
-                int rshift, int gshift, int bshift, int pitch, codec_t out_codec)
+                int rshift, int gshift, int bshift, codec_t out_codec)
 {
         auto s = static_cast<struct state_cineform_decompress *>(state);
 
-        s->pitch = pitch;
         s->rshift = rshift;
         s->gshift = gshift;
         s->bshift = bshift;
@@ -332,9 +330,11 @@ static decompress_status probe_internal(struct state_cineform_decompress *s,
         return probe_internal_cineform(s, src, src_len, internal_prop);
 }
 
-static decompress_status cineform_decompress(void *state, unsigned char *dst, unsigned char *src,
-                unsigned int src_len, int frame_seq, struct video_frame_callbacks *callbacks,
-                struct pixfmt_desc *internal_prop)
+static decompress_status
+cineform_decompress(void *state, unsigned char *dst, unsigned char *src,
+                    unsigned int src_len, int frame_seq,
+                    struct video_frame_callbacks *callbacks,
+                    struct pixfmt_desc *internal_prop, unsigned pitch)
 {
         UNUSED(frame_seq);
         UNUSED(callbacks);
@@ -352,17 +352,17 @@ static decompress_status cineform_decompress(void *state, unsigned char *dst, un
         }
 
         unsigned char *decode_dst = s->convert ? s->conv_buf.data() : dst;
-        int pitch = s->convert ? s->decode_linesize : s->pitch;
+        unsigned decode_pitch = s->convert ? s->decode_linesize : pitch;
 
         status = CFHD_DecodeSample(s->decoderRef,
                         src,
                         src_len,
                         decode_dst,
-                        pitch);
+                        decode_pitch);
 
         if(status == CFHD_ERROR_OKAY){
                 if(s->convert){
-                        s->convert(dst, decode_dst, s->desc.width, s->desc.height, s->pitch);
+                        s->convert(dst, decode_dst, s->desc.width, s->desc.height, pitch);
                 }
                 res = DECODER_GOT_FRAME;
         } else {

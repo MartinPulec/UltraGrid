@@ -517,7 +517,8 @@ vidcap_rtsp_grab(void *state, struct audio_frame **audio) {
                 decompress_frame(s->vrtsp_state.sd->state[0],
                     (unsigned char *) decompressed->tiles[0].data,
                     (unsigned char *) frame->tiles[0].data,
-                    frame->tiles[0].data_len, 0, NULL, NULL);
+                    frame->tiles[0].data_len, 0, NULL, NULL,
+                    vc_get_linesize(out_desc.width, UYVY));
                 vf_free(frame);
                 frame = decompressed;
             }
@@ -1069,8 +1070,7 @@ init_decompressor(struct video_rtsp_state *sr, struct video_desc desc) {
         if (!sr->sd) {
                 return 0;
         }
-        decompress_reconfigure(sr->sd, desc, 16, 8, 0,
-                               vc_get_linesize(desc.width, UYVY), UYVY);
+        decompress_reconfigure(sr->sd, desc, 16, 8, 0, UYVY);
         return 1;
 }
 

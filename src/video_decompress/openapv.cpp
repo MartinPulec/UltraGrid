@@ -71,7 +71,6 @@ struct state_video_decompress_openapv {
         const from_openapv_conversion *convert_from_planar = nullptr;
 
         video_desc desc{};
-        int pitch = 0;
         codec_t out_codec = VIDEO_CODEC_NONE;
 };
 
@@ -123,12 +122,15 @@ bool configure_with(state_video_decompress_openapv *s, unsigned char *bitstream_
         return true;
 }
 
-void openapv_to_uv_convert(state_video_decompress_openapv *s, const oapv_imgb_t *src, uint8_t *dst) {
+void
+openapv_to_uv_convert(state_video_decompress_openapv *s, const oapv_imgb_t *src,
+                      uint8_t *dst, unsigned pitch)
+{
         from_planar_data d = {};
         d.width = src->w[0];
         d.height = src->h[0];
         d.out_data = dst;
-        d.out_pitch = s->pitch;
+        d.out_pitch = pitch;
         d.in_data[0] = (const unsigned char *) src->a[0];
         d.in_data[1] = (const unsigned char *) src->a[1];
         d.in_data[2] = (const unsigned char *) src->a[2];
@@ -153,18 +155,16 @@ void *openapv_decompress_init() {
 }
 
 int openapv_decompress_reconfigure(void *state, video_desc desc,
-        int /*rshift*/, int /*gshift*/, int /*bshift*/, int pitch, codec_t out_codec)
+        int /*rshift*/, int /*gshift*/, int /*bshift*/, codec_t out_codec)
 {
         auto s = static_cast<state_video_decompress_openapv *>(state);
 
         if (s->out_codec == out_codec &&
-                s->pitch == pitch &&
                 video_desc_eq_excl_param(s->desc, desc, PARAM_INTERLACING)) {
                 return true;
         }
 
         s->desc = desc;
-        s->pitch = pitch;
         s->out_codec = out_codec;
         s->configured = false;
         s->convert_from_planar = nullptr;
@@ -196,8 +196,11 @@ decompress_status openapv_probe_internal_codec(pixfmt_desc *internal_prop, unsig
         return DECODER_GOT_CODEC;
 }
 
-decompress_status openapv_decompress(void *state, unsigned char *dst, unsigned char *buffer,
-        unsigned int src_len, int /*frame_seq*/, video_frame_callbacks */*callbacks*/, pixfmt_desc *internal_prop)
+decompress_status
+openapv_decompress(void *state, unsigned char *dst, unsigned char *buffer,
+                   unsigned int src_len, int /*frame_seq*/,
+                   video_frame_callbacks * /*callbacks*/,
+                   pixfmt_desc *internal_prop, unsigned pitch)
 {
         auto *s = static_cast<state_video_decompress_openapv *>(state);
 
@@ -229,7 +232,7 @@ decompress_status openapv_decompress(void *state, unsigned char *dst, unsigned c
                 return DECODER_NO_FRAME;
         }
 
-        openapv_to_uv_convert(s, imgb, dst);
+        openapv_to_uv_convert(s, imgb, dst, pitch);
 
         return DECODER_GOT_FRAME;
 }

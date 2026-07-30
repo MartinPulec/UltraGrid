@@ -44,6 +44,7 @@
 #include <stdlib.h>                      // for abort, free, NULL, calloc
 #include <string.h>                      // for strncpy, memcpy
 
+#include "compat/c23.h"  // IWYU pragma: keep
 #include "debug.h"
 #include "host.h"
 #include "pixfmt_conv.h"
@@ -65,17 +66,13 @@ struct state_decompress_gpujpeg {
 
         struct video_desc desc;
         int rshift, gshift, bshift;
-        int pitch;
+        unsigned pitch;
         codec_t out_codec;
 };
 
 static int
-configure_with(struct state_decompress_gpujpeg *s, struct video_desc desc,
-               int pitch)
+configure(struct state_decompress_gpujpeg *s, unsigned pitch)
 {
-        s->desc = desc;
-        s->pitch = pitch;
-
 #if GPUJPEG_VERSION_INT >= GPUJPEG_MK_VERSION_INT(0, 25, 5)
         struct gpujpeg_decoder_init_parameters param =
             gpujpeg_decoder_default_init_parameters();
@@ -155,6 +152,7 @@ configure_with(struct state_decompress_gpujpeg *s, struct video_desc desc,
                 assert("Invalid codec!" && 0);
         }
 
+        s->pitch = pitch;
         return true;
 }
 
@@ -185,7 +183,7 @@ static void * gpujpeg_decompress_init(void)
 }
 
 static int gpujpeg_decompress_reconfigure(void *state, struct video_desc desc,
-                int rshift, int gshift, int bshift, int pitch, codec_t out_codec)
+                int rshift, int gshift, int bshift, codec_t out_codec)
 {
         struct state_decompress_gpujpeg *s = (struct state_decompress_gpujpeg *) state;
         
@@ -193,22 +191,20 @@ static int gpujpeg_decompress_reconfigure(void *state, struct video_desc desc,
                         || out_codec == UYVY || out_codec == VIDEO_CODEC_NONE);
 
         if(s->out_codec == out_codec &&
-                        s->pitch == pitch &&
                         s->rshift == rshift &&
                         s->gshift == gshift &&
                         s->bshift == bshift &&
                         video_desc_eq_excl_param(s->desc, desc, PARAM_INTERLACING)) {
                 return true;
-        } else {
-                s->out_codec = out_codec;
-                s->rshift = rshift;
-                s->gshift = gshift;
-                s->bshift = bshift;
-                if(s->decoder) {
-                        gpujpeg_decoder_destroy(s->decoder);
-                }
-                return configure_with(s, desc, pitch);
         }
+
+        s->out_codec = out_codec;
+        s->rshift    = rshift;
+        s->gshift    = gshift;
+        s->bshift    = bshift;
+        s->pitch     = -1;
+
+        return true;
 }
 
 static decompress_status gpujpeg_probe_internal_codec(unsigned char *buffer, size_t len, struct pixfmt_desc *internal_prop) {
@@ -277,8 +273,11 @@ static decompress_status gpujpeg_probe_internal_codec(unsigned char *buffer, siz
 	return DECODER_GOT_CODEC;
 }
 
-static decompress_status gpujpeg_decompress(void *state, unsigned char *dst, unsigned char *buffer,
-                unsigned int src_len, int frame_seq, struct video_frame_callbacks *callbacks, struct pixfmt_desc *internal_prop)
+static decompress_status
+gpujpeg_decompress(void *state, unsigned char *dst, unsigned char *buffer,
+                   unsigned int src_len, int frame_seq,
+                   struct video_frame_callbacks *callbacks,
+                   struct pixfmt_desc *internal_prop, unsigned pitch)
 {
         UNUSED(frame_seq);
         UNUSED(callbacks);
@@ -286,6 +285,16 @@ static decompress_status gpujpeg_decompress(void *state, unsigned char *dst, uns
         int ret;
         struct gpujpeg_decoder_output decoder_output;
         int linesize;
+
+        if (s->pitch != pitch) { // reconfigure
+                if(s->decoder) {
+                        gpujpeg_decoder_destroy(s->decoder);
+                        s->decoder = nullptr;
+                }
+                if (!configure(s, pitch)) {
+                        return DECODER_NO_FRAME;
+                }
+        }
 
         if (s->out_codec == VIDEO_CODEC_NONE) {
                 return gpujpeg_probe_internal_codec(buffer, src_len, internal_prop);

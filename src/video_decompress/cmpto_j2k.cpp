@@ -483,8 +483,9 @@ set_postprocess_convert(struct state_decompress_j2k  *s,
         return true;
 }
 
-static int j2k_decompress_reconfigure(void *state, struct video_desc desc,
-                int rshift, int gshift, int bshift, int pitch, codec_t out_codec)
+static int
+j2k_decompress_reconfigure(void *state, struct video_desc desc, int rshift,
+                           int gshift, int bshift, codec_t out_codec)
 {
         struct state_decompress_j2k *s = (struct state_decompress_j2k *) state;
 
@@ -584,7 +585,6 @@ static int j2k_decompress_reconfigure(void *state, struct video_desc desc,
 
         s->desc = desc;
         s->out_codec = out_codec;
-        s->pitch = pitch;
 
         int ret = pthread_create(&s->thread_id, NULL, decompress_j2k_worker, (void *) s);
         assert(ret == 0 && "Unable to create thread");
@@ -657,8 +657,11 @@ static decompress_status j2k_probe_internal_codec(codec_t in_codec, unsigned cha
  * some decoded frames. If so, copies that to framebuffer. In the opposite case
  * it just returns false.
  */
-static decompress_status j2k_decompress(void *state, unsigned char *dst, unsigned char *buffer,
-                unsigned int src_len, int /* frame_seq */, struct video_frame_callbacks * /* callbacks */, struct pixfmt_desc *internal_prop)
+static decompress_status
+j2k_decompress(void *state, unsigned char *dst, unsigned char *buffer,
+               unsigned int src_len, int /* frame_seq */,
+               struct video_frame_callbacks * /* callbacks */,
+               struct pixfmt_desc *internal_prop, unsigned pitch)
 {
         struct state_decompress_j2k *s =
                 (struct state_decompress_j2k *) state;
@@ -706,7 +709,9 @@ return_previous:
         }
 
         for (size_t i = 0; i < s->desc.height; ++i) {
-                memcpy(dst + i * s->pitch, decoded.first + i * linesize, min(linesize, decoded.second - min(decoded.second, i * linesize)));
+                memcpy(dst + (i * pitch), decoded.first + (i * linesize),
+                       min(linesize,
+                           decoded.second - min(decoded.second, i * linesize)));
         }
 
         free(decoded.first);
