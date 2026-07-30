@@ -183,7 +183,7 @@ using change_il_t = void (*)(char *dst, char *src, int linesize, int height, voi
 
 // prototypes
 static bool reconfigure_decoder(struct state_video_decoder *decoder,
-                struct video_desc desc, struct pixfmt_desc comp_int_desc);
+                                struct video_desc           desc);
 #if 0
 static void check_for_mode_change(struct state_video_decoder *decoder, const uint32_t *hdr);
 static void wait_for_framebuffer_swap(struct state_video_decoder *decoder);
@@ -358,7 +358,6 @@ struct state_video_decoder
                   fec_thread_id;
         struct video_desc received_vid_desc = {}; ///< description of the network video
         struct fec_desc   received_vid_fec = {};
-        struct pixfmt_desc received_int_desc = {}; ///< compression int desc
         struct video_desc display_desc = {};      ///< description of the mode that display is currently configured to
 
         // struct video_frame *frame = NULL; ///< @todo rewrite this more reasonably
@@ -1050,7 +1049,7 @@ static vector<pair<struct pixfmt_desc, codec_t>> video_decoder_order_output_code
  * @return                 Output codec, if no decoding function found, -1 is returned.
  */
 static codec_t choose_codec_and_decoder(struct state_video_decoder *decoder, struct video_desc desc,
-                                decoder_t *decode_line, struct pixfmt_desc comp_int_prop)
+                                decoder_t *decode_line)
 {
         codec_t out_codec = VIDEO_CODEC_NONE;
 
@@ -1073,7 +1072,7 @@ static codec_t choose_codec_and_decoder(struct state_video_decoder *decoder, str
                         }
 
                         out_codec = codec;
-                        goto after_linedecoder_lookup;
+                        return out_codec;
                 }
         }
         /* otherwise if we have line decoder (incl. slow codecs) */
@@ -1087,13 +1086,13 @@ static codec_t choose_codec_and_decoder(struct state_video_decoder *decoder, str
                 *decode_line = get_best_decoder_from(desc.color_spec, native_codecs_copy, &out_codec);
                 if (*decode_line) {
                         decoder->decoder_type = LINE_DECODER;
-                        goto after_linedecoder_lookup;
+                        return out_codec;
                 }
         }
 
+#if 0
 after_linedecoder_lookup:
 
-#if 0
         /* we didn't find line decoder. So try now regular (aka DXT) decoder */
         if(*decode_line == NULL) {
                 int nr_substreams = NR_SUBSTREAMS_FROM_VIDEO_MODE(decoder->video_mode);
@@ -1125,8 +1124,10 @@ after_linedecoder_lookup:
 after_decoder_lookup:
 #endif
 
-        /// @todo we should perhaps fail but copy the input as is now..... let
-        /// video runtime handle the situation...
+        decoder->decoder_type = EXTERNAL_DECODER;
+        return desc.color_spec;
+
+#if 0
         if (decoder->decoder_type == UNSET) {
                 log_msg(LOG_LEVEL_ERROR, "Unable to find decoder for input codec \"%s\"!!!\n", get_codec_name(desc.color_spec));
                 char buf[1024];
@@ -1146,6 +1147,7 @@ after_decoder_lookup:
         }
 
         return out_codec;
+#endif
 }
 
 #if 0
@@ -1204,8 +1206,8 @@ static change_il_t select_il_func(enum interlacing in_il, enum interlacing *supp
  * @invariant
  * decoder->display != NULL
  */
-static bool reconfigure_decoder(struct state_video_decoder *decoder,
-                struct video_desc desc, struct pixfmt_desc comp_int_prop)
+static bool
+reconfigure_decoder(struct state_video_decoder *decoder, struct video_desc desc)
 {
         codec_t out_codec;
 #if 0
@@ -1241,8 +1243,8 @@ static bool reconfigure_decoder(struct state_video_decoder *decoder,
         desc.tile_count = get_video_mode_tiles_x(decoder->video_mode)
                         * get_video_mode_tiles_y(decoder->video_mode);
 
-        out_codec = choose_codec_and_decoder(
-            decoder, desc, &decoder->decode_line, comp_int_prop);
+        out_codec =
+            choose_codec_and_decoder(decoder, desc, &decoder->decode_line);
         if (out_codec == VIDEO_CODEC_NONE) {
                 return false;
         }
@@ -1394,10 +1396,9 @@ bool parse_video_hdr(const uint32_t *hdr, struct video_desc *desc)
 }
 
 static bool reconfigure_helper(struct state_video_decoder *decoder,
-                struct video_desc network_desc,
-                struct pixfmt_desc comp_int_desc)
+                struct video_desc network_desc)
 {
-        bool ret = reconfigure_decoder(decoder, network_desc, comp_int_desc);
+        bool ret = reconfigure_decoder(decoder, network_desc);
         if (!ret) {
                 log_msg(LOG_LEVEL_ERROR, "[video dec.] Reconfiguration failed!!!\n");
                 // decoder->frame = NULL;
@@ -1406,7 +1407,6 @@ static bool reconfigure_helper(struct state_video_decoder *decoder,
         }
 
         decoder->received_vid_desc = network_desc;
-        decoder->received_int_desc = comp_int_desc;
 
         return ret;
 }
@@ -1446,7 +1446,7 @@ reconfigure_if_needed(struct state_video_decoder *decoder,
         snprintf_ch(report, "new incoming video fmt: %s", desc);
         control_report_stats(decoder->control, report);
 
-        return reconfigure_helper(decoder, network_desc, {});
+        return reconfigure_helper(decoder, network_desc);
         /// @todo this will be removed
 #if 0
         const bool comp_int_eq =
@@ -1482,7 +1482,7 @@ static void check_for_mode_change(struct state_video_decoder *decoder,
         report += desc;
         control_report_stats(decoder->control, report.c_str());
 
-        reconfigure_helper(decoder, network_desc, {});
+        reconfigure_helper(decoder, network_desc);
 }
 #endif
 
@@ -1505,6 +1505,11 @@ configure_decoder(struct vcodec_state *pbuf_data, int pt, int nr_substreams,
         parse_video_hdr(hdr, &desc);
         if (!reconfigure_if_needed(decoder, desc, pckt->m, nr_substreams)) {
                 return nullptr;
+        }
+        if (decoder->decoder_type == EXTERNAL_DECODER) {
+                pbuf_data->decoded_frame = vf_alloc_desc(desc);
+                pbuf_data->decoded_frame->callbacks.data_deleter = vf_data_deleter;
+                return pbuf_data->decoded_frame;
         }
         unsigned pitch = pbuf_data->display_pitch;
         if (pbuf_data->decoded_frame == nullptr ||
@@ -1605,9 +1610,9 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
         bool ret = true;
         int prints=0;
 
-        uint32_t buffer_num[MAX_SUBSTREAMS];
         int buffer_number = 0;
 #if 0
+        uint32_t buffer_num[MAX_SUBSTREAMS];
         // the following is just FEC related optimalization - normally we fill up
         // allocated buffers when we have compressed data. But in case of FEC, there
         // is just the FEC buffer present, so we point to it instead to copying
@@ -1681,6 +1686,7 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                         if (!frame) {
                                 return false;
                         }
+                        frame->seq = buffer_number;
                 }
 
                 if (PT_VIDEO_IS_ENCRYPTED(pt)) {
@@ -1785,8 +1791,8 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                 }
 #endif
 
-                buffer_num[substream] = buffer_number;
 #if 0
+                buffer_num[substream] = buffer_number;
                 pckt_list[substream][data_pos] = len;
 #endif
 
