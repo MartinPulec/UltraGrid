@@ -1073,7 +1073,7 @@ static codec_t choose_codec_and_decoder(struct state_video_decoder *decoder, str
                         }
 
                         out_codec = codec;
-                        goto after_linedecoder_lookup;
+                        return out_codec;
                 }
         }
         /* otherwise if we have line decoder (incl. slow codecs) */
@@ -1087,13 +1087,13 @@ static codec_t choose_codec_and_decoder(struct state_video_decoder *decoder, str
                 *decode_line = get_best_decoder_from(desc.color_spec, native_codecs_copy, &out_codec);
                 if (*decode_line) {
                         decoder->decoder_type = LINE_DECODER;
-                        goto after_linedecoder_lookup;
+                        return out_codec;
                 }
         }
 
+#if 0
 after_linedecoder_lookup:
 
-#if 0
         /* we didn't find line decoder. So try now regular (aka DXT) decoder */
         if(*decode_line == NULL) {
                 int nr_substreams = NR_SUBSTREAMS_FROM_VIDEO_MODE(decoder->video_mode);
@@ -1125,8 +1125,10 @@ after_linedecoder_lookup:
 after_decoder_lookup:
 #endif
 
-        /// @todo we should perhaps fail but copy the input as is now..... let
-        /// video runtime handle the situation...
+        decoder->decoder_type = EXTERNAL_DECODER;
+        return desc.color_spec;
+
+#if 0
         if (decoder->decoder_type == UNSET) {
                 log_msg(LOG_LEVEL_ERROR, "Unable to find decoder for input codec \"%s\"!!!\n", get_codec_name(desc.color_spec));
                 char buf[1024];
@@ -1146,6 +1148,7 @@ after_decoder_lookup:
         }
 
         return out_codec;
+#endif
 }
 
 #if 0
@@ -1506,6 +1509,11 @@ configure_decoder(struct vcodec_state *pbuf_data, int pt, int nr_substreams,
         if (!reconfigure_if_needed(decoder, desc, pckt->m, nr_substreams)) {
                 return nullptr;
         }
+        if (decoder->decoder_type == EXTERNAL_DECODER) {
+                pbuf_data->decoded_frame = vf_alloc_desc(desc);
+                pbuf_data->decoded_frame->data_deleter = vf_data_deleter;
+                return pbuf_data->decoded_frame;
+        }
         unsigned pitch = pbuf_data->display_pitch;
         if (pbuf_data->decoded_frame == nullptr ||
             !video_desc_eq(video_desc_from_frame(pbuf_data->decoded_frame),
@@ -1605,9 +1613,9 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
         bool ret = true;
         int prints=0;
 
-        uint32_t buffer_num[MAX_SUBSTREAMS];
         int buffer_number = 0;
 #if 0
+        uint32_t buffer_num[MAX_SUBSTREAMS];
         // the following is just FEC related optimalization - normally we fill up
         // allocated buffers when we have compressed data. But in case of FEC, there
         // is just the FEC buffer present, so we point to it instead to copying
@@ -1681,6 +1689,7 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                         if (!frame) {
                                 return false;
                         }
+                        frame->seq = buffer_number;
                 }
 
                 if (PT_VIDEO_IS_ENCRYPTED(pt)) {
@@ -1785,8 +1794,8 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                 }
 #endif
 
-                buffer_num[substream] = buffer_number;
 #if 0
+                buffer_num[substream] = buffer_number;
                 pckt_list[substream][data_pos] = len;
 #endif
 

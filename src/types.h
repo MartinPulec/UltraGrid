@@ -139,12 +139,12 @@ enum subsampling {
         SUBS_4444 = 4444,
 };
 
-struct pixfmt_desc {
+typedef struct pixfmt_desc {
         int depth;       ///< bit depth; 0 means that whole struct is undefined
         enum subsampling subsampling;
         bool rgb;
         enum hw_accel_type accel_type;
-};
+} pixfmt_desc;
 
 enum {
         kHz8  = 8000,
