@@ -211,6 +211,33 @@ init_decompress(struct state_video *s, struct video_desc desc,
         return nullptr;
 }
 
+static bool
+display_codec_config_probed(decompress_thread_data   *d,
+                            const struct pixfmt_desc *comp_desc)
+{
+        struct state_video *s         = d->s;
+        codec_t             dec_codec = VC_NONE;
+        video_decompress   *new_dec =
+            init_decompress(s, s->saved_network_desc, *comp_desc, &dec_codec);
+        if (!new_dec) {
+                return false;
+        }
+        decompress_done(d->decompress);
+        d->decompress = new_dec;
+        if (!dec_codec) {
+                MSG(FATAL, "Decompress didn't return output codec!\n");
+                abort();
+        }
+        struct video_desc desc = s->saved_network_desc;
+        desc.color_spec        = dec_codec;
+        if (!my_display_reconfigure(s, desc)) {
+                MSG(ERROR, "Cannot reconfigure display for decompress!\n");
+                return false;
+        }
+        d->configured_display_codec = dec_codec;
+        return true;
+}
+
 static void *
 decompress_thread(void *arg)
 {
@@ -246,25 +273,9 @@ decompress_thread(void *arg)
                 }
                 assert(display_frame || comp_desc.depth != 0);
                 if (!display_frame) { // probed
-                        codec_t dec_codec = VC_NONE;
-                        video_decompress *new_dec   = init_decompress(
-                            s, s->saved_network_desc, comp_desc, &dec_codec);
-                        if (!new_dec) {
+                        if (!display_codec_config_probed(d, &comp_desc)) {
                                 continue;
                         }
-                        decompress_done(d->decompress);
-                        d->decompress = new_dec;
-                        if (!dec_codec) {
-                                MSG(FATAL, "Decompress didn't return output codec!\n");
-                                abort();
-                        }
-                        struct video_desc desc = s->saved_network_desc;
-                        desc.color_spec             = dec_codec;
-                        if (!my_display_reconfigure(s, desc)) {
-                                MSG(ERROR, "Cannot reconfigure display for decompress!\n");
-                                continue;
-                        }
-                        d->configured_display_codec = dec_codec;
                         display_frame = display_get_frame(s->display);
                         if (!decompress(d, f, display_frame, &comp_desc)) {
                                 continue;
