@@ -41,17 +41,35 @@ struct state_video {
         size_t            display_pitch;
         long long         putf_timeout;
         struct video_desc saved_network_desc;
-        codec_t           configured_display_codec;
-        video_decompress *decompress;
 
-        char  *scratchpad;
-        size_t scratchpad_allocated;
+        pthread_t           decompress_thread;
+        pthread_cond_t      decompress_new_frame_ready;
+        pthread_cond_t      decompress_frame_consumed;
+        pthread_mutex_t     decompress_lock;
+        struct video_frame *decompress_frame;
 };
+
+static struct video_frame decompress_poison_pill;
+typedef struct {
+        struct state_video *s;
+        video_decompress   *decompress;
+        codec_t             dec_codec;
+        codec_t             configured_display_codec;
+        char               *scratchpad;
+        size_t              scratchpad_allocated;
+} decompress_thread_data;
 
 typedef struct {
         struct pixfmt_desc desc;
         codec_t            codec;
 } desc_codec_pair;
+
+static bool decompress(decompress_thread_data   *d,
+                       const struct video_frame *recv_frame,
+                       struct video_frame       *display_frame,
+                       struct pixfmt_desc       *comp_desc);
+static bool my_display_reconfigure(struct state_video *s,
+                                   struct video_desc   desc);
 
 static QSORT_S_COMP_DEFINE(compare, a, b, context)
 {
@@ -67,7 +85,7 @@ video_decoder_order_output_codecs(pixfmt_desc     comp_int_prop,
                                   desc_codec_pair ret[static VC_COUNT])
 {
         unsigned count = 0;
-        bool used[VC_COUNT] = { 0 };
+        bool used[VC_COUNT] = { false };
         // first add hw-accelerated codecs
         for (codec_t *c = display_codecs; *c; c++) {
                 if (codec_is_hw_accelerated(*c)) {
@@ -128,18 +146,15 @@ video_decoder_order_output_codecs(pixfmt_desc     comp_int_prop,
 
 #define codec_list_to_string(cl) codec_list_to_str(cl, STR_LEN, (char[1024]){})
 
-static bool
+static video_decompress *
 init_decompress(struct state_video *s, struct video_desc desc,
                 struct pixfmt_desc comp_int_prop, codec_t *out_codec)
 {
-        decompress_done(s->decompress);
-        s->decompress = nullptr;
-
         bool probe = comp_int_prop.depth == 0;
         if (probe) {
                 video_decompress *d = decompress_init(
                     desc.color_spec, (struct pixfmt_desc){ 0 }, VIDEO_CODEC_NONE,
-                    desc.tile_count);
+                    (int) desc.tile_count);
                 if (d) {
                         int buf_size  = decompress_reconfigure(
                             d, desc, s->display_rgb_shift[0],
@@ -148,36 +163,34 @@ init_decompress(struct state_video *s, struct video_desc desc,
                         if (!buf_size) {
                                 MSG(ERROR, "Cannot reconfigure for probe!\n");
                                 decompress_done(d);
-                                return false;
+                                return nullptr;
                         }
-                        s->decompress = d;
                         *out_codec    = VC_NONE;
-                        return true;
+                        return d;
                 }
                 MSG(VERBOSE, "Auto-detection not supported!\n");
         }
         desc_codec_pair formats_to_try[VC_COUNT];
-        const unsigned  count = video_decoder_order_output_codecs(
+        const unsigned  codec_count = video_decoder_order_output_codecs(
             comp_int_prop, s->display_codecs, formats_to_try);
 
-        for (unsigned i = 0; i < count; i++) {
-                video_decompress *d =
-                    decompress_init(desc.color_spec, formats_to_try[i].desc,
-                                    formats_to_try[i].codec, desc.tile_count);
-                if (d) {
-                        int buf_size = decompress_reconfigure(
-                            d, desc, s->display_rgb_shift[0],
-                            s->display_rgb_shift[1], s->display_rgb_shift[2],
-                            formats_to_try[i].codec);
-                        if (!buf_size) {
-                                MSG(ERROR, "Cannot reconfigure for probe!\n");
-                                decompress_done(d);
-                                return false;
-                        }
-                        s->decompress = d;
-                        *out_codec = formats_to_try[i].codec;
-                        return true;
+        for (unsigned i = 0; i < codec_count; i++) {
+                video_decompress *d = decompress_init(
+                    desc.color_spec, formats_to_try[i].desc,
+                    formats_to_try[i].codec, (int) desc.tile_count);
+                if (!d) { // try next
+                        continue;
                 }
+                int buf_size = decompress_reconfigure(
+                    d, desc, s->display_rgb_shift[0], s->display_rgb_shift[1],
+                    s->display_rgb_shift[2], formats_to_try[i].codec);
+                if (!buf_size) {
+                        MSG(ERROR, "Cannot reconfigure for probe!\n");
+                        decompress_done(d);
+                        return nullptr;
+                }
+                *out_codec = formats_to_try[i].codec;
+                return d;
         }
 
         MSG(ERROR, "Unable to find decoder for input codec \"%s\"!!!\n",
@@ -196,16 +209,88 @@ init_decompress(struct state_video *s, struct video_desc desc,
             "from %s to display supported formats (%s).\n",
             get_codec_name(desc.color_spec),
             codec_list_to_string(s->display_codecs));
-        return false;
+        return nullptr;
+}
+
+static void *
+decompress_thread(void *arg)
+{
+        decompress_thread_data *d = arg;
+        struct state_video     *s             = d->s;
+        struct video_frame     *f             = nullptr;
+        struct video_frame     *display_frame = nullptr;
+
+        while (true) {
+                VIDEO_FRAME_DISPOSE(f);
+                CHK_PTHR(pthread_mutex_lock(&s->decompress_lock));
+                {
+                        while (!s->decompress_frame) {
+                                CHK_PTHR(pthread_cond_wait(
+                                    &s->decompress_new_frame_ready, &s->decompress_lock));
+                        }
+                        f = s->decompress_frame;
+                        s->decompress_frame = nullptr;
+                }
+                CHK_PTHR(pthread_mutex_unlock(&s->decompress_lock));
+                CHK_PTHR(pthread_cond_signal(&s->decompress_frame_consumed));
+
+                if (f == &decompress_poison_pill) {
+                        f = nullptr;
+                        break;
+                }
+
+                struct pixfmt_desc comp_desc   = { 0 };
+                bool               ret =
+                    decompress(d, f, display_frame, &comp_desc);
+                if (!ret) {
+                        continue;
+                }
+                assert(display_frame || comp_desc.depth != 0);
+                if (!display_frame) { // probed
+                        codec_t dec_codec = VC_NONE;
+                        video_decompress *new_dec   = init_decompress(
+                            s, s->saved_network_desc, comp_desc, &dec_codec);
+                        if (!new_dec) {
+                                continue;
+                        }
+                        decompress_done(d->decompress);
+                        d->decompress = new_dec;
+                        if (!dec_codec) {
+                                MSG(FATAL, "Decompress didn't return output codec!\n");
+                                abort();
+                        }
+                        struct video_desc desc = s->saved_network_desc;
+                        desc.color_spec             = dec_codec;
+                        if (!my_display_reconfigure(s, desc)) {
+                                MSG(ERROR, "Cannot reconfigure display for decompress!\n");
+                                continue;
+                        }
+                        d->configured_display_codec = dec_codec;
+                        display_frame = display_get_frame(s->display);
+                        if (!decompress(d, f, display_frame, &comp_desc)) {
+                                continue;
+                        }
+                }
+                display_put_frame(s->display, display_frame, s->putf_timeout);
+                display_frame = display_get_frame(s->display);
+        }
+        VIDEO_FRAME_DISPOSE(f);
+
+        if (display_frame) {
+                display_put_frame(s->display, display_frame, PUTF_DISCARD);
+        }
+
+        decompress_done(d->decompress);
+        free(d->scratchpad);
+        free(d);
+
+        return nullptr;
 }
 
 static bool
-my_display_reconfigure(struct state_video *s, struct video_desc network_desc,
-                       codec_t display_codec)
+my_display_reconfigure(struct state_video *s, struct video_desc desc)
 {
-        struct video_desc display_desc = network_desc;
-        display_desc.color_spec        = display_codec;
-        if (!display_reconfigure(s->display, display_desc)) {
+        if (!display_reconfigure(s->display, desc)) {
                 MSG(ERROR, "Cannot reconfigure display!\n");
                 return false;
         }
@@ -218,44 +303,53 @@ my_display_reconfigure(struct state_video *s, struct video_desc network_desc,
                 display_requested_pitch = PITCH_DEFAULT;
         }
         if (display_requested_pitch == PITCH_DEFAULT) {
-                s->display_pitch = vc_get_linesize(display_desc.width,
-                                                   display_desc.color_spec);
+                s->display_pitch = vc_get_linesize(desc.width, desc.color_spec);
         } else {
                 s->display_pitch = display_requested_pitch;
         }
-        s->saved_network_desc = network_desc;
         return true;
+}
+
+static void
+start_decompress_thread(struct state_video *s, video_decompress *d,
+                        codec_t dec_codec)
+{
+        decompress_thread_data *thr_data = malloc(sizeof *thr_data);
+        *thr_data = (decompress_thread_data){ .decompress = d,
+                                              .s                = s,
+                                              .dec_codec        = dec_codec };
+        CHK_PTHR(pthread_create(&s->decompress_thread, nullptr,
+                                decompress_thread, thr_data));
 }
 
 static bool
 recv_reconfigure(struct state_video *s, struct video_desc desc)
 {
-        decompress_done(s->decompress);
-        s->decompress = nullptr;
-
         if (codec_is_in_set(desc.color_spec, s->display_codecs)) {
-                s->configured_display_codec = desc.color_spec;
-        } else {
-                codec_t dec_codec = VC_NONE;
-                if (!init_decompress(s, desc, (struct pixfmt_desc){ 0 },
-                                     &dec_codec)) {
+                bool ret = my_display_reconfigure(s, desc);
+                if (!ret) {
                         return false;
                 }
-                if (!dec_codec) { // probing now
-                        s->saved_network_desc = desc;
-                        return true;
-                }
-                s->configured_display_codec = dec_codec;
-        }
 
-        return my_display_reconfigure(s, desc, s->configured_display_codec);
+                s->saved_network_desc = desc;
+                return true;
+        }
+        codec_t           dec_codec = VC_NONE;
+        video_decompress *d =
+            init_decompress(s, desc, (struct pixfmt_desc){ 0 }, &dec_codec);
+        if (!d) {
+                return false;
+        }
+        start_decompress_thread(s, d, dec_codec);
+        s->saved_network_desc = desc;
+        return true;
 }
 
 static bool
-decompress(struct state_video *s, const struct video_frame *recv_frame,
-           struct video_frame **display_frame_inout)
+decompress(decompress_thread_data *d, const struct video_frame *recv_frame,
+           struct video_frame *display_frame, struct pixfmt_desc *comp_desc)
 {
-        struct video_frame *display_frame = *display_frame_inout;
+        struct state_video *s = d->s;
         for (unsigned i = 0; i < recv_frame->tile_count; ++i) {
                 size_t max_len = ((size_t) recv_frame->tiles[i].width *
                                   recv_frame->tiles[i].height * MAX_BPS) +
@@ -263,11 +357,11 @@ decompress(struct state_video *s, const struct video_frame *recv_frame,
                 char *buf = nullptr;
                 struct video_frame_callbacks *clbcks = nullptr;
                 if (!display_frame) {
-                        if (s->scratchpad_allocated < max_len) {
-                                free(s->scratchpad);
-                                s->scratchpad_allocated = max_len;
+                        if (d->scratchpad_allocated < max_len) {
+                                free(d->scratchpad);
+                                d->scratchpad_allocated = max_len;
                         }
-                        buf = s->scratchpad = malloc(s->scratchpad_allocated);
+                        buf = d->scratchpad = malloc(d->scratchpad_allocated);
                 } else {
                         /// @todo implementovat dekodovani tiled-4k do merged
                         assert(display_frame->tile_count ==
@@ -276,45 +370,23 @@ decompress(struct state_video *s, const struct video_frame *recv_frame,
                         clbcks = &display_frame->callbacks;
                 }
 
-                struct pixfmt_desc comp_desc = { 0 };
-                decompress_status  ret  = decompress_frame(
-                    s->decompress->state[i], (unsigned char *) buf,
+                decompress_status  ret       = decompress_frame(
+                    d->decompress->state[i], (unsigned char *) buf,
                     (unsigned char *) recv_frame->tiles[i].data,
-                    recv_frame->tiles[i].data_len, recv_frame->seq, clbcks,
-                    &comp_desc, s->display_pitch);
+                    recv_frame->tiles[i].data_len, (int) recv_frame->seq,
+                    clbcks, comp_desc, s->display_pitch);
                 switch (ret) {
-                case DECODER_NO_FRAME: 
+                case DECODER_NO_FRAME:
                         return false;
                 case DECODER_UNSUPP_PIXFMT:
                         codec_list_erase(s->display_codecs,
-                                         s->configured_display_codec);
+                                         d->configured_display_codec);
                         s->saved_network_desc = (struct video_desc){ 0 };
                         return false;
                 case DECODER_GOT_CODEC: {
                         MSG(NOTICE, "Detected compression properties: %s\n",
-                            get_pixdesc_desc(comp_desc));
-                        codec_t dec_codec = VC_NONE;
-                        if (!init_decompress(s, s->saved_network_desc,
-                                             comp_desc, &dec_codec)) {
-                                s->saved_network_desc =
-                                    (struct video_desc){ 0 };
-                                return false;
-                        }
-                        if (!dec_codec) {
-                                MSG(FATAL, "Decompress didn't return output codec!\n");
-                                abort();
-                        }
-                        if (!my_display_reconfigure(s, s->saved_network_desc,
-                                                    dec_codec)) {
-                                s->saved_network_desc =
-                                    (struct video_desc){ 0 };
-                                return false;
-                        }
-                        *display_frame_inout = display_frame =
-                            display_get_frame(s->display);
-                        // do the actual decode - restart loop
-                        i = -1;
-                        continue;
+                            get_pixdesc_desc(*comp_desc));
+                        return true;
                 }
                 case DECODER_GOT_FRAME:
                         continue;
@@ -322,6 +394,42 @@ decompress(struct state_video *s, const struct video_frame *recv_frame,
                 abort(); // ret not part of enum
         }
         return true;
+}
+
+static void
+submit_decompress_frame(struct state_video *s, struct video_frame *f)
+{
+        CHK_PTHR(pthread_mutex_lock(&s->decompress_lock));
+        {
+                // poison pill must be enqueued
+                if (f == &decompress_poison_pill) {
+                        while (s->decompress_frame) {
+                                CHK_PTHR(pthread_cond_wait(
+                                    &s->decompress_frame_consumed,
+                                    &s->decompress_lock));
+                        }
+                } else {
+                        if (s->decompress_frame) {
+                                VIDEO_FRAME_DISPOSE(f);
+                                /// @todo too slow message
+                                goto unlock;
+                        }
+                }
+                s->decompress_frame = f;
+                CHK_PTHR(pthread_cond_signal(&s->decompress_new_frame_ready));
+        }
+unlock:
+        CHK_PTHR(pthread_mutex_unlock(&s->decompress_lock));
+}
+
+static void
+stop_decompress(struct state_video *s)
+{
+        if (s->decompress_thread != PTHREAD_NULL) {
+                submit_decompress_frame(s, &decompress_poison_pill);
+                CHK_PTHR(pthread_join(s->decompress_thread, nullptr));
+        }
+        s->decompress_thread = PTHREAD_NULL;
 }
 
 static void *
@@ -333,9 +441,8 @@ video_receiver_thread(void *arg)
         struct video_frame *display_frame = nullptr;
 
         while (true) {
-                struct video_frame *recv_frame = s->decompress ? nullptr : display_frame;
                 struct video_frame *ret =
-                    rxtx_recv_video_frame(s->rxtx, recv_frame, s->display_pitch);
+                    rxtx_recv_video_frame(s->rxtx, display_frame, s->display_pitch);
                 if (!ret) {
                         break;
                 }
@@ -349,30 +456,28 @@ video_receiver_thread(void *arg)
                                                   PUTF_DISCARD);
                                 display_frame = nullptr;
                         }
+                        stop_decompress(s);
                         if (!recv_reconfigure(s, video_desc_from_frame(ret))) {
                                 VIDEO_FRAME_DISPOSE(ret);
                                 continue;
                         }
                 }
 
-                if (s->decompress) {
-                        if (!decompress(s, ret, &display_frame)) {
-                                VIDEO_FRAME_DISPOSE(ret);
-                                continue;
-                        }
-                } else {
-                        if (!display_frame) {
-                                display_frame = display_get_frame(s->display);
-                                assert(display_frame);
-                        }
-
-                        if (ret != display_frame) {
-                                vf_copy_metadata(display_frame, ret);
-                                vf_copy_data_pitch(display_frame,
-                                                   s->display_pitch, ret);
-                        }
+                const bool have_decompress = s->decompress_thread != PTHREAD_NULL;
+                if (have_decompress) {
+                        submit_decompress_frame(s, ret);
+                        continue;
                 }
+
+                if (!display_frame) {
+                        display_frame = display_get_frame(s->display);
+                        assert(display_frame);
+                }
+
                 if (ret != display_frame) {
+                        vf_copy_metadata(display_frame, ret);
+                        vf_copy_data_pitch(display_frame, s->display_pitch,
+                                           ret);
                         VIDEO_FRAME_DISPOSE(ret);
                 }
 
@@ -384,9 +489,9 @@ video_receiver_thread(void *arg)
                 display_put_frame(s->display, display_frame, PUTF_DISCARD);
         }
 
+        stop_decompress(s);
         // pass poisoned pill to display
         display_put_frame(s->display, nullptr, PUTF_BLOCKING);
-        decompress_done(s->decompress);
 
         return nullptr;
 }
@@ -439,6 +544,10 @@ video_start(struct rxtx *rxtx, const struct rxtx_params *params,
         s->rxtx               = rxtx;
         s->display            = d;
         s->parent             = parent;
+        s->decompress_thread  = PTHREAD_NULL;
+        ug_pthread_mutex_init(&s->decompress_lock);
+        CHK_PTHR(pthread_cond_init(&s->decompress_new_frame_ready, nullptr));
+        CHK_PTHR(pthread_cond_init(&s->decompress_frame_consumed, nullptr));
 
         if (params->medium[TX_MEDIA_VIDEO].rxtx_mode & MODE_RECEIVER &&
             rxtx_have_receive_video_frame(rxtx)) {
@@ -479,6 +588,8 @@ video_done(struct state_video *s)
                 return;
         }
         assert(s->magic == MAGIC);
-        free(s->scratchpad);
+        CHK_PTHR(pthread_mutex_destroy(&s->decompress_lock));
+        CHK_PTHR(pthread_cond_destroy(&s->decompress_new_frame_ready));
+        CHK_PTHR(pthread_cond_destroy(&s->decompress_frame_consumed));
         free(s);
 }
