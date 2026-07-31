@@ -147,9 +147,9 @@ video_decoder_order_output_codecs(pixfmt_desc     comp_int_prop,
 
 static video_decompress *
 init_decompress(struct state_video *s, struct video_desc desc,
-                struct pixfmt_desc comp_int_prop, codec_t *out_codec)
+                struct pixfmt_desc comp_int_prop, codec_t *out_codec,
+                bool probe)
 {
-        bool probe = comp_int_prop.depth == 0;
         if (probe) {
                 video_decompress *d = decompress_init(
                     desc.color_spec, (struct pixfmt_desc){ 0 }, VIDEO_CODEC_NONE,
@@ -215,10 +215,14 @@ static bool
 display_codec_config_probed(decompress_thread_data   *d,
                             const struct pixfmt_desc *comp_desc)
 {
+        if (comp_desc->depth == 0) { /// @todo not sure if should occur or not
+                MSG(WARNING, "Compressed properties not probed, reconfiguring "
+                             "anyways. Check if it is ok...\n");
+        }
         struct state_video *s         = d->s;
         codec_t             dec_codec = VC_NONE;
-        video_decompress   *new_dec =
-            init_decompress(s, s->saved_network_desc, *comp_desc, &dec_codec);
+        video_decompress   *new_dec   = init_decompress(
+            s, s->saved_network_desc, *comp_desc, &dec_codec, false);
         if (!new_dec) {
                 return false;
         }
@@ -271,8 +275,7 @@ decompress_thread(void *arg)
                 if (!ret) {
                         continue;
                 }
-                assert(display_frame || comp_desc.depth != 0);
-                if (!display_frame) { // probed
+                if (!display_frame) { // not yet configured until probed
                         if (!display_codec_config_probed(d, &comp_desc)) {
                                 continue;
                         }
@@ -345,8 +348,8 @@ recv_reconfigure(struct state_video *s, struct video_desc desc)
                 return true;
         }
         codec_t           dec_codec = VC_NONE;
-        video_decompress *d =
-            init_decompress(s, desc, (struct pixfmt_desc){ 0 }, &dec_codec);
+        video_decompress *d         = init_decompress(
+            s, desc, (struct pixfmt_desc){ 0 }, &dec_codec, true);
         if (!d) {
                 return false;
         }
