@@ -14,7 +14,6 @@
 #include "compat/qsort_s.h" // for qsort_s
 #include "debug.h"          // for LOG_LEVEL_ERROR, MSG, debug_msg
 #include "host.h"           // for register_should_exit_callback, unregister...
-#include "pixfmt_conv.h"
 #include "rxtx.h"           // for rxtx_medium_params, rxtx_have_receive_vid...
 #include "tv.h"
 #include "types.h"          // for rxtx_mode, tx_media_type, video_desc
@@ -35,12 +34,12 @@ struct state_video {
         struct rxtx    *rxtx;
         struct module  *parent;
 
-        struct display   *display;
-        codec_t           display_codecs[VIDEO_CODEC_COUNT];
-        int               display_rgb_shift[3];
-        size_t            display_pitch;
-        long long         putf_timeout;
-        struct video_desc saved_network_desc;
+        struct display       *display;
+        struct display_params display_params;
+        bool                  display_merged_fb;
+        size_t                display_pitch;
+        long long             putf_timeout;
+        struct video_desc     saved_network_desc;
 
         pthread_t           decompress_thread;
         pthread_cond_t      decompress_new_frame_ready;
@@ -156,10 +155,9 @@ init_decompress(struct state_video *s, struct video_desc desc,
                     desc.color_spec, (struct pixfmt_desc){ 0 }, VIDEO_CODEC_NONE,
                     (int) desc.tile_count);
                 if (d) {
-                        int buf_size  = decompress_reconfigure(
-                            d, desc, s->display_rgb_shift[0],
-                            s->display_rgb_shift[1], s->display_rgb_shift[2],
-                            VC_NONE);
+                        int *shift = s->display_params.rgb_shift;
+                        int  buf_size = decompress_reconfigure(
+                            d, desc, shift[0], shift[1], shift[2], VC_NONE);
                         if (!buf_size) {
                                 MSG(ERROR, "Cannot reconfigure for probe!\n");
                                 decompress_done(d);
@@ -172,7 +170,7 @@ init_decompress(struct state_video *s, struct video_desc desc,
         }
         desc_codec_pair formats_to_try[VC_COUNT];
         const unsigned  codec_count = video_decoder_order_output_codecs(
-            comp_int_prop, s->display_codecs, formats_to_try);
+            comp_int_prop, s->display_params.native_codecs, formats_to_try);
 
         for (unsigned i = 0; i < codec_count; i++) {
                 video_decompress *d = decompress_init(
@@ -181,9 +179,10 @@ init_decompress(struct state_video *s, struct video_desc desc,
                 if (!d) { // try next
                         continue;
                 }
-                int buf_size = decompress_reconfigure(
-                    d, desc, s->display_rgb_shift[0], s->display_rgb_shift[1],
-                    s->display_rgb_shift[2], formats_to_try[i].codec);
+                int *shift = s->display_params.rgb_shift;
+                int  buf_size =
+                    decompress_reconfigure(d, desc, shift[0], shift[1],
+                                           shift[2], formats_to_try[i].codec);
                 if (!buf_size) {
                         MSG(ERROR, "Cannot reconfigure for probe!\n");
                         decompress_done(d);
@@ -198,17 +197,17 @@ init_decompress(struct state_video *s, struct video_desc desc,
         MSG(ERROR,
             "Display doesn't support video codec %s! Supported codecs: %s\n",
             get_codec_name(desc.color_spec),
-            codec_list_to_string(s->display_codecs));
+            codec_list_to_string(s->display_params.native_codecs));
         MSG(INFO,
             "Compression internal codec is \"%s\". Native codecs are: "
             "%s\n",
             get_pixdesc_desc(comp_int_prop),
-            codec_list_to_string(s->display_codecs));
+            codec_list_to_string(s->display_params.native_codecs));
         MSG(ERROR,
             "Could not find neither line conversion nor decompress "
             "from %s to display supported formats (%s).\n",
             get_codec_name(desc.color_spec),
-            codec_list_to_string(s->display_codecs));
+            codec_list_to_string(s->display_params.native_codecs));
         return nullptr;
 }
 
@@ -325,7 +324,7 @@ start_decompress_thread(struct state_video *s, video_decompress *d,
 static bool
 recv_reconfigure(struct state_video *s, struct video_desc desc)
 {
-        if (codec_is_in_set(desc.color_spec, s->display_codecs)) {
+        if (codec_is_in_set(desc.color_spec, s->display_params.native_codecs)) {
                 bool ret = my_display_reconfigure(s, desc);
                 if (!ret) {
                         return false;
@@ -379,7 +378,7 @@ decompress(decompress_thread_data *d, const struct video_frame *recv_frame,
                 case DECODER_NO_FRAME:
                         return false;
                 case DECODER_UNSUPP_PIXFMT:
-                        codec_list_erase(s->display_codecs,
+                        codec_list_erase(s->display_params.native_codecs,
                                          d->configured_display_codec);
                         s->saved_network_desc = (struct video_desc){ 0 };
                         return false;
@@ -501,23 +500,9 @@ ADD_TO_PARAM("decoder-drop-policy",
                 "  Force specified blocking policy (default nonblock).\n"
                 "  <sec> - specifies frame timeout in seconds (can have suffixes, eg. \"20ms\")\n");
 static bool
-recv_config(struct state_video *s)
+recv_config(struct state_video *s, const struct rxtx_params *params)
 {
-        size_t len = sizeof s->display_codecs;
-        if (!display_ctl_property(s->display, DISPLAY_PROPERTY_CODECS,
-                                  s->display_codecs, &len)) {
-                MSG(ERROR, "Failed to query codecs from video display.\n");
-                return false;
-        }
-        len = sizeof s->display_rgb_shift;
-        if (!display_ctl_property(s->display, DISPLAY_PROPERTY_RGB_SHIFT,
-                                   &s->display_rgb_shift, &len)) {
-                debug_msg(
-                    "Failed to get r,g,b shift property from video driver.\n");
-                int rgb_shift[] = DEFAULT_RGB_SHIFT_INIT;
-                memcpy(&s->display_rgb_shift, rgb_shift,
-                       sizeof rgb_shift);
-        }
+        s->display_params = params->display_params;
 
         const char *drop_policy = get_commandline_param("decoder-drop-policy");
         if (drop_policy == nullptr) {
@@ -551,7 +536,7 @@ video_start(struct rxtx *rxtx, const struct rxtx_params *params,
 
         if (params->medium[TX_MEDIA_VIDEO].rxtx_mode & MODE_RECEIVER &&
             rxtx_have_receive_video_frame(rxtx)) {
-                if (!recv_config(s)) {
+                if (!recv_config(s, params)) {
                         video_done(s);
                         return nullptr;
                 }
