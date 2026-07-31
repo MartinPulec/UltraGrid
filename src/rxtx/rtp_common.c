@@ -1004,7 +1004,16 @@ rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode,
                         /// @todo multi-out
                         assert(!out);
                         out = vdecoder_state->decoded_frame;
-                        assert(display_buffer == 0 || vdecoder_state->decoded_frame == display_buffer);
+                        // assert that new frame is allocated by vdec only on
+                        // format change
+                        if (display_buffer != nullptr) {
+                                bool same_props = video_desc_eq(
+                                    video_desc_from_frame(
+                                        vdecoder_state->decoded_frame),
+                                    video_desc_from_frame(display_buffer));
+                                assert(vdecoder_state->decoded_frame ==
+                                            display_buffer || !same_props);
+                        }
                 } else {
                         if (vdecoder_state->decoded_frame != display_buffer) {
                                 vf_free(vdecoder_state->decoded_frame);

@@ -1491,11 +1491,14 @@ configure_decoder(struct vcodec_state *pbuf_data, int pt, int nr_substreams,
         if (!reconfigure_if_needed(decoder, desc, {})) {
                 return nullptr;
         }
-        if (!pbuf_data->decoded_frame ||
+        unsigned pitch = pbuf_data->display_pitch;
+        if (pbuf_data->decoded_frame == nullptr ||
             !video_desc_eq(video_desc_from_frame(pbuf_data->decoded_frame),
                            decoder->display_desc)) {
                 pbuf_data->decoded_frame =
                     vf_alloc_desc_data(decoder->display_desc);
+                pitch = vc_get_linesize(decoder->display_desc.width,
+                                        decoder->display_desc.color_spec);
         }
 
         if(decoder->decoder_type != LINE_DECODER) {
@@ -1515,7 +1518,7 @@ configure_decoder(struct vcodec_state *pbuf_data, int pt, int nr_substreams,
                                 get_pf_block_bytes(out_codec);
                 out->conv_den = get_pf_block_bytes(desc.color_spec) *
                                 get_pf_block_pixels(out_codec);
-                out->dst_pitch = pbuf_data->display_pitch;
+                out->dst_pitch = pitch;
                 out->src_linesize =
                     vc_get_linesize(desc.width, desc.color_spec);
                 out->dst_linesize  = vc_get_linesize(desc.width, out_codec);
@@ -1528,8 +1531,7 @@ configure_decoder(struct vcodec_state *pbuf_data, int pt, int nr_substreams,
                                 struct line_decoder *out =
                                     &decoder->line_decoder[x + src_x_tiles * y];
                                 out->base_offset =
-                                    y * (desc.height) *
-                                        pbuf_data->display_pitch +
+                                    y * (desc.height) * pitch +
                                     vc_get_linesize(x * desc.width, out_codec);
 
                                 out->conv_num =
@@ -1538,7 +1540,7 @@ configure_decoder(struct vcodec_state *pbuf_data, int pt, int nr_substreams,
                                 out->conv_den =
                                     get_pf_block_bytes(desc.color_spec) *
                                     get_pf_block_pixels(out_codec);
-                                out->dst_pitch    = pbuf_data->display_pitch;
+                                out->dst_pitch    = pitch;
                                 out->src_linesize = vc_get_linesize(
                                     desc.width, desc.color_spec);
                                 out->dst_linesize =
