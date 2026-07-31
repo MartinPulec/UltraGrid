@@ -1053,7 +1053,7 @@ static bool
 display_gl_reconfigure(void *state, struct video_desc desc)
 {
         struct state_gl	*s = (struct state_gl *) state;
-
+        assert(desc.tile_count == 1);
         assert(get_pixfmt_config(desc.color_spec) != nullptr);
         const int recv_depth = get_bits_per_component(desc.color_spec);
         if (recv_depth > s->mode_depth) {
