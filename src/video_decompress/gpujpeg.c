@@ -70,6 +70,30 @@ struct state_decompress_gpujpeg {
         codec_t out_codec;
 };
 
+static bool
+configure_pitch(struct state_decompress_gpujpeg *s, unsigned pitch)
+{
+        if (s->out_codec == VC_NONE) { // probe
+                return true;
+        }
+
+        size_t linesize = vc_get_linesize(s->desc.width, s->out_codec);
+        if (pitch == linesize) {
+                return true;
+        }
+#if GPUJPEG_VERSION_INT < GPUJPEG_MK_VERSION_INT(0, 27, 13)
+        MSG(ERROR, "Requested pitch %d but linesize is %d B - please "
+                   "upgrade GPUJPEG!\n");
+        return false;
+#else
+        char val[32];
+        snprintf(val, sizeof val, "%d", pitch);
+        gpujpeg_decoder_set_option(s->decoder,
+                                   GPUJPEG_DEC_OPT_ALIGNMENT_BYTES_INT, val);
+        return true;
+#endif
+}
+
 static int
 configure(struct state_decompress_gpujpeg *s, unsigned pitch)
 {
@@ -80,7 +104,7 @@ configure(struct state_decompress_gpujpeg *s, unsigned pitch)
 #if GPUJPEG_VERSION_INT >= GPUJPEG_MK_VERSION_INT(0, 26, 0)
         param.verbose =
             log_level >= LOG_LEVEL_DEBUG ? GPUJPEG_LL_VERBOSE : GPUJPEG_LL_INFO;
-#else
+#else // >= 0.25.5 && < 0.26.0
         param.verbose = MAX(0, log_level - LOG_LEVEL_INFO);
 #endif
         param.perf_stats = log_level >= LOG_LEVEL_DEBUG ? 1 : 0;
@@ -88,7 +112,7 @@ configure(struct state_decompress_gpujpeg *s, unsigned pitch)
         if(!s->decoder) {
                 return false;
         }
-#else
+#else // < 0.25.5
         s->decoder = gpujpeg_decoder_create(NULL);
         if(!s->decoder) {
                 return false;
@@ -103,20 +127,11 @@ configure(struct state_decompress_gpujpeg *s, unsigned pitch)
         param.perf_stats = log_level >= LOG_LEVEL_DEBUG ? 1 : 0;
         struct gpujpeg_image_parameters param_image;
         gpujpeg_image_set_default_parameters(&param_image);
-        param_image.width = desc.width; // size must be non-zero in order the init to succeed
-        param_image.height = desc.height;
+        param_image.width = s->desc.width; // size must be non-zero in order the init to succeed
+        param_image.height = s->desc.height;
         param_image.color_space = GPUJPEG_YCBCR_BT709; // assume now BT.709 as default - this is mainly applicable for FFmpeg-encoded
                                                        // JPEGs that doesn't indicate explicitly color spec (no JFIF marker, only CS=ITU601
                                                        // for BT.601 limited range - not enabled by UG encoder because FFmpeg emits it also for 709)
-        if (pitch != linesize) {
-#if GPUJPEG_VERSION_INT < GPUJPEG_MK_VERSION_INT(0, 27, 8)
-                MSG(ERROR, "Requested pitch %d but linesize is %d B - please upgrade GPUJPEG!\n");
-                return false;
-#else
-                param_image.width_padding = pitch - linesize;
-#endif
-        }
-
         int rc = gpujpeg_decoder_init(s->decoder, &param, &param_image);
         assert(rc == 0);
 #endif
@@ -152,7 +167,12 @@ configure(struct state_decompress_gpujpeg *s, unsigned pitch)
                 assert("Invalid codec!" && 0);
         }
 
+
+        if (!configure_pitch(s, pitch)) {
+                return false;
+        }
         s->pitch = pitch;
+
         return true;
 }
 
@@ -198,6 +218,7 @@ static int gpujpeg_decompress_reconfigure(void *state, struct video_desc desc,
                 return true;
         }
 
+        s->desc      = desc;
         s->out_codec = out_codec;
         s->rshift    = rshift;
         s->gshift    = gshift;
