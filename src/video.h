@@ -14,10 +14,10 @@ extern "C" {
 #endif
 
 struct state_video *video_start(struct rxtx              *rxtx,
-                                const struct rxtx_params *params,
-                                struct module *parent, struct display *d);
-void                video_join(struct state_video *s);
-void                video_done(struct state_video *s);
+                               const struct rxtx_params *params,
+                               struct module *parent, struct display *d);
+void               video_join(struct state_video *s);
+void               video_done(struct state_video *s);
 
 #ifdef __cplusplus
 }
