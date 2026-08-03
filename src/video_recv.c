@@ -207,10 +207,6 @@ static bool
 display_codec_config_probed(decompress_thread_data   *d,
                             const struct pixfmt_desc *comp_desc)
 {
-        if (comp_desc->depth == 0) { /// @todo not sure if should occur or not
-                MSG(WARNING, "Compressed properties not probed, reconfiguring "
-                             "anyways. Check if it is ok...\n");
-        }
         struct state_video_recv *s         = d->s;
         codec_t                  dec_codec = VC_NONE;
         video_decompress        *new_dec   = init_decompress(
