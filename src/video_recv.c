@@ -20,7 +20,8 @@
 #include "utils/macros.h"  // for to_fourcc
 #include "utils/pthread.h" // for PTHREAD_NULL
 #include "utils/thread.h"  // for set_thread_name
-#include "video_codec.h"   // for get_codec_name
+#include "utils/video.h"
+#include "video_codec.h" // for get_codec_name
 #include "video_decompress.h"
 #include "video_display.h" // for PITCH_DEFAULT, PUTF_NONBLOCK, display_get...
 #include "video_frame.h"   // for vf_copy_data_pitch, vf_copy_metadata, vf_...
@@ -36,7 +37,6 @@ struct state_video_recv {
 
         struct display       *display;
         struct display_params display_params;
-        bool                  display_merged_fb;
         size_t                display_pitch;
         long long             putf_timeout;
         struct video_desc     saved_network_desc;
@@ -54,8 +54,10 @@ typedef struct {
         video_decompress        *decompress;
         codec_t                  dec_codec;
         codec_t                  configured_display_codec;
-        char                    *scratchpad;
+        unsigned char           *scratchpad;
         size_t                   scratchpad_allocated;
+        bool                     merged_fb;
+        enum video_mode          video_mode;
 } decompress_thread_data;
 
 typedef struct {
@@ -203,9 +205,13 @@ init_decompress(struct state_video_recv *s, struct video_desc desc,
         return nullptr;
 }
 
+/**
+ * called after compression format is probed (or probe unsupported)
+ * @returns true if dec reinit for given properties succeeds
+ */
 static bool
-display_codec_config_probed(decompress_thread_data   *d,
-                            const struct pixfmt_desc *comp_desc)
+decompress_display_codec_format_probed(decompress_thread_data   *d,
+                                       const struct pixfmt_desc *comp_desc)
 {
         struct state_video_recv *s         = d->s;
         codec_t                  dec_codec = VC_NONE;
@@ -222,6 +228,19 @@ display_codec_config_probed(decompress_thread_data   *d,
         }
         struct video_desc desc = s->saved_network_desc;
         desc.color_spec        = dec_codec;
+
+        bool stereo_recv = s->saved_network_desc.tile_count == 2;
+        d->merged_fb =
+            s->display_params.display_mode == DISPLAY_PROPERTY_VIDEO_MERGED ||
+            (s->display_params.display_mode ==
+                 DISPLAY_PROPERTY_VIDEO_SEPARATE_3D &&
+             !stereo_recv);
+        if (d->merged_fb) {
+                d->video_mode = guess_video_mode(desc.tile_count);
+                desc.width *= get_video_mode_tiles_x(d->video_mode);
+                desc.height *= get_video_mode_tiles_y(d->video_mode);
+                desc.tile_count = 1;
+        }
         if (!vrcv_display_reconfigure(s, desc)) {
                 MSG(ERROR, "Cannot reconfigure display for decompress!\n");
                 return false;
@@ -265,7 +284,8 @@ decompress_thread(void *arg)
                         continue;
                 }
                 if (!display_frame) { // not yet configured until probed
-                        if (!display_codec_config_probed(d, &comp_desc)) {
+                        if (!decompress_display_codec_format_probed(
+                                d, &comp_desc)) {
                                 continue;
                         }
                         display_frame = display_get_frame(s->display);
@@ -365,11 +385,18 @@ decompress(decompress_thread_data *d, const struct video_frame *recv_frame,
            struct video_frame *display_frame, struct pixfmt_desc *comp_desc)
 {
         struct state_video_recv *s = d->s;
+        unsigned                 tile_width =
+            recv_frame->tiles[0]
+                .width; // get_video_mode_tiles_x(decoder->video_mode);
+        unsigned tile_height =
+            recv_frame->tiles[0]
+                .height; // get_video_mode_tiles_y(decoder->video_mode);
+
         for (unsigned i = 0; i < recv_frame->tile_count; ++i) {
                 size_t max_len = ((size_t) recv_frame->tiles[i].width *
                                   recv_frame->tiles[i].height * MAX_BPS) +
                                  MAX_PADDING;
-                char  *buf     = nullptr;
+                unsigned char                *buf    = nullptr;
                 struct video_frame_callbacks *clbcks = nullptr;
                 if (!display_frame) {
                         if (d->scratchpad_allocated < max_len) {
@@ -378,15 +405,28 @@ decompress(decompress_thread_data *d, const struct video_frame *recv_frame,
                         }
                         buf = d->scratchpad = malloc(d->scratchpad_allocated);
                 } else {
-                        /// @todo implementovat dekodovani tiled-4k do merged
-                        assert(display_frame->tile_count ==
-                               recv_frame->tile_count);
-                        buf    = display_frame->tiles[i].data;
+                        if (d->merged_fb) {
+                                size_t x =
+                                    i % get_video_mode_tiles_x(d->video_mode);
+                                size_t y =
+                                    i / get_video_mode_tiles_x(d->video_mode);
+                                buf = (unsigned char *) vf_get_tile(
+                                          display_frame, 0)
+                                          ->data +
+                                      (y * s->display_pitch * tile_height) +
+                                      (vc_get_linesize(
+                                           tile_width,
+                                           display_frame->color_spec) *
+                                       x);
+                        } else {
+                                buf = (unsigned char *) display_frame->tiles[i]
+                                          .data;
+                        }
                         clbcks = &display_frame->callbacks;
                 }
 
                 decompress_status ret = decompress_frame(
-                    d->decompress->state[i], (unsigned char *) buf,
+                    d->decompress->state[i], buf,
                     (unsigned char *) recv_frame->tiles[i].data,
                     recv_frame->tiles[i].data_len, (int) recv_frame->seq,
                     clbcks, comp_desc, s->display_pitch);
