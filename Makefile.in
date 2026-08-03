@@ -183,6 +183,7 @@ COMMON_OBJS     = \
 ULTRAGRID_LIBS = @ULTRAGRID_LIBS@
 ULTRAGRID_OBJS = $(COMMON_OBJS) @ULTRAGRID_OBJS@ \
                 src/video.o \
+                src/video_recv.o \
                 src/main.o \
 
 REFLECTOR_OBJS = @REFLECTOR_OBJS@ $(COMMON_OBJS) \

@@ -167,6 +167,7 @@ enum {
         (IS_PREFIX_WO_VAL(tok, key) || IS_KEY_PREFIX(tok, key))
 
 #define CONST_CAST(T, dst, src)                                                \
+        /* NOLINTNEXTLINE(bugprone-sizeof-expression) */                       \
         *(T *) memcpy((void *) &(dst), (const void *) &(src), sizeof(src));    \
         static_assert(_Generic((dst), T: 1, default: 0),                       \
                       "dst (" #dst ") has wrong type (exptected: " #T ")");    \
