@@ -45,6 +45,7 @@
 #include <string.h>           // for memcpy, strcmp, strlen
 #include <time.h>             // for localtime_r, strftime, time, time_t, tm
 
+#include "compat/c23.h" // IWYU pragma: keep
 #include "debug.h"
 #include "export.h"
 #include "host.h"
@@ -71,10 +72,32 @@ struct dump_display_state {
 static void usage()
 {
         color_printf("Usage:\n");
-        color_printf(TERM_BOLD TERM_FG_RED "\t-d dump" TERM_FG_RESET "[:<directory>] [--param decoder-use-codec=<c>]\n" TERM_RESET);
+        color_printf(TBOLD(
+            TRED("\t-d dump") "[:d[irecotry]=<directory>] [--param decoder-use-codec=<c>]")
+                     "\n");
         color_printf("where\n");
-        color_printf(TERM_BOLD "\t<directory>" TERM_RESET " - directory to save the dumped stream\n");
+        color_printf("\t" TBOLD("directory") " - directory to save the dumped stream\n");
         color_printf(TERM_BOLD "\t<c>" TERM_RESET " - codec to use instead of the received (default), must be a way to convert\n");
+}
+
+static bool
+parse_fmt(const char *cfg, const char **dirname)
+{
+        if (strlen(cfg) == 0) {
+                return true;
+        }
+        if (IS_KEY_PREFIX(cfg, "directory")) {
+                *dirname = strchr(cfg, '=') + 1;
+                return true;
+        }
+        if (strchr(cfg, '=')) {
+                MSG(ERROR, "Wrong config: %s\n", cfg);
+                return false;
+        }
+        MSG(WARNING, "Passing dir name directly is deprecated! Prefer using "
+                     ":directory= key\n");
+        *dirname = cfg;
+        return true;
 }
 
 static void *display_dump_init(struct module *parent, const char *cfg, unsigned int flags)
@@ -84,17 +107,20 @@ static void *display_dump_init(struct module *parent, const char *cfg, unsigned 
                 usage();
                 return INIT_NOERR;
         }
-        struct dump_display_state *s = calloc(1, sizeof *s);
-        char dirname[128];
-        if (strlen(cfg) == 0) {
-                time_t     t      = time(NULL);
-                struct tm  tm_buf = { 0 };
-                localtime_r(&t, &tm_buf);
-                strftime(dirname, sizeof dirname, "dump.%Y%m%dT%H%M%S",
-                         &tm_buf);
-                cfg = dirname;
+
+        char buf[128];
+        time_t    t      = time(NULL);
+        struct tm tm_buf = { 0 };
+        localtime_r(&t, &tm_buf);
+        strftime(buf, sizeof buf, "dump.%Y%m%dT%H%M%S", &tm_buf);
+        const char *dirname = buf; // default
+
+        if (!parse_fmt(cfg, &dirname)) {
+                return nullptr;
         }
-        s->e = export_init(NULL, cfg, true);
+
+        struct dump_display_state *s = calloc(1, sizeof *s);
+        s->e = export_init(nullptr, dirname, true);
         if (s->e == NULL) {
                 log_msg(LOG_LEVEL_ERROR, "[dump] Failed to create export instance!\n");
                 free(s);
