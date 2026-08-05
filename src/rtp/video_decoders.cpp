@@ -43,6 +43,55 @@
  * @author  Martin Pulec <pulec@cesnet.cz>
  * @ingroup video_rtp_decoder
  *
+ * @todo
+ * This stuff is under huge refactor since @~19 (including this commit),
+ * some 10 of previous commits were also in preparation to it.
+ *
+ * The objective is to decopule entierly the video display from receiving.
+ * The API that should remain should set single video frame to pbuf_data
+ * struct. The eventual decompression occurs in video_recv.c, as well
+ * as interlacing mode change (not yet ported). FEC should then be handled
+ * in ultragrid_rtp, presumably.
+ *
+ * Since the state-of-the art of UltraGrid was to avoid memcpy entirely, this
+ * makes things  a bit complicated - what should remain are the linedecoders -
+ * decoding directly to vdisplay framebuffer if possible. If eg. not 1st frame
+ * is received, new frame is allocated and video_recv then decompressed to.
+ * To fullfill the requirements, we still need here to know display supported
+ * codecs to select best linedecoder (again, just if not compressed), rgb shift
+ * and pitch (passed in pbuf_data now).
+ *
+ * What is working (ported, either here or otherwise
+ * - linedecoders - here (should be then used by ultragrid_rtp for FEC frames as
+ * well)
+ * - video decomnpression inside a thread (video_recv.c) - here remains just
+ * running individual tiles' decompress with a worker as it is here above
+ * (mostly easy)
+ * - tiled video with merged/split buffers - uncompressed here, compressed in
+ * ultragrid_rtp
+ *
+ * What is yet to be ported:
+ * - frame statistics processing (the idea is to utilize packet counter);
+ * - change interlacing
+ * - decompress workers
+ * - FEC - suggesting using the packet counter to register the packets
+ * instead of the map (depending if the stuff remains in C++, then the
+ * map could remain); also line decoders for that as indicated above
+ * - multi out display (pipe)
+ * - delete the moved code (usually commented-out with `#if 0` below) - the
+ * nicest way would be to pair copied code with removing in approprioate
+ * commits (so that there is actual move in the commit content)
+ *
+ * What can be added after not implemented (some not easily implementable now):
+ * - line decoders after decompress (but it may not be easy because now is
+ *   probed/negotiated the format between video_display and decompress...
+ *   maybe as a fallback if unable so that vdec decodes to best format and
+ *   then linedecoder is tried?)
+ * - vo_postprocess as a separate step of pipeline (with perhaps own thread)
+ * - asynchronous decompress - suitable mainly for decompressions like
+ *   cmpto_j2k that already have asynchronous API (only)
+ * - mv capture_thread to video (or rather video_send file)
+ *
  * ## Workflow ##
  *
  * Normal workflow through threads is following:
