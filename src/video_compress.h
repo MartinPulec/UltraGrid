@@ -210,7 +210,7 @@ struct compress_module_info{
 
 /**
  * There are 4 possible APIs for video compress modules. Each module may choose
- * which one to implement, however, only one should be implemented (there is no
+ * which one to implement, however, only one must be implemented (there is no
  * "smart" heuristics to pick one if more APIs are implemented). Available options
  * are:
  * 1. Frame API - compress entire frame (all tiles)

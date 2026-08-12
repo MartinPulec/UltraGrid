@@ -48,9 +48,10 @@
 #include <utility>                     // for move
 #include <vector>
 
-#include "messaging.h"
+#include "compat/platform_semaphore.h"
 #include "debug.h"
 #include "lib_common.h"
+#include "messaging.h"
 #include "module.h"
 #include "tv.h"
 #include "utils/macros.h"              // for to_fourcc
@@ -96,6 +97,10 @@ public:
         vector<void*> state;                  ///< driver internal states
         string              compress_options; ///< compress options (for reconfiguration)
         volatile bool       discard_frames;   ///< this class is no longer active
+        struct module      *parent;
+        // following 2 vars used only for Sync Tile API compressions
+        synchronized_queue<vector<task_result_handle_t>, 1> sync_tile_queue;
+        sem_t sync_tile_semaphore{}; ///< to protect access to compress state
 };
 }
 
@@ -122,8 +127,8 @@ struct compress_state {
         bool poisoned = false;
 };
 
-static shared_ptr<video_frame> compress_frame_tiles(struct compress_state *proxy,
-                shared_ptr<video_frame> frame);
+static void compress_frame_sync_tiles_push(struct compress_state_real *s,
+                                           shared_ptr<video_frame>     frame);
 
 /// @brief Displays list of available compressions.
 void show_compress_help(bool full)
@@ -139,6 +144,8 @@ static void async_poison(struct compress_state_real *s){
                 for(size_t i = 0; i < s->state.size(); i++){
                         s->funcs->compress_tile_async_push_func(s->state[i], {}); // poison
                 }
+        } else if (s->funcs->compress_tile_func) {
+                compress_frame_sync_tiles_push(s, {});
         }
 }
 
@@ -233,8 +240,8 @@ int compress_init(struct module *parent, const char *config_string, struct compr
  * @throws    -1            if error occurred
  * @retval     1            finished successfully, no state created (eg. displayed help)
  */
-compress_state_real::compress_state_real(struct module *parent, const char *config_string) :
-        funcs(nullptr), discard_frames(false)
+compress_state_real::compress_state_real(struct module *parent_, const char *config_string) :
+        funcs(nullptr), discard_frames(false), parent(parent_)
 {
         string compress_name;
 
@@ -280,11 +287,12 @@ compress_state_real::compress_state_real(struct module *parent, const char *conf
         } else {
                 throw -1;
         }
+        platform_sem_init(&sync_tile_semaphore, 0, 1);
 }
 
 void compress_state_real::start(struct compress_state *proxy)
 {
-        if (funcs->compress_frame_async_push_func) {
+        if (funcs->compress_frame_async_pop_func || funcs->compress_tile_func) {
                 asynch_consumer_thread = thread(&compress_state_real::async_frame_consumer, this, proxy);
         } else if (funcs->compress_tile_async_push_func){
                 asynch_consumer_thread = thread(&compress_state_real::async_tile_consumer, this, proxy);
@@ -299,15 +307,13 @@ void compress_state_real::start(struct compress_state *proxy)
  * @param[in]     frame         uncompressed frame
  * @return                      false in case of failure
  */
-static bool check_state_count(unsigned tile_count, struct compress_state *proxy)
+static bool check_state_count(unsigned tile_count, struct compress_state_real *s)
 {
-        struct compress_state_real *s = proxy->ptr;
-
         if(tile_count != s->state.size()) {
                 size_t old_size = s->state.size();
                 s->state.resize(tile_count);
                 for (unsigned int i = old_size; i < s->state.size(); ++i) {
-                        s->state[i] = s->funcs->init_func(&proxy->mod, s->compress_options.c_str());
+                        s->state[i] = s->funcs->init_func(s->parent, s->compress_options.c_str());
                         if(!s->state[i]) {
                                 LOG(LOG_LEVEL_ERROR) << MOD_NAME
                                     "Compression initialization failed\n";
@@ -349,6 +355,10 @@ void compress_frame(struct compress_state *proxy, shared_ptr<video_frame> frame)
                 frame->compress_start = get_time_in_ns();
         }
 
+        if (s->funcs->compress_tile_func) {
+                compress_frame_sync_tiles_push(s, std::move(frame));
+                return;
+        }
         if (s->funcs->compress_frame_async_push_func) {
                 assert(s->funcs->compress_frame_async_pop_func);
                 s->funcs->compress_frame_async_push_func(s->state[0],
@@ -362,7 +372,7 @@ void compress_frame(struct compress_state *proxy, shared_ptr<video_frame> frame)
                         return;
                 }
 
-                if(!check_state_count(frame->tile_count, proxy)){
+                if(!check_state_count(frame->tile_count, s)){
                         return;
                 }
 
@@ -375,7 +385,7 @@ void compress_frame(struct compress_state *proxy, shared_ptr<video_frame> frame)
                 return;
         }
 
-        // sync APIs - pass poisoned pill to the queue but not to compressions,
+        // sync frame API - pass poisoned pill to the queue but not to compressions,
         if (!frame) { // which doesn't need that but use NULL frame differently
                 proxy->queue.push(shared_ptr<video_frame>());
                 return;
@@ -385,8 +395,6 @@ void compress_frame(struct compress_state *proxy, shared_ptr<video_frame> frame)
         do {
                 if (s->funcs->compress_frame_func) {
                         sync_api_frame = s->funcs->compress_frame_func(s->state[0], frame);
-                } else if(s->funcs->compress_tile_func) {
-                        sync_api_frame = compress_frame_tiles(proxy, frame);
                 } else {
                         assert(!"No eligible compress API found");
                 }
@@ -426,6 +434,9 @@ struct compress_worker_data {
 static void *compress_tile_callback(void *arg) {
         compress_worker_data *s = (compress_worker_data *) arg;
 
+        if (s->frame == nullptr) { // poison pill
+                return s;
+        }
         s->ret = s->callback(s->state, s->frame);
 
         return s;
@@ -438,55 +449,75 @@ static void *compress_tile_callback(void *arg) {
  * @param[in]     frame         uncompressed frame
  * @return                      compressed video frame, may be NULL if compression failed
  */
-static shared_ptr<video_frame> compress_frame_tiles(struct compress_state *proxy,
-                shared_ptr<video_frame> frame)
+static void
+compress_frame_sync_tiles_push(struct compress_state_real *s,
+                          shared_ptr<video_frame>     frame)
 {
-        struct compress_state_real *s = proxy->ptr;
         vector<shared_ptr<video_frame>> separate_tiles;
         if (frame) {
-                if (!check_state_count(frame->tile_count, proxy)) {
-                        return nullptr;
+                if (!check_state_count(frame->tile_count, s)) {
+                        return;
                 }
                 separate_tiles = vf_separate_tiles(frame);
         } else {
-                separate_tiles.resize(proxy->ptr->state.size());
+                separate_tiles.resize(s->state.size());
         }
 
         // frame pointer may no longer be valid
         frame = NULL;
 
-        const int tile_cnt = (int) proxy->ptr->state.size();
+        const int tile_cnt = (int) separate_tiles.size();
         vector<task_result_handle_t> task_handle(tile_cnt);
 
-        vector <compress_worker_data> data_tile(tile_cnt);
+        // prevent concurrent runs
+        platform_sem_wait(&s->sync_tile_semaphore);
         for (int i = 0; i < tile_cnt; ++i) {
-                struct compress_worker_data *data = &data_tile[i];
-                data->state = s->state[i];
-                data->frame = separate_tiles[i];
-                data->callback = s->funcs->compress_tile_func;
-
+                auto *data = new compress_worker_data{
+                        .state    = s->state[i],
+                        .frame    = std::move(separate_tiles[i]),
+                        .callback = s->funcs->compress_tile_func,
+                        .ret      = {},
+                };
                 task_handle[i] = task_run_async(compress_tile_callback, data);
         }
+        s->sync_tile_queue.push(std::move(task_handle));
+}
 
-        vector<shared_ptr<video_frame>> compressed_tiles(separate_tiles.size());
+static shared_ptr<video_frame>
+compress_frame_sync_tiles_pop(struct compress_state *proxy)
+{
+        struct compress_state_real *s = proxy->ptr;
+        vector<task_result_handle_t> task_handle = s->sync_tile_queue.pop();
+
+        int tile_cnt = (int) task_handle.size();
+        vector<shared_ptr<video_frame>> compressed_tiles(tile_cnt);
 
         bool failed = false;
+        bool poisoned = false;
         for (int i = 0; i < tile_cnt; ++i) {
                 struct compress_worker_data *data = (struct compress_worker_data *)
                         wait_task(task_handle[i]);
-
+                // do not break - we need to destroy all threads data
+                if (!data->frame) {
+                        poisoned = true;
+                }
                 if(!data->ret) {
                         failed = true;
                 }
-
                 compressed_tiles[i] = data->ret;
+                delete data;
         }
+        platform_sem_post(&s->sync_tile_semaphore);
 
+        if (poisoned) {
+                return {};
+        }
         if (failed) {
-                return NULL;
+                return vcomp_pop_retry;
         }
-
-        return vf_merge_tiles(compressed_tiles);
+        shared_ptr<video_frame> sync_api_frame = vf_merge_tiles(compressed_tiles);
+        sync_api_frame->compress_end = get_time_in_ns();
+        return sync_api_frame;
 }
 /**
  * @}
@@ -522,6 +553,7 @@ compress_state_real::~compress_state_real()
         for(unsigned int i = 0; i < state.size(); ++i) {
                 funcs->done(state[i]);
         }
+        platform_sem_destroy(&sync_tile_semaphore);
 }
 
 namespace {
@@ -583,8 +615,12 @@ void compress_state_real::async_tile_consumer(struct compress_state *s)
 void compress_state_real::async_frame_consumer(struct compress_state *s)
 {
         set_thread_name(__func__);
+        assert(!!funcs->compress_frame_async_pop_func != !!funcs->compress_tile_func);
         while (true) {
-                auto frame = funcs->compress_frame_async_pop_func(state[0]);
+                auto frame =
+                    funcs->compress_frame_async_pop_func
+                        ? funcs->compress_frame_async_pop_func(state[0])
+                        : compress_frame_sync_tiles_pop(s);
                 if (frame == vcomp_pop_retry) {
                         continue;
                 }
