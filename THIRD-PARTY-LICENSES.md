@@ -1616,8 +1616,14 @@ Permission is granted to anyone to use this software for any purpose, including 
     Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
 
     This notice may not be removed or altered from any source distribution.
-```
+````
 
+### Qt Toolkit
+
+Copyright:
+- 2018 The Qt Company Ltd. and other contributors.
+
+License: GPL-3
 
 ### SDL
 
@@ -1671,7 +1677,7 @@ Modifications by Dan Rubenstein (see Modifications.txt for
 their description.
 Modifications (C) 1998 Dan Rubenstein (drubenst@cs.umass.edu)
 
-Licenses
+Common licenses
 --------
 
 ### BSD-2-clause
