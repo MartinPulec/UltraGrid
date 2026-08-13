@@ -73,7 +73,6 @@
  * What is yet to be ported:
  * - frame statistics processing (the idea is to utilize packet counter);
  * - change interlacing
- * - decompress workers
  * - FEC - suggesting using the packet counter to register the packets
  * instead of the map (depending if the stuff remains in C++, then the
  * map could remain); also line decoders for that as indicated above
@@ -718,51 +717,7 @@ static void *decompress_thread(void *args) {
                 }
 
                 if(decoder->decoder_type == EXTERNAL_DECODER) {
-                        int tile_count = get_video_mode_tiles_x(decoder->video_mode) *
-                                        get_video_mode_tiles_y(decoder->video_mode);
-                        vector<task_result_handle_t> handle(tile_count);
-                        vector<decompress_data> data(tile_count);
-                        for (int pos = 0; pos < tile_count; ++pos) {
-                                data[pos].decoder = decoder;
-                                data[pos].pos = pos;
-                                data[pos].compressed = msg->nofec_frame;
-                                data[pos].buffer_num = msg->buffer_num[pos];
-                                if (tmp.get()) {
-                                        data[pos].out = (unsigned char *) tmp.get();
-                                } else if (decoder->merged_fb) {
-                                        // TODO: OK when rendering directly to display FB, otherwise, do not reflect pitch (we use PP)
-                                        int x = pos % get_video_mode_tiles_x(decoder->video_mode),
-                                            y = pos / get_video_mode_tiles_x(decoder->video_mode);
-                                        data[pos].out = (unsigned char *) vf_get_tile(decoder->frame, 0)->data + y * decoder->pitch * tile_height +
-                                                vc_get_linesize(tile_width, decoder->out_codec) * x;
-                                } else {
-                                        data[pos].out = (unsigned char *) vf_get_tile(decoder->frame, pos)->data;
-                                }
-                                if (tile_count > 1) {
-                                        handle[pos] = task_run_async(decompress_worker, &data[pos]);
-                                } else {
-                                        decompress_worker(&data[pos]);
-                                }
-                        }
-                        if (tile_count > 1) {
-                                for (int pos = 0; pos < tile_count; ++pos) {
-                                        wait_task(handle[pos]);
-                                }
-                        }
-                        for (int pos = 0; pos < tile_count; ++pos) {
-                                if (data[pos].ret == DECODER_GOT_CODEC) {
-                                        LOG(LOG_LEVEL_NOTICE) << MOD_NAME << "Detected compression properties: " << get_pixdesc_desc(data[pos].internal_prop) << "\n";
-                                        decoder->msg_queue.push(new main_msg_reconfigure(decoder->received_vid_desc, nullptr, false, data[pos].internal_prop));
-                                        goto skip_frame;
-                                }
-                                if (data[pos].ret != DECODER_GOT_FRAME){
-                                        if (data[pos].ret == DECODER_UNSUPP_PIXFMT) {
-                                                if(blacklist_current_out_codec(decoder))
-                                                        decoder->msg_queue.push(new main_msg_reconfigure(decoder->received_vid_desc, nullptr, true));
-                                        }
-                                        goto skip_frame;
-                                }
-                        }
+                        abort(); // moved to video_recv
                 } else {
                         if (decoder->frame->decoder_overrides_data_len) {
                                 for (unsigned int i = 0; i < decoder->frame->tile_count; ++i) {

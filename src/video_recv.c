@@ -21,6 +21,7 @@
 #include "utils/pthread.h" // for PTHREAD_NULL
 #include "utils/thread.h"  // for set_thread_name
 #include "utils/video.h"
+#include "utils/worker.h"
 #include "video_codec.h" // for get_codec_name
 #include "video_decompress.h"
 #include "video_display.h" // for PITCH_DEFAULT, PUTF_NONBLOCK, display_get...
@@ -380,6 +381,35 @@ recv_reconfigure(struct state_video_recv *s, struct video_desc desc)
         return false;
 }
 
+typedef struct {
+        decompress_thread_data   *decoder;
+        unsigned                  pos;
+        const struct video_frame *compressed;
+        decompress_status         ret;
+        unsigned char            *out;
+        /// @todo callback should not be ideally written in parallel
+        struct video_frame_callbacks *callbacks;
+        // set only if probing (ret == DECODER_GOT_CODEC)
+        struct pixfmt_desc internal_prop;
+        size_t             pitch;
+} decompress_tile_data;
+static void *
+decompress_worker(void *data)
+{
+        decompress_tile_data   *d       = data;
+        decompress_thread_data *decoder = d->decoder;
+
+        if (!d->compressed->tiles[d->pos].data) {
+                return nullptr;
+        }
+        d->ret = decompress_frame(
+            decoder->decompress->state[d->pos], d->out,
+            (unsigned char *) d->compressed->tiles[d->pos].data,
+            d->compressed->tiles[d->pos].data_len, (int) d->compressed->seq,
+            d->callbacks, &d->internal_prop, d->pitch);
+        return d;
+}
+
 static bool
 decompress(decompress_thread_data *d, const struct video_frame *recv_frame,
            struct video_frame *display_frame, struct pixfmt_desc *comp_desc)
@@ -392,18 +422,30 @@ decompress(decompress_thread_data *d, const struct video_frame *recv_frame,
             recv_frame->tiles[0]
                 .height; // get_video_mode_tiles_y(decoder->video_mode);
 
-        for (unsigned i = 0; i < recv_frame->tile_count; ++i) {
-                size_t max_len = ((size_t) recv_frame->tiles[i].width *
-                                  recv_frame->tiles[i].height * MAX_BPS) +
+        if (!display_frame) {
+                size_t max_len = ((size_t) recv_frame->tiles[0].width *
+                                  recv_frame->tiles[0].height * MAX_BPS) +
                                  MAX_PADDING;
+                if (d->scratchpad_allocated < max_len) {
+                        free(d->scratchpad);
+                        d->scratchpad_allocated = max_len;
+                }
+                d->scratchpad = malloc(d->scratchpad_allocated);
+        }
+
+        task_result_handle_t handle[recv_frame->tile_count];
+        decompress_tile_data data[recv_frame->tile_count];
+        for (unsigned i = 0; i < recv_frame->tile_count; ++i) {
                 unsigned char                *buf    = nullptr;
                 struct video_frame_callbacks *clbcks = nullptr;
+                size_t                        pitch  = s->display_pitch;
+                const struct tile            *tile   = &recv_frame->tiles[i];
                 if (!display_frame) {
-                        if (d->scratchpad_allocated < max_len) {
-                                free(d->scratchpad);
-                                d->scratchpad_allocated = max_len;
-                        }
-                        buf = d->scratchpad = malloc(d->scratchpad_allocated);
+                        assert(tile->width == recv_frame->tiles[0].width &&
+                               tile->height == recv_frame->tiles[0].height);
+                        buf   = d->scratchpad;
+                        pitch = vc_get_linesize(tile->width,
+                                                recv_frame->color_spec);
                 } else {
                         if (d->merged_fb) {
                                 size_t x =
@@ -425,12 +467,23 @@ decompress(decompress_thread_data *d, const struct video_frame *recv_frame,
                         clbcks = &display_frame->callbacks;
                 }
 
-                decompress_status ret = decompress_frame(
-                    d->decompress->state[i], buf,
-                    (unsigned char *) recv_frame->tiles[i].data,
-                    recv_frame->tiles[i].data_len, (int) recv_frame->seq,
-                    clbcks, comp_desc, s->display_pitch);
-                switch (ret) {
+                data[i].decoder    = d;
+                data[i].pos        = i;
+                data[i].compressed = recv_frame;
+                data[i].ret        = DECODER_NO_FRAME;
+                data[i].out        = buf;
+                data[i].callbacks  = clbcks;
+                // data[i].internal_prop;
+                data[i].pitch = pitch;
+
+                handle[i] = task_run_async(decompress_worker, &data[i]);
+        }
+        for (unsigned i = 0; i < recv_frame->tile_count; ++i) {
+                wait_task(handle[i]);
+        }
+
+        for (unsigned i = 0; i < recv_frame->tile_count; ++i) {
+                switch (data[i].ret) {
                 case DECODER_NO_FRAME:
                         return false;
                 case DECODER_UNSUPP_PIXFMT:
@@ -439,6 +492,7 @@ decompress(decompress_thread_data *d, const struct video_frame *recv_frame,
                         s->saved_network_desc = (struct video_desc){ 0 };
                         return false;
                 case DECODER_GOT_CODEC: {
+                        *comp_desc = data[i].internal_prop;
                         MSG(NOTICE, "Detected compression properties: %s\n",
                             get_pixdesc_desc(*comp_desc));
                         return true;
