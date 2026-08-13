@@ -4,6 +4,49 @@ Third party sources and external libraries
 This file contains licenses for 3rd party libraries that UG links to (needs
 to be contained in binary builds) + 3rd party sources not covered by COPYRIGHT.
 
+TODO
+----
+Add licenses for:
+- qt
+- dejavu font
+- decor
+- glew
+- glm
+- imagemagick
+- soxr
+- ssl
+- caca
+- jack
+- natpmp
+- v4l2convert
+- portaudio
+- pipewire
+- opencv
+- curl
+- i965 shaders
+- libva
+- aja
+- ews
+- juice
+- live555
+- openapv
+- pcp
+- zfec
+- cinerform
+- omt
+- gpujpeg
+- svt jpegxs/vp9/hevc/av1
+- vulkanr
+- aom, dav1d, rav1e
+- vpx
+- nvcodec
+- onevpl
+
+### also
+- check .so files in AppImage/dmg/zip to see if anything is not missing
+- add -license parameter to show the license where it normally will be
+hidden from the user (eg. running from AppImage)
+
 UltraGrid
 --------
 
