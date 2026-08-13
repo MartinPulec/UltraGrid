@@ -66,36 +66,11 @@ struct state_decompress_gpujpeg {
 
         struct video_desc desc;
         int rshift, gshift, bshift;
-        unsigned pitch;
         codec_t out_codec;
 };
 
-static bool
-configure_pitch(struct state_decompress_gpujpeg *s, unsigned pitch)
-{
-        if (s->out_codec == VC_NONE) { // probe
-                return true;
-        }
-
-        size_t linesize = vc_get_linesize(s->desc.width, s->out_codec);
-        if (pitch == linesize) {
-                return true;
-        }
-#if GPUJPEG_VERSION_INT < GPUJPEG_MK_VERSION_INT(0, 27, 13)
-        MSG(ERROR, "Requested pitch %d but linesize is %d B - please "
-                   "upgrade GPUJPEG!\n");
-        return false;
-#else
-        char val[32];
-        snprintf_ch(val, "%d", pitch);
-        int ret = gpujpeg_decoder_set_option(
-            s->decoder, GPUJPEG_DEC_OPT_ALIGNMENT_BYTES_INT, val);
-        return ret == GPUJPEG_NOERR;
-#endif
-}
-
 static int
-configure(struct state_decompress_gpujpeg *s, unsigned pitch)
+configure(struct state_decompress_gpujpeg *s)
 {
 #if GPUJPEG_VERSION_INT >= GPUJPEG_MK_VERSION_INT(0, 25, 5)
         struct gpujpeg_decoder_init_parameters param =
@@ -167,12 +142,6 @@ configure(struct state_decompress_gpujpeg *s, unsigned pitch)
                 assert("Invalid codec!" && 0);
         }
 
-
-        if (!configure_pitch(s, pitch)) {
-                return false;
-        }
-        s->pitch = pitch;
-
         return true;
 }
 
@@ -210,11 +179,9 @@ static int gpujpeg_decompress_reconfigure(void *state, struct video_desc desc,
         assert(out_codec == I420 || out_codec == RGB || out_codec == RGBA
                         || out_codec == UYVY || out_codec == VIDEO_CODEC_NONE);
 
-        if(s->out_codec == out_codec &&
-                        s->rshift == rshift &&
-                        s->gshift == gshift &&
-                        s->bshift == bshift &&
-                        video_desc_eq_excl_param(s->desc, desc, PARAM_INTERLACING)) {
+        if (s->decoder && s->out_codec == out_codec && s->rshift == rshift &&
+            s->gshift == gshift && s->bshift == bshift &&
+            video_desc_eq_excl_param(s->desc, desc, PARAM_INTERLACING)) {
                 return true;
         }
 
@@ -223,7 +190,13 @@ static int gpujpeg_decompress_reconfigure(void *state, struct video_desc desc,
         s->rshift    = rshift;
         s->gshift    = gshift;
         s->bshift    = bshift;
-        s->pitch     = -1;
+        if (s->decoder) {
+                gpujpeg_decoder_destroy(s->decoder);
+                s->decoder = nullptr;
+        }
+        if (!configure(s)) {
+                return DECODER_NO_FRAME;
+        }
 
         return true;
 }
@@ -305,29 +278,18 @@ gpujpeg_decompress(void *state, unsigned char *dst, unsigned char *buffer,
         struct state_decompress_gpujpeg *s = (struct state_decompress_gpujpeg *) state;
         int ret;
         struct gpujpeg_decoder_output decoder_output;
-        int linesize;
-
-        if (s->pitch != pitch) { // reconfigure
-                if(s->decoder) {
-                        gpujpeg_decoder_destroy(s->decoder);
-                        s->decoder = nullptr;
-                }
-                if (!configure(s, pitch)) {
-                        return DECODER_NO_FRAME;
-                }
-        }
 
         if (s->out_codec == VIDEO_CODEC_NONE) {
                 return gpujpeg_probe_internal_codec(buffer, src_len, internal_prop);
         }
 
-        linesize = vc_get_linesize(s->desc.width, s->out_codec);
+        unsigned linesize = vc_get_linesize(s->desc.width, s->out_codec);
         
         gpujpeg_set_device(cuda_devices[0]);
 
-        if (s->out_codec == UYVY || s->out_codec == RGB ||
+        if (linesize == pitch && (s->out_codec == UYVY || s->out_codec == RGB ||
             (s->out_codec == RGBA && s->rshift == 0 && s->gshift == 8 &&
-             s->bshift == 16)) {
+             s->bshift == 16))) {
                 gpujpeg_decoder_output_set_custom(&decoder_output, dst);
                 //int data_decompressed_size = decoder_output.data_size;
                     
@@ -355,7 +317,7 @@ gpujpeg_decompress(void *state, unsigned char *dst, unsigned char *buffer,
                                 memcpy(line_dst, line_src, linesize);
                         }
                                 
-                        line_dst += s->pitch;
+                        line_dst += pitch;
                         line_src += vc_get_linesize(s->desc.width, s->out_codec);
                 }
         }
