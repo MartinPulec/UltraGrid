@@ -7,8 +7,6 @@ to be contained in binary builds) + 3rd party sources not covered by COPYRIGHT.
 TODO
 ----
 Add licenses for:
-- decor
-- glew
 - glm
 - imagemagick
 - soxr
@@ -1644,6 +1642,37 @@ License: Sundry
  the consequences of using this software.
 ```
 
+### GLEW
+
+Copyright:
+- 2002-2007, Milan Ikits <milan ikits[]ieee org>
+- 2002-2007, Marcelo E. Magallon <mmagallo[]debian org>
+- 2002, Lev Povalahev
+
+License: BSD-3-Clause
+
+The GLEW license also includes further licenses.
+
+#### Mesa 3-D graphics library
+
+Copyright:
+- 1999-2007  Brian Paul   All Rights Reserved.
+
+License: MIT
+
+#### Khronos-licensed stuff
+
+In GLEW LICENSE.txt it is not directly metioned which part it
+relates, relevant GLEW files containing the license are the files
+auto/src/visualinfo.rc, auto/src/glewinfo.rci, auto/src/glew.rc,
+auto/src/khronos_license.h.
+
+Copyright:
+- 2007 The Khronos Group Inc.
+
+License: MIT
+
+
 ### GLFW
 
 GLFW is licensed under the zlib/libpng license, a BSD-like license that
@@ -1672,6 +1701,18 @@ Copyright:
 - 2018 The Qt Company Ltd. and other contributors.
 
 License: GPL-3
+
+### libdecor
+
+Copyright was not included in file LICENSE, taken from individual source files.
+
+Copyright:
+- 2008 Kristian Høgsberg
+- 2012 Intel Corporation
+- 2017-2018 Red Hat Inc.
+- 2018-2021 Jonas Ådahl
+
+License: MIT
 
 ### SDL
 
