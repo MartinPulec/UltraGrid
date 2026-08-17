@@ -469,9 +469,6 @@ compress_frame_sync_tiles_push(struct compress_state_real *s,
                 separate_tiles.resize(s->state.size());
         }
 
-        // frame pointer may no longer be valid
-        frame = NULL;
-
         const int tile_cnt = (int) separate_tiles.size();
         vector<task_result_handle_t> task_handle(tile_cnt);
 

@@ -120,7 +120,7 @@ vector<shared_ptr<video_frame>> vf_separate_tiles(shared_ptr<video_frame> frame)
                 auto holder = new shared_ptr<video_frame>(frame);
                 ret[i] = shared_ptr<video_frame>(vf_alloc_desc(desc), [holder](struct video_frame *frame) {
                         delete holder;
-                        vf_free(frame);
+                        vf_free(frame); // the wrapper only
                 });
 
                 ret[i]->tiles[0].data_len = frame->tiles[i].data_len;
