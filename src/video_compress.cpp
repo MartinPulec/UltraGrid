@@ -128,7 +128,8 @@ struct compress_state {
 };
 
 static void compress_frame_sync_tiles_push(struct compress_state_real *s,
-                                           shared_ptr<video_frame>     frame);
+                                           shared_ptr<video_frame>     frame,
+                                           bool                        poison);
 
 /// @brief Displays list of available compressions.
 void show_compress_help(bool full)
@@ -145,7 +146,7 @@ static void async_poison(struct compress_state_real *s){
                         s->funcs->compress_tile_async_push_func(s->state[i], {}); // poison
                 }
         } else if (s->funcs->compress_tile_func) {
-                compress_frame_sync_tiles_push(s, {});
+                compress_frame_sync_tiles_push(s, {}, true);
         }
 }
 
@@ -356,7 +357,8 @@ void compress_frame(struct compress_state *proxy, shared_ptr<video_frame> frame)
         }
 
         if (s->funcs->compress_tile_func) {
-                compress_frame_sync_tiles_push(s, std::move(frame));
+                bool poison = frame == nullptr;
+                compress_frame_sync_tiles_push(s, std::move(frame), poison);
                 return;
         }
         if (s->funcs->compress_frame_async_push_func) {
@@ -421,9 +423,11 @@ void compress_frame(struct compress_state *proxy, shared_ptr<video_frame> frame)
 struct compress_worker_data {
         void *state;      ///< compress driver status
         shared_ptr<video_frame> frame; ///< uncompressed tile to be compressed
+        bool poisoned;
 
         compress_tile_t callback;  ///< tile compress callback
-        shared_ptr<video_frame> ret; ///< OUT - returned compressed tile, NULL if failed
+        /// OUT - returned compressed tile, NULL if failed or poisoned
+        shared_ptr<video_frame> ret;
 };
 
 /**
@@ -434,7 +438,7 @@ struct compress_worker_data {
 static void *compress_tile_callback(void *arg) {
         compress_worker_data *s = (compress_worker_data *) arg;
 
-        if (s->frame == nullptr) { // poison pill
+        if (s->poisoned) {
                 return s;
         }
         s->ret = s->callback(s->state, s->frame);
@@ -446,13 +450,15 @@ static void *compress_tile_callback(void *arg) {
  * Compresses video frame with tiles API
  *
  * @param         proxy         compress state
- * @param[in]     frame         uncompressed frame
+ * @param[in]     frame         uncompressed frame, 0 to drain further frames
+ * @param         poison        poison the queue
  * @return                      compressed video frame, may be NULL if compression failed
  */
 static void
 compress_frame_sync_tiles_push(struct compress_state_real *s,
-                          shared_ptr<video_frame>     frame)
+                          shared_ptr<video_frame>     frame, bool poison)
 {
+        bool fetch_subseq_frames = !frame && !poison;
         vector<shared_ptr<video_frame>> separate_tiles;
         if (frame) {
                 if (!check_state_count(frame->tile_count, s)) {
@@ -470,11 +476,14 @@ compress_frame_sync_tiles_push(struct compress_state_real *s,
         vector<task_result_handle_t> task_handle(tile_cnt);
 
         // prevent concurrent runs
-        platform_sem_wait(&s->sync_tile_semaphore);
+        if (!fetch_subseq_frames) {
+                platform_sem_wait(&s->sync_tile_semaphore);
+        }
         for (int i = 0; i < tile_cnt; ++i) {
                 auto *data = new compress_worker_data{
                         .state    = s->state[i],
                         .frame    = std::move(separate_tiles[i]),
+                        .poisoned = poison,
                         .callback = s->funcs->compress_tile_func,
                         .ret      = {},
                 };
@@ -492,31 +501,39 @@ compress_frame_sync_tiles_pop(struct compress_state *proxy)
         int tile_cnt = (int) task_handle.size();
         vector<shared_ptr<video_frame>> compressed_tiles(tile_cnt);
 
-        bool failed = false;
+        bool no_frame = false; // failed or finished processing
         bool poisoned = false;
+        /// @todo consider handling the situation with mixed results from
+        /// different workers (not observed until now as it was never handled,
+        /// though; but multi-tile is not often used)
         for (int i = 0; i < tile_cnt; ++i) {
                 struct compress_worker_data *data = (struct compress_worker_data *)
                         wait_task(task_handle[i]);
-                // do not break - we need to destroy all threads data
-                if (!data->frame) {
+                // do not break - we need to destroy all threads' data
+                if (data->poisoned) {
                         poisoned = true;
                 }
                 if(!data->ret) {
-                        failed = true;
+                        no_frame = true;
                 }
                 compressed_tiles[i] = data->ret;
                 delete data;
         }
-        platform_sem_post(&s->sync_tile_semaphore);
 
         if (poisoned) {
+                platform_sem_post(&s->sync_tile_semaphore);
                 return {};
         }
-        if (failed) {
+        if (no_frame) {
+                platform_sem_post(&s->sync_tile_semaphore);
                 return vcomp_pop_retry;
         }
         shared_ptr<video_frame> sync_api_frame = vf_merge_tiles(compressed_tiles);
         sync_api_frame->compress_end = get_time_in_ns();
+
+        // query subsequent frames produced by compression, no sem_post yet
+        compress_frame_sync_tiles_push(s, nullptr, false);
+
         return sync_api_frame;
 }
 /**
