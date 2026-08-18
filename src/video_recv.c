@@ -148,6 +148,27 @@ video_decoder_order_output_codecs(pixfmt_desc     comp_int_prop,
         return count;
 }
 
+static video_decompress *
+decompress_init_reconfigure(struct state_video_recv *s, struct video_desc desc,
+                            struct pixfmt_desc int_fmt, codec_t out_codec)
+{
+        video_decompress *d = decompress_init(desc.color_spec, int_fmt,
+                                              out_codec, (int) desc.tile_count);
+        if (!d) {
+                return nullptr;
+        }
+        int *shift    = s->display_params.rgb_shift;
+        int  buf_size = decompress_reconfigure(d, desc, shift[0], shift[1],
+                                               shift[2], out_codec);
+        if (!buf_size) {
+                MSG(ERROR, "Cannot reconfigure decompress%s!\n",
+                    out_codec == VC_NONE ? " for probe" : "");
+                decompress_done(d);
+                return nullptr;
+        }
+        return d;
+}
+
 #define codec_list_to_string(cl) codec_list_to_str(cl, STR_LEN, (char[1024]){})
 
 static video_decompress *
@@ -156,18 +177,9 @@ init_decompress(struct state_video_recv *s, struct video_desc desc,
                 bool probe)
 {
         if (probe) {
-                video_decompress *d =
-                    decompress_init(desc.color_spec, (struct pixfmt_desc){ 0 },
-                                    VIDEO_CODEC_NONE, (int) desc.tile_count);
+                video_decompress *d = decompress_init_reconfigure(
+                    s, desc, (struct pixfmt_desc){ 0 }, VC_NONE);
                 if (d) {
-                        int *shift    = s->display_params.rgb_shift;
-                        int  buf_size = decompress_reconfigure(
-                            d, desc, shift[0], shift[1], shift[2], VC_NONE);
-                        if (!buf_size) {
-                                MSG(ERROR, "Cannot reconfigure for probe!\n");
-                                decompress_done(d);
-                                return nullptr;
-                        }
                         *out_codec = VC_NONE;
                         return d;
                 }
@@ -178,20 +190,10 @@ init_decompress(struct state_video_recv *s, struct video_desc desc,
             comp_int_prop, s->display_params.native_codecs, formats_to_try);
 
         for (unsigned i = 0; i < codec_count; i++) {
-                video_decompress *d = decompress_init(
-                    desc.color_spec, formats_to_try[i].desc,
-                    formats_to_try[i].codec, (int) desc.tile_count);
+                video_decompress *d = decompress_init_reconfigure(
+                    s, desc, formats_to_try[i].desc, formats_to_try[i].codec);
                 if (!d) { // try next
                         continue;
-                }
-                int *shift = s->display_params.rgb_shift;
-                int  buf_size =
-                    decompress_reconfigure(d, desc, shift[0], shift[1],
-                                           shift[2], formats_to_try[i].codec);
-                if (!buf_size) {
-                        MSG(ERROR, "Cannot reconfigure for probe!\n");
-                        decompress_done(d);
-                        return nullptr;
                 }
                 *out_codec = formats_to_try[i].codec;
                 return d;
