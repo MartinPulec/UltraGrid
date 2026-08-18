@@ -64,7 +64,7 @@ struct packet_counter {
         uint32_t magic;
         int      num_substreams;
 
-        struct packet *packets;
+        struct pc_packet *packets;
         size_t         packets_allocated;
         size_t         packets_count;
 };
@@ -97,7 +97,7 @@ packet_counter_register_packet(struct packet_counter *s,
         if (s->packets_count == s->packets_allocated) {
                 s->packets_allocated = 2 * (s->packets_allocated + 1);
                 s->packets = realloc(s->packets, s->packets_allocated *
-                                                     sizeof(struct packet));
+                                                     sizeof(struct pc_packet));
                 assert(s->packets != nullptr);
         }
         s->packets[s->packets_count].substream_id  = substream_id;
@@ -110,8 +110,8 @@ packet_counter_register_packet(struct packet_counter *s,
 static int
 compare(const void *a, const void *b)
 {
-        const struct packet *packet_a = a;
-        const struct packet *packet_b = b;
+        const struct pc_packet *packet_a = a;
+        const struct pc_packet *packet_b = b;
         if (packet_a->substream_id != packet_b->substream_id) {
                 return packet_a->substream_id - packet_b->substream_id;
         }
@@ -143,20 +143,25 @@ packet_counter_get_bytes(struct packet_counter *s, long *expected_o,
                          long *received_o)
 {
         qsort(s->packets, s->packets_count, sizeof s->packets[0], compare);
+        // remove duplicates
+        if (s->packets_count > 1) {
+                unsigned long wr_index = 1;
+                for (unsigned long i = 1; i < s->packets_count; ++i) {
+                        const struct pc_packet *p = s->packets + i;
+                        if (p->substream_id != p[-1].substream_id ||
+                            p->buffer_number != p[-1].buffer_number ||
+                            p->offset != p[-1].offset) {
+                                s->packets[wr_index++] = *p;
+                        }
+                }
+                s->packets_count = wr_index;
+        }
+
         long expected = 0;
         long received = 0;
 
-        unsigned long last_stream = ULONG_MAX;
-        unsigned long last_offset = ULONG_MAX;
-        unsigned long last_bufnum = ULONG_MAX;
-
         for (unsigned long i = 0; i < s->packets_count; ++i) {
-                const struct packet *p = s->packets + i;
-                if (p->substream_id == last_stream &&
-                    p->buffer_number == last_bufnum &&
-                    p->offset == last_offset) {
-                        continue; // skip pkt dup
-                }
+                const struct pc_packet *p = s->packets + i;
                 received += p->packet_len;
                 // last packet of a buffer in a substeram (count expected as its
                 // offset+len); buffers with no packes can therefor not be
@@ -167,9 +172,6 @@ packet_counter_get_bytes(struct packet_counter *s, long *expected_o,
                     p[1].buffer_number != p->buffer_number) {
                         expected += p->offset + p->packet_len;
                 }
-                last_stream = p->substream_id;
-                last_offset = p->offset;
-                last_bufnum = p->buffer_number;
         }
         *expected_o = expected;
         *received_o = received;
@@ -179,4 +181,12 @@ void
 packet_counter_clear(struct packet_counter *s)
 {
         s->packets_count = 0;
+}
+
+unsigned
+packet_counter_get_packets(const struct packet_counter *state,
+                           const struct pc_packet     **packet)
+{
+        *packet = state->packets;
+        return state->packets_count;
 }

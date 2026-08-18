@@ -84,6 +84,7 @@
 #include "types.h"
 #include "utils/color_out.h" // for color_printf
 #include "utils/net.h"       // for is_host_loopback
+#include "utils/packet_counter.h"
 #include "utils/pthread.h"   // for CHK_PTHR
 #include "utils/string.h"    // for strprintf
 #include "video_frame.h"
@@ -854,7 +855,7 @@ destroy_video_decoder(void *state)
         }
 
         video_decoder_destroy(video_decoder_state->decoder);
-
+        packet_counter_destroy(video_decoder_state->recv_packets);
         free(video_decoder_state);
 }
 
@@ -877,6 +878,7 @@ new_video_decoder(struct rtp_rxtx_common *s)
                         //decoder_register_display(state->decoder, uv->display_device);
                 }
         }
+        state->recv_packets = packet_counter_init();
 
         return state;
 }
@@ -908,7 +910,8 @@ deactivate_all_video_decoders(struct rtp_rxtx_common *s)
  */
 struct video_frame *
 rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode,
-                     struct video_frame *display_buffer, unsigned display_pitch)
+                     struct video_frame *display_buffer, unsigned display_pitch,
+                     struct vcodec_state **dec_state)
 {
         struct rtp_rxtx_common_priv_state *priv  = s->priv;
         struct rtp_rxtx_medium            *video = &s->medium[TX_MEDIA_VIDEO];
@@ -949,6 +952,8 @@ rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode,
                 priv->last_not_timeout = curr_time;
         }
 
+        /// @todo assuming only one state now - not true for multi src dec (pipe)
+        struct vcodec_state *vdecoder_state = nullptr;
         /* Decode and render for each participant in the conference... */
         pdb_iter_t it;
         cp = pdb_iter_init(video->participants, &it);
@@ -988,11 +993,11 @@ rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode,
                         }
                 }
 
-                struct vcodec_state *vdecoder_state = cp->decoder_state;
-                if (!vdecoder_state) { // disabled
+                if (!cp->decoder_state) { // disabled
                         goto next;
                 }
 
+                vdecoder_state = cp->decoder_state;
                 vdecoder_state->decoded_frame = display_buffer;
                 vdecoder_state->display_pitch = display_pitch;
                 /* Decode and render video... */
@@ -1015,6 +1020,7 @@ rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode,
                         if (vdecoder_state->decoded_frame != display_buffer) {
                                 vf_free(vdecoder_state->decoded_frame);
                         }
+                        packet_counter_clear(vdecoder_state->recv_packets);
                 }
                 vdecoder_state->decoded_frame = nullptr;
 
@@ -1042,6 +1048,7 @@ next:
 
         if (out) {
                 out->callbacks.dispose = vf_free;
+                *dec_state = vdecoder_state;
                 return out;
         }
         return rxtx_retry;

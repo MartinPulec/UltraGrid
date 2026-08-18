@@ -77,6 +77,7 @@
 #include "rtp/fec.h"            // for fec
 #include "rtp/pbuf.h"
 #include "rtp/rtp.h"
+#include "rtp/rtp_types.h"
 #include "rtp/video_decoders.h"
 #include "rxtx.h"
 #include "rxtx/rtp_common.h"  // for rtp_common
@@ -87,11 +88,13 @@
 #include "utils/color_out.h"  // for TBOLD, color_printf
 #include "utils/macros.h"     // for to_fourcc
 #include "utils/misc.h"       // for format_in_si_units
+#include "utils/packet_counter.h"
 #include "utils/pthread.h"    // for CHK_PTHR, ug_pthread_mutex_ini
 #include "utils/text.h"       // for wrap_paragraph
 #include "utils/thread.h"
 #include "utils/worker.h"
 #include "video_display.h"
+#include "video_frame.h"
 
 struct audio_frame2;
 struct display;
@@ -132,6 +135,10 @@ struct ultragrid_rtp_rxtx {
         struct module *receiver_mod;
 
         atomic_bool should_exit;
+
+        struct fec_decode_state *fec_state;
+
+        unsigned corrupted;
 };
 
 // protoypes
@@ -144,6 +151,7 @@ static void done(void *state)
                 display_done(s->display_copies[i]);
         }
         rtp_rxtx_common_done(s->rtp_common);
+        fec_decode_destroy(s->fec_state);
         free(s);
 }
 
@@ -164,6 +172,8 @@ init(struct rxtx_params *params)
         s->start_time     = params->start_time;
         s->receiver_mod   = params->receiver_mod;
         s->async_sending_task = nullptr;
+        s->fec_state          = fec_decode_create();
+
         int rc = rtp_rxtx_common_init(&s->rtp_common, params);
         if (rc != 0) {
                 done(s);
@@ -227,17 +237,88 @@ static void *send_video_frame_async_callback(void *arg) {
         return nullptr;
 }
 
+/// disposes the recv frame + the wrapper that just points
+/// to recv frame buffer (typically +4B + different size)
+static void
+dispose_fec_frame(struct video_frame *f)
+{
+        struct video_frame *fec_frame = f->callbacks.dispose_udata;
+        fec_frame->callbacks.dispose(fec_frame);
+        vf_free(f);
+}
+
+/// @todo more tiles, linedecoder, thread
+static struct video_frame *
+fec_reconstruct(struct ultragrid_rtp_rxtx *s, struct video_frame *frame,
+                struct packet_counter *recv_packets_pc)
+{
+        assert(frame->tile_count == 1);
+        for (unsigned pos = 0; pos < frame->tile_count; pos++) {
+                char *fec_out_buffer = nullptr;
+                int   fec_out_len    = 0;
+                bool  succeeded      = fec_decode_decode(
+                    s->fec_state, frame->fec_params, frame->tiles[pos].data,
+                    (int) frame->tiles[pos].data_len, &fec_out_buffer, &fec_out_len,
+                    recv_packets_pc);
+                if (!succeeded) {
+                        s->corrupted += 1;
+                        MSG(VERBOSE, "FEC: unable to reconstruct data.\n");
+                        if (fec_out_len < (int) sizeof(video_payload_hdr_t)) {
+                                return nullptr;
+                        }
+                }
+
+                video_payload_hdr_t video_hdr;
+                memcpy(&video_hdr, fec_out_buffer, sizeof(video_payload_hdr_t));
+                fec_out_buffer += sizeof(video_payload_hdr_t);
+                fec_out_len -= sizeof(video_payload_hdr_t);
+
+                struct video_desc video_desc;
+                if (!parse_video_hdr(video_hdr, &video_desc)) {
+                        return nullptr;
+                }
+
+                struct video_frame *nofec_frame = vf_alloc_desc(video_desc);
+                nofec_frame->ssrc               = frame->ssrc;
+                nofec_frame->tiles[0].data      = fec_out_buffer;
+                nofec_frame->tiles[0].data_len  = fec_out_len;
+                nofec_frame->timestamp          = frame->timestamp;
+                nofec_frame->callbacks.dispose_udata = frame;
+                nofec_frame->callbacks.dispose       = dispose_fec_frame;
+                if (!succeeded) {
+                        nofec_frame->flags |= FRM_FLG_CORRUPTED;
+                }
+                return nofec_frame;
+        }
+        return nullptr;
+}
+
 static struct video_frame *
 recv_vid_frame(void *arg, struct video_frame *display_buffer,
                size_t display_pitch)
 {
         struct ultragrid_rtp_rxtx *s = arg;
-        struct video_frame        *frame = rtp_recv_video_frame(
-            s->rtp_common, decode_video_frame, display_buffer, display_pitch);
+        struct vcodec_state *vdecoder_state = nullptr;
+
+        struct video_frame *frame = rtp_recv_video_frame(
+            s->rtp_common, decode_video_frame, display_buffer, display_pitch,
+            &vdecoder_state);
         if (!frame || frame == rxtx_retry) {
                 return frame;
         }
-        assert(frame->color_spec != VC_NONE); // eg. FEC
+        if (frame->fec_params.type != FEC_NONE) {
+                struct video_frame *nofec_frame =
+                    fec_reconstruct(s, frame, vdecoder_state->recv_packets);
+                if (!nofec_frame) {
+                        frame->callbacks.dispose(frame);
+                        packet_counter_clear(vdecoder_state->recv_packets);
+                        return rxtx_retry;
+                }
+                // original frame released by nofec_frame dispose
+                frame = nofec_frame;
+        }
+        assert(frame->color_spec != VC_NONE);
+        packet_counter_clear(vdecoder_state->recv_packets);
         return frame;
 }
 

@@ -91,6 +91,9 @@
  *   cmpto_j2k that already have asynchronous API (only)
  * - mv capture_thread to video (or rather video_send file)
  *
+ * Needs to be tested (except everything else):
+ * - decryption
+ *
  * ## Workflow ##
  *
  * Normal workflow through threads is following:
@@ -182,6 +185,7 @@
 #include "utils/color_out.h"
 #include "utils/macros.h"
 #include "utils/misc.h"
+#include "utils/packet_counter.h"
 #include "utils/synchronized_queue.h"
 #include "utils/thread.h"
 #include "utils/timed_message.h"
@@ -1502,6 +1506,19 @@ configure_decoder(struct vcodec_state *pbuf_data, int pt, int nr_substreams,
         if (PT_VIDEO_HAS_FEC(pt)) {
                 pbuf_data->decoded_frame = vf_alloc(nr_substreams);
                 pbuf_data->decoded_frame->callbacks.data_deleter = vf_data_deleter;
+                const uint32_t *hdr = (uint32_t *)(void *)pckt->data;
+                const uint32_t tmp = ntohl(hdr[3]);
+                const unsigned k = tmp >> 19;
+                const unsigned m = 0x1fff & (tmp >> 6);
+                const unsigned c = 0x3f & tmp;
+                const unsigned seed = ntohl(hdr[4]);
+                pbuf_data->decoded_frame->fec_params =
+                    fec_desc{ .type        = fec::fec_type_from_pt(pt),
+                              .k           = k,
+                              .m           = m,
+                              .c           = c,
+                              .seed        = seed,
+                              .symbol_size = 0 };
                 return pbuf_data->decoded_frame;
         }
 
@@ -1650,24 +1667,6 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
         // frame->ssrc = cdata->data->ssrc;
         uint64_t timestamp = cdata->data->ts;
         // frame->timestamp = cdata->data->ts;
-        int pt = cdata->data->pt;
-        if (PT_VIDEO_HAS_FEC(pt)) {
-                /// @todo
-#if 0
-                const uint32_t *hdr = (uint32_t *)(void *)cdata->data->data;
-                const uint32_t tmp = ntohl(hdr[3]);
-                const unsigned k = tmp >> 19;
-                const unsigned m = 0x1fff & (tmp >> 6);
-                const unsigned c = 0x3f & tmp;
-                const unsigned seed = ntohl(hdr[4]);
-                frame->fec_params = fec_desc{ .type = fec::fec_type_from_pt(pt),
-                                              .k    = k,
-                                              .m    = m,
-                                              .c    = c,
-                                              .seed = seed,
-                                              .symbol_size = 0 };
-#endif
-        }
 
         const int *const rgb_shift = decoder->display_params.rgb_shift;
 
@@ -1677,7 +1676,7 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                 rtp_packet *pckt = cdata->data;
                 enum openssl_mode crypto_mode = MODE_AES128_NONE;
 
-                pt = pckt->pt;
+                int pt = pckt->pt;
                 const uint32_t *hdr = (uint32_t *)(void *) pckt->data;
                 const uint32_t data_pos = ntohl(hdr[1]);
                 uint32_t tmp = ntohl(hdr[0]);
@@ -1799,6 +1798,9 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                 buffer_num[substream] = buffer_number;
                 pckt_list[substream][data_pos] = len;
 #endif
+                packet_counter_register_packet(pbuf_data->recv_packets,
+                                               substream, buffer_number,
+                                               data_pos, len);
 
                 if ((pt == PT_VIDEO || pt == PT_ENCRYPT_VIDEO) && decoder->decoder_type == LINE_DECODER) {
                         struct tile *tile = NULL;

@@ -39,8 +39,21 @@
 #define PACKET_COUNTER_H_4C10B9CD_C5FF_4EFA_9E3B_06504F332972
 
 #ifdef __cplusplus
+#include <cstdint>
+#else
+#include <stdint.h>
+#endif
+
+#ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
+
+struct pc_packet {
+        uint16_t substream_id;
+        uint16_t packet_len;
+        uint32_t buffer_number;
+        uint32_t offset;
+};
 
 struct packet_counter *packet_counter_init();
 void packet_counter_destroy(struct packet_counter *state);
@@ -49,6 +62,9 @@ void packet_counter_register_packet(struct packet_counter *state, unsigned int s
 void packet_counter_get_bytes(struct packet_counter *state, long *expected,
                               long *received);
 void packet_counter_clear(struct packet_counter *state);
+
+unsigned packet_counter_get_packets(const struct packet_counter *state,
+                                    const struct pc_packet     **packet);
 
 #ifdef __cplusplus
 }

@@ -107,10 +107,12 @@ typedef int decode_frame_fn(struct coded_data *cdata, void *pbuf_data,
                             struct pbuf_stats *);
 struct rx_audio_frames *rtp_recv_audio_frame(struct rtp_rxtx_common *s,
                                              decode_frame_fn decode);
-struct video_frame     *rtp_recv_video_frame(struct rtp_rxtx_common *s,
-                                             decode_frame_fn         decode,
-                                             struct video_frame     *display_buffer,
-                                             unsigned                display_pitch);
+struct vcodec_state;
+struct video_frame *rtp_recv_video_frame(struct rtp_rxtx_common *s,
+                                         decode_frame_fn         decode,
+                                         struct video_frame     *display_buffer,
+                                         unsigned                display_pitch,
+                                         struct vcodec_state   **dec_state);
 
 #ifdef __cplusplus
 }

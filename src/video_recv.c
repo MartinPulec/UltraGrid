@@ -46,6 +46,7 @@ struct state_video_recv {
         pthread_cond_t      decompress_new_frame_ready;
         pthread_cond_t      decompress_frame_consumed;
         pthread_mutex_t     decompress_lock;
+        bool                decompress_accepts_corrupted;
         struct video_frame *decompress_frame;
 };
 
@@ -166,6 +167,14 @@ decompress_init_reconfigure(struct state_video_recv *s, struct video_desc desc,
                 decompress_done(d);
                 return nullptr;
         }
+
+        int    accepts = 0;
+        size_t size    = sizeof(accepts);
+        int    ret     = decompress_get_property(
+            d, DECOMPRESS_PROPERTY_ACCEPTS_CORRUPTED_FRAME, &accepts, &size);
+        s->decompress_accepts_corrupted = ret && accepts;
+        MSG(VERBOSE, "Decoder accepts corrupted frames: %d\n",
+            (int) s->decompress_accepts_corrupted);
         return d;
 }
 
@@ -279,6 +288,10 @@ decompress_thread(void *arg)
                 if (f == &decompress_poison_pill) {
                         f = nullptr;
                         break;
+                }
+                if ((f->flags & FRM_FLG_CORRUPTED) &&
+                    !s->decompress_accepts_corrupted) {
+                        continue;
                 }
 
                 struct pixfmt_desc comp_desc = { 0 };

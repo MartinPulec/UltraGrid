@@ -48,11 +48,13 @@
 
 #include "config.h"              // for HAVE_LDGM
 #include "debug.h"
+#include "host.h"
 #include "rtp/ldgm.hpp"
 #include "rtp/rs.h"
 #include "rtp/rtp_callback.h"
 #include "rtp/rtp_types.h"       // for PT_ENCRYPT_VIDEO, PT_ENCRYPT_VIDEO_LDGM
 #include "utils/macros.h"
+#include "utils/packet_counter.h"
 
 #define MOD_NAME "[fec] "
 
@@ -285,4 +287,46 @@ fec_usage()
 #endif // !defined HAVE_LDGM || !defined HAVE_ZFEC
 
         color_printf("\n");
+}
+
+// wrapper over fec that allows reconfiguration
+typedef struct fec_decode_state {
+        struct fec_desc saved_desc;
+        struct fec *impl;
+} fec_decode_state;
+
+struct fec_decode_state *fec_decode_create() {
+        return (fec_decode_state *) calloc(1, sizeof(fec_decode_state));
+}
+
+void
+fec_decode_destroy(struct fec_decode_state *s)
+{
+        delete s->impl;
+        free(s);
+}
+
+bool
+fec_decode_decode(struct fec_decode_state *s, struct fec_desc desc, char *in,
+           int in_len, char **out, int *out_len,
+           const struct packet_counter *recv_packets)
+{
+        if (desc.k != s->saved_desc.k || desc.m != s->saved_desc.m ||
+            desc.c != s->saved_desc.c || desc.seed != s->saved_desc.seed) {
+                delete s->impl;
+                s->impl = fec::create_from_desc(desc);
+                if (!s->impl) {
+                        MSG(FATAL, "%s: Unable to initialize FEC.\n", __func__);
+                        exit_uv(1);
+                        return false;
+                }
+                s->saved_desc = desc;
+        }
+        std::map<int, int> packet_map;
+        const struct pc_packet *packets = nullptr;
+        unsigned count = packet_counter_get_packets(recv_packets, &packets);
+        for (unsigned i = 0; i < count; ++i) {
+                packet_map.emplace(packets[i].offset, packets[i].packet_len);
+        }
+        return s->impl->decode(in, in_len, out, out_len, packet_map);
 }

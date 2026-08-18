@@ -113,6 +113,7 @@ struct vcodec_state {
         struct video_frame *decoded_frame;
         /// [in] framebuffer pitch (needed only if decoded_frame != 0)
         unsigned display_pitch;
+        struct packet_counter *recv_packets; ///< for FEC
 };
 
 struct acodec_state {
