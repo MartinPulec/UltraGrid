@@ -61,6 +61,9 @@ void packet_counter_register_packet(struct packet_counter *state, unsigned int s
                 unsigned int bufnum, unsigned int offset, unsigned int len);
 void packet_counter_get_bytes(struct packet_counter *state, long *expected,
                               long *received);
+void packet_counter_get_bytes_per_ss(struct packet_counter *state,
+                                     unsigned substream_id, long *expected,
+                                     long *received);
 void packet_counter_clear(struct packet_counter *state);
 
 unsigned packet_counter_get_packets(const struct packet_counter *state,

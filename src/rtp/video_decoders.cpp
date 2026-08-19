@@ -527,13 +527,6 @@ static void *fec_thread(void *args) {
                                 char *fec_out_buffer = NULL;
                                 int fec_out_len = 0;
 
-                                if (data->recv_frame->tiles[pos].data_len != (unsigned int) sum_map(data->pckt_list[pos])) {
-                                        debug_msg("Frame incomplete - substream %d, buffer %d: expected %u bytes, got %u.\n", pos,
-                                                        (unsigned int) data->buffer_num[pos],
-                                                        data->recv_frame->tiles[pos].data_len,
-                                                        (unsigned int) sum_map(data->pckt_list[pos]));
-                                }
-
                                 bool ret = fec_state->decode(data->recv_frame->tiles[pos].data,
                                                 data->recv_frame->tiles[pos].data_len,
                                                 &fec_out_buffer, &fec_out_len, data->pckt_list[pos]);

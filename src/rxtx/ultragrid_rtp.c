@@ -256,6 +256,19 @@ fec_reconstruct(struct ultragrid_rtp_rxtx *s, struct video_frame *frame,
         for (unsigned pos = 0; pos < frame->tile_count; pos++) {
                 char *fec_out_buffer = nullptr;
                 int   fec_out_len    = 0;
+
+                long expected = 0;
+                long received = 0;
+                packet_counter_get_bytes_per_ss(recv_packets_pc, pos, &expected,
+                                                &received);
+                if (received != frame->tiles[pos].data_len) {
+                        MSG(DEBUG,
+                            "Frame incomplete - substream %d, buffer %d: "
+                            "expected %u bytes, got %ld.\n",
+                            pos, frame->seq, frame->tiles[pos].data_len,
+                            received);
+                }
+
                 bool  succeeded      = fec_decode_decode(
                     s->fec_state, frame->fec_params, frame->tiles[pos].data,
                     (int) frame->tiles[pos].data_len, &fec_out_buffer, &fec_out_len,

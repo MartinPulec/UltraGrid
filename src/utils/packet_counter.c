@@ -48,6 +48,10 @@
 
 #define MAGIC to_fourcc('U', 'T', 'p', 'c')
 
+enum {
+        PC_MAX_SUBSTREAMS = 256,
+};
+
 /**
  * The member field order is just for better memory efficiency,
  * for sorting, the packet_len goes at the end (otherwise the
@@ -65,8 +69,16 @@ struct packet_counter {
         int      num_substreams;
 
         struct pc_packet *packets;
-        size_t         packets_allocated;
-        size_t         packets_count;
+        size_t            packets_allocated;
+        size_t            packets_count;
+
+        bool stats_generated;
+        struct {
+                long expected;
+                long received;
+        } stats[PC_MAX_SUBSTREAMS];
+        long expected_cumul;
+        long received_cumul;
 };
 
 struct packet_counter *
@@ -129,19 +141,13 @@ compare(const void *a, const void *b)
         return 0;
 }
 
-/**
- * @param[out] expected_o  number of expected bytes
- * @param[out] received_o  actual number of received bytes
- *
- * @note
- * The reported number of expected bytes may be lees than the actual,
- * see the inline comment below. Usually it works ok for big buffers
- * but not for small containing few or even one packet (as in audio).
- */
-void
-packet_counter_get_bytes(struct packet_counter *s, long *expected_o,
-                         long *received_o)
+static void
+gen_stats(struct packet_counter *s)
 {
+        if (s->stats_generated) {
+                return;
+        }
+
         qsort(s->packets, s->packets_count, sizeof s->packets[0], compare);
         // remove duplicates
         if (s->packets_count > 1) {
@@ -160,6 +166,11 @@ packet_counter_get_bytes(struct packet_counter *s, long *expected_o,
         long expected = 0;
         long received = 0;
 
+
+        memset(s->stats, 0, sizeof s->stats);
+        s->expected_cumul = 0;
+        s->received_cumul = 0;
+
         for (unsigned long i = 0; i < s->packets_count; ++i) {
                 const struct pc_packet *p = s->packets + i;
                 received += p->packet_len;
@@ -170,17 +181,58 @@ packet_counter_get_bytes(struct packet_counter *s, long *expected_o,
                 if (i == s->packets_count - 1 ||
                     p[1].substream_id != p->substream_id ||
                     p[1].buffer_number != p->buffer_number) {
+                        assert(p->substream_id < PC_MAX_SUBSTREAMS);
                         expected += p->offset + p->packet_len;
+                        s->stats[p->substream_id].expected = expected;
+                        s->stats[p->substream_id].received = received;
+                        s->expected_cumul += expected;
+                        s->received_cumul += received;
+                        expected = 0;
+                        received = 0;
                 }
         }
-        *expected_o = expected;
-        *received_o = received;
+        s->stats_generated = true;
+}
+
+/**
+ * get cumulative status for all non-empty substreams (see the note)
+ *
+ * @see packet_counter_get_bytes_per_ss
+ *
+ * @note
+ * The reported number of expected bytes may be lees than the actual,
+ * see the inline comment below. Usually it works ok for big buffers
+ * but not for small containing few or even one packet (as in audio).
+ */
+void
+packet_counter_get_bytes(struct packet_counter *s, long *expected,
+                         long *received) {
+        gen_stats(s);
+        *expected = s->expected_cumul;
+        *received = s->received_cumul;
+}
+
+/**
+ * get packets stats for given substream ID
+ *
+ * @param[in]  substream_id  substream ID
+ * @param[out] expected      number of expected bytes
+ * @param[out] received      actual number of received bytes
+ */
+void
+packet_counter_get_bytes_per_ss(struct packet_counter *s, unsigned substream_id,
+                                long *expected, long *received)
+{
+        gen_stats(s);
+        *expected = s->stats[substream_id].expected;
+        *received = s->stats[substream_id].received;
 }
 
 void
 packet_counter_clear(struct packet_counter *s)
 {
-        s->packets_count = 0;
+        s->packets_count   = 0;
+        s->stats_generated = false;
 }
 
 unsigned
