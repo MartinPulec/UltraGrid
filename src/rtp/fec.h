@@ -91,12 +91,14 @@ int fec_pt_from_fec_type(enum tx_media_type media_type, enum fec_type fec_type, 
 const char *get_fec_desc(struct fec_desc desc, size_t buflen, char *buf);
 void fec_usage();
 
-struct packet_counter;
+struct pc_packet;
+typedef struct fec_decode_state fec_decode_state;
 struct fec_decode_state *fec_decode_create();
 void                     fec_decode_destroy(struct fec_decode_state *);
 bool fec_decode_decode(struct fec_decode_state *s, struct fec_desc desc,
                        char *in, int in_len, char **out, int *out_len,
-                       const struct packet_counter *recv_packets);
+                       const struct pc_packet *recv_packets,
+                       unsigned                pkt_count);
 
 #ifdef __cplusplus
 }

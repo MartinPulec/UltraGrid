@@ -52,17 +52,7 @@ enum {
         PC_MAX_SUBSTREAMS = 256,
 };
 
-/**
- * The member field order is just for better memory efficiency,
- * for sorting, the packet_len goes at the end (otherwise the
- * order matches).
- */
-struct packet {
-        uint16_t substream_id;
-        uint16_t packet_len;
-        uint32_t buffer_number;
-        uint32_t offset;
-};
+typedef struct pc_packet packet;
 
 struct packet_counter {
         uint32_t magic;
@@ -74,8 +64,9 @@ struct packet_counter {
 
         bool stats_generated;
         struct {
-                long expected;
-                long received;
+                long          expected;
+                long          received;
+                const packet *past_last;
         } stats[PC_MAX_SUBSTREAMS];
         long expected_cumul;
         long received_cumul;
@@ -141,8 +132,11 @@ compare(const void *a, const void *b)
         return 0;
 }
 
+/**
+ * sort, rm dups, generate stats and substream pointers
+ */
 static void
-gen_stats(struct packet_counter *s)
+process_packets(struct packet_counter *s)
 {
         if (s->stats_generated) {
                 return;
@@ -185,6 +179,7 @@ gen_stats(struct packet_counter *s)
                         expected += p->offset + p->packet_len;
                         s->stats[p->substream_id].expected = expected;
                         s->stats[p->substream_id].received = received;
+                        s->stats[p->substream_id].past_last = p + 1;
                         s->expected_cumul += expected;
                         s->received_cumul += received;
                         expected = 0;
@@ -207,7 +202,7 @@ gen_stats(struct packet_counter *s)
 void
 packet_counter_get_bytes(struct packet_counter *s, long *expected,
                          long *received) {
-        gen_stats(s);
+        process_packets(s);
         *expected = s->expected_cumul;
         *received = s->received_cumul;
 }
@@ -223,7 +218,7 @@ void
 packet_counter_get_bytes_per_ss(struct packet_counter *s, unsigned substream_id,
                                 long *expected, long *received)
 {
-        gen_stats(s);
+        process_packets(s);
         *expected = s->stats[substream_id].expected;
         *received = s->stats[substream_id].received;
 }
@@ -236,9 +231,29 @@ packet_counter_clear(struct packet_counter *s)
 }
 
 unsigned
-packet_counter_get_packets(const struct packet_counter *state,
-                           const struct pc_packet     **packet)
+packet_counter_get_packets(struct packet_counter *s, unsigned substream_id,
+                           const struct pc_packet **packets)
 {
-        *packet = state->packets;
-        return state->packets_count;
+        process_packets(s);
+        const packet *const past_last = s->stats[substream_id].past_last;
+        if (!past_last) {
+                return 0;
+        }
+        if (substream_id == 0) {
+                *packets = s->packets;
+                return past_last - s->packets;
+        }
+        // find our first packet (typically the previous substream past last if
+        // substream not empty)
+        const packet *prev_end          = s->stats[0].past_last;
+        unsigned      prev_substream_id = substream_id - 1;
+        while (prev_substream_id > 0) { // find prev non-empty channel
+                if (s->stats[prev_substream_id].past_last) {
+                        prev_end = s->stats[prev_substream_id].past_last;
+                        break;
+                }
+                prev_substream_id -= 1;
+        }
+        *packets = prev_end;
+        return past_last - prev_end;
 }

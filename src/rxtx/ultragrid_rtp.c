@@ -87,11 +87,9 @@
 #include "types.h"            // for video_frame (ptr only), video_mode
 #include "utils/color_out.h"  // for TBOLD, color_printf
 #include "utils/macros.h"     // for to_fourcc
-#include "utils/misc.h"       // for format_in_si_units
 #include "utils/packet_counter.h"
 #include "utils/pthread.h"    // for CHK_PTHR, ug_pthread_mutex_ini
 #include "utils/text.h"       // for wrap_paragraph
-#include "utils/thread.h"
 #include "utils/worker.h"
 #include "video_display.h"
 #include "video_frame.h"
@@ -136,7 +134,8 @@ struct ultragrid_rtp_rxtx {
 
         atomic_bool should_exit;
 
-        struct fec_decode_state *fec_state;
+        fec_decode_state **fec_state;
+        unsigned           fec_state_count;
 
         unsigned corrupted;
 };
@@ -151,7 +150,10 @@ static void done(void *state)
                 display_done(s->display_copies[i]);
         }
         rtp_rxtx_common_done(s->rtp_common);
-        fec_decode_destroy(s->fec_state);
+        for (unsigned i = 0; i < s->fec_state_count; i++) {
+                fec_decode_destroy(s->fec_state[i]);
+        }
+        free((void *) s->fec_state);
         free(s);
 }
 
@@ -172,7 +174,6 @@ init(struct rxtx_params *params)
         s->start_time     = params->start_time;
         s->receiver_mod   = params->receiver_mod;
         s->async_sending_task = nullptr;
-        s->fec_state          = fec_decode_create();
 
         int rc = rtp_rxtx_common_init(&s->rtp_common, params);
         if (rc != 0) {
@@ -247,12 +248,33 @@ dispose_fec_frame(struct video_frame *f)
         vf_free(f);
 }
 
-/// @todo more tiles, linedecoder, thread
+/**
+ * if succeeded, we take ownership of frame_p so set to nullptr
+ * @todo linedecoder, thread; consider runner whem multi tiles
+ */
 static struct video_frame *
-fec_reconstruct(struct ultragrid_rtp_rxtx *s, struct video_frame *frame,
+fec_reconstruct(struct ultragrid_rtp_rxtx *s, struct video_frame **frame_p,
                 struct packet_counter *recv_packets_pc)
 {
-        assert(frame->tile_count == 1);
+        struct video_frame *frame = *frame_p;
+
+        // allocate further states if needed
+        if (s->fec_state_count < frame->tile_count) {
+                fec_decode_state **new_state = (fec_decode_state **) realloc(
+                    (void *) s->fec_state,
+                    frame->tile_count * sizeof(fec_decode_state *));
+                assert(new_state);
+                s->fec_state = new_state;
+                for (unsigned i = s->fec_state_count; i < frame->tile_count;
+                     ++i) {
+                        s->fec_state[i] = fec_decode_create();
+                }
+                s->fec_state_count = frame->tile_count;
+        }
+
+        struct video_frame *nofec_frame = nullptr;
+        bool corrupted = false;
+
         for (unsigned pos = 0; pos < frame->tile_count; pos++) {
                 char *fec_out_buffer = nullptr;
                 int   fec_out_len    = 0;
@@ -269,41 +291,53 @@ fec_reconstruct(struct ultragrid_rtp_rxtx *s, struct video_frame *frame,
                             received);
                 }
 
-                bool  succeeded      = fec_decode_decode(
-                    s->fec_state, frame->fec_params, frame->tiles[pos].data,
-                    (int) frame->tiles[pos].data_len, &fec_out_buffer, &fec_out_len,
-                    recv_packets_pc);
+                const struct pc_packet *pkts = nullptr;
+                unsigned                pkt_count =
+                    packet_counter_get_packets(recv_packets_pc, pos, &pkts);
+                bool succeeded = fec_decode_decode(
+                    s->fec_state[pos], frame->fec_params,
+                    frame->tiles[pos].data, (int) frame->tiles[pos].data_len,
+                    &fec_out_buffer, &fec_out_len, pkts, pkt_count);
                 if (!succeeded) {
-                        s->corrupted += 1;
+                        corrupted = true;
                         MSG(VERBOSE, "FEC: unable to reconstruct data.\n");
                         if (fec_out_len < (int) sizeof(video_payload_hdr_t)) {
+                                s->corrupted += 1;
+                                vf_free(nofec_frame);
                                 return nullptr;
                         }
                 }
+                assert(frame->tiles[pos].data_len);
 
-                video_payload_hdr_t video_hdr;
-                memcpy(&video_hdr, fec_out_buffer, sizeof(video_payload_hdr_t));
-                fec_out_buffer += sizeof(video_payload_hdr_t);
-                fec_out_len -= sizeof(video_payload_hdr_t);
-
-                struct video_desc video_desc;
-                if (!parse_video_hdr(video_hdr, &video_desc)) {
-                        return nullptr;
+                if (pos == 0) { // assuming same prop for all tiles, incl W+H
+                        video_payload_hdr_t video_hdr;
+                        memcpy(&video_hdr, fec_out_buffer,
+                               sizeof(video_payload_hdr_t));
+                        struct video_desc video_desc;
+                        if (!parse_video_hdr(video_hdr, &video_desc)) {
+                                s->corrupted += 1;
+                                return nullptr;
+                        }
+                        video_desc.tile_count  = frame->tile_count;
+                        nofec_frame            = vf_alloc_desc(video_desc);
+                        nofec_frame->ssrc      = frame->ssrc;
+                        nofec_frame->timestamp = frame->timestamp;
+                        nofec_frame->callbacks.dispose_udata = frame;
+                        nofec_frame->callbacks.dispose = dispose_fec_frame;
                 }
 
-                struct video_frame *nofec_frame = vf_alloc_desc(video_desc);
-                nofec_frame->ssrc               = frame->ssrc;
-                nofec_frame->tiles[0].data      = fec_out_buffer;
-                nofec_frame->tiles[0].data_len  = fec_out_len;
-                nofec_frame->timestamp          = frame->timestamp;
-                nofec_frame->callbacks.dispose_udata = frame;
-                nofec_frame->callbacks.dispose       = dispose_fec_frame;
-                if (!succeeded) {
-                        nofec_frame->flags |= FRM_FLG_CORRUPTED;
-                }
-                return nofec_frame;
+                nofec_frame->tiles[pos].data =
+                    fec_out_buffer + sizeof(video_payload_hdr_t);
+                nofec_frame->tiles[pos].data_len =
+                    fec_out_len - sizeof(video_payload_hdr_t);
         }
-        return nullptr;
+
+        if (corrupted) {
+                s->corrupted += 1;
+                nofec_frame->flags |= FRM_FLG_CORRUPTED;
+        }
+        *frame_p = nullptr;
+        return nofec_frame;
 }
 
 static struct video_frame *
@@ -321,7 +355,7 @@ recv_vid_frame(void *arg, struct video_frame *display_buffer,
         }
         if (frame->fec_params.type != FEC_NONE) {
                 struct video_frame *nofec_frame =
-                    fec_reconstruct(s, frame, vdecoder_state->recv_packets);
+                    fec_reconstruct(s, &frame, vdecoder_state->recv_packets);
                 if (!nofec_frame) {
                         frame->callbacks.dispose(frame);
                         packet_counter_clear(vdecoder_state->recv_packets);

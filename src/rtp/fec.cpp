@@ -308,8 +308,8 @@ fec_decode_destroy(struct fec_decode_state *s)
 
 bool
 fec_decode_decode(struct fec_decode_state *s, struct fec_desc desc, char *in,
-           int in_len, char **out, int *out_len,
-           const struct packet_counter *recv_packets)
+                  int in_len, char **out, int *out_len,
+                  const struct pc_packet *recv_packets, unsigned pkt_count)
 {
         if (desc.k != s->saved_desc.k || desc.m != s->saved_desc.m ||
             desc.c != s->saved_desc.c || desc.seed != s->saved_desc.seed) {
@@ -323,10 +323,9 @@ fec_decode_decode(struct fec_decode_state *s, struct fec_desc desc, char *in,
                 s->saved_desc = desc;
         }
         std::map<int, int> packet_map;
-        const struct pc_packet *packets = nullptr;
-        unsigned count = packet_counter_get_packets(recv_packets, &packets);
-        for (unsigned i = 0; i < count; ++i) {
-                packet_map.emplace(packets[i].offset, packets[i].packet_len);
+        for (unsigned i = 0; i < pkt_count; ++i) {
+                packet_map.emplace(recv_packets[i].offset,
+                                   recv_packets[i].packet_len);
         }
         return s->impl->decode(in, in_len, out, out_len, packet_map);
 }

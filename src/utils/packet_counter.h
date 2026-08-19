@@ -48,6 +48,11 @@
 extern "C" {
 #endif /* __cplusplus */
 
+/**
+ * The member field order is just for better memory efficiency. When sorted, the
+ * packet_len is the last criterion (although irrelevant as there should not be
+ * packets differing only by the length).
+ */
 struct pc_packet {
         uint16_t substream_id;
         uint16_t packet_len;
@@ -66,8 +71,9 @@ void packet_counter_get_bytes_per_ss(struct packet_counter *state,
                                      long *received);
 void packet_counter_clear(struct packet_counter *state);
 
-unsigned packet_counter_get_packets(const struct packet_counter *state,
-                                    const struct pc_packet     **packet);
+unsigned packet_counter_get_packets(struct packet_counter   *state,
+                                    unsigned                 substream_id,
+                                    const struct pc_packet **packets);
 
 #ifdef __cplusplus
 }
