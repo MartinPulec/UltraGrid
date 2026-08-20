@@ -447,7 +447,6 @@ struct state_video_decoder
 
         synchronized_queue<unique_ptr<frame_msg>, 1> fec_queue;
 
-        enum video_mode   video_mode = {} ;  ///< video mode set for this decoder
         bool          merged_fb = false; ///< flag if the display device driver requires tiled video or not
 
         timed_message<LOG_LEVEL_WARNING> slow_msg; ///< shows warning only in certain interval
@@ -1061,7 +1060,7 @@ static codec_t choose_codec_and_decoder(struct state_video_decoder *decoder, str
                 if (desc.color_spec == codec) {
                         if ((desc.color_spec == DXT1 || desc.color_spec == DXT1_YUV ||
                                         desc.color_spec == DXT5)
-                                        && decoder->video_mode != VIDEO_NORMAL)
+                                        && desc.tile_count != 1)
                                 continue; /// DXT1 it is a exception, see @ref vdec_note1
 
                         *decode_line = vc_memcpy;
@@ -1233,7 +1232,6 @@ reconfigure_decoder(struct state_video_decoder *decoder, struct video_desc desc)
 
         enum video_mode video_mode = guess_video_mode(desc.tile_count);
         if (video_mode != VIDEO_UNKNOWN) {
-                decoder->video_mode = video_mode;
                 MSG(INFO, "Video mode: %s\n",
                     get_video_mode_description(video_mode));
         } else {
@@ -1241,11 +1239,8 @@ reconfigure_decoder(struct state_video_decoder *decoder, struct video_desc desc)
                 return false;
         }
 
-        desc.tile_count = get_video_mode_tiles_x(decoder->video_mode)
-                        * get_video_mode_tiles_y(decoder->video_mode);
-
-        out_codec =
-            choose_codec_and_decoder(decoder, desc, &decoder->decode_line);
+        out_codec = choose_codec_and_decoder(
+            decoder, desc, &decoder->decode_line);
         if (out_codec == VIDEO_CODEC_NONE) {
                 return false;
         }
@@ -1268,8 +1263,8 @@ reconfigure_decoder(struct state_video_decoder *decoder, struct video_desc desc)
         }
 
         if (display_mode == DISPLAY_PROPERTY_VIDEO_MERGED) {
-                display_desc.width *= get_video_mode_tiles_x(decoder->video_mode);
-                display_desc.height *= get_video_mode_tiles_y(decoder->video_mode);
+                display_desc.width *= get_video_mode_tiles_x(video_mode);
+                display_desc.height *= get_video_mode_tiles_y(video_mode);
                 display_desc.tile_count = 1;
         }
 
@@ -1343,6 +1338,7 @@ reconfigure_decoder(struct state_video_decoder *decoder, struct video_desc desc)
 #endif
         }
 
+#if 0
         // Pass metadata to receiver thread (it can tweak parameters)
         auto *msg =
             (struct msg_sender *) new_message(sizeof(struct msg_sender));
@@ -1352,7 +1348,6 @@ reconfigure_decoder(struct state_video_decoder *decoder, struct video_desc desc)
             get_parent_module(&decoder->mod), (struct message *) msg);
         free_response(resp);
 
-#if 0
         if (out_codec != VIDEO_CODEC_END) {
                 decoder->frame = display_get_frame(decoder->display);
                 assert(decoder->frame != nullptr);
@@ -1396,22 +1391,6 @@ bool parse_video_hdr(const uint32_t *hdr, struct video_desc *desc)
         return true;
 }
 
-static bool reconfigure_helper(struct state_video_decoder *decoder,
-                struct video_desc network_desc)
-{
-        bool ret = reconfigure_decoder(decoder, network_desc);
-        if (!ret) {
-                log_msg(LOG_LEVEL_ERROR, "[video dec.] Reconfiguration failed!!!\n");
-                // decoder->frame = NULL;
-                decoder->out_codec = VIDEO_CODEC_NONE;
-                return false;
-        }
-
-        decoder->received_vid_desc = network_desc;
-
-        return ret;
-}
-
 static bool
 reconfigure_if_needed(struct state_video_decoder *decoder,
                       struct video_desc network_desc, bool m_bit_present,
@@ -1421,8 +1400,8 @@ reconfigure_if_needed(struct state_video_decoder *decoder,
         const bool desc_eq = video_desc_eq_excl_param(
             decoder->received_vid_desc, network_desc, excluded_param);
         if (desc_eq) {
-                if (NR_SUBSTREAMS_FROM_VIDEO_MODE(decoder->video_mode) >=
-                    nr_substreams) {
+                if (decoder->received_vid_desc.tile_count >=
+                    (unsigned) nr_substreams) {
                         return true;
                 }
                 MSG(WARNING,
@@ -1447,7 +1426,16 @@ reconfigure_if_needed(struct state_video_decoder *decoder,
         snprintf_ch(report, "new incoming video fmt: %s", desc);
         control_report_stats(decoder->control, report);
 
-        return reconfigure_helper(decoder, network_desc);
+        bool ret = reconfigure_decoder(decoder, network_desc);
+        if (!ret) {
+                log_msg(LOG_LEVEL_ERROR, "[video dec.] Reconfiguration failed!!!\n");
+                // decoder->frame = NULL;
+                decoder->out_codec = VIDEO_CODEC_NONE;
+                return false;
+        }
+        decoder->received_vid_desc = network_desc;
+        return true;
+
         /// @todo this will be removed
 #if 0
         const bool comp_int_eq =
@@ -1490,15 +1478,27 @@ static void check_for_mode_change(struct state_video_decoder *decoder,
 #define max(a, b)       (((a) > (b))? (a): (b))
 
 static struct video_frame *
-configure_decoder(struct vcodec_state *pbuf_data, int pt, int nr_substreams,
-                  const rtp_packet *pckt)
+configure_decoder(struct vcodec_state *pbuf_data, int pt,
+                  unsigned nr_substreams, const rtp_packet *pckt)
 {
         const auto *hdr = (const uint32_t *) (const void *) pckt->data;
         struct state_video_decoder *decoder = pbuf_data->decoder;
 
         if (PT_VIDEO_HAS_FEC(pt)) {
-                pbuf_data->decoded_frame = vf_alloc(nr_substreams);
-                pbuf_data->decoded_frame->callbacks.data_deleter = vf_data_deleter;
+                if (!pckt->m && nr_substreams > decoder->received_vid_desc.tile_count) {
+                        MSG(WARNING,
+                            "Receiving %d streams but no m-bit thus cannot "
+                            "determine FEC channel count!\n",
+                            nr_substreams);
+                        return nullptr;
+                }
+                if (pckt->m) {
+                        decoder->received_vid_desc.tile_count = nr_substreams;
+                }
+                pbuf_data->decoded_frame =
+                    vf_alloc(decoder->received_vid_desc.tile_count);
+                pbuf_data->decoded_frame->callbacks.data_deleter =
+                    vf_data_deleter;
                 const uint32_t *hdr = (uint32_t *)(void *)pckt->data;
                 const uint32_t tmp = ntohl(hdr[3]);
                 const unsigned k = tmp >> 19;
@@ -1520,6 +1520,8 @@ configure_decoder(struct vcodec_state *pbuf_data, int pt, int nr_substreams,
         if (!reconfigure_if_needed(decoder, desc, pckt->m, nr_substreams)) {
                 return nullptr;
         }
+        // in case last tile is missing not to trigger reconf
+        desc.tile_count = decoder->received_vid_desc.tile_count;
         if (decoder->decoder_type == EXTERNAL_DECODER) {
                 pbuf_data->decoded_frame = vf_alloc_desc(desc);
                 pbuf_data->decoded_frame->callbacks.data_deleter = vf_data_deleter;
@@ -1539,13 +1541,15 @@ configure_decoder(struct vcodec_state *pbuf_data, int pt, int nr_substreams,
                 return pbuf_data->decoded_frame;
         }
         // pitch may change, we want to reset line decoder props
-        int src_x_tiles = get_video_mode_tiles_x(decoder->video_mode);
-        int src_y_tiles = get_video_mode_tiles_y(decoder->video_mode);
+        enum video_mode video_mode =
+            guess_video_mode(decoder->received_vid_desc.tile_count);
+        int     src_x_tiles = get_video_mode_tiles_x(video_mode);
+        int src_y_tiles = get_video_mode_tiles_y(video_mode);
         codec_t out_codec = decoder->out_codec; // set by reconfigure
 
         if (decoder->display_params.display_mode ==
                 DISPLAY_PROPERTY_VIDEO_MERGED &&
-            decoder->video_mode == VIDEO_NORMAL) {
+            video_mode == VIDEO_NORMAL) {
                 struct line_decoder *out = &decoder->line_decoder[0];
                 out->base_offset         = 0;
                 out->conv_num = get_pf_block_pixels(desc.color_spec) *
@@ -1559,7 +1563,7 @@ configure_decoder(struct vcodec_state *pbuf_data, int pt, int nr_substreams,
                 decoder->merged_fb = true;
         } else if (decoder->display_params.display_mode ==
                        DISPLAY_PROPERTY_VIDEO_MERGED &&
-                   decoder->video_mode != VIDEO_NORMAL) {
+                   video_mode != VIDEO_NORMAL) {
                 for (int x = 0; x < src_x_tiles; ++x) {
                         for (int y = 0; y < src_y_tiles; ++y) {
                                 struct line_decoder *out =
