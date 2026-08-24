@@ -1,4 +1,6 @@
 #!/bin/sh -eux
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2020-2026 CESNET, zájmové sdružení právnických osob
 
 ## download directly release asset - doesn't work right now, the
 ## static library fails to link with the rest of the UG because

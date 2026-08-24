@@ -1,4 +1,6 @@
 #!/bin/bash -ex
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2018-2026 CESNET, zájmové sdružení právnických osob
 
 #export PATH='/usr/local/bin:/usr/bin:/bin'
 

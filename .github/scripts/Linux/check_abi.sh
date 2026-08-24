@@ -1,4 +1,6 @@
 #!/bin/sh -eu
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2020-2026 CESNET, zájmové sdružení právnických osob
 
 # Checks libc/ibstdc++ ABI version
 # see also https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html

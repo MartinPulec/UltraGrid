@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2018-2026 CESNET, zájmové sdružení právnických osob
 #
 # Generates (prints) list of DLL dependencies of Windows executable
 # (would work with DLL itself as well).

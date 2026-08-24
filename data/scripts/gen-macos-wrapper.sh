@@ -1,4 +1,6 @@
 #!/bin/sh -eu
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2022-2026 CESNET, zájmové sdružení právnických osob
 
 cat << 'EOF'
 #!/bin/sh -eu

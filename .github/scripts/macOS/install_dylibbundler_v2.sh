@@ -1,4 +1,6 @@
 #!/bin/sh -eu
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2020-2026 CESNET, zájmové sdružení právnických osob
 
 # 2020-05-02
 # Used dylib bundler v2 from https://github.com/SCG82/macdylibbundler instead of the

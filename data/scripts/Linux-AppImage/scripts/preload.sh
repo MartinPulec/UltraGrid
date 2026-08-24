@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2022-2026 CESNET, zájmové sdružení právnických osob
+#
 # shellcheck shell=sh
 get_loader() {
         loaders='/lib64/ld-linux-*so* /lib/ld-linux-*so* /lib*/ld-linux-*so*'

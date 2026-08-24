@@ -1,4 +1,6 @@
 #!/bin/sh -eu
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2019-2026 CESNET, zájmové sdružení právnických osob
 
 # Requires asciidoc (a2x) and working UltraGrid (uv, hd-rum-transcode) in PATH
 # TODO: add sections EXAMPLES, DESCRIPTION etc.

@@ -1,4 +1,6 @@
 #!/bin/sh -eu
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2014-2026 CESNET, zájmové sdružení právnických osob
 
 ## Prepares UG for release, does following tasks:
 ## - replaces verson string in configure.ac

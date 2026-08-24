@@ -1,4 +1,6 @@
 #!/bin/sh -eux
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2020-2026 CESNET, zájmové sdružení právnických osob
 
 export CPATH=/usr/local/include${CPATH:+":$CPATH"}
 EXTRA_LIB_PATH=/usr/local/cuda/lib64:/usr/local/lib

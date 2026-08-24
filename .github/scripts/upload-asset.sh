@@ -1,4 +1,6 @@
 #!/bin/sh -eu
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2020-2026 CESNET, zájmové sdružení právnických osob
 
 dir=$(dirname "$0")
 # shellcheck source=/dev/null

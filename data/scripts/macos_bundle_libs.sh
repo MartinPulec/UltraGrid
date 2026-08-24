@@ -1,4 +1,6 @@
 #!/bin/sh -eu
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025-2026 CESNET, zájmové sdružení právnických osob
 
 dylibbundler=$1
 dylibbundler_flags=$2

@@ -1,4 +1,6 @@
 #!/bin/sh -eu
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2020-2026 CESNET, zájmové sdružení právnických osob
 #
 ## downloads gh release asset
 ## @param $1 GH repo (eg aja-video/ntv2)

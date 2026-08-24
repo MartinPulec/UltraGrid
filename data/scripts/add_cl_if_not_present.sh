@@ -1,4 +1,8 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2021-2026 CESNET, zájmové sdružení právnických osob
+#
 # shellcheck shell=sh
+#
 ## This file tries to find cl.exe by using vswhere if nvcc was found in $PATH. This
 ## is a prerequisity in MSW. Does nothing if cl.exe already in $PATH or given explicitly
 ## by --with-cuda-host-compiler (obviously also when not in MSW or there is not CUDA).

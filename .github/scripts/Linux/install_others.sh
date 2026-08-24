@@ -1,4 +1,6 @@
 #!/bin/sh -eux
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2022-2026 CESNET, zájmové sdružení právnických osob
 
 . /etc/os-release
 

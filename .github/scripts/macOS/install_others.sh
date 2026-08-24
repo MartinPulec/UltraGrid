@@ -1,4 +1,6 @@
 #!/bin/sh -eu
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2020-2026 CESNET, zájmové sdružení právnických osob
 #
 # Environment variables that may be updated by subsequent functions
 # (eg. FEATURES) should not be set in a subshell, otherwise just the

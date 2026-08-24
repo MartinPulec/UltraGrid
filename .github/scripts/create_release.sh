@@ -1,4 +1,6 @@
 #!/bin/sh -eux
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2020-2026 CESNET, zájmové sdružení právnických osob
 
 ## == NEWS/FIXES.md processing description (release)
 ## NEWS: 1. first line is stripped; then all content is used until new line

@@ -1,4 +1,6 @@
 #!/bin/sh -ux
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2021-2026 CESNET, zájmové sdružení právnických osob
 #
 ## Prints GH variable $1 equal to ETag of URL in $2. The output is supposed
 ## to be redirected to $GITHUB_OUTPUT file.

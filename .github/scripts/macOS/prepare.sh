@@ -1,4 +1,6 @@
 #!/bin/bash -eux
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2020-2026 CESNET, zájmové sdružení právnických osob
 
 srcroot=$(cd "$(dirname "$0")/../../.."; pwd)
 readonly srcroot

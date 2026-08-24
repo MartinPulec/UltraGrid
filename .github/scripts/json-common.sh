@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2020-2026 CESNET, zájmové sdružení právnických osob
 # shellcheck shell=sh
 is_int() { test "$@" -eq "$@"; }
 

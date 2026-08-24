@@ -1,4 +1,6 @@
 #!/bin/sh -eux
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2021-2026 CESNET, zájmové sdružení právnických osob
 #
 # Ensures that tag "continuous" is present is released on GH. This is required for
 # zsync AppImage release asset.

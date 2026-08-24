@@ -1,4 +1,6 @@
 #!/bin/sh -eux
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2020-2026 CESNET, zájmové sdružení právnických osob
 
 set +e # pattern matching may fail
 # If first parameter 2 parameters is GITHUB_REPOSOTIRY and GITHUB_TOKEN, those willbe used as an env var (used by the scripts below)

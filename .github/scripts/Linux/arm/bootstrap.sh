@@ -1,4 +1,6 @@
 #!/bin/sh -exu
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2020-2026 CESNET, zájmové sdružení právnických osob
 
 debver=$(. /etc/os-release; echo "$VERSION_CODENAME")
 readonly debver

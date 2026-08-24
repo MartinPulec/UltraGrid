@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2025-2026 CESNET, zájmové sdružení právnických osob
 # $2 - pattern to exclude; separate packates with '\|' (BRE alternation)
 get_build_deps_excl() {
         apt-cache showsrc "$1" | sed -n "/^Build-Depends:/\

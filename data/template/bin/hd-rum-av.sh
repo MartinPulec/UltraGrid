@@ -1,4 +1,6 @@
 #!/bin/sh -eu
+# SPDX-License-Identifier: BSD-3-Clause
+# Copyright (c) 2024-2026 CESNET, zájmové sdružení právnických osob
 ##
 ## Wrapper for (transcoding) reflector runnint both audio
 ## and video instance simoultaneously. Base parameters are
