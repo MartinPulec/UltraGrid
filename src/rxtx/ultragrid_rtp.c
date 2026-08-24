@@ -328,6 +328,11 @@ fec_reconstruct(struct ultragrid_rtp_rxtx *s, struct video_frame **frame_p,
         return nofec_frame;
 }
 
+/**
+ * missing since porting from video decoder:
+ * - fec in a separate thread - I don't think it is necessary and it would
+ *   make the processing here more clumsy (if eg. in a worker)
+ */
 static struct video_frame *
 recv_vid_frame(void *arg, struct video_frame *display_buffer,
                size_t display_pitch)
@@ -335,11 +340,12 @@ recv_vid_frame(void *arg, struct video_frame *display_buffer,
         struct ultragrid_rtp_rxtx *s = arg;
         struct vcodec_state *vdecoder_state = nullptr;
 
-        struct video_frame *frame = rtp_recv_video_frame(
-            s->rtp_common, decode_video_frame, display_buffer, display_pitch,
-            &vdecoder_state);
-
-        if (!frame || frame == rxtx_retry) {
+        struct video_frame *frame = nullptr;
+        while ((frame = rtp_recv_video_frame(s->rtp_common, decode_video_frame,
+                                             display_buffer, display_pitch,
+                                             &vdecoder_state)) == rxtx_retry) {
+        }
+        if (!frame) {
                 return frame;
         }
 
