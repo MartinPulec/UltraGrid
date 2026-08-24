@@ -14,7 +14,8 @@
 #include "compat/qsort_s.h" // for qsort_s
 #include "debug.h"          // for LOG_LEVEL_ERROR, MSG, debug_msg
 #include "host.h"           // for register_should_exit_callback, unregister...
-#include "rxtx.h"           // for rxtx_medium_params, rxtx_have_receive_vid...
+#include "pixfmt_conv.h"
+#include "rxtx.h" // for rxtx_medium_params, rxtx_have_receive_vid...
 #include "tv.h"
 #include "types.h"         // for rxtx_mode, tx_media_type, video_desc
 #include "utils/macros.h"  // for to_fourcc
@@ -30,6 +31,8 @@
 #define MOD_NAME "[vrecv] "
 #define MAGIC    to_fourcc('v', 'd', 'r', 'x')
 
+static const struct video_frame thread_poison_pill;
+
 struct state_video_recv {
         uint32_t       magic;
         pthread_t      vid_recv_thread_id;
@@ -41,16 +44,19 @@ struct state_video_recv {
         size_t                display_pitch;
         long long             putf_timeout;
         struct video_desc     saved_network_desc;
+        enum video_mode       video_mode;
+        bool                  merged_fb;
 
-        pthread_t           decompress_thread;
-        pthread_cond_t      decompress_new_frame_ready;
-        pthread_cond_t      decompress_frame_consumed;
-        pthread_mutex_t     decompress_lock;
+        // either line decoder or decompress
+        pthread_t           decode_thread_id;
+        pthread_cond_t      decode_thread_new_frame_ready;
+        pthread_cond_t      decode_thread_frame_consumed;
+        pthread_mutex_t     decode_thread_lock;
+        struct video_frame *decode_thread_frame;
         bool                decompress_accepts_corrupted;
-        struct video_frame *decompress_frame;
+        decoder_t           decode_line;
 };
 
-static const struct video_frame decompress_poison_pill;
 typedef struct {
         struct state_video_recv *s;
         video_decompress        *decompress;
@@ -58,8 +64,6 @@ typedef struct {
         codec_t                  configured_display_codec;
         unsigned char           *scratchpad;
         size_t                   scratchpad_allocated;
-        bool                     merged_fb;
-        enum video_mode          video_mode;
 } decompress_thread_data;
 
 typedef struct {
@@ -147,6 +151,158 @@ video_decoder_order_output_codecs(pixfmt_desc     comp_int_prop,
         }
 
         return count;
+}
+
+/// @returns whether writting to merged fb
+static bool
+adjust_desc_video_mode_for_tiles(const struct state_video_recv *s,
+                                 struct video_desc             *desc,
+                                 enum video_mode               *video_mode)
+{
+        *video_mode      = guess_video_mode(desc->tile_count);
+        bool stereo_recv = desc->tile_count == 2;
+        bool merged_fb =
+            s->display_params.display_mode == DISPLAY_PROPERTY_VIDEO_MERGED ||
+            (s->display_params.display_mode ==
+                 DISPLAY_PROPERTY_VIDEO_SEPARATE_3D &&
+             !stereo_recv);
+        if (!merged_fb) {
+                return false;
+        }
+        desc->width *= get_video_mode_tiles_x(*video_mode);
+        desc->height *= get_video_mode_tiles_y(*video_mode);
+        desc->tile_count = 1;
+        return true;
+}
+
+static void *
+line_decoder_thread(void *arg)
+{
+        set_thread_name(__func__);
+        struct state_video_recv *s = arg;
+        struct video_frame      *f = nullptr;
+
+        while (true) {
+                VIDEO_FRAME_DISPOSE(f);
+
+                CHK_PTHR(pthread_mutex_lock(&s->decode_thread_lock));
+                {
+                        while (!s->decode_thread_frame) {
+                                CHK_PTHR(pthread_cond_wait(
+                                    &s->decode_thread_new_frame_ready,
+                                    &s->decode_thread_lock));
+                        }
+                        f                      = s->decode_thread_frame;
+                        s->decode_thread_frame = nullptr;
+                }
+                CHK_PTHR(pthread_mutex_unlock(&s->decode_thread_lock));
+                CHK_PTHR(pthread_cond_signal(&s->decode_thread_frame_consumed));
+
+                if (f == &thread_poison_pill) {
+                        f = nullptr;
+                        break;
+                }
+
+                struct video_frame *display_frame =
+                    display_get_frame(s->display);
+
+                int *restrict shifts = s->display_params.rgb_shift;
+                for (unsigned pos = 0; pos < f->tile_count; ++pos) {
+                        struct tile *s_tile = vf_get_tile(f, pos);
+                        int d_tile_idx      = s->merged_fb ? 0 : f->tile_count;
+                        struct tile *d_tile =
+                            vf_get_tile(display_frame, d_tile_idx);
+                        size_t tile_pos_x =
+                            pos % get_video_mode_tiles_x(s->video_mode);
+                        size_t tile_pos_y =
+                            pos / get_video_mode_tiles_x(s->video_mode);
+                        size_t dst_buf_offset =
+                            (tile_pos_y * s->saved_network_desc.height *
+                             s->display_pitch) +
+                            vc_get_linesize(tile_pos_x *
+                                                s->saved_network_desc.width,
+                                            display_frame->color_spec);
+                        size_t src_linesize =
+                            vc_get_linesize(s_tile->width, f->color_spec);
+                        size_t dst_linesize = vc_get_linesize(
+                            s_tile->width, display_frame->color_spec);
+
+                        char       *src     = f->tiles[pos].data;
+                        const char *src_end = src + s_tile->data_len;
+                        char       *dst     = d_tile->data + dst_buf_offset;
+                        while (src < src_end) {
+                                s->decode_line((unsigned char *) dst,
+                                               (unsigned char *) src,
+                                               dst_linesize, shifts[0],
+                                               shifts[1], shifts[2]);
+                                src += src_linesize;
+                                dst += s->display_pitch;
+                        }
+                }
+                display_frame->ssrc      = f->ssrc;
+                display_frame->timestamp = f->timestamp;
+
+                display_put_frame(s->display, display_frame, s->putf_timeout);
+        }
+
+        return nullptr;
+}
+
+/**
+ * mimics choose_codec_and_decoder() (rtp/video_decoders)
+ * @note
+ * The properties of DXTn do not exactly match - bpp is 0.5, but line (actually
+ * 4 lines) is (2 * width) long, so it makes troubles when using line decoder
+ * and tiles. So the fallback is external decoder. The DXT compression is
+ * exceptional in that, that it can be both internally and externally
+ * decompressed.
+ */
+static bool
+setup_line_decoder(struct state_video_recv *s, struct video_desc desc)
+{
+        codec_t found_codec = VC_NONE;
+        for (const codec_t *it = s->display_params.native_codecs;
+             !found_codec && *it != VC_NONE; it++) {
+                if (desc.color_spec != *it) {
+                        continue;
+                }
+                if ((desc.color_spec == DXT1 || desc.color_spec == DXT1_YUV ||
+                     desc.color_spec == DXT5) &&
+                    desc.tile_count != 1) {
+                        continue; /// DXT it is an exception, see note
+                                  /// above
+                }
+                s->decode_line = vc_memcpy;
+                /* another exception - we may change shifts */
+                if (desc.color_spec == RGBA) {
+                        s->decode_line = get_decoder_from_to(desc.color_spec,
+                                                             desc.color_spec);
+                }
+                found_codec = *it;
+        }
+        // if codec doesen't match, try to find line decoder
+        for (const codec_t *it = s->display_params.native_codecs;
+             !found_codec && *it != VC_NONE; it++) {
+                s->decode_line = get_decoder_from_to(desc.color_spec, *it);
+                if (s->decode_line) {
+                        found_codec = *it;
+                }
+        }
+        if (!found_codec) { // no eligible line decoder was found
+                return false;
+        }
+        desc.color_spec = found_codec;
+        s->merged_fb =
+            adjust_desc_video_mode_for_tiles(s, &desc, &s->video_mode);
+
+        bool ret = vrcv_display_reconfigure(s, desc);
+        if (!ret) {
+                return false;
+        }
+        CHK_PTHR(pthread_create(&s->decode_thread_id, nullptr,
+                                line_decoder_thread, s));
+        assert(s->decode_thread_id != PTHREAD_NULL);
+        return true;
 }
 
 static video_decompress *
@@ -241,18 +397,9 @@ decompress_display_codec_format_probed(decompress_thread_data   *d,
         struct video_desc desc = s->saved_network_desc;
         desc.color_spec        = dec_codec;
 
-        bool stereo_recv = s->saved_network_desc.tile_count == 2;
-        d->merged_fb =
-            s->display_params.display_mode == DISPLAY_PROPERTY_VIDEO_MERGED ||
-            (s->display_params.display_mode ==
-                 DISPLAY_PROPERTY_VIDEO_SEPARATE_3D &&
-             !stereo_recv);
-        if (d->merged_fb) {
-                d->video_mode = guess_video_mode(desc.tile_count);
-                desc.width *= get_video_mode_tiles_x(d->video_mode);
-                desc.height *= get_video_mode_tiles_y(d->video_mode);
-                desc.tile_count = 1;
-        }
+        s->merged_fb =
+            adjust_desc_video_mode_for_tiles(s, &desc, &s->video_mode);
+
         if (!vrcv_display_reconfigure(s, desc)) {
                 MSG(ERROR, "Cannot reconfigure display for decompress!\n");
                 return false;
@@ -272,20 +419,20 @@ decompress_thread(void *arg)
 
         while (true) {
                 VIDEO_FRAME_DISPOSE(f);
-                CHK_PTHR(pthread_mutex_lock(&s->decompress_lock));
+                CHK_PTHR(pthread_mutex_lock(&s->decode_thread_lock));
                 {
-                        while (!s->decompress_frame) {
+                        while (!s->decode_thread_frame) {
                                 CHK_PTHR(pthread_cond_wait(
-                                    &s->decompress_new_frame_ready,
-                                    &s->decompress_lock));
+                                    &s->decode_thread_new_frame_ready,
+                                    &s->decode_thread_lock));
                         }
-                        f                   = s->decompress_frame;
-                        s->decompress_frame = nullptr;
+                        f                      = s->decode_thread_frame;
+                        s->decode_thread_frame = nullptr;
                 }
-                CHK_PTHR(pthread_mutex_unlock(&s->decompress_lock));
-                CHK_PTHR(pthread_cond_signal(&s->decompress_frame_consumed));
+                CHK_PTHR(pthread_mutex_unlock(&s->decode_thread_lock));
+                CHK_PTHR(pthread_cond_signal(&s->decode_thread_frame_consumed));
 
-                if (f == &decompress_poison_pill) {
+                if (f == &thread_poison_pill) {
                         f = nullptr;
                         break;
                 }
@@ -312,7 +459,6 @@ decompress_thread(void *arg)
                 display_put_frame(s->display, display_frame, s->putf_timeout);
                 display_frame = display_get_frame(s->display);
         }
-        VIDEO_FRAME_DISPOSE(f);
 
         if (display_frame) {
                 display_put_frame(s->display, display_frame, PUTF_DISCARD);
@@ -356,28 +502,42 @@ start_decompress_thread(struct state_video_recv *s, video_decompress *d,
         *thr_data = (decompress_thread_data){ .decompress = d,
                                               .s          = s,
                                               .dec_codec  = dec_codec };
-        CHK_PTHR(pthread_create(&s->decompress_thread, nullptr,
+        CHK_PTHR(pthread_create(&s->decode_thread_id, nullptr,
                                 decompress_thread, thr_data));
+        assert(s->decode_thread_id != PTHREAD_NULL);
+}
+
+/// @returns whether display wants native rgb shifts or we need to use a line
+/// decoder
+static bool
+disp_rgba_has_native_shifts(const int rgb_shift[const static 3])
+{
+        return rgb_shift[0] == DEFAULT_R_SHIFT &&
+               rgb_shift[1] == DEFAULT_G_SHIFT &&
+               rgb_shift[2] == DEFAULT_B_SHIFT;
 }
 
 static bool
 recv_reconfigure(struct state_video_recv *s, struct video_desc desc)
 {
-        if (codec_is_in_set(desc.color_spec, s->display_params.native_codecs)) {
-                bool ret = vrcv_display_reconfigure(s, desc);
-                if (!ret) {
-                        return false;
-                }
+        s->saved_network_desc = desc;
+        // natively supported
+        if (codec_is_in_set(desc.color_spec, s->display_params.native_codecs) &&
+            (desc.color_spec != RGBA ||
+             disp_rgba_has_native_shifts(s->display_params.rgb_shift))) {
+                return vrcv_display_reconfigure(s, desc);
+        }
 
-                s->saved_network_desc = desc;
+        if (setup_line_decoder(s, desc)) {
                 return true;
         }
+
+        // finally try to find decompress
         codec_t           dec_codec = VC_NONE;
         video_decompress *d         = init_decompress(
             s, desc, (struct pixfmt_desc){ 0 }, &dec_codec, true);
         if (d) {
                 start_decompress_thread(s, d, dec_codec);
-                s->saved_network_desc = desc;
                 return true;
         }
 
@@ -393,6 +553,7 @@ recv_reconfigure(struct state_video_recv *s, struct video_desc desc)
             get_codec_name(desc.color_spec),
             codec_list_to_string(s->display_params.native_codecs));
 
+        s->saved_network_desc = (struct video_desc){ 0 };
         return false;
 }
 
@@ -462,11 +623,11 @@ decompress(decompress_thread_data *d, const struct video_frame *recv_frame,
                         pitch = vc_get_linesize(tile->width,
                                                 recv_frame->color_spec);
                 } else {
-                        if (d->merged_fb) {
+                        if (s->merged_fb) {
                                 size_t x =
-                                    i % get_video_mode_tiles_x(d->video_mode);
+                                    i % get_video_mode_tiles_x(s->video_mode);
                                 size_t y =
-                                    i / get_video_mode_tiles_x(d->video_mode);
+                                    i / get_video_mode_tiles_x(s->video_mode);
                                 buf = (unsigned char *) vf_get_tile(
                                           display_frame, 0)
                                           ->data +
@@ -521,43 +682,44 @@ decompress(decompress_thread_data *d, const struct video_frame *recv_frame,
 }
 
 static void
-submit_decompress_frame(struct state_video_recv *s, struct video_frame *f)
+submit_frame(struct state_video_recv *s, struct video_frame *f)
 {
-        CHK_PTHR(pthread_mutex_lock(&s->decompress_lock));
+        CHK_PTHR(pthread_mutex_lock(&s->decode_thread_lock));
         {
                 // poison pill must be enqueued
-                if (f == &decompress_poison_pill) {
-                        while (s->decompress_frame) {
+                if (f == &thread_poison_pill) {
+                        while (s->decode_thread_frame) {
                                 CHK_PTHR(pthread_cond_wait(
-                                    &s->decompress_frame_consumed,
-                                    &s->decompress_lock));
+                                    &s->decode_thread_frame_consumed,
+                                    &s->decode_thread_lock));
                         }
                 } else {
-                        if (s->decompress_frame) {
+                        if (s->decode_thread_frame) {
                                 VIDEO_FRAME_DISPOSE(f);
                                 /// @todo too slow message
                                 goto unlock;
                         }
                 }
-                s->decompress_frame = f;
-                CHK_PTHR(pthread_cond_signal(&s->decompress_new_frame_ready));
+                s->decode_thread_frame = f;
+                CHK_PTHR(
+                    pthread_cond_signal(&s->decode_thread_new_frame_ready));
         }
 unlock:
-        CHK_PTHR(pthread_mutex_unlock(&s->decompress_lock));
+        CHK_PTHR(pthread_mutex_unlock(&s->decode_thread_lock));
 }
 
 static void
-stop_decompress(struct state_video_recv *s)
+stop_thread(struct state_video_recv *s)
 {
-        if (s->decompress_thread == PTHREAD_NULL) {
+        if (s->decode_thread_id == PTHREAD_NULL) {
                 return;
         }
-        const struct video_frame *cpill = &decompress_poison_pill;
+        const struct video_frame *cpill = &thread_poison_pill;
         struct video_frame       *pill =
             CONST_CAST(struct video_frame *, pill, cpill);
-        submit_decompress_frame(s, pill);
-        CHK_PTHR(pthread_join(s->decompress_thread, nullptr));
-        s->decompress_thread = PTHREAD_NULL;
+        submit_frame(s, pill);
+        CHK_PTHR(pthread_join(s->decode_thread_id, nullptr));
+        s->decode_thread_id = PTHREAD_NULL;
 }
 
 static void *
@@ -584,17 +746,16 @@ video_receiver_thread(void *arg)
                                                   PUTF_DISCARD);
                                 display_frame = nullptr;
                         }
-                        stop_decompress(s);
+                        stop_thread(s);
                         if (!recv_reconfigure(s, video_desc_from_frame(ret))) {
                                 VIDEO_FRAME_DISPOSE(ret);
                                 continue;
                         }
                 }
 
-                const bool have_decompress =
-                    s->decompress_thread != PTHREAD_NULL;
-                if (have_decompress) {
-                        submit_decompress_frame(s, ret);
+                const bool have_thread = s->decode_thread_id != PTHREAD_NULL;
+                if (have_thread) {
+                        submit_frame(s, ret);
                         continue;
                 }
 
@@ -618,7 +779,7 @@ video_receiver_thread(void *arg)
                 display_put_frame(s->display, display_frame, PUTF_DISCARD);
         }
 
-        stop_decompress(s);
+        stop_thread(s);
         // pass poisoned pill to display
         display_put_frame(s->display, nullptr, PUTF_BLOCKING);
 
@@ -640,11 +801,12 @@ video_recv_start(struct rxtx *rxtx, const struct rxtx_params *params,
         s->rxtx                    = rxtx;
         s->display                 = d;
         s->parent                  = parent;
-        s->decompress_thread       = PTHREAD_NULL;
+        s->decode_thread_frame     = nullptr;
+        s->decode_thread_id        = PTHREAD_NULL;
         s->display_params          = params->display_params;
-        ug_pthread_mutex_init(&s->decompress_lock);
-        CHK_PTHR(pthread_cond_init(&s->decompress_new_frame_ready, nullptr));
-        CHK_PTHR(pthread_cond_init(&s->decompress_frame_consumed, nullptr));
+        ug_pthread_mutex_init(&s->decode_thread_lock);
+        CHK_PTHR(pthread_cond_init(&s->decode_thread_new_frame_ready, nullptr));
+        CHK_PTHR(pthread_cond_init(&s->decode_thread_frame_consumed, nullptr));
 
         const char *drop_policy = get_commandline_param("decoder-drop-policy");
         if (drop_policy == nullptr) {
@@ -696,8 +858,8 @@ video_recv_done(struct state_video_recv *s)
                 return;
         }
         assert(s->magic == MAGIC);
-        CHK_PTHR(pthread_mutex_destroy(&s->decompress_lock));
-        CHK_PTHR(pthread_cond_destroy(&s->decompress_new_frame_ready));
-        CHK_PTHR(pthread_cond_destroy(&s->decompress_frame_consumed));
+        CHK_PTHR(pthread_mutex_destroy(&s->decode_thread_lock));
+        CHK_PTHR(pthread_cond_destroy(&s->decode_thread_new_frame_ready));
+        CHK_PTHR(pthread_cond_destroy(&s->decode_thread_frame_consumed));
         free(s);
 }

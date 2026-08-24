@@ -250,7 +250,7 @@ dispose_fec_frame(struct video_frame *f)
 
 /**
  * if succeeded, we take ownership of frame_p so set to nullptr
- * @todo linedecoder, thread; consider runner whem multi tiles
+ * @todo thread; consider runner whem multi tiles
  */
 static struct video_frame *
 fec_reconstruct(struct ultragrid_rtp_rxtx *s, struct video_frame **frame_p,
