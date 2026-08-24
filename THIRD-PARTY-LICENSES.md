@@ -21,6 +21,7 @@ Add licenses for:
 - ews
 - juice
 - live555
+- midi
 - openapv
 - pcp
 - zfec
