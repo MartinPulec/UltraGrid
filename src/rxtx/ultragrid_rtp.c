@@ -353,6 +353,10 @@ recv_vid_frame(void *arg, struct video_frame *display_buffer,
                     "Frame incomplete - buffer %d: "
                     "expected %u bytes, got %ld.\n",
                     frame->seq, sum_data_len, received);
+                if (frame->fec_params.type == FEC_NONE) {
+                        s->corrupted += 1;
+                        frame->flags |= FRM_FLG_CORRUPTED;
+                }
         }
 
         if (frame->fec_params.type != FEC_NONE) {
