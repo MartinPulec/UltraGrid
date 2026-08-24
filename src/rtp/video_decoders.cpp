@@ -1863,15 +1863,6 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                 fec_msg->pckt_list = std::move(pckt_list);
                 fec_msg->received_pkts_cum = stats->received_pkts_cum;
                 fec_msg->expected_pkts_cum = stats->expected_pkts_cum;
-
-                auto t0 = steady_clock::now();
-                decoder->fec_queue.push(std::move(fec_msg));
-                auto t1 = steady_clock::now();
-                auto tpf = std::chrono::duration<double>(1.0 / decoder->display_desc.fps);
-                if (t1 - t0 > tpf && decoder->stats.displayed > 20) {
-                        decoder->slow_msg.print("Your computer may be too SLOW to play this !!!\n");
-                }
-
         }
         ;
         if (!ret) {

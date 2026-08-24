@@ -53,6 +53,7 @@ struct state_video_recv {
         pthread_cond_t      decode_thread_frame_consumed;
         pthread_mutex_t     decode_thread_lock;
         struct video_frame *decode_thread_frame;
+        unsigned long long  decode_dropped_frames;
         bool                decompress_accepts_corrupted;
         decoder_t           decode_line;
 };
@@ -696,7 +697,10 @@ submit_frame(struct state_video_recv *s, struct video_frame *f)
                 } else {
                         if (s->decode_thread_frame) {
                                 VIDEO_FRAME_DISPOSE(f);
-                                /// @todo too slow message
+                                if (s->decode_dropped_frames++ % 150 == 20) {
+                                        MSG(WARNING, "Your computer may be too "
+                                                     "SLOW to play this !!!\n");
+                                }
                                 goto unlock;
                         }
                 }
