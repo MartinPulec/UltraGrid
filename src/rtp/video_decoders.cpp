@@ -521,22 +521,6 @@ static void *fec_thread(void *args) {
 
                 if (data->recv_frame->fec_params.type != FEC_NONE) {
                 } else { /* PT_VIDEO */
-                        for(int i = 0; i < (int) data->nofec_frame->tile_count; ++i) {
-                                data->nofec_frame->tiles[i].data_len = data->recv_frame->tiles[i].data_len;
-                                data->nofec_frame->tiles[i].data = data->recv_frame->tiles[i].data;
-
-                                if (data->recv_frame->tiles[i].data_len != (unsigned int) sum_map(data->pckt_list[i])) {
-                                        debug_msg("Frame incomplete - substream %d, buffer %d: expected %u bytes, got %u.%s\n", i,
-                                                        (unsigned int) data->buffer_num[i],
-                                                        data->recv_frame->tiles[i].data_len,
-                                                        (unsigned int) sum_map(data->pckt_list[i]),
-                                                        decoder->decoder_type == EXTERNAL_DECODER && !decoder->accepts_corrupted_frame ? " dropped.\n" : "");
-                                        data->is_corrupted = true;
-                                        if(decoder->decoder_type == EXTERNAL_DECODER && !decoder->accepts_corrupted_frame) {
-                                                goto cleanup;
-                                        }
-                                }
-                        }
                 }
 
                 decoder->decompress_queue.push(std::move(data));

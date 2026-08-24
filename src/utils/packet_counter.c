@@ -195,9 +195,14 @@ process_packets(struct packet_counter *s)
  * @see packet_counter_get_bytes_per_ss
  *
  * @note
- * The reported number of expected bytes may be lees than the actual,
- * see the inline comment below. Usually it works ok for big buffers
- * but not for small containing few or even one packet (as in audio).
+ * The reported number of _expected_ bytes may be lees than the actual, see the
+ * inline comment in process_packets() because off+len of last packet in substream
+ * is used but this may be lost.
+ * <br>
+ * Usually it works ok for big buffers but not for small containing few or even
+ * one packet (as in audio).
+ * <br>
+ * If possible, prefer `data_len` header from packet, which is reliable.
  */
 void
 packet_counter_get_bytes(struct packet_counter *s, long *expected,
@@ -209,6 +214,9 @@ packet_counter_get_bytes(struct packet_counter *s, long *expected,
 
 /**
  * get packets stats for given substream ID
+ *
+ * @note
+ * see the note in packet_counter_get_bytes()
  *
  * @param[in]  substream_id  substream ID
  * @param[out] expected      number of expected bytes

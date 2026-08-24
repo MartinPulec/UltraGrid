@@ -279,18 +279,6 @@ fec_reconstruct(struct ultragrid_rtp_rxtx *s, struct video_frame **frame_p,
                 char *fec_out_buffer = nullptr;
                 int   fec_out_len    = 0;
 
-                long expected = 0;
-                long received = 0;
-                packet_counter_get_bytes_per_ss(recv_packets_pc, pos, &expected,
-                                                &received);
-                if (received != frame->tiles[pos].data_len) {
-                        MSG(DEBUG,
-                            "Frame incomplete - substream %d, buffer %d: "
-                            "expected %u bytes, got %ld.\n",
-                            pos, frame->seq, frame->tiles[pos].data_len,
-                            received);
-                }
-
                 const struct pc_packet *pkts = nullptr;
                 unsigned                pkt_count =
                     packet_counter_get_packets(recv_packets_pc, pos, &pkts);
@@ -350,9 +338,23 @@ recv_vid_frame(void *arg, struct video_frame *display_buffer,
         struct video_frame *frame = rtp_recv_video_frame(
             s->rtp_common, decode_video_frame, display_buffer, display_pitch,
             &vdecoder_state);
+
         if (!frame || frame == rxtx_retry) {
                 return frame;
         }
+
+        unsigned sum_data_len    = vf_get_data_len(frame);
+        long     expected_unused = 0; // sum_data_len is more reliable...
+        long     received        = 0;
+        packet_counter_get_bytes(vdecoder_state->recv_packets, &expected_unused,
+                                 &received);
+        if (received != sum_data_len) {
+                MSG(DEBUG,
+                    "Frame incomplete - buffer %d: "
+                    "expected %u bytes, got %ld.\n",
+                    frame->seq, sum_data_len, received);
+        }
+
         if (frame->fec_params.type != FEC_NONE) {
                 struct video_frame *nofec_frame =
                     fec_reconstruct(s, &frame, vdecoder_state->recv_packets);
