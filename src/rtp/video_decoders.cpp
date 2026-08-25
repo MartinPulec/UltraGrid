@@ -73,9 +73,6 @@
  * What is yet to be ported:
  * - frame statistics processing (the idea is to utilize packet counter);
  * - change interlacing
- * - FEC - suggesting using the packet counter to register the packets
- * instead of the map (depending if the stuff remains in C++, then the
- * map could remain); also line decoders for that as indicated above
  * - multi out display (pipe)
  * - delete the moved code (usually commented-out with `#if 0` below) - the
  * nicest way would be to pair copied code with removing in approprioate

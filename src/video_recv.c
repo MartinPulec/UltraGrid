@@ -526,7 +526,12 @@ recv_reconfigure(struct state_video_recv *s, struct video_desc desc)
         if (codec_is_in_set(desc.color_spec, s->display_params.native_codecs) &&
             (desc.color_spec != RGBA ||
              disp_rgba_has_native_shifts(s->display_params.rgb_shift))) {
-                return vrcv_display_reconfigure(s, desc);
+                struct video_desc desc_copy = desc;
+                bool merged_fb =
+                    adjust_desc_video_mode_for_tiles(s, &desc_copy, &s->video_mode);
+                if (!merged_fb || s->video_mode == VIDEO_NORMAL) {
+                        return vrcv_display_reconfigure(s, desc);
+                }
         }
 
         if (setup_line_decoder(s, desc)) {
