@@ -79,7 +79,6 @@ struct state_blend_common {
                                 vf_free(frame);
                         }
                 }
-                thread_id.join();
         }
         struct display *real_display;
         struct video_desc display_desc;
@@ -231,6 +230,7 @@ static void display_blend_run(void *state)
                                 skipped = 0;
                         } else {
                                 skipped++;
+                                vf_free(frame);
                                 continue;
                         }
                 }
@@ -346,6 +346,8 @@ static void display_blend_run(void *state)
 static void display_blend_done(void *state)
 {
         struct state_blend *s = (struct state_blend *)state;
+        s->common->thread_id.join();
+
         delete s;
 }
 
