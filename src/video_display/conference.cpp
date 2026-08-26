@@ -45,18 +45,25 @@
 #include <queue>
 #include <thread>
 #include <string_view>
+#include <unordered_map>
 
+#include "compat/platform_semaphore.h"
 #include "debug.h"
 #include "host.h"
 #include "lib_common.h"
 #include "module.h"
 #include "messaging.h"                  // for check_message...
+#include "pixfmt_conv.h"
 #include "utils/color_out.h"
 #include "utils/misc.h"
+#include "utils/worker.h"
 #include "utils/string_view_utils.hpp"
 #include "video_codec.h"
+#include "video_decompress.h"
 #include "video_display.h"
 #include "video_frame.h"
+#include "types.h"
+
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-align"
@@ -178,6 +185,24 @@ void Participant::to_cv_frame(){
                 src_len -= 4;
         }
 }
+
+typedef uint32_t ssrc;
+namespace {
+struct decompress_data {
+        decompress_data()
+        {
+                sem_t *sem = (sem_t *) malloc(sizeof *sem);
+                platform_sem_init(sem, 0, 1);
+                semaphore = std::shared_ptr<sem_t>(sem, [](sem_t *sem) {
+                        platform_sem_destroy(sem);
+                        free(sem);
+                });
+        }
+        video_desc                   desc {};
+        std::shared_ptr<video_decompress> state;
+        std::shared_ptr<sem_t>            semaphore;
+};
+} // namespace
 
 class Video_mixer{
 public:
@@ -425,6 +450,8 @@ struct state_conference_common{
         std::condition_variable incoming_frame_consumed;
         std::condition_variable new_incoming_frame_cv;
         std::queue<unique_frame> incoming_frames;
+
+        std::unordered_map<ssrc, decompress_data> decompress;
 };
 
 struct state_conference {
@@ -672,12 +699,16 @@ static bool display_conference_get_property(void *state, int property, void *val
                 return true;
 
         } else if(property == DISPLAY_PROPERTY_CODECS) {
-                codec_t codecs[] = {UYVY};
-
-                memcpy(val, codecs, sizeof(codecs));
-
-                *len = sizeof(codecs);
-
+                codec_t codecs[VC_COUNT + 1];
+                size_t count = 0;
+                codecs[count++] = UYVY;
+                count += get_all_codecs(codecs + count, true);
+                const unsigned c_len = count * sizeof(codec_t);
+                if (c_len > *len) {
+                        return false;
+                }
+                memcpy(val, codecs, c_len);
+                *len = c_len;
                 return true;
         }
         
@@ -688,7 +719,8 @@ static bool display_conference_reconfigure(void *state, struct video_desc desc)
 {
         struct state_conference *s = (struct state_conference *) state;
 
-        s->desc = desc;
+        (void) s, (void) desc;
+        // s->desc = desc;
 
         return true;
 }
@@ -704,8 +736,60 @@ static struct video_frame *display_conference_getf(void *state)
 {
         PROFILE_FUNC;
         auto s = static_cast<state_conference *>(state);
+        (void) s;
+        return nullptr;
+        // return vf_alloc_desc_data(s->desc);
+}
 
-        return vf_alloc_desc_data(s->desc);
+namespace {
+typedef struct {
+        struct state_conference_common *s;
+        video_decompress          *decompress;
+        struct video_frame        *f;
+        sem_t                     *sem;
+} conference_decompress_worker_data;
+} // namespace
+
+static void *
+decompress_worker(void *arg)
+{
+        auto                      *d     = (conference_decompress_worker_data *) arg;
+        struct state_conference_common *s     = d->s;
+        struct video_frame        *frame = d->f;
+        video_decompress *decompress = d->decompress;
+        sem_t *sem = d->sem;
+        free(d);
+
+        struct video_desc desc  = video_desc_from_frame(frame);
+        desc.color_spec         = UYVY;
+        struct video_frame *out = vf_alloc_desc_data(desc);
+        decompress_status   ret = decompress_frame(
+            decompress->state[0], (unsigned char *) out->tiles[0].data,
+            (unsigned char *) frame->tiles[0].data, frame->tiles[0].data_len,
+            frame->seq, &frame->callbacks, nullptr,
+            vc_get_linesize(out->tiles[0].width, UYVY));
+        vf_free(frame);
+        if (ret == DECODER_NO_FRAME) {
+                vf_free(out);
+                platform_sem_post(sem);
+                return nullptr;
+        }
+        assert(ret == DECODER_GOT_FRAME);
+        out->ssrc = frame->ssrc;
+        frame = out;
+
+        std::unique_lock<std::mutex>         lg(s->incoming_frames_lock);
+        if (s->incoming_frames.size() >= IN_QUEUE_MAX_BUFFER_LEN) {
+                log_msg(LOG_LEVEL_WARNING, "[conference] queue full!\n");
+                vf_free(frame);
+                platform_sem_post(sem);
+                return nullptr;
+        }
+        s->incoming_frames.emplace(frame);
+        lg.unlock();
+        s->new_incoming_frame_cv.notify_one();
+        platform_sem_post(sem);
+        return nullptr;
 }
 
 static bool display_conference_putf(void *state, struct video_frame *frame, long long flags)
@@ -714,7 +798,22 @@ static bool display_conference_putf(void *state, struct video_frame *frame, long
 
         if (flags == PUTF_DISCARD) {
                 vf_free(frame);
-        } else {
+                return true;
+        }
+
+        if (frame == nullptr) { // poison pill
+                for (auto const &d : s->decompress) { // wait for workers to end
+                        platform_sem_wait(d.second.semaphore.get());
+                }
+                // pass
+                std::unique_lock<std::mutex> lg(s->incoming_frames_lock);
+                s->incoming_frames.emplace(frame);
+                lg.unlock();
+                s->new_incoming_frame_cv.notify_one();
+                return true;
+        }
+
+        if (frame->color_spec == UYVY) {
                 std::unique_lock<std::mutex> lg(s->incoming_frames_lock);
                 if (s->incoming_frames.size() >= IN_QUEUE_MAX_BUFFER_LEN) {
                         log_msg(LOG_LEVEL_WARNING, "[conference] queue full!\n");
@@ -731,6 +830,50 @@ static bool display_conference_putf(void *state, struct video_frame *frame, long
                 lg.unlock();    
                 s->new_incoming_frame_cv.notify_one();
         }
+
+        if ((frame->flags & FRM_FLG_CORRUPTED) != 0U) {
+                vf_free(frame);
+                return false;
+        }
+
+        sem_t            *sem        = nullptr;
+        video_decompress *decompress = nullptr;
+        struct video_desc decompress_desc{};
+        {
+                auto               it = s->decompress.find(frame->ssrc);
+                if (it == s->decompress.end()) {
+                        s->decompress.emplace(frame->ssrc, decompress_data{});
+                        it = s->decompress.find(frame->ssrc);
+                }
+                decompress_desc = it->second.desc;
+                sem             = it->second.semaphore.get();
+                decompress      = it->second.state.get();
+        }
+        platform_sem_wait(sem);
+
+        struct video_desc frame_desc = video_desc_from_frame(frame);
+        if (!video_desc_eq(decompress_desc, frame_desc)) {
+                decompress =
+                    decompress_init(frame_desc.color_spec, {}, UYVY, 1);
+                assert(decompress);
+                int ret = decompress_reconfigure(
+                    decompress, frame_desc, DEFAULT_R_SHIFT, DEFAULT_G_SHIFT,
+                    DEFAULT_B_SHIFT, UYVY);
+                assert(ret);
+                auto it = s->decompress.find(frame->ssrc);
+                it->second.state =
+                    std::shared_ptr<video_decompress>{ decompress,
+                                                       decompress_done };
+                it->second.desc = frame_desc;
+        }
+
+        auto *d = (conference_decompress_worker_data *) calloc(
+            1, sizeof(conference_decompress_worker_data));
+        d->s          = s.get();
+        d->decompress = decompress;
+        d->f          = frame;
+        d->sem        = sem;
+        task_run_async_detached(decompress_worker, d);
 
         return true;
 }

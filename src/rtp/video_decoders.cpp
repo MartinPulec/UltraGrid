@@ -73,7 +73,6 @@
  * What is yet to be ported:
  * - frame statistics processing (the idea is to utilize packet counter);
  * - change interlacing
- * - multi out display (pipe)
  * - delete the moved code (usually commented-out with `#if 0` below) - the
  * nicest way would be to pair copied code with removing in approprioate
  * commits (so that there is actual move in the commit content)
@@ -1564,11 +1563,6 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
 
         struct video_frame *frame = nullptr;
 
-        uint32_t ssrc = cdata->data->ssrc;
-        // frame->ssrc = cdata->data->ssrc;
-        uint64_t timestamp = cdata->data->ts;
-        // frame->timestamp = cdata->data->ts;
-
         const int *const rgb_shift = decoder->display_params.rgb_shift;
 
         for ( ; cdata != NULL; cdata = cdata->nxt) {
@@ -1591,6 +1585,8 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                                 return false;
                         }
                         frame->seq = buffer_number;
+                        frame->ssrc = cdata->data->ssrc;
+                        frame->timestamp = cdata->data->ts;
                 }
 
                 if (PT_VIDEO_IS_ENCRYPTED(pt)) {
@@ -1795,6 +1791,10 @@ int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf
                                 d_x = 0;        /* next line from beginning */
                                 s_x = 0;
                                 y += line_decoder->dst_pitch;  /* next line */
+                        }
+                        if (is_codec_opaque(decoder->received_vid_desc.color_spec)) {
+                                frame->tiles[substream].data_len =
+                                    buffer_length;
                         }
                 } else { /* PT_VIDEO_LDGM or external decoder */
                         if(!frame->tiles[substream].data) {

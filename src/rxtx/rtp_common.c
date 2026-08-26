@@ -124,6 +124,13 @@ struct rtp_medium_priv {
         struct module sender_mod;
 };
 
+// only used with multi-source displays
+struct recv_vid_frame {
+        struct video_frame    *f;
+        struct vcodec_state   *vcodec_state;
+        struct recv_vid_frame *next;
+};
+
 struct rtp_rxtx_common_priv_state {
         uint32_t magic;
 
@@ -148,6 +155,8 @@ struct rtp_rxtx_common_priv_state {
         struct display_params display_params;
 
         atomic_bool should_exit;
+
+        struct recv_vid_frame *cached_frames;
 };
 
  // protoypes
@@ -919,6 +928,16 @@ rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode,
         struct pdb_e *cp;
         struct timeval timeout;
 
+        if (priv->cached_frames) {
+                struct recv_vid_frame *rfrm = priv->cached_frames;
+                priv->cached_frames         = rfrm->next;
+                *dec_state                  = rfrm->vcodec_state;
+                out                         = rfrm->f;
+                out->callbacks.dispose      = vf_free;
+                free(rfrm);
+                return out;
+        };
+
         if (priv->should_exit) {
                 return nullptr;
         }
@@ -952,7 +971,6 @@ rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode,
                 priv->last_not_timeout = curr_time;
         }
 
-        /// @todo assuming only one state now - not true for multi src dec (pipe)
         struct vcodec_state *vdecoder_state = nullptr;
         /* Decode and render for each participant in the conference... */
         pdb_iter_t it;
@@ -1003,8 +1021,6 @@ rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode,
                 /* Decode and render video... */
                 if (pbuf_decode(cp->playout_buffer, curr_time, decode,
                                 vdecoder_state)) {
-                        /// @todo multi-out
-                        assert(!out);
                         out = vdecoder_state->decoded_frame;
                         // assert that new frame is allocated by vdec only on
                         // format change
@@ -1015,6 +1031,15 @@ rtp_recv_video_frame(struct rtp_rxtx_common *s, decode_frame_fn decode,
                                     video_desc_from_frame(display_buffer));
                                 assert(vdecoder_state->decoded_frame ==
                                             display_buffer || !same_props);
+                        }
+                        if (s->vplayback_supports_multiple_streams) {
+                                struct recv_vid_frame *rfrm =
+                                    calloc(1, sizeof *rfrm);
+                                rfrm->f             = out;
+                                rfrm->vcodec_state  = vdecoder_state;
+                                rfrm->next          = priv->cached_frames;
+                                priv->cached_frames = rfrm;
+                                out                 = nullptr;
                         }
                 } else {
                         if (vdecoder_state->decoded_frame != display_buffer) {

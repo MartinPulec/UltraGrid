@@ -1267,4 +1267,26 @@ codec_list_erase(codec_t *codecs, codec_t codec)
         return false;
 }
 
+/**
+ * writes all known codecs (excluding VC_NONE)
+ * @param[out] codec  buffer to store - allocate VC_COUNT,
+ *                    buffer will be 0-terminated
+ * @returns number of items (excluding 0-termination)
+ */
+unsigned
+get_all_codecs(codec_t *codecs, bool opaque_only)
+{
+        static_assert(VC_FIRST == 1);
+        // all codecs (exclude VC_NONE)
+        unsigned count = 0;
+        for (int i = VC_FIRST; i < VC_COUNT; ++i) {
+                codec_t c = i;
+                if (!opaque_only || is_codec_opaque(c)) {
+                        codecs[count++] = c;
+                }
+        }
+        codecs[count] = VC_NONE;
+        return count;
+}
+
 /* vim: set expandtab sw=8: */

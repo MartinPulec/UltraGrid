@@ -87,7 +87,6 @@ struct rtp_rxtx_common {
         // sources will be returned (normally all sources are dismissed except
         // of the latest one)
         bool aplayback_supports_multiple_streams;
-        /// @todo set
         bool vplayback_supports_multiple_streams;
 };
 

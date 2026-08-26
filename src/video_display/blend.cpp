@@ -38,6 +38,18 @@
  * @file
  * @todo
  * Rewrite the code to have more clear state machine!
+ * @todo
+ * Also this should no longer be a display, since we can now receive video
+ * frames from RTP without the actual display.
+ * @note
+ * The "shared" state is no longer in use and could be removed but see the
+ * previous note, that should be better. Multiple states is now replaced by
+ * per-SSRC decompress states (now it receives either UYVY or compressed frame).
+ *
+ * But consider rather removing this altogether since there is only a little use
+ * for this. It was presented as a demo many years ago on GLIF in 2014. Although
+ * the effect looks nice, there are drawbacks - mainly added latency, also it
+ * strips metadata, supports just UYVY and old/new format size must match.
  */
 
 #include "debug.h"
@@ -58,7 +70,13 @@
 #include <thread>
 #include <unordered_map>
 
+#include "compat/platform_semaphore.h"
+#include "pixfmt_conv.h"
+#include "types.h"
 #include "utils/color_out.h"
+#include "utils/worker.h"
+#include "video_codec.h"
+#include "video_decompress.h"
 
 using namespace std;
 
@@ -69,6 +87,24 @@ static constexpr unsigned int IN_QUEUE_MAX_BUFFER_LEN = 5;
 static constexpr int SKIP_FIRST_N_FRAMES_IN_STREAM = 5;
 
 static void display_blend_run(void *state);
+
+typedef uint32_t ssrc;
+namespace {
+struct decompress_data {
+        decompress_data()
+        {
+                sem_t *sem = (sem_t *) malloc(sizeof *sem);
+                platform_sem_init(sem, 0, 1);
+                semaphore = shared_ptr<sem_t>(sem, [](sem_t *sem) {
+                        platform_sem_destroy(sem);
+                        free(sem);
+                });
+        }
+        video_desc                   desc {};
+        shared_ptr<video_decompress> state;
+        shared_ptr<sem_t>            semaphore;
+};
+} // namespace
 
 struct state_blend_common {
         ~state_blend_common() {
@@ -92,6 +128,8 @@ struct state_blend_common {
         condition_variable in_queue_decremented_cv;
         map<uint32_t, list<struct video_frame *> > frames;
         unordered_map<uint32_t, chrono::steady_clock::time_point> disabled_ssrc;
+
+        unordered_map<ssrc, decompress_data> decompress;
 
         mutex lock;
         condition_variable cv;
@@ -354,8 +392,59 @@ static void display_blend_done(void *state)
 static struct video_frame *display_blend_getf(void *state)
 {
         struct state_blend *s = (struct state_blend *)state;
+        (void) s;
 
-        return vf_alloc_desc_data(s->desc);
+        // return vf_alloc_desc_data(s->desc);
+        return nullptr;
+}
+
+typedef struct {
+        struct state_blend_common *s;
+        video_decompress          *decompress;
+        struct video_frame        *f;
+        sem_t                     *sem;
+} blend_decompress_worker_data;
+
+static void *
+decompress_worker(void *arg)
+{
+        auto                      *d     = (blend_decompress_worker_data *) arg;
+        struct state_blend_common *s     = d->s;
+        struct video_frame        *frame = d->f;
+        video_decompress *decompress = d->decompress;
+        sem_t *sem = d->sem;
+        free(d);
+
+        struct video_desc desc  = video_desc_from_frame(frame);
+        desc.color_spec         = UYVY;
+        struct video_frame *out = vf_alloc_desc_data(desc);
+        decompress_status   ret = decompress_frame(
+            decompress->state[0], (unsigned char *) out->tiles[0].data,
+            (unsigned char *) frame->tiles[0].data, frame->tiles[0].data_len,
+            frame->seq, &frame->callbacks, nullptr,
+            vc_get_linesize(out->tiles[0].width, UYVY));
+        vf_free(frame);
+        if (ret == DECODER_NO_FRAME) {
+                vf_free(out);
+                platform_sem_post(sem);
+                return nullptr;
+        }
+        assert(ret == DECODER_GOT_FRAME);
+        out->ssrc = frame->ssrc;
+        frame = out;
+
+        unique_lock<mutex>         lg(s->lock);
+        if (s->incoming_queue.size() >= IN_QUEUE_MAX_BUFFER_LEN) {
+                fprintf(stderr, "blend: queue full!\n");
+                vf_free(frame);
+                platform_sem_post(sem);
+                return nullptr;
+        }
+        s->incoming_queue.push(frame);
+        lg.unlock();
+        s->cv.notify_one();
+        platform_sem_post(sem);
+        return nullptr;
 }
 
 static bool display_blend_putf(void *state, struct video_frame *frame, long long flags)
@@ -364,7 +453,22 @@ static bool display_blend_putf(void *state, struct video_frame *frame, long long
 
         if (flags == PUTF_DISCARD) {
                 vf_free(frame);
-        } else {
+                return true;
+        }
+
+        if (frame == nullptr) { // poison pill
+                for (auto const &d : s->decompress) { // wait for workers to end
+                        platform_sem_wait(d.second.semaphore.get());
+                }
+                // pass
+                unique_lock<mutex> lg(s->lock);
+                s->incoming_queue.push(frame);
+                lg.unlock();
+                s->cv.notify_one();
+                return true;
+        }
+
+        if (frame->color_spec == UYVY) {
                 unique_lock<mutex> lg(s->lock);
                 if (s->incoming_queue.size() >= IN_QUEUE_MAX_BUFFER_LEN) {
                         fprintf(stderr, "blend: queue full!\n");
@@ -377,7 +481,51 @@ static bool display_blend_putf(void *state, struct video_frame *frame, long long
                 s->incoming_queue.push(frame);
                 lg.unlock();
                 s->cv.notify_one();
+                return true;
         }
+
+        if ((frame->flags & FRM_FLG_CORRUPTED) != 0U) {
+                vf_free(frame);
+                return false;
+        }
+
+        sem_t            *sem        = nullptr;
+        video_decompress *decompress = nullptr;
+        struct video_desc decompress_desc{};
+        {
+                auto               it = s->decompress.find(frame->ssrc);
+                if (it == s->decompress.end()) {
+                        s->decompress.emplace(frame->ssrc, decompress_data{});
+                        it = s->decompress.find(frame->ssrc);
+                }
+                decompress_desc = it->second.desc;
+                sem             = it->second.semaphore.get();
+                decompress      = it->second.state.get();
+        }
+        platform_sem_wait(sem);
+
+        struct video_desc frame_desc = video_desc_from_frame(frame);
+        if (!video_desc_eq(decompress_desc, frame_desc)) {
+                decompress =
+                    decompress_init(frame_desc.color_spec, {}, UYVY, 1);
+                assert(decompress);
+                int ret = decompress_reconfigure(
+                    decompress, frame_desc, DEFAULT_R_SHIFT, DEFAULT_G_SHIFT,
+                    DEFAULT_B_SHIFT, UYVY);
+                assert(ret);
+                auto it = s->decompress.find(frame->ssrc);
+                it->second.state =
+                    shared_ptr<video_decompress>{ decompress, decompress_done };
+                it->second.desc = frame_desc;
+        }
+
+        auto *d = (blend_decompress_worker_data *) calloc(
+            1, sizeof(blend_decompress_worker_data));
+        d->s          = s.get();
+        d->decompress = decompress;
+        d->f          = frame;
+        d->sem        = sem;
+        task_run_async_detached(decompress_worker, d);
 
         return true;
 }
@@ -392,14 +540,27 @@ static bool display_blend_get_property(void *state, int property, void *val, siz
                 *len = sizeof(struct multi_sources_supp_info);
                 return true;
         }
+        if (property == DISPLAY_PROPERTY_CODECS) {
+                codec_t codecs[VC_COUNT + 1];
+                size_t count = 0;
+                codecs[count++] = UYVY;
+                count += get_all_codecs(codecs + count, true);
+                const unsigned c_len = count * sizeof(codec_t);
+                if (c_len > *len) {
+                        return false;
+                }
+                memcpy(val, codecs, c_len);
+                *len = c_len;
+                return true;
+        }
         return display_ctl_property(s->real_display, property, val, len);
 }
 
 static bool display_blend_reconfigure(void *state, struct video_desc desc)
 {
         struct state_blend *s = (struct state_blend *) state;
-
-        s->desc = desc;
+        (void) s, (void) desc;
+        // s->desc = desc;
 
         return true;
 }
@@ -425,4 +586,3 @@ static const struct video_display_info display_blend_info = {
 };
 
 REGISTER_HIDDEN_MODULE(blend, &display_blend_info, LIBRARY_CLASS_VIDEO_DISPLAY, VIDEO_DISPLAY_ABI_VERSION);
-

@@ -56,6 +56,8 @@ struct state_video_recv {
         unsigned long long  decode_dropped_frames;
         bool                decompress_accepts_corrupted;
         decoder_t           decode_line;
+
+        bool display_multi;
 };
 
 typedef struct {
@@ -527,8 +529,8 @@ recv_reconfigure(struct state_video_recv *s, struct video_desc desc)
             (desc.color_spec != RGBA ||
              disp_rgba_has_native_shifts(s->display_params.rgb_shift))) {
                 struct video_desc desc_copy = desc;
-                bool merged_fb =
-                    adjust_desc_video_mode_for_tiles(s, &desc_copy, &s->video_mode);
+                bool              merged_fb = adjust_desc_video_mode_for_tiles(
+                    s, &desc_copy, &s->video_mode);
                 if (!merged_fb || s->video_mode == VIDEO_NORMAL) {
                         return vrcv_display_reconfigure(s, desc);
                 }
@@ -684,6 +686,8 @@ decompress(decompress_thread_data *d, const struct video_frame *recv_frame,
                 }
                 abort(); // ret not part of enum
         }
+        display_frame->ssrc      = recv_frame->ssrc;
+        display_frame->timestamp = recv_frame->timestamp;
         return true;
 }
 
@@ -768,6 +772,11 @@ video_receiver_thread(void *arg)
                         continue;
                 }
 
+                if (s->display_multi) {
+                        display_put_frame(s->display, ret, s->putf_timeout);
+                        continue;
+                }
+
                 if (!display_frame) {
                         display_frame = display_get_frame(s->display);
                         assert(display_frame);
@@ -835,16 +844,21 @@ video_recv_start(struct rxtx *rxtx, const struct rxtx_params *params,
                 return s;
         }
 
+        struct multi_sources_supp_info multi_src_display;
+        size_t                         len = sizeof multi_src_display;
+        bool ret = display_ctl_property(s->display,
+                                        DISPLAY_PROPERTY_SUPPORTS_MULTI_SOURCES,
+                                        &multi_src_display, &len);
+        if (ret && multi_src_display.val) {
+                bool   val = true;
+                size_t len = sizeof val;
+                rxtx_ctl_property(s->rxtx, SET_ULTRAGRID_RTP_MUTLI_OUT_VIDEO,
+                                  &val, &len);
+                s->display_multi = true;
+        }
+
         pthread_create(&s->vid_recv_thread_id, nullptr, video_receiver_thread,
                        s);
-
-#if 0
-        /// @todo set
-        size_t len = sizeof s->rtp_common->display_supp_for_mult_sources;
-        display_ctl_property(
-            s->display_device, DISPLAY_PROPERTY_SUPPORTS_MULTI_SOURCES,
-            &s->rtp_common->display_supp_for_mult_sources, &len);
-#endif
 
         return s;
 }

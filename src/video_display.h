@@ -117,6 +117,11 @@ struct audio_frame;
 struct module;
 struct video_frame;
 
+/**
+ * @todo now used just as a flag; also its users should be rewritten since it
+ * has been merely a hack since beginning and we no longer need a display to
+ * recv video frame to a buffer
+ */
 struct multi_sources_supp_info {
         bool val;
         struct display *(*fork_display)(void *state);
