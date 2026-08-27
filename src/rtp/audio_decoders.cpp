@@ -320,7 +320,7 @@ audio_fec_decode(struct state_audio_decoder                *decoder,
         return true;
 }
 
-int decode_audio_frame(struct coded_data *cdata, void *pbuf_data, struct pbuf_stats *)
+int decode_audio_frame(struct coded_data *cdata, void *pbuf_data)
 {
         auto *s = (struct acodec_state *) pbuf_data;
         struct state_audio_decoder *decoder = s->decoder;

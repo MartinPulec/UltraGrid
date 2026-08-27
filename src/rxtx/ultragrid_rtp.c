@@ -136,8 +136,6 @@ struct ultragrid_rtp_rxtx {
 
         fec_decode_state **fec_state;
         unsigned           fec_state_count;
-
-        unsigned corrupted;
 };
 
 // protoypes
@@ -290,7 +288,6 @@ fec_reconstruct(struct ultragrid_rtp_rxtx *s, struct video_frame **frame_p,
                         corrupted = true;
                         MSG(VERBOSE, "FEC: unable to reconstruct data.\n");
                         if (fec_out_len < (int) sizeof(video_payload_hdr_t)) {
-                                s->corrupted += 1;
                                 vf_free(nofec_frame);
                                 return nullptr;
                         }
@@ -303,15 +300,18 @@ fec_reconstruct(struct ultragrid_rtp_rxtx *s, struct video_frame **frame_p,
                                sizeof(video_payload_hdr_t));
                         struct video_desc video_desc;
                         if (!parse_video_hdr(video_hdr, &video_desc)) {
-                                s->corrupted += 1;
                                 return nullptr;
                         }
                         video_desc.tile_count  = frame->tile_count;
                         nofec_frame            = vf_alloc_desc(video_desc);
+                        nofec_frame->seq       = frame->seq;
                         nofec_frame->ssrc      = frame->ssrc;
                         nofec_frame->timestamp = frame->timestamp;
                         nofec_frame->callbacks.dispose_udata = frame;
                         nofec_frame->callbacks.dispose = dispose_fec_frame;
+                        // for statistics...
+                        nofec_frame->fec_params.type = frame->fec_params.type;
+                        nofec_frame->flags |= frame->flags & FRM_FLG_INCOMPLETE;
                 }
 
                 nofec_frame->tiles[pos].data =
@@ -321,7 +321,6 @@ fec_reconstruct(struct ultragrid_rtp_rxtx *s, struct video_frame **frame_p,
         }
 
         if (corrupted) {
-                s->corrupted += 1;
                 nofec_frame->flags |= FRM_FLG_CORRUPTED;
         }
         *frame_p = nullptr;
@@ -354,15 +353,16 @@ recv_vid_frame(void *arg, struct video_frame *display_buffer,
         long     received        = 0;
         packet_counter_get_bytes(vdecoder_state->recv_packets, &expected_unused,
                                  &received);
+        frame->flags &= ~(FRM_FLG_CORRUPTED | FRM_FLG_INCOMPLETE);
         if (received != sum_data_len) {
                 MSG(DEBUG,
                     "Frame incomplete - buffer %d: "
                     "expected %u bytes, got %ld.\n",
                     frame->seq, sum_data_len, received);
                 if (frame->fec_params.type == FEC_NONE) {
-                        s->corrupted += 1;
                         frame->flags |= FRM_FLG_CORRUPTED;
                 }
+                frame->flags |= FRM_FLG_INCOMPLETE;
         }
 
         if (frame->fec_params.type != FEC_NONE) {
@@ -373,7 +373,7 @@ recv_vid_frame(void *arg, struct video_frame *display_buffer,
                         packet_counter_clear(vdecoder_state->recv_packets);
                         return rxtx_retry;
                 }
-                // original frame released by nofec_frame dispose
+                // original frame will be released by nofec_frame dispose
                 frame = nofec_frame;
         }
         assert(frame->color_spec != VC_NONE);

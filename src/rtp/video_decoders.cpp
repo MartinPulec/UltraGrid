@@ -71,7 +71,6 @@
  * ultragrid_rtp
  *
  * What is yet to be ported:
- * - frame statistics processing (the idea is to utilize packet counter);
  * - change interlacing
  * - delete the moved code (usually commented-out with `#if 0` below) - the
  * nicest way would be to pair copied code with removing in approprioate
@@ -245,14 +244,6 @@ static bool  video_decoder_register_display(struct state_video_decoder *decoder,
                                             struct display             *display);
 #endif
 
-static int sum_map(const map<int, int>& m) {
-        int ret = 0;
-        for (auto [pos, len] : m) {
-                ret += len;
-        }
-        return ret;
-}
-
 namespace {
 /**
  * Enumerates 2 possibilities how to decode arriving data.
@@ -277,48 +268,9 @@ struct line_decoder {
 };
 
 struct reported_statistics_cumul {
-        ~reported_statistics_cumul() {
-                print();
-        }
-        long long int last_buffer_number = -1; ///< last received buffer ID
-        steady_clock::time_point t_last = steady_clock::now();
-        unsigned long int displayed = 0, dropped = 0, corrupted = 0, missing = 0;
-        atomic_ulong fec_ok = 0, fec_corrected = 0, fec_nok = 0;
         void print() {
-                ostringstream fec;
-                if (fec_ok + fec_nok + fec_corrected > 0) {
-                        fec << ", FEC noerr/OK/NOK: " << SBOLD(fec_ok) << "/" << SBOLD(fec_corrected) << "/" << SBOLD(fec_nok);
-                }
-                unsigned long total = displayed + dropped + missing;
-                LOG(LOG_LEVEL_INFO) << SUNDERLINE("vdec stats") << " (cumul): "
-                        << SBOLD(total) << " total: "
-                        << SBOLD(displayed) << " disp / "
-                        << SBOLD(dropped) << " drop / "
-                        << SBOLD(corrupted) << " corr / "
-                        << SBOLD(missing) << " miss"
-                        << fec.str() << "\n";
-                if (total > 3000 && dropped * 50 >= total) { // more than 2% frames were dropped
-                        log_msg_once(LOG_LEVEL_WARNING, to_fourcc('D', 'R', 'P', 'S'), MOD_NAME "Dropped %lu of %lu frames. This may be due "
-                                        "to network jitter, try adding \"--param decoder-drop-policy=blocking\" if the problem persists.\n", dropped, total);
-                }
         }
-        void update(int buffer_number) {
-                if (last_buffer_number != -1) {
-                        long long int diff = buffer_number -
-                                ((last_buffer_number + 1) & ((1U<<BUFNUM_BITS) - 1));
-                        diff = (diff + (1U<<BUFNUM_BITS)) % (1U<<BUFNUM_BITS);
-                        if (diff < (1U<<BUFNUM_BITS) / 2) {
-                                missing += diff;
-                        } else { // frames may have been reordered, add arbitrary 1
-                                missing += 1;
-                        }
-                }
-                last_buffer_number = buffer_number;
-                const auto now = steady_clock::now();
-                if (now - t_last > std::chrono::seconds(CUMULATIVE_REPORTS_INTERVAL)) {
-                        print();
-                        t_last = now;
-                }
+        void update(int /* buffer_number */) {
         }
 };
 
@@ -330,27 +282,6 @@ struct frame_msg {
                              stats(sr)
         {}
         inline ~frame_msg() {
-                if (recv_frame) {
-                        int received_bytes = 0;
-                        for (unsigned int i = 0; i < recv_frame->tile_count; ++i) {
-                                received_bytes += sum_map(pckt_list[i]);
-                        }
-                        int expected_bytes = vf_get_data_len(recv_frame);
-                        if (recv_frame->fec_params.type != FEC_NONE) {
-                                if (is_corrupted) {
-                                        stats.fec_nok += 1;
-                                } else {
-                                        if (received_bytes == expected_bytes) {
-                                                stats.fec_ok += 1;
-                                        } else {
-                                                stats.fec_corrected += 1;
-                                        }
-                                }
-                        }
-                        stats.corrupted += is_corrupted;
-                        stats.displayed += is_displayed;
-                        stats.dropped += !is_displayed;
-                }
                 vf_free(recv_frame);
                 vf_free(nofec_frame);
         }
@@ -1523,7 +1454,8 @@ configure_decoder(struct vcodec_state *pbuf_data, int pt,
  *                     decoding may fail in some subsequent (asynchronous) steps.
  * @retval false       if decoding failed
  */
-int decode_video_frame(struct coded_data *cdata, void *decoder_data, struct pbuf_stats *stats)
+int
+decode_video_frame(struct coded_data *cdata, void *decoder_data)
 {
         struct vcodec_state *pbuf_data = (struct vcodec_state *) decoder_data;
         struct state_video_decoder *decoder = pbuf_data->decoder;

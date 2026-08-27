@@ -214,6 +214,8 @@ struct fec_desc {
 enum frame_flags_common {
         TIMESTAMP_VALID = 1 << 0, ///< timestamp set by source (in 90 kHz clock)
         FRM_FLG_CORRUPTED  = 1 << 1, ///< frame doesn't have all data from RX
+        /// not all data was received (but might have been corrected by FEC)
+        FRM_FLG_INCOMPLETE = 1 << 2,
 };
 
 struct video_frame;

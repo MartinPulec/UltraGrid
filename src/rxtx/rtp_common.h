@@ -102,8 +102,7 @@ bool rtp_rxtx_common_is_ipv6(struct rtp_rxtx_common *s);
 
 struct coded_data;
 struct pbuf_stats;
-typedef int decode_frame_fn(struct coded_data *cdata, void *pbuf_data,
-                            struct pbuf_stats *);
+typedef int decode_frame_fn(struct coded_data *cdata, void *pbuf_data);
 struct rx_audio_frames *rtp_recv_audio_frame(struct rtp_rxtx_common *s,
                                              decode_frame_fn decode);
 struct vcodec_state;

@@ -67,7 +67,7 @@ struct tile;
 extern "C" {
 #endif // __cplusplus
 
-int decode_video_frame(struct coded_data *received_data, void *decoder_data, struct pbuf_stats *stats);
+int decode_video_frame(struct coded_data *received_data, void *decoder_data);
 
 struct state_video_decoder *
 video_decoder_init(struct module               *parent,

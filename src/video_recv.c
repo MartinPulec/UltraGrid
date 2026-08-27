@@ -15,12 +15,15 @@
 #include "debug.h"          // for LOG_LEVEL_ERROR, MSG, debug_msg
 #include "host.h"           // for register_should_exit_callback, unregister...
 #include "pixfmt_conv.h"
-#include "rxtx.h" // for rxtx_medium_params, rxtx_have_receive_vid...
+#include "rtp/rtp_types.h" // for BUFNUM_BITS
+#include "rxtx.h"          // for rxtx_medium_params, rxtx_have_receive_vid...
 #include "tv.h"
-#include "types.h"         // for rxtx_mode, tx_media_type, video_desc
-#include "utils/macros.h"  // for to_fourcc
-#include "utils/pthread.h" // for PTHREAD_NULL
-#include "utils/thread.h"  // for set_thread_name
+#include "types.h"           // for video_frame, tile, video_desc, codec_t
+#include "utils/color_out.h" // for TBOLD, TUNDERLINE
+#include "utils/macros.h"    // for STR_LEN, to_fourcc, CONST_CAST
+#include "utils/misc.h"      // for unit_evaluate_dbl
+#include "utils/pthread.h"   // for CHK_PTHR, PTHREAD_NULL, ug_pthread_mut...
+#include "utils/thread.h"    // for set_thread_name
 #include "utils/video.h"
 #include "utils/worker.h"
 #include "video_codec.h" // for get_codec_name
@@ -32,6 +35,14 @@
 #define MAGIC    to_fourcc('v', 'd', 'r', 'x')
 
 static const struct video_frame thread_poison_pill;
+
+struct reported_statistics_cumul {
+        long int              last_buffer_number; ///< last received buffer ID
+        time_ns_t             t_last;
+        _Atomic unsigned long displayed, dropped;
+        unsigned long         corrupted, missing;
+        unsigned long         fec_ok, fec_corrected, fec_nok;
+};
 
 struct state_video_recv {
         uint32_t       magic;
@@ -58,6 +69,8 @@ struct state_video_recv {
         decoder_t           decode_line;
 
         bool display_multi;
+
+        struct reported_statistics_cumul stats;
 };
 
 typedef struct {
@@ -73,6 +86,94 @@ typedef struct {
         struct pixfmt_desc desc;
         codec_t            codec;
 } desc_codec_pair;
+
+static void vrcv_display_put_frame(struct state_video_recv *s,
+                                   struct video_frame      *frame,
+                                   long long                timeout_ns);
+
+static void
+stats_print(const struct reported_statistics_cumul *stats)
+{
+        char          buf[STR_LEN];
+        char         *buf_end = buf + sizeof buf;
+        char         *buf_ptr = buf;
+        unsigned long total =
+            stats->displayed + stats->dropped + stats->missing;
+        int bytes = snprintf(buf_ptr, buf_end - buf_ptr,
+                             TUNDERLINE("stats") " (cumul): " TBOLD("%lu")
+                                                 " total: " TBOLD("%lu")
+                                                 " disp / " TBOLD("%lu")
+                                                 " drop / " TBOLD("%lu")
+                                                 " corr / " TBOLD("%lu")
+                                                 " miss",
+                             total, stats->displayed, stats->dropped,
+                             stats->corrupted, stats->missing);
+        assert(bytes > 0);
+        buf_ptr += bytes;
+        if (stats->fec_ok + stats->fec_nok + stats->fec_corrected > 0) {
+                bytes = snprintf(buf_ptr, buf_end - buf_ptr,
+                                 ", FEC noerr/OK/NOK: " TBOLD("%lu")
+                                 "/" TBOLD("%lu")
+                                 "/" TBOLD("%lu"),
+                                 stats->fec_ok, stats->fec_corrected,
+                                 stats->fec_nok);
+                assert(bytes > 0);
+                buf_ptr += bytes;
+        }
+        MSG(INFO, "%s\n", buf);
+        enum {
+                CUTOFF_FRAMES = 3000,
+                PCT2_INV      = 50,
+        };
+        // more than 2% frames were dropped
+        if (total > CUTOFF_FRAMES && stats->dropped * PCT2_INV >= total) {
+                log_msg_once(
+                    LOG_LEVEL_WARNING, to_fourcc('D', 'R', 'P', 'S'),
+                    MOD_NAME
+                    "Dropped %lu of %lu frames. This may be due "
+                    "to network jitter, try adding \"--param "
+                    "decoder-drop-policy=blocking\" if the problem persists.\n",
+                    stats->dropped, total);
+        }
+}
+
+static void
+stats_update(struct reported_statistics_cumul *stats,
+             const struct video_frame         *frame)
+{
+        if (frame->fec_params.type != FEC_NONE) {
+                if (frame->flags & FRM_FLG_INCOMPLETE) {
+                        if (frame->flags & FRM_FLG_CORRUPTED) {
+                                stats->fec_nok += 1;
+                        } else {
+                                stats->fec_corrected += 1;
+                        }
+                } else {
+                        stats->fec_ok += 1;
+                }
+        }
+        if (frame->flags & FRM_FLG_CORRUPTED) {
+                stats->corrupted += 1;
+        }
+
+        if (stats->last_buffer_number != -1) {
+                long long int diff =
+                    frame->seq - ((stats->last_buffer_number + 1) &
+                                  ((1U << BUFNUM_BITS) - 1));
+                diff = (diff + (1U << BUFNUM_BITS)) % (1U << BUFNUM_BITS);
+                if (diff < (1U << BUFNUM_BITS) / 2) {
+                        stats->missing += diff;
+                } else { // frames may have been reordered, add arbitrary 1
+                        stats->missing += 1;
+                }
+        }
+        stats->last_buffer_number = frame->seq;
+        time_ns_t now             = get_time_in_ns();
+        if (now - stats->t_last > SEC_TO_NS(CUMULATIVE_REPORTS_INTERVAL)) {
+                stats_print(stats);
+                stats->t_last = now;
+        }
+}
 
 static bool decompress(decompress_thread_data   *d,
                        const struct video_frame *recv_frame,
@@ -245,7 +346,7 @@ line_decoder_thread(void *arg)
                 display_frame->ssrc      = f->ssrc;
                 display_frame->timestamp = f->timestamp;
 
-                display_put_frame(s->display, display_frame, s->putf_timeout);
+                vrcv_display_put_frame(s, display_frame, s->putf_timeout);
         }
 
         return nullptr;
@@ -459,12 +560,12 @@ decompress_thread(void *arg)
                                 continue;
                         }
                 }
-                display_put_frame(s->display, display_frame, s->putf_timeout);
+                vrcv_display_put_frame(s, display_frame, s->putf_timeout);
                 display_frame = display_get_frame(s->display);
         }
 
         if (display_frame) {
-                display_put_frame(s->display, display_frame, PUTF_DISCARD);
+                vrcv_display_put_frame(s, display_frame, PUTF_DISCARD);
         }
 
         decompress_done(d->decompress);
@@ -495,6 +596,18 @@ vrcv_display_reconfigure(struct state_video_recv *s, struct video_desc desc)
                 s->display_pitch = display_requested_pitch;
         }
         return true;
+}
+
+static void
+vrcv_display_put_frame(struct state_video_recv *s, struct video_frame *frame,
+                       long long timeout_ns)
+{
+        bool ret = display_put_frame(s->display, frame, timeout_ns);
+        if (ret) {
+                s->stats.displayed += 1;
+        } else {
+                s->stats.dropped += 1;
+        }
 }
 
 static void
@@ -752,11 +865,12 @@ video_receiver_thread(void *arg)
                 if (ret == rxtx_retry) {
                         continue;
                 }
+                stats_update(&s->stats, ret);
                 if (!video_desc_eq(video_desc_from_frame(ret),
                                    s->saved_network_desc)) {
                         if (display_frame) {
-                                display_put_frame(s->display, display_frame,
-                                                  PUTF_DISCARD);
+                                vrcv_display_put_frame(s, display_frame,
+                                                       PUTF_DISCARD);
                                 display_frame = nullptr;
                         }
                         stop_thread(s);
@@ -773,7 +887,7 @@ video_receiver_thread(void *arg)
                 }
 
                 if (s->display_multi) {
-                        display_put_frame(s->display, ret, s->putf_timeout);
+                        vrcv_display_put_frame(s, ret, s->putf_timeout);
                         continue;
                 }
 
@@ -789,17 +903,17 @@ video_receiver_thread(void *arg)
                         VIDEO_FRAME_DISPOSE(ret);
                 }
 
-                display_put_frame(s->display, display_frame, s->putf_timeout);
+                vrcv_display_put_frame(s, display_frame, s->putf_timeout);
                 display_frame = display_get_frame(s->display);
         }
 
         if (display_frame) {
-                display_put_frame(s->display, display_frame, PUTF_DISCARD);
+                vrcv_display_put_frame(s, display_frame, PUTF_DISCARD);
         }
 
         stop_thread(s);
         // pass poisoned pill to display
-        display_put_frame(s->display, nullptr, PUTF_BLOCKING);
+        vrcv_display_put_frame(s, nullptr, PUTF_BLOCKING);
 
         return nullptr;
 }
@@ -825,6 +939,9 @@ video_recv_start(struct rxtx *rxtx, const struct rxtx_params *params,
         ug_pthread_mutex_init(&s->decode_thread_lock);
         CHK_PTHR(pthread_cond_init(&s->decode_thread_new_frame_ready, nullptr));
         CHK_PTHR(pthread_cond_init(&s->decode_thread_frame_consumed, nullptr));
+
+        s->stats.last_buffer_number = -1;
+        s->stats.t_last             = get_time_in_ns();
 
         const char *drop_policy = get_commandline_param("decoder-drop-policy");
         if (drop_policy == nullptr) {
@@ -881,6 +998,7 @@ video_recv_done(struct state_video_recv *s)
                 return;
         }
         assert(s->magic == MAGIC);
+        stats_print(&s->stats);
         CHK_PTHR(pthread_mutex_destroy(&s->decode_thread_lock));
         CHK_PTHR(pthread_cond_destroy(&s->decode_thread_new_frame_ready));
         CHK_PTHR(pthread_cond_destroy(&s->decode_thread_frame_consumed));

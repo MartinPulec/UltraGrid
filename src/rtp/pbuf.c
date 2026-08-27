@@ -14,7 +14,7 @@
  *
  * Copyright (c) 2003-2004 University of Southern California
  * Copyright (c) 2003-2004 University of Glasgow
- * Copyright (c) 2005-2023 CESNET z.s.p.o.
+ * Copyright (c) 2005-2026 CESNET z.s.p.o.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, is permitted provided that the following conditions
@@ -590,9 +590,7 @@ pbuf_decode(struct pbuf *playout_buf, time_ns_t curr_time,
                                 && curr_time > curr->playout_time
                    ) {
                         if (frame_complete(curr)) {
-                                struct pbuf_stats stats = { playout_buf->received_pkts_cum,
-                                        playout_buf->expected_pkts_cum };
-                                int ret = decode_func(curr->cdata, data, &stats);
+                                int ret = decode_func(curr->cdata, data);
                                 curr->decoded = 1;
                                 return ret;
                         } else {

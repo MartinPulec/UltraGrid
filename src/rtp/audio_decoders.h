@@ -55,7 +55,7 @@ struct pbuf_stats;
 
 typedef bool (*audio_playback_ctl_t)(void *state, int request, void *data, size_t *len);
 
-int decode_audio_frame(struct coded_data *cdata, void *data, struct pbuf_stats *stats);
+int decode_audio_frame(struct coded_data *cdata, void *data);
 int decode_audio_frame_mulaw(struct coded_data *cdata, void *data, struct pbuf_stats *stats);
 void *audio_decoder_init(const char *encryption, struct module *parent);
 void audio_decoder_destroy(void *state);
