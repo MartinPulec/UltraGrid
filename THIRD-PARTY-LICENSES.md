@@ -8,9 +8,6 @@ may also link to it statically.
 TODO
 ----
 Add licenses for:
-- caca
-- jack
-- natpmp
 - v4l2convert
 - portaudio
 - pipewire
@@ -1679,12 +1676,54 @@ To apply the ImageMagick License to your work, attach the following boilerplate 
 
 ````
 
-### Qt Toolkit
+### JACK Audio Connection Kit (library)
+
+Taken from Debian package libjack-dev where debianized by Stefan
+Schwandter <swan@debian.org>. Kept just LGPL-2.1+ because we are
+using the library, not runtime (which is GPL 2).
 
 Copyright:
-- 2018 The Qt Company Ltd. and other contributors.
+- 2001-2009 Paul Davis
 
-License: GPL-3
+License: LGPL-2.1+
+
+JACK was inspired by and partially designed during discussions on the
+Linux Audio Developers mailing list. Particularly significant
+contributions to those discussions came from (in alphabetical order):
+
+    Paul Davis
+    David Olofson
+    Benno Sennoner
+    Kai Vehmanen
+
+Many other members of LAD contributed ideas to JACK, particularly
+Richard Guenther.
+
+Paul Davis was the principal author of the JACK API and of the sample
+implementation contained here. Andy Wingo provided many small patches
+Fernando Pablo Lopez-Lezcano contributed the capabilities-based code.
+Jeremy Hall, Steve Harris, and Martin Boer contributed sample clients
+and utilities.
+
+Many others have contributed patches and/or test results.
+
+## libcaca
+
+Copyright:
+- 2003-2008 Sam Hocevar <sam@zoy.org>
+- 2003-2008 Jean-Yves Lamoureux <jylam@lnxscene.org>
+- 2004-2005 John Beppu <beppu@lbox.org>
+- 2006-2007 Ben Wiley Sittler <bsittler@gmail.com>
+- 2007-2008 Pascal Terjan <pterjan@linuxfr.org>
+
+License: WTFPL
+
+### libpcpnatpmp
+
+Copyright:
+- 2013 by Cisco Systems, Inc.
+
+License: BSD-2-clause
 
 ### libdecor
 
@@ -1780,6 +1819,13 @@ Copyright:
 - 1992-1994	Jutta Degener, Carsten Bormann
 
 License: BSD-3-Clause
+
+### Qt Toolkit
+
+Copyright:
+- 2018 The Qt Company Ltd. and other contributors.
+
+License: GPL-3
 
 ### zfec
 
@@ -3833,6 +3879,24 @@ copyright notice for the Original Work:
       above with the notice "Licensed under " or with a notice of your
       own that is not confusingly similar to the notice in this License.
 ```
+
+### WTFPL
+
+````
+           DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+                   Version 2, December 2004
+ 
+Copyright (C) 2004 Sam Hocevar <sam@hocevar.net>
+
+Everyone is permitted to copy and distribute verbatim or modified
+copies of this license document, and changing it is allowed as long
+as the name is changed.
+ 
+           DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE
+  TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+
+ 0. You just DO WHAT THE FUCK YOU WANT TO.
+````
 
 ### Zlib
 
