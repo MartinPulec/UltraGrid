@@ -71,7 +71,6 @@
  * ultragrid_rtp
  *
  * What is yet to be ported:
- * - change interlacing
  * - delete the moved code (usually commented-out with `#if 0` below) - the
  * nicest way would be to pair copied code with removing in approprioate
  * commits (so that there is actual move in the commit content)
@@ -222,12 +221,6 @@ using std::vector;
 
 struct state_video_decoder;
 
-/**
- * Interlacing changing function prototype. The function should be able to change buffer
- * in place, that is when dst and src are the same.
- */
-using change_il_t = void (*)(char *dst, char *src, int linesize, int height, void **state);
-
 // prototypes
 static bool reconfigure_decoder(struct state_video_decoder *decoder,
                                 struct video_desc           desc);
@@ -351,9 +344,6 @@ struct state_video_decoder
 #else
         struct display_params display_params;
 #endif
-
-        change_il_t       change_il = NULL;      ///< function to change interlacing, if needed. Otherwise NULL.
-        void             *change_il_state[MAX_SUBSTREAMS]{};
 
         mutex lock;
 
@@ -559,14 +549,6 @@ static void *decompress_thread(void *args) {
                 LOG(LOG_LEVEL_DEBUG) << MOD_NAME << "Decompress duration: " <<
                         std::chrono::duration<double, std::milli>(steady_clock::now() - t0).count() << " ms\n";
 
-                if(decoder->change_il) {
-                        for(unsigned int i = 0; i < decoder->frame->tile_count; ++i) {
-                                struct tile *tile = vf_get_tile(decoder->frame, i);
-                                decoder->change_il(tile->data, tile->data, vc_get_linesize(tile->width,
-                                                        decoder->out_codec), tile->height, &decoder->change_il_state[i]);
-                        }
-                }
-
                 {
 #if 0
                         long long putf_timeout = force_putf_timeout != -1 ? force_putf_timeout : PUTF_NONBLOCK; // originally was BLOCKING when !is_codec_interframe(decoder->received_vid_desc.color_spec)
@@ -769,11 +751,6 @@ static void cleanup(struct state_video_decoder *decoder)
         if(decoder->line_decoder) {
                 free(decoder->line_decoder);
                 decoder->line_decoder = NULL;
-        }
-
-        for (auto && item : decoder->change_il_state) {
-                free(item);
-                item = nullptr;
         }
 }
 
@@ -983,52 +960,6 @@ after_decoder_lookup:
         return out_codec;
 #endif
 }
-
-#if 0
-/**
- * This function finds interlacing mode changing function.
- *
- * @param[in]  in_il       input_interlacing
- * @param[in]  supported   list of supported output interlacing modes
- * @param[in]  il_out_cnt  count of supported items
- * @param[out] out_il      selected output interlacing
- * @return                 selected interlacing changing function, NULL if not needed or not found
- */
-static change_il_t select_il_func(enum interlacing in_il, enum interlacing *supported,
-                int il_out_cnt, /*out*/ enum interlacing *out_il)
-{
-        struct transcode_t { enum interlacing in; enum interlacing out; change_il_t func; };
-
-        struct transcode_t transcode[] = {
-                {LOWER_FIELD_FIRST, INTERLACED_MERGED, il_lower_to_merged},
-                {UPPER_FIELD_FIRST, INTERLACED_MERGED, il_upper_to_merged},
-                {INTERLACED_MERGED, UPPER_FIELD_FIRST, il_merged_to_upper}
-        };
-
-        int i;
-        /* first try to check if it can be natively displayed */
-        for (i = 0; i < il_out_cnt; ++i) {
-                if(in_il == supported[i]) {
-                        *out_il = in_il;
-                        return NULL;
-                }
-        }
-
-        for (i = 0; i < il_out_cnt; ++i) {
-                size_t j;
-                for (j = 0; j < sizeof(transcode) / sizeof(struct transcode_t); ++j) {
-                        if(in_il == transcode[j].in && supported[i] == transcode[j].out) {
-                                *out_il = transcode[j].out;
-                                return transcode[j].func;
-                        }
-                }
-        }
-
-        log_msg(LOG_LEVEL_WARNING, "[Warning] Cannot find transition between incoming and display "
-                        "interlacing modes!\n");
-        return NULL;
-}
-#endif
 
 /**
  * Reconfigures decoder if network received video data format has changed.

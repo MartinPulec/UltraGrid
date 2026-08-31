@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
-// Copyright (c) 2026 CESNET, zájmové sdružení právických osob
+// Copyright (c) 2011-2026 CESNET, zájmové sdružení právických osob
 
 #include "video_recv.h"
 
@@ -67,6 +67,10 @@ struct state_video_recv {
         unsigned long long  decode_dropped_frames;
         bool                decompress_accepts_corrupted;
         decoder_t           decode_line;
+
+        change_il_fn change_il;
+        void       **change_il_state;
+        size_t       change_il_state_cnt;
 
         bool display_multi;
 
@@ -575,9 +579,88 @@ decompress_thread(void *arg)
         return nullptr;
 }
 
+/**
+ * This function finds interlacing mode changing function.
+ *
+ * @param[in]  in_il       received frame interlacing
+ * @param[in]  supported   list of display supported output interlacing modes
+ * @param[out] out_il_fn   selected output interlacing convert fn,
+ *                         nullptr if unneeded
+ * @retval   INTERLACING_COUNT if conversion needed but no conversion found
+ * @returns  interlacing suuported by the display (may be in_il, in which case
+ * conv func is nullptr)
+ */
+static enum interlacing
+select_il_func(enum interlacing in_il, const enum interlacing *supported,
+               /*out*/ change_il_fn *out_il_fn)
+{
+        *out_il_fn = nullptr;
+
+        /* first try to check if it can be natively displayed */
+        for (const enum interlacing *it = supported; *it != INTERLACING_COUNT;
+             it++) {
+                if (in_il == *it) {
+                        return in_il;
+                }
+        }
+
+        for (const enum interlacing *it = supported; *it != INTERLACING_COUNT;
+             it++) {
+                *out_il_fn = get_change_il_fn(in_il, *it);
+                if (*out_il_fn) {
+                        return *it;
+                }
+        }
+
+        MSG(WARNING, "Cannot find transition between incoming and display "
+                     "interlacing modes!\n");
+        return INTERLACING_COUNT;
+}
+
+static void
+clear_change_il_state(struct state_video_recv *s)
+{
+        for (unsigned i = 0; i < s->change_il_state_cnt; i++) {
+                free(s->change_il_state[i]);
+        }
+        free((void *) s->change_il_state);
+        s->change_il_state     = nullptr;
+        s->change_il_state_cnt = 0;
+}
+
+static void
+change_il(struct state_video_recv *s, struct video_frame *frame)
+{
+        if (!frame) {
+                return;
+        }
+        if (s->change_il_state_cnt < frame->tile_count) {
+                clear_change_il_state(s);
+                s->change_il_state =
+                    (void **) calloc(frame->tile_count, sizeof(void *));
+                assert(s->change_il_state);
+                s->change_il_state_cnt = frame->tile_count;
+        }
+        for (unsigned int i = 0; i < frame->tile_count; ++i) {
+                struct tile *tile = vf_get_tile(frame, (int) i);
+                s->change_il(tile->data, tile->data,
+                             vc_get_linesize(tile->width, frame->color_spec),
+                             (int) tile->height, &s->change_il_state[i]);
+        }
+}
+
 static bool
 vrcv_display_reconfigure(struct state_video_recv *s, struct video_desc desc)
 {
+        // if display doesn't support received frame interlacing, use conv func
+        clear_change_il_state(s);
+        enum interlacing display_il =
+            select_il_func(desc.interlacing,
+                           s->display_params.supported_il_modes, &s->change_il);
+        if (display_il != INTERLACING_COUNT) {
+                desc.interlacing = display_il;
+        }
+
         if (!display_reconfigure(s->display, desc)) {
                 MSG(ERROR, "Cannot reconfigure display!\n");
                 return false;
@@ -602,6 +685,10 @@ static void
 vrcv_display_put_frame(struct state_video_recv *s, struct video_frame *frame,
                        long long timeout_ns)
 {
+        if (s->change_il) {
+                change_il(s, frame);
+        }
+
         bool ret = display_put_frame(s->display, frame, timeout_ns);
         if (ret) {
                 s->stats.displayed += 1;
@@ -933,6 +1020,8 @@ video_recv_start(struct rxtx *rxtx, const struct rxtx_params *params,
         s->rxtx                    = rxtx;
         s->display                 = d;
         s->parent                  = parent;
+        s->change_il               = nullptr;
+        s->change_il_state         = nullptr;
         s->decode_thread_frame     = nullptr;
         s->decode_thread_id        = PTHREAD_NULL;
         s->display_params          = params->display_params;
@@ -1002,5 +1091,6 @@ video_recv_done(struct state_video_recv *s)
         CHK_PTHR(pthread_mutex_destroy(&s->decode_thread_lock));
         CHK_PTHR(pthread_cond_destroy(&s->decode_thread_new_frame_ready));
         CHK_PTHR(pthread_cond_destroy(&s->decode_thread_frame_consumed));
+        clear_change_il_state(s);
         free(s);
 }

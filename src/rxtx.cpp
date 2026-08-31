@@ -375,6 +375,23 @@ set_display_params(struct rxtx_params *params)
         if (get_commandline_param("decoder-use-codec")) {
                 return restrict_codecs(params->display_params.native_codecs);
         }
+
+        len = sizeof params->display_params.supported_il_modes;
+        ret = display_ctl_property(
+            params->display_device, DISPLAY_PROPERTY_SUPPORTED_IL_MODES,
+            &params->display_params.supported_il_modes, &len);
+        if (ret) {
+                unsigned count = len / sizeof(enum interlacing);
+                assert(count < std::size(params->display_params.supported_il_modes));
+                params->display_params.supported_il_modes[count] =
+                    INTERLACING_COUNT; // terminate
+        } else {
+                /* default if not said otherwise */
+                enum interlacing tmp[] = { PROGRESSIVE, INTERLACED_MERGED,
+                                           SEGMENTED_FRAME, INTERLACING_COUNT };
+                memcpy(params->display_params.supported_il_modes, tmp, sizeof(tmp));
+        }
+
         return true;
 }
 

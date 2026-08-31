@@ -66,6 +66,8 @@ struct display_params {
         /// VC_NONE-terminated
         codec_t native_codecs[VC_COUNT + 1];
         int     rgb_shift[3];
+        /// INTERLACING_COUNT-terminated
+        enum interlacing supported_il_modes[INTERLACING_COUNT + 1];
 };
 
 struct rxtx_medium_params  {
