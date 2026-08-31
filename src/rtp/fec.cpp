@@ -329,3 +329,11 @@ fec_decode_decode(struct fec_decode_state *s, struct fec_desc desc, char *in,
         }
         return s->impl->decode(in, in_len, out, out_len, packet_map);
 }
+
+bool
+fec_desc_eq(struct fec_desc a, struct fec_desc b, bool ignore_symbol_size)
+{
+        return a.type == b.type && a.k == b.k && a.m == b.m && a.c == b.c &&
+               a.seed == b.seed &&
+               (ignore_symbol_size || a.symbol_size == b.symbol_size);
+}

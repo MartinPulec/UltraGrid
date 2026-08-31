@@ -89,6 +89,7 @@ struct video_frame  *fec_encode_video_frame(struct fec               *s,
 void fec_destroy(struct fec *s);
 int fec_pt_from_fec_type(enum tx_media_type media_type, enum fec_type fec_type, bool encrypted);
 const char *get_fec_desc(struct fec_desc desc, size_t buflen, char *buf);
+bool fec_desc_eq(struct fec_desc a, struct fec_desc b, bool ignore_symbol_size);
 void fec_usage();
 
 struct pc_packet;

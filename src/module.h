@@ -99,6 +99,7 @@ extern const enum module_class path_audio_postprocess[]; // defined in audio/pos
 extern const enum module_class path_audio_send_module[]; // defined in audio.cpp
 extern const enum module_class path_sender_audio[]; // defined in rtp_comomn.c
 extern const enum module_class path_sender_video[]; // defined in rtp_comomn.c
+extern const enum module_class path_video_recv[];   // defined in video_recv.c
 
 struct module;
 

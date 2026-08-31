@@ -14,7 +14,10 @@
 #include "compat/qsort_s.h" // for qsort_s
 #include "debug.h"          // for LOG_LEVEL_ERROR, MSG, debug_msg
 #include "host.h"           // for register_should_exit_callback, unregister...
+#include "messaging.h"
+#include "module.h"
 #include "pixfmt_conv.h"
+#include "rtp/fec.h"
 #include "rtp/rtp_types.h" // for BUFNUM_BITS
 #include "rxtx.h"          // for rxtx_medium_params, rxtx_have_receive_vid...
 #include "tv.h"
@@ -34,6 +37,9 @@
 #define MOD_NAME "[vrecv] "
 #define MAGIC    to_fourcc('v', 'd', 'r', 'x')
 
+const enum module_class         path_video_recv[] = { MODULE_CLASS_VIDEO,
+                                                      MODULE_CLASS_DECODER,
+                                                      MODULE_CLASS_NONE };
 static const struct video_frame thread_poison_pill;
 
 struct reported_statistics_cumul {
@@ -46,17 +52,19 @@ struct reported_statistics_cumul {
 
 struct state_video_recv {
         uint32_t       magic;
+        struct module  mod;
         pthread_t      vid_recv_thread_id;
         struct rxtx   *rxtx;
-        struct module *parent;
 
         struct display       *display;
         struct display_params display_params;
         size_t                display_pitch;
         long long             putf_timeout;
         struct video_desc     saved_network_desc;
-        enum video_mode       video_mode;
-        bool                  merged_fb;
+        pthread_mutex_t saved_network_prop_lock; // for vrecv_process_message()
+        struct fec_desc saved_fec_desc;
+        enum video_mode video_mode;
+        bool            merged_fb;
 
         // either line decoder or decompress
         pthread_t           decode_thread_id;
@@ -142,9 +150,17 @@ stats_print(const struct reported_statistics_cumul *stats)
 }
 
 static void
-stats_update(struct reported_statistics_cumul *stats,
-             const struct video_frame         *frame)
+stats_update(struct state_video_recv *s, const struct video_frame *frame)
 {
+        struct reported_statistics_cumul *stats = &s->stats;
+
+        // for keycontrol
+        if (!fec_desc_eq(s->saved_fec_desc, frame->fec_params, true)) {
+                CHK_PTHR(pthread_mutex_lock(&s->saved_network_prop_lock));
+                s->saved_fec_desc = frame->fec_params;
+                CHK_PTHR(pthread_mutex_unlock(&s->saved_network_prop_lock));
+        }
+
         if (frame->fec_params.type != FEC_NONE) {
                 if (frame->flags & FRM_FLG_INCOMPLETE) {
                         if (frame->flags & FRM_FLG_CORRUPTED) {
@@ -720,10 +736,18 @@ disp_rgba_has_native_shifts(const int rgb_shift[const static 3])
                rgb_shift[2] == DEFAULT_B_SHIFT;
 }
 
+static void
+set_saved_network_desc(struct state_video_recv *s, struct video_desc desc)
+{
+        CHK_PTHR(pthread_mutex_lock(&s->saved_network_prop_lock));
+        s->saved_network_desc = desc;
+        CHK_PTHR(pthread_mutex_unlock(&s->saved_network_prop_lock));
+}
+
 static bool
 recv_reconfigure(struct state_video_recv *s, struct video_desc desc)
 {
-        s->saved_network_desc = desc;
+        set_saved_network_desc(s, desc);
         // natively supported
         if (codec_is_in_set(desc.color_spec, s->display_params.native_codecs) &&
             (desc.color_spec != RGBA ||
@@ -761,7 +785,7 @@ recv_reconfigure(struct state_video_recv *s, struct video_desc desc)
             get_codec_name(desc.color_spec),
             codec_list_to_string(s->display_params.native_codecs));
 
-        s->saved_network_desc = (struct video_desc){ 0 };
+        set_saved_network_desc(s, (struct video_desc){ 0 });
         return false;
 }
 
@@ -952,7 +976,7 @@ video_receiver_thread(void *arg)
                 if (ret == rxtx_retry) {
                         continue;
                 }
-                stats_update(&s->stats, ret);
+                stats_update(s, ret);
                 if (!video_desc_eq(video_desc_from_frame(ret),
                                    s->saved_network_desc)) {
                         if (display_frame) {
@@ -1005,6 +1029,42 @@ video_receiver_thread(void *arg)
         return nullptr;
 }
 
+static void
+vrecv_process_message(struct module *m)
+{
+        struct state_video_recv *s = m->priv_data;
+        struct message *msg = nullptr;
+
+        while ((msg = check_message(m))) {
+                struct response      *r      = nullptr;
+                struct msg_universal *m_univ = (void *) msg;
+                if (strcmp(m_univ->text, "get_format") == 0) {
+                        CHK_PTHR(
+                            pthread_mutex_lock(&s->saved_network_prop_lock));
+                        struct video_desc desc = s->saved_network_desc;
+                        CHK_PTHR(
+                            pthread_mutex_unlock(&s->saved_network_prop_lock));
+
+                        char buf[STR_LEN];
+                        video_desc_to_string(desc, sizeof buf, buf);
+                        r = new_response(RESPONSE_OK, buf);
+                } else if (strcmp(m_univ->text, "get_fec") == 0) {
+                        CHK_PTHR(
+                            pthread_mutex_lock(&s->saved_network_prop_lock));
+                        struct fec_desc desc = s->saved_fec_desc;
+                        CHK_PTHR(
+                            pthread_mutex_unlock(&s->saved_network_prop_lock));
+
+                        char buf[STR_LEN];
+                        r = new_response(RESPONSE_OK,
+                                         get_fec_desc(desc, sizeof buf, buf));
+                } else {
+                        r = new_response(RESPONSE_NOT_FOUND, nullptr);
+                }
+                free_message(msg, r);
+        }
+}
+
 ADD_TO_PARAM("decoder-drop-policy",
              "* decoder-drop-policy=blocking|nonblock|<sec>\n"
              "  Force specified blocking policy (default nonblock).\n"
@@ -1019,15 +1079,21 @@ video_recv_start(struct rxtx *rxtx, const struct rxtx_params *params,
         s->vid_recv_thread_id      = PTHREAD_NULL;
         s->rxtx                    = rxtx;
         s->display                 = d;
-        s->parent                  = parent;
         s->change_il               = nullptr;
         s->change_il_state         = nullptr;
         s->decode_thread_frame     = nullptr;
         s->decode_thread_id        = PTHREAD_NULL;
         s->display_params          = params->display_params;
         ug_pthread_mutex_init(&s->decode_thread_lock);
+        ug_pthread_mutex_init(&s->saved_network_prop_lock);
         CHK_PTHR(pthread_cond_init(&s->decode_thread_new_frame_ready, nullptr));
         CHK_PTHR(pthread_cond_init(&s->decode_thread_frame_consumed, nullptr));
+
+        module_init_default(&s->mod);
+        s->mod.cls         = MODULE_CLASS_DECODER;
+        s->mod.priv_data   = s;
+        s->mod.new_message = vrecv_process_message;
+        module_register(&s->mod, parent);
 
         s->stats.last_buffer_number = -1;
         s->stats.t_last             = get_time_in_ns();
@@ -1089,8 +1155,10 @@ video_recv_done(struct state_video_recv *s)
         assert(s->magic == MAGIC);
         stats_print(&s->stats);
         CHK_PTHR(pthread_mutex_destroy(&s->decode_thread_lock));
+        CHK_PTHR(pthread_mutex_destroy(&s->saved_network_prop_lock));
         CHK_PTHR(pthread_cond_destroy(&s->decode_thread_new_frame_ready));
         CHK_PTHR(pthread_cond_destroy(&s->decode_thread_frame_consumed));
         clear_change_il_state(s);
+        module_done(&s->mod);
         free(s);
 }

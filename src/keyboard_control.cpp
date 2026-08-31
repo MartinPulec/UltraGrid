@@ -749,6 +749,8 @@ print_start_elapsed_time(time_t start_time)
 
 void keyboard_control::impl::info()
 {
+        char path[1024];
+
         col() << TBOLD("UltraGrid version: ") << get_version_details() << "\n";
         print_command_line();
         print_start_elapsed_time(m_start_time);
@@ -807,9 +809,13 @@ void keyboard_control::impl::info()
 	}
 
 	{
+                set_message_path(path, sizeof path, path_video_recv);
+
                 struct msg_universal *m = (struct msg_universal *) new_message(sizeof(struct msg_universal));
                 strcpy(m->text, "get_format");
-                struct response *r = send_message_sync(m_root, "receiver.decoder", (struct message *) m, 100,  SEND_MESSAGE_FLAG_QUIET | SEND_MESSAGE_FLAG_NO_STORE);
+                struct response *r = send_message_sync(
+                    m_root, path, (struct message *) m, 100,
+                    SEND_MESSAGE_FLAG_QUIET | SEND_MESSAGE_FLAG_NO_STORE);
                 if (response_get_status(r) == RESPONSE_OK) {
                         col() << TBOLD("Received video format: ")
                               << response_get_text(r) << "\n";
@@ -819,8 +825,7 @@ void keyboard_control::impl::info()
                 m = (struct msg_universal *) new_message(
                     sizeof(struct msg_universal));
                 strcpy(m->text, "get_fec");
-                r = send_message_sync(
-                    m_root, "receiver.decoder", (struct message *) m, 100,
+                r = send_message_sync(m_root, path, (struct message *) m, 100,
                     SEND_MESSAGE_FLAG_QUIET | SEND_MESSAGE_FLAG_NO_STORE);
                 if (response_get_status(r) == RESPONSE_OK) {
                         col() << TBOLD("Received video FEC: ")

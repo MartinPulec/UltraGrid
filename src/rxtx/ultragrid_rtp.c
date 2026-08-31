@@ -309,8 +309,8 @@ fec_reconstruct(struct ultragrid_rtp_rxtx *s, struct video_frame **frame_p,
                         nofec_frame->timestamp = frame->timestamp;
                         nofec_frame->callbacks.dispose_udata = frame;
                         nofec_frame->callbacks.dispose = dispose_fec_frame;
-                        // for statistics...
-                        nofec_frame->fec_params.type = frame->fec_params.type;
+                        // for statistics + keycontrol info...
+                        nofec_frame->fec_params = frame->fec_params;
                         nofec_frame->flags |= frame->flags & FRM_FLG_INCOMPLETE;
                 }
 
