@@ -181,6 +181,10 @@ void il_upper_to_merged(char *dst, char *src, int linesize, int height, void **s
  */
 void il_merged_to_upper(char *dst, char *src, int linesize, int height, void **stored_state);
 
+typedef void (*change_il_fn)(char *dst, char *src, int linesize, int height,
+                             void **state);
+change_il_fn get_change_il_fn(enum interlacing in_il, enum interlacing out_il);
+
 /**
  * @brief Computes FPS as a double from packet fields.
  *

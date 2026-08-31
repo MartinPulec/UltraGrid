@@ -3807,6 +3807,7 @@ if test "$build_default" != no || test "$req_files" = all; then
         CAPTURE_FILTERS="
         src/capture_filter/add_frame.o
         src/capture_filter/change_pixfmt.o
+        src/capture_filter/change_il.o
         src/capture_filter/color.o
         src/capture_filter/display.o
         src/capture_filter/disrupt.o

@@ -383,6 +383,27 @@ void il_merged_to_upper(char *dst, char *src, int linesize, int height, void **s
         free(tmp);
 }
 
+change_il_fn
+get_change_il_fn(enum interlacing in_il, enum interlacing out_il)
+{
+        const struct {
+                enum interlacing in;
+                enum interlacing out;
+                change_il_fn     func;
+        } transcode[] = {
+                { LOWER_FIELD_FIRST, INTERLACED_MERGED, il_lower_to_merged },
+                { UPPER_FIELD_FIRST, INTERLACED_MERGED, il_upper_to_merged },
+                { INTERLACED_MERGED, UPPER_FIELD_FIRST, il_merged_to_upper }
+        };
+
+        for (unsigned i = 0; i < countof(transcode); ++i) {
+                if (in_il == transcode[i].in && out_il == transcode[i].out) {
+                        return transcode[i].func;
+                }
+        }
+        return nullptr;
+}
+
 /**
  * Computes FPS from packet format values:
  * https://www.cesnet.cz/wp-content/uploads/2013/01/ultragrid-4k.pdf
