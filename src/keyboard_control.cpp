@@ -985,16 +985,23 @@ void keyboard_control::impl::execute_command(const char *command) {
 
 void keyboard_control::impl::read_command(bool multiple)
 {
-        int saved_log_level = log_level;
-        log_level = LOG_LEVEL_QUIET;
-        restore_old_tio();
         if (multiple) {
-                printf("Enter commands for control (try \"help\" or \"localhelp\").\n");
+                MSG(WARNING,
+                    "WARNING: Consider using single-command mode ('c') instead "
+                    "of multi-line mode not to suppress eventual feedback from "
+                    "UG after single command exetutes!\n");
+                printf("Enter commands for control (try \"help\" or "
+                       "\"localhelp\").\n");
                 printf("Exit the mode with blank line.\n");
         } else {
-                printf("Enter a command for control (try \"help\" or \"localhelp\"):\n");
+                printf("Enter a command for control (try \"help\" or "
+                       "\"localhelp\"):\n");
         }
+        int saved_log_level = log_level;
+        restore_old_tio();
         while (1) {
+                MSG(WARNING, "Note: terminal output discarded until a commnand "
+                             "entered...\n");
                 log_level = LOG_LEVEL_QUIET;
                 printf("control> ");
                 char buf[sizeof msg_universal::text];
