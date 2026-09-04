@@ -199,10 +199,46 @@ install_openapv() (
         fi
 )
 
+macos_patch_pyrowave() (
+                sed 's/std::quick_exit/exit/' pyrowave_device_validation.cpp >F
+                mv F pyrowave_device_validation.cpp
+                cat <<'EOF' | patch
+diff --git a/Granite/util/timer.cpp b/Granitei/util/timer.cpp
+index a1408352..d17e0c0a 100644
+--- a/Granite/util/timer.cpp
++++ b/Granite/util/timer.cpp
+@@ -143,9 +143,20 @@ void sleep_until_nsecs(int64_t timepoint
+	struct timespec ts = {};
+	ts.tv_sec = timepoint / 1000000000ll;
+	ts.tv_nsec = timepoint % 1000000000ll;
++	struct timespec now = {};
++	clock_gettime(timebase, &now);
++	ts.tv_sec -= now.tv_sec;
++	ts.tv_nsec -= now.tv_nsec;
++	if (ts.tv_nsec < 0) {
++		ts.tv_nsec += 1000000000ll;
++		ts.tv_sec -= 1;
++	}
+	// Linux does not support clock_nanosleep with MONOTONIC_RAW :(
+	int ret;
+-	while ((ret = clock_nanosleep(timebase, TIMER_ABSTIME, &ts, nullptr)) == EINTR) {}
++	struct timespec rem;
++	while ((ret = nanosleep(&ts, &rem)) == -1 && errno == EINTR) {
++		ts = rem;
++	}
+ #endif
+ }
+
+EOF
+)
+
 install_pyrowave() (
         git clone --depth 1 https://github.com/Themaister/pyrowave.git
         cd pyrowave
         ./checkout_granite.sh
+        if [ "$(uname -s)" = Darwin ]; then
+                macos_patch_pyrowave
+        fi
         mkdir build
         cd build
         cmake -DCMAKE_INSTALL_PREFIX=/usr/local -G "Unix Makefiles" ..
@@ -239,7 +275,7 @@ if ! is_win; then
         install_items="$install_items omt"
 fi
 
-if [ "$(uname -s)" != Darwin ] && [ "$(uname -m)" != armv7l ]; then
+if [ "$(uname -m)" != armv7l ]; then
         install_items="$install_items pyrowave"
 fi
 

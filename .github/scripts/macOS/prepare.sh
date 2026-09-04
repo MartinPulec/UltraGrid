@@ -27,7 +27,8 @@ printf "%b" "\
 CPATH=$CPATH\n\
 LDFLAGS=$LDFLAGS\n\
 LIBRARY_PATH=$LIBRARY_PATH\n" >> "$GITHUB_ENV"
-echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig" >> "$GITHUB_ENV"
+echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/share/pkgconfig"\
+ >> "$GITHUB_ENV"
 echo "/usr/local/opt/qt/bin" >> "$GITHUB_PATH"
 echo "DYLIBBUNDLER_FLAGS=$DYLIBBUNDLER_FLAGS" >> "$GITHUB_ENV"
 
