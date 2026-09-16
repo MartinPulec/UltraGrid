@@ -1,5 +1,15 @@
+> [!NOTE]
+> 🌿 **The `compat` branch adds some fixes to compile
+> [UltraGrid](https://github.com/CESNET/UltraGrid) on older systems.**
+
+List of changes:
+- support for older Qt versions with qmake instead of CMake
+
+---
+
 UltraGrid - A High Definition Collaboratory
 ===========================================
+
 [![Facebook Follow](https://img.shields.io/badge/Facebook-follow-blue)](https://www.facebook.com/UltraGrid/)
 [![Mastodon Follow](https://img.shields.io/badge/Mastodon-follow-blue)](https://mastodon.social/@UltraGrid)
 [![Web Visit](https://img.shields.io/badge/web-visit-orange)](http://www.ultragrid.cz)
