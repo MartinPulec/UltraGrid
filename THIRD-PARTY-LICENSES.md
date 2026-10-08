@@ -10,7 +10,6 @@ TODO
 
 Add licenses for:
 
-- v4l2convert
 - portaudio
 - pipewire
 - opencv
@@ -1940,6 +1939,208 @@ Copyright:
 - 2018-2021 Jonas Ådahl
 
 License: MIT
+
+### libv4lconvert
+
+Extracted from Debian package Left just parts relevant for v4lconvert
++ the license itself (left files not being used by the convert lib).
+
+```
+Upstream Authors:
+    Hans de Goede <hdegoede@redhat.com>
+    Hans Verkuil <hans.verkuil@cisco.com>
+    Mauro Carvalho Chehab <mchehab@redhat.com>
+    Gregor Jasny <gjasny@googlemail.com>
+
+Comment:
+ The general licensing for the libraries:
+ libv4l* libraries are licensed LGPL-2.1+
+ libdvbv5 is licensed GPL-2
+
+Files: lib/libv4lconvert/bayer.c
+Copyright: 2008 Hans de Goede <hdegoede@redhat.com>
+           Written by Damien Douxchamps and Frederic Devernay
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/hm12.c
+Copyright: 2009 Hans Verkuil <hverkuil@xs4all.nl>
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/jpgl.c
+Copyright: 2003 Sylvain Munaut <nw8xx ]at[ 246tNt.com>
+           2011 Jean-François Moine <moinejf@free.fr>
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/control/*:
+Copyright: 2008-2009 Elmar Kleijn <elmar_kleijn@hotmail.com>
+           2008-2009 Sjoerd Piepenbrink <need4weed@gmail.com>
+           2008-2009 Radjnies Bhansingh <radjnies@gmail.com>
+           2008-2010 Hans de Goede <hdegoede@redhat.com>
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/processing/libv4lprocessing*, lib/libv4lconvert/processing/whitebalance.c
+Copyright: 2008-2009 Elmar Kleijn <elmar_kleijn@hotmail.com>
+           2008-2009 Sjoerd Piepenbrink <need4weed@gmail.com>
+           2008-2009 Hans de Goede <hdegoede@redhat.com>
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/libv4lsyscall-priv.h
+Copyright: 2009 Hans Petter Selasky. All rights reserved.
+License:
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+
+Files: lib/libv4lconvert/mr97310a.c
+Copyright: 2004-2009 Theodore Kilgore <kilgota@auburn.edu>
+License: LGPL-2+
+
+Files: lib/libv4lconvert/ov511-decomp.c
+Copyright: 1999-2003 Mark W. McClelland
+           1998-2000 OmniVision Technologies
+License: GPL-2
+
+Files: lib/libv4lconvert/ov518-decomp.c
+Copyright: 2002-2003 Mark W. McClelland
+           Yuri van Oers <yvanoers AT xs4all.nl>
+           1998-2000 OmniVision Technologies
+License: GPL-2
+
+Files: lib/libv4lconvert/pac207.c
+Copyright: 2005  Bertrik.Sikken. Thomas Kaiser
+           2003 2004 2005 Michel Xhaard
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/rgbyuv.c
+Copyright: 2008 Hans de Goede <hdegoede@redhat.com>
+           2009 Mauro Carvalho Chehab <mchehab@redhat.com>
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/se401.c
+Copyright: 2011 Hans de Goede <hdegoede@redhat.com>
+           Jeroen B. Vreeken <pe1rxq@amsat.org>
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/sn9c10x.c
+Copyright: 2005 Bertrik.Sikken
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/sn9c2028-decomp.c
+Copyright: 2005 Theodore Kilgore <kilgota@auburn.edu>
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/sn9c20x.c
+Copyright: 2008-2009 Vasily Khoruzhick
+           Jens on microdia google group
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/spca561-decompress.c
+Copyright: 2005 Andrzej Szombierski [qq@kuku.eu.org]
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/sq905c.c
+Copyright: 2005, 2007, 2009 Theodore Kilgore <kilgota@auburn.edu>
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/tinyjpeg*
+Copyright: 2006, Luc Saillard <luc@saillard.org>
+License:
+    All rights reserved.
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+
+    - Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
+
+    - Redistributions in binary form must reproduce the above copyright notice,
+     this list of conditions and the following disclaimer in the documentation
+     and/or other materials provided with the distribution.
+
+    - Neither the name of the author nor the names of its contributors may be
+     used to endorse or promote products derived from this software without
+     specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+    LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+    CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+
+Files: lib/libv4lconvert/jidctflt.c lib/libv4lconvert/jpeg_memsrcdest.c
+Copyright: 1994-1998, Thomas G. Lane.
+License:
+    This file is part of the Independent JPEG Group's software.
+
+    The authors make NO WARRANTY or representation, either express or implied,
+    with respect to this software, its quality, accuracy, merchantability, or
+    fitness for a particular purpose.  This software is provided "AS IS", and you,
+    its user, assume the entire risk as to its quality and accuracy.
+
+    This software is copyright (C) 1991-1998, Thomas G. Lane.
+    All Rights Reserved except as specified below.
+
+    Permission is hereby granted to use, copy, modify, and distribute this
+    software (or portions thereof) for any purpose, without fee, subject to these
+    conditions:
+    (1) If any part of the source code for this software is distributed, then this
+    README file must be included, with this copyright and no-warranty notice
+    unaltered; and any additions, deletions, or changes to the original files
+    must be clearly indicated in accompanying documentation.
+    (2) If only executable code is distributed, then the accompanying
+    documentation must state that "this software is based in part on the work of
+    the Independent JPEG Group".
+    (3) Permission for use of this software is granted only if the user accepts
+    full responsibility for any undesirable consequences; the authors accept
+    NO LIABILITY for damages of any kind.
+
+    These conditions apply to any software derived from or based on the IJG code,
+    not just to the unmodified library.  If you use our work, you ought to
+    acknowledge us.
+
+    Permission is NOT granted for the use of any IJG author's name or company name
+    in advertising or publicity relating to this software or products derived from
+    it.  This software may be referred to only as "the Independent JPEG Group's
+    software".
+
+    We specifically permit and encourage the use of this software as the basis of
+    commercial products, provided that all warranty or liability claims are
+    assumed by the product vendor.
+
+    This implementation is based on Arai, Agui, and Nakajima's algorithm for
+    scaled DCT.  Their original paper (Trans. IEICE E-71(11):1095) is in
+    Japanese, but the algorithm is described in the Pennebaker & Mitchell
+    JPEG textbook (see REFERENCES section in file README).  The following code
+    is based directly on figure 4-8 in P&M.
+
+Files: debian/*
+Copyright: 2008 - 2013 Gregor Jasny <gjasny@googlemail.com>
+License: GPL-2+
+```
+
+License: LGPL-2.1+
 
 ### OpenSSL
 
