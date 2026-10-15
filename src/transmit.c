@@ -596,7 +596,8 @@ get_packet_sizes(struct video_frame *frame, unsigned substream, int mtu,
                 symbol_size = vc_get_linesize(frame->tiles[substream].width, frame->color_spec);
                 int pf_block_size = PIX_BLOCK_LCM / get_pf_block_pixels(frame->color_spec) * get_pf_block_bytes(frame->color_spec);
                 assert(pf_block_size <= mtu);
-                if (symbol_size % pf_block_size == 0) {
+                extern int gso_force; // defined in rtp_common
+                if (symbol_size % pf_block_size == 0 || gso_force) {
                         symbol_size = pf_block_size;
                 }
                 mtu = mtu / pf_block_size * pf_block_size;
@@ -775,7 +776,7 @@ tx_send_base(struct tx *tx, struct video_frame *frame, struct rtp *rtp_session,
         }
 
         if (!tx->encryption) {
-                rtp_async_start(rtp_session, mult_pkt_cnt);
+                rtp_async_start(rtp_session, mult_pkt_cnt, tx->mtu);
         }
 
         rtp_hdr_packet = (uint32_t *) rtp_headers;

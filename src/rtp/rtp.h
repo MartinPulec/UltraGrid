@@ -230,6 +230,7 @@ typedef enum {
 	RTP_OPT_PEEK              = 5,
 	RTP_OPT_RECORD_SOURCE     = 6,  /* Record network source (sockaddr_storage) at the   */
                                         /* end of the packet                                 */
+	RTP_OPT_USE_UDP_GSO       = 7,  /* Linux GSO/USO:    0 - off, 1 - on, 2 - auto (dfl) */
 } rtp_option;
 
 struct msghdr;
@@ -324,7 +325,7 @@ bool             rtp_has_receiver(struct rtp *session);
  * started after rtp_async_start(). Caller is responsible that rtp_send_data_hdr() is not called
  * more than nr_packet times.
  */
-void             rtp_async_start(struct rtp *session, int nr_packets);
+void             rtp_async_start(struct rtp *session, int nr_packets, int mtu);
 void             rtp_async_wait(struct rtp *session);
 
 struct socket_udp_local *rtp_get_udp_local_socket(struct rtp *session);
