@@ -546,6 +546,35 @@ rtp_rxtx_common_done(struct rtp_rxtx_common *pub)
         free(s);
 }
 
+int gso_force;
+ADD_TO_PARAM("udp-gso",
+             "* udp-gso=[off|on|auto|force]\n"
+             "  Use UDP Segmentation Offload / Generic Segmentation Offload (Linux only).\n"
+             "  Values mean - never, always, always + give up correct packet splitting, auto (default)\n"
+             "  The \"force\" option enables UDP segments where not efficient, notably\n"
+             "  when line-size is not divisible by 24 and exceeds packet size, eg. UYVY 8192.\n"
+             "  yields segment of just 2 9000 B packets (but 12 standard)\n");
+static int
+get_req_gso()
+{
+        const char *opt = get_commandline_param("udp-gso");
+        if (!opt || strcasecmp(opt, "auto") == 0) {
+                return 2;
+        }
+        if (strcasecmp(opt, "off") == 0) {
+                return 0;
+        }
+        if (strcasecmp(opt, "on") == 0) {
+                return 1;
+        }
+        if (strcasecmp(opt, "force") == 0) {
+                gso_force = 1;
+                return 1;
+        }
+        MSG(ERROR, "Wrong use-gso option: %s!\n", opt);
+        return 2;
+}
+
 static struct rtp *
 initialize_network(const char *addr, int recv_port, int send_port,
                    struct pdb *participants, int force_ip_version,
@@ -576,6 +605,7 @@ initialize_network(const char *addr, int recv_port, int send_port,
 
         if (medium == TX_MEDIA_VIDEO) {
                 rtp_set_send_buf(device, INITIAL_VIDEO_SEND_BUFFER_SIZE);
+                rtp_set_option(device, RTP_OPT_USE_UDP_GSO, get_req_gso());
         } else {
                 rtp_set_option(device, RTP_OPT_RECORD_SOURCE, true);
         }

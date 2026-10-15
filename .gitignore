@@ -60,6 +60,7 @@ unittest/run_tests
 .clangd
 .editorconfig
 .env*
+.mdlint.toml
 compile_commands.json
 compile_flags.txt
 .vscode
