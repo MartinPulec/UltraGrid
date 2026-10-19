@@ -1446,6 +1446,32 @@ static void *udp_reader(void *arg)
         set_thread_name(__func__);
         socket_udp *s = (socket_udp *) arg;
 
+#ifdef HAVE_RECVMMSG
+        enum { MMSG_COUNT = 64, LEN = ALIGNED_ITEM_OFF + sizeof(struct item) };
+        struct mmsghdr          msgs[MMSG_COUNT];
+        struct iovec            iov[MMSG_COUNT];
+        uint8_t                *packets[MMSG_COUNT];
+        assert(MMSG_COUNT <= s->local->max_packets);
+#define ALLOC_RECVMMSG(i)                                                      \
+        packets[i]      = malloc(LEN);                                         \
+        iov[i].iov_len  = RTP_MAX_PACKET_LEN - RTP_PACKET_HEADER_SIZE;         \
+        iov[i].iov_base = packets[i] + RTP_PACKET_HEADER_SIZE;                 \
+        msgs[i].msg_hdr = (struct msghdr){                                     \
+                .msg_name    = packets[i] + ALIGNED_SOCKADDR_STORAGE_OFF,      \
+                .msg_namelen = sizeof(struct sockaddr_storage),                \
+                .msg_iov     = &iov[i],                                        \
+                .msg_iovlen  = 1,                                              \
+        };
+        for (int i = 0; i < MMSG_COUNT; i++) {
+                ALLOC_RECVMMSG(i)
+        }
+
+#define FREE_RECVMMSGS                                                         \
+        for (int i = 0; i < MMSG_COUNT; i++) {                                 \
+                free(packets[i]);                                              \
+        }
+#endif // defined HAVE_RECVMMSG
+
         while (1) {
                 fd_set fds;
                 FD_ZERO(&fds);
@@ -1461,6 +1487,10 @@ static void *udp_reader(void *arg)
                 if (FD_ISSET(s->local->should_exit_fd[0], &fds)) {
                         break;
                 }
+#ifdef HAVE_RECVMMSG
+                int size = recvmmsg(s->local->rx_fd, msgs, MMSG_COUNT,
+                                    MSG_WAITFORONE, NULL);
+#else
                 uint8_t *packet = (uint8_t *) malloc(ALIGNED_ITEM_OFF + sizeof(struct item));
                 uint8_t *buffer = ((uint8_t *) packet) + RTP_PACKET_HEADER_SIZE;
                 struct sockaddr *src_addr = (struct sockaddr *)(void *)(packet + ALIGNED_SOCKADDR_STORAGE_OFF);
@@ -1468,36 +1498,68 @@ static void *udp_reader(void *arg)
                 int size = recvfrom(s->local->rx_fd, (char *) buffer,
                                 RTP_MAX_PACKET_LEN - RTP_PACKET_HEADER_SIZE,
                                 0, src_addr, &addrlen);
+#endif // !defined HAVE_RECVMMSG
 
                 if (size <= 0) {
                         /// @todo
                         /// In MSW, this block is called as often as packet is sent if
                         /// we got WSAECONNRESET error (no one is listening). This can have
                         /// negative performance impact.
+#ifdef HAVE_RECVMMSG
+                        socket_error("recvmmsg");
+#else
                         socket_error("recvfrom");
                         free(packet);
+#endif
                         continue;
                 }
 
                 pthread_mutex_lock(&s->local->lock);
-                while (simple_linked_list_size(s->local->packets) >= (int) s->local->max_packets && !s->local->should_exit) {
+#ifdef HAVE_RECVMMSG
+                while (simple_linked_list_size(s->local->packets) + size > (int) s->local->max_packets &&
+#else
+                while (simple_linked_list_size(s->local->packets) >= (int) s->local->max_packets &&
+#endif
+                       !s->local->should_exit) {
+                       MSG(VERBOSE, "UDP queue full!!!\n");
                         pthread_cond_wait(&s->local->reader_cv, &s->local->lock);
                 }
                 if (s->local->should_exit) {
+#ifndef HAVE_RECVMMSG
                         free(packet);
+#endif
                         pthread_mutex_unlock(&s->local->lock);
                         break;
                 }
 
+#ifdef HAVE_RECVMMSG
+                for (int i = 0; i < size; ++i) {
+                        struct item *it =
+                            (struct item *) (void *) ((char *) packets[i] +
+                                                      ALIGNED_ITEM_OFF);
+                        *it = (struct item){ packets[i], msgs[i].msg_len,
+                                             msgs[i].msg_hdr.msg_name,
+                                             msgs[i].msg_hdr.msg_namelen };
+                        simple_linked_list_append(s->local->packets, it);
+                        ALLOC_RECVMMSG(i)
+                }
+#else
                 struct item *i = (struct item *)(void *)(packet + ALIGNED_ITEM_OFF);
                 *i = (struct item){packet, size, src_addr, addrlen};
                 simple_linked_list_append(s->local->packets, i);
+#endif // !defined HAVE_RECVMMSG
 
                 pthread_mutex_unlock(&s->local->lock);
                 pthread_cond_signal(&s->local->boss_cv);
         }
 
         platform_pipe_close(s->local->should_exit_fd[0]);
+
+#ifdef HAVE_RECVMMSG
+        FREE_RECVMMSGS
+#undef ALLOC_RECVMMSG
+#undef FREE_RECVMMSGS
+#endif
 
         return NULL;
 }
