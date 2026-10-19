@@ -1290,6 +1290,26 @@ int udp_sendto(socket_udp * s, char *buffer, int buflen, struct sockaddr *dst_ad
 }
 
 bool
+udp_is_gso_supported()
+{
+#ifdef HAVE_LINUX_UDP_SEGMENT
+        bool supported = false;
+        int  fd        = socket(AF_INET, SOCK_DGRAM, 0);
+        if (fd == -1) {
+                perror(__func__);
+                return false;
+        }
+        int probe = 0;
+        supported =
+            setsockopt(fd, IPPROTO_UDP, UDP_SEGMENT, &probe, sizeof probe) == 0;
+        close(fd);
+        return supported;
+#else
+        return false;
+#endif
+}
+
+bool
 udp_set_gso(socket_udp *s, int val)
 {
         if (val < RTP_GSO_AUTO || val > 64) {
@@ -1297,14 +1317,15 @@ udp_set_gso(socket_udp *s, int val)
                 return false;
         }
 #ifdef HAVE_LINUX_UDP_SEGMENT
-        s->local->req_gso = val;
-#else
-        (void) s;
+        if (udp_is_gso_supported()) {
+                s->local->req_gso = val;
+                return true;
+        }
+#endif
         if (val >= RTP_GSO_ON) {
                 MSG(ERROR, "Cannot turn on GSO - support not available!\n");
                 return false;
         }
-#endif
         return true;
 }
 
