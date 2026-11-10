@@ -77,6 +77,10 @@ cd $TEMP_INST
 
 "$srcroot/.github/scripts/macOS/install_others.sh"
 
+# TODO TOREMOVE when no longer needed
+# fix incorrectly included '$ORIGIN' in rpath causing dylibbundler fail
+sudo install_name_tool -delete_rpath '$ORIGIN' /opt/homebrew/lib/libtbb.dylib
+
 # Remove installation files
 cd
 rm -rf $TEMP_INST
