@@ -3766,6 +3766,32 @@ fi
 
 ENSURE_FEATURE_PRESENT([$fluidsynth_req], [$fluidsynth], [fluidsynth not found!])
 
+# ---------------------------------------------------------------------
+# overlay 
+# ---------------------------------------------------------------------
+AC_ARG_ENABLE(overlay,
+              AS_HELP_STRING([--disable-overlay],
+[disable overlay postproces filter (default is auto)]),
+              [overlay_req=$enableval],
+              [overlay_req=$build_default])
+overlay=no
+
+if test "${overlay_req?}" != no; then
+        if test "${found_swscale?}" = yes; then
+                overlay_obj="src/vo_postprocess/overlay/alpha_blend.o \
+		src/vo_postprocess/overlay/overlay_config.o \
+		src/vo_postprocess/overlay/overlay_layout.o \
+		src/vo_postprocess/overlay/overlay_pam.o \
+		src/vo_postprocess/overlay/overlay_scale.o \
+		src/vo_postprocess/overlay/overlay_soft_edge.o \
+		src/vo_postprocess/overlay/overlay_watch.o"
+                add_module vo_overlay "$overlay_obj" "${SWSCALE_LIBS?}"
+                overlay=yes
+        fi
+fi
+
+ENSURE_FEATURE_PRESENT([${overlay_req?}], [${overlay?}], [overlay not found!])
+
 # -----------------------------------------------------------------------------
 # Reflector
 # -----------------------------------------------------------------------------
@@ -3883,6 +3909,7 @@ if test "$build_default" != no || test "$req_files" = all; then
         src/vo_postprocess/delay.o
         src/vo_postprocess/dummy.o
         src/vo_postprocess/interlace.o
+        src/vo_postprocess/overlay.o
         src/vo_postprocess/split.o
         src/vo_postprocess/temporal-deint.o
         src/vo_postprocess/temporal_3d.o
