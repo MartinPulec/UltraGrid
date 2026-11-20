@@ -60,7 +60,7 @@ jobs:
       uses: actions/cache@main
       with:
         path: '~/chroot.tar'
-        key: cache-bootstrap-${{ env.ImageOS }}-${{ matrix.arch }}-${{
+        key: cache-bootstrap-${{ env.OS_VERSION }}-${{ matrix.arch }}-${{
           hashFiles('.github/scripts/Linux/arm/bootstrap.sh',
           '.github/scripts/Linux/install_others.sh',
           '.github/scripts/install-common-deps.sh') }}

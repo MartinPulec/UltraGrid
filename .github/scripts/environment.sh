@@ -128,9 +128,17 @@ if ! is_arm; then
 fi
 
 printf '%b' "FEATURES=$FEATURES\n" >> "$GITHUB_ENV"
-# populate /etc/environment-defined var to global env
 # shellcheck disable=SC2154 # defined by runner in /etc/environment
-printf '%b' "ImageOS=$ImageOS\n" >> "$GITHUB_ENV"
+if [ "$(uname -s)" = Linux ]; then ( # ubuntu-24.04
+        . /etc/os-release
+        printf 'OS_VERSION=%b-%b\n' "${ID?}" "${VERSION_ID?}"  >> "$GITHUB_ENV"
+) elif [ "$(uname -s)" = Darwin ]; then # macOS-15
+        printf 'OS_VERSION=%b-%b\n' "$(sw_vers --productName)"\
+         "$(sw_vers --productVersion | cut -d. -f1)" >> "$GITHUB_ENV"
+else
+        printf 'OS_VERSION=Windows\n' >> "$GITHUB_ENV"
+
+fi
 
 if [ "$(uname -s)" = Darwin ] && [ "$(uname -m)" != arm64 ]; then
         export UG_ARCH=-msse4.2
