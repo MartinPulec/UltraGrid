@@ -9,6 +9,8 @@ on:
   push:
     branches:
       - macos-build
+      - macos-build-arm64
+      - macos-build-x86_64
 
 jobs:
   macOS:
@@ -16,14 +18,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: macos-15
-            arch: arm64
-            runner_var: MACOS_ARM64_RUNNER # custom runner - repo var name
-          - os: macos-15-intel
-            arch: x86_64
-            runner_var: MACOS_X86_64_RUNNER # custom runner - repo var name
-    runs-on: ${{ vars[matrix.runner_var] || matrix.os }}
+        # build just a single arch if macos-build-arm64/x86_64 was pushed
+        arch: ${{ fromJSON(case(
+            github.ref_name == 'macos-build-arm64', '["arm64"]',
+            github.ref_name == 'macos-build-x86_64', '["x86_64"]',
+            '["arm64", "x86_64"]')) }}
+    runs-on: ${{ case(matrix.arch == 'arm64',
+        vars.MACOS_ARM64_RUNNER || 'macos-15',
+        vars.MACOS_X86_64_RUNNER || 'macos-15-intel') }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SDK_NONFREE_PATH: /private/var/tmp/sdks-nonfree

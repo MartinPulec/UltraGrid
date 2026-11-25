@@ -128,7 +128,8 @@ the above, which means that build artifact is created if pushed to the
 specific branch:
 
 - [**linux.yml**](linux.yml) - push to _linux-build_
-- [**macos.yml**](macos.yml) - push to _macos-build_
+- [**macos.yml**](macos.yml) - push to _macos-build_ (or
+  _macos-build-arm64_ / _macos-build-x86_64_ for a single arch only)
 - [**windows.yml**](windows.yml) - push to _windows-build_
 
 #### Default runner override
